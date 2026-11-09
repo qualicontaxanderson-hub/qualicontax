@@ -596,6 +596,59 @@
 .qb-reuso .acesso-pessoa:has(input:checked) { border-color:#16a34a; background:#f0fdf4; color:#166534; font-weight:600; }
 .qb-reuso .acesso-pessoa input { accent-color:#16a34a; }
 .qb-reuso .acesso-opcao input { width:18px; height:18px; accent-color:#16a34a; }
+.qb-pessoa[data-ct] { cursor:pointer; transition:background .15s, box-shadow .15s; }
+.qb-pessoa[data-ct]:hover { background:#f0fdf4; box-shadow:inset 0 0 0 1.5px #86efac; }
+.qb-end-col { display:flex; flex-direction:column; }
+.qb-end-col .qb-lista2 { display:flex; flex-direction:column; flex:1; }
+.qb-end-col .qb-lista2 .qb-novo:last-child { flex:1; min-height:90px; }
+
+/* capital social em Sócios */
+.qb-capital { display:flex; align-items:baseline; gap:6px 12px; flex-wrap:wrap; padding:12px 14px; border-radius:14px; background:#f5f3ff; margin-bottom:6px; }
+.qb-capital small { font-size:12.5px; color:#6d28d9; font-weight:600; } .qb-capital b { font-size:20px; font-weight:800; color:#0f172a; letter-spacing:-.3px; }
+.qb-capital span { font-size:12.5px; color:#64748b; }
+/* contatos em duas colunas na tela larga (preenche a largura) */
+@media (min-width:1281px) { #contatos .qb-pessoas { display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); align-items:stretch; }
+    #contatos .qb-novo-linha { grid-column:1 / -1; } }
+#contatos .qb-pessoa { flex-wrap:wrap; } #contatos .qb-pessoa-acs { margin-left:auto; }
+/* certificado da empresa: cartão verde compacto */
+.qb-cert .qb-bh small { display:block; }
+.qb-cert-barra { height:8px; border-radius:99px; background:rgba(255,255,255,.14); overflow:hidden; margin:10px 0 4px; }
+.qb-cert-barra i { display:block; height:100%; background:linear-gradient(90deg,#4ade80,#86efac); border-radius:99px; }
+.qb-cert-arq { opacity:.8; word-break:break-all; margin-top:8px; }
+.qb-cert-acoes { display:flex; flex-wrap:wrap; gap:8px; margin-top:16px; }
+.qb-btn-branco { display:inline-flex; align-items:center; gap:7px; font:inherit; font-size:13px; font-weight:700; color:#0f3d2e; background:#fff; border:0; border-radius:11px; padding:9px 14px; cursor:pointer; }
+.qb-btn-branco:hover { background:#dcfce7; }
+.qb-btn-transp { display:inline-flex; align-items:center; gap:7px; font-size:13px; font-weight:600; color:#ecfdf5; background:rgba(255,255,255,.12); border:1px solid rgba(255,255,255,.2); border-radius:11px; padding:9px 14px; text-decoration:none; }
+.qb-btn-transp:hover { background:rgba(255,255,255,.2); color:#fff; }
+.qb-cert-como { margin-top:12px; } .qb-cert-como summary { cursor:pointer; font-size:12.5px; font-weight:600; color:#a7f3d0; }
+.qb-cert-como p { margin:8px 0 0; font-size:12.5px; line-height:1.5; color:#d1fae5; } .qb-cert-como code { background:rgba(255,255,255,.12); color:#fff; border-radius:5px; padding:0 5px; }
+.qb-cert-senha { margin-top:14px; display:flex; flex-direction:column; gap:8px; }
+.qb-cert-senha label { font-size:13px; font-weight:600; color:#ecfdf5; }
+.qb-inp-claro { height:42px; border:0; border-radius:11px; padding:0 12px; font:inherit; font-size:14px; }
+.qb-cert-senha .qb-btn-branco { align-self:flex-start; }
+.qb-cert #certMsg { font-size:13px; } .qb-cert #certMsg * { color:inherit; }
+/* contador e notas */
+.qb-sub2 { display:block; font-size:12.5px; color:#64748b; font-weight:500; }
+.qb-ct { display:flex; align-items:center; gap:14px; padding:14px; border-radius:16px; background:#f8fafc; margin-bottom:10px; }
+.qb-av-g { width:46px; height:46px; flex-basis:46px; font-size:15px; }
+.qb-ct-t { flex:1; min-width:0; } .qb-ct-t b { font-size:15px; display:block; } .qb-ct-t small { display:block; color:#64748b; font-size:12.5px; margin-top:2px; }
+.qb-chip-ok, .qb-chip-am { display:inline-flex; align-items:center; gap:6px; font-size:12px; font-weight:600; border-radius:99px; padding:3px 10px; margin-top:7px; }
+.qb-chip-ok { background:#dcfce7; color:#166534; } .qb-chip-am { background:#fef3c7; color:#92400e; }
+.qb-ct-add summary { cursor:pointer; font-size:13px; font-weight:600; color:#15803d; list-style:none; display:inline-flex; gap:7px; align-items:center; }
+.qb-ct-add summary::-webkit-details-marker { display:none; }
+.qb-ct-form { display:flex; flex-wrap:wrap; gap:8px; margin-top:10px; }
+.qb-inp { height:40px; border:1.5px solid #e2e8f0; border-radius:11px; padding:0 11px; font:inherit; font-size:13.5px; background:#fff; color:#0f172a; min-width:0; }
+.qb-inp:focus { border-color:#16a34a; outline:none; box-shadow:0 0 0 4px rgba(22,163,74,.12); }
+.qb-ct-form select { flex:1 1 240px; } .qb-ct-form input { flex:0 1 180px; }
+.qb-estado { display:flex; align-items:center; gap:14px; padding:14px 16px; border-radius:16px; background:#f0fdf4; }
+.qb-estado-ic { width:44px; height:44px; border-radius:13px; background:#16a34a; color:#fff; display:flex; align-items:center; justify-content:center; font-size:18px; flex:0 0 44px; }
+.qb-estado b { font-size:16px; display:block; } .qb-estado small { color:#166534; font-size:12.5px; }
+.qb-estado-am { background:#fffbeb; } .qb-estado-am .qb-estado-ic { background:#f59e0b; } .qb-estado-am small { color:#92400e; }
+.qb-estado-ruim { background:#fef2f2; } .qb-estado-ruim .qb-estado-ic { background:#dc2626; } .qb-estado-ruim small { color:#991b1b; }
+.qb-nota-azul { margin:10px 0 0; font-size:12.5px; color:#1e40af; background:#eff6ff; border-radius:12px; padding:9px 12px; }
+.qb-adv { margin-top:14px; } .qb-adv summary { color:#b45309; }
+.qb-adv-box { margin-top:8px; padding:12px; border:1px dashed #e2e8f0; border-radius:12px; background:#fafafa; display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
+.qb-adv-box p { margin:0; width:100%; font-size:12.5px; color:#64748b; line-height:1.45; } .qb-adv-num { width:100%; font-size:13px; color:#334155; }
 .tu-barra:not(.on) { visibility:hidden; transition:transform .2s, visibility 0s .2s; }
 @media (max-width:900px) { .qb-kpi3 { grid-template-columns:minmax(0, 1fr); } }
 @keyframes qb-piscar { 0%, 55% { box-shadow:0 0 0 4px rgba(245,158,11,.4); } 100% { box-shadow:0 1px 2px rgba(15,23,42,.04), 0 10px 30px rgba(15,61,46,.06); } }
@@ -856,6 +909,7 @@
             {% set total_s = socios_total_percentual or 0 %}
             <section class="qb-b s7" id="socios" data-copiar-secao>
                 <div class="qb-bh"><span class="qb-ico i-roxo"><i class="fas fa-user-tie"></i></span><h3>Sócios</h3>
+                    {% set cap_total = socios | rejectattr('capital_valor', 'none') | map(attribute='capital_valor') | map('float') | sum %}
                     {% if socios %}<span class="qb-selo {{ 'qb-selo-ok' if total_s == 100 else 'qb-selo-amb' }}">{{ '%g' % total_s }}%</span>{% else %}{{ selo(['socios']) }}{% endif %}
                     <span class="qb-bh-dir">
                         {% if qualif_todos %}<button type="button" class="qb-add qb-add-cinza" data-copiar-texto="{{ qualif_todos }}" data-copiar-rotulo="Qualificação dos sócios" title="Copia a qualificação de todos os sócios, uma por parágrafo"><i class="fas fa-file-signature"></i> Qualificação de todos</button>{% endif %}
@@ -863,6 +917,8 @@
                         <button type="button" class="qb-add" onclick="showAddSocioModal()"><i class="fas fa-plus"></i> Sócio</button>
                     </span></div>
                 {% if socios %}
+                <div class="qb-capital"><small>Capital social</small><b data-copiar data-copiar-rotulo="Capital social">{{ cap_total | format_currency if cap_total else '—' }}</b>
+                    <span>{% if cap_total %}soma das cotas dos {{ socios|length }} sócio{{ 's' if socios|length != 1 }}{% else %}informe o capital de cada sócio (no Adicionar sócio){% endif %}</span></div>
                 <div class="qb-donut">
                     {% set ns = namespace(acum=0) %}
                     <svg width="118" height="118" viewBox="0 0 42 42" aria-hidden="true"><circle cx="21" cy="21" r="15.9155" fill="none" stroke="#eef2f6" stroke-width="6"/>
@@ -907,20 +963,43 @@
                 {% endif %}
             </section>
 
-            <!-- CERTIFICADO (resumo; os detalhes e a captura ficam no bloco Certificado, mais abaixo) -->
-            <section class="qb-b qb-cert s5">
-                <div class="qb-bh"><span class="qb-ico qb-ico-claro"><i class="fas fa-certificate"></i></span><h3>Certificado digital</h3>
-                    {% if certificado %}{% set cs = certificado.cert_status %}<span class="qb-selo {{ 'qb-selo-verm' if cs and cs.nivel == 'vencido' else 'qb-selo-amb' if cs and cs.nivel == 'laranja' else 'qb-selo-ok' }}">{% if cs and cs.nivel == 'vencido' %}vencido{% elif cs and cs.nivel == 'laranja' %}vence em {{ cs.dias }} dias{% else %}válido{% endif %}</span>{% endif %}</div>
-                {% if certificado %}
-                <small class="qb-cert-l">{{ certificado.tipo_doc }} {{ certificado.cnpj }} · vence em</small>
-                <div class="qb-cert-data">{{ certificado.validade|format_date if certificado.validade else '—' }}</div>
-                {% if dfe_cursor %}<div class="qb-cert-l"><i class="fas fa-{{ 'triangle-exclamation' if dfe_cursor.travado or dfe_cursor.atraso else 'circle-check' }}"></i>
-                    {% if dfe_cursor.travado %}Captura de NF-e travada (656){% elif dfe_cursor.atraso %}Captura com {{ dfe_cursor.atraso }} NSU de atraso{% else %}Captura de NF-e em dia · cursor {{ dfe_cursor.ult_nsu }}{% endif %}</div>{% endif %}
-                {% else %}
-                <div class="qb-cert-data" style="font-size:20px">Sem certificado</div>
-                <small class="qb-cert-l">Nenhum certificado vinculado a esta empresa.</small>
-                {% endif %}
-                <a class="qb-link-claro" href="#certificado" style="margin-top:14px">{{ 'Ver certificado e captura' if certificado else 'Vincular certificado' }} <i class="fas fa-arrow-down"></i></a>
+            <!-- CERTIFICADO DA EMPRESA (cartão verde compacto; o texto de instrução fica recolhido) -->
+            {% set contador_cert = (contadores | selectattr('tem_certificado') | first) %}
+            {% set cs = certificado.cert_status if certificado else None %}
+            <section class="qb-b qb-cert s5" id="certificado">
+                <div class="qb-bh"><span class="qb-ico qb-ico-claro"><i class="fas fa-certificate"></i></span>
+                    <div><h3>Certificado da empresa</h3>{% if certificado %}<small class="qb-cert-l" style="margin:0">A1 · {{ certificado.tipo_doc }} {{ certificado.cnpj }}</small>{% endif %}</div>
+                    {% if certificado %}<span class="qb-selo {{ 'qb-selo-verm' if cs and cs.nivel == 'vencido' else 'qb-selo-amb' if cs and cs.nivel == 'laranja' else 'qb-selo-ok' }}">{% if cs and cs.nivel == 'vencido' %}vencido{% elif cs and cs.nivel == 'laranja' %}vence logo{% else %}válido{% endif %}</span>{% endif %}</div>
+                <div id="certVinculoAtual">
+                    {% if certificado %}
+                    <small class="qb-cert-l">{{ 'venceu em' if cs and cs.nivel == 'vencido' else 'vence em' }}</small>
+                    <div class="qb-cert-data">{{ certificado.validade|format_date if certificado.validade else '—' }}</div>
+                    {% if cs and cs.dias is not none and cs.nivel != 'vencido' %}{% set d = cs.dias|int %}
+                    <div class="qb-cert-barra"><i style="width:{{ [[d / 365 * 100, 4]|max, 100]|min }}%"></i></div>
+                    <small class="qb-cert-l">faltam {{ d }} dia{{ 's' if d != 1 }}</small>{% endif %}
+                    {% if certificado.procuracao %}<small class="qb-cert-l"><i class="fas fa-user-shield"></i> por procuração (certificado de terceiro)</small>{% endif %}
+                    <small class="qb-cert-l qb-cert-arq" title="Arquivo do certificado"><i class="far fa-file"></i> {{ (certificado.dropbox_path or '').rsplit('/', 1)[-1] }}</small>
+                    {% else %}
+                    <div class="qb-cert-data" style="font-size:22px">Sem certificado</div>
+                    <small class="qb-cert-l">{% if contador_cert %}As notas são buscadas com o certificado do contador {{ contador_cert.nome_razao_social | nome_proprio }}.{% else %}Nenhum certificado vinculado a esta empresa.{% endif %}</small>
+                    {% endif %}
+                </div>
+                <div class="qb-cert-acoes">
+                    <button type="button" class="qb-btn-branco" id="btnCertBuscar" onclick="certBuscar({{ cliente.id }})"><i class="fas fa-rotate"></i> {{ 'Trocar certificado' if certificado else 'Vincular certificado' }}</button>
+                    <a class="qb-btn-transp" href="{{ url_for('static', filename='docs/certificado-digital-instrucoes.pdf') }}" target="_blank" rel="noopener" title="Como enviar e instalar o certificado (PDF)"><i class="fas fa-book"></i> Como vincular</a>
+                </div>
+                <details class="qb-cert-como"><summary>Como mandar o arquivo</summary>
+                    <p>Envie o <b>.pfx</b> ou <b>.p12</b> pelo <b>Q-Colabore</b>, com o nome do <b>número do cadastro</b> ({{ (cliente.numero_cliente or 's/nº') }}.pfx) ou do <b>CPF/CNPJ</b>.
+                    Se o nome trouxer a palavra <b>senha</b> seguida da senha (ex.: <code>{{ (cliente.numero_cliente or '175') }} senha 1234.pfx</code>), o sistema vincula sozinho em até 5 minutos.
+                    Senão, clique em <b>{{ 'Trocar certificado' if certificado else 'Vincular certificado' }}</b>: o sistema acha o arquivo e pede a senha.</p>
+                </details>
+                <div id="certSenhaBox" class="qb-cert-senha" style="display:none;">
+                    <label for="certSenha">Senha do certificado (<strong id="certArquivoNome"></strong>)</label>
+                    <input type="password" id="certSenha" class="qb-inp-claro" autocomplete="off" placeholder="Digite a senha do .pfx">
+                    {% if certificado %}<small class="qb-cert-l"><i class="fas fa-triangle-exclamation"></i> Vincular outro <b>substitui</b> o atual ({{ certificado.tipo_doc }} {{ certificado.cnpj }}{% if certificado.validade %}, até {{ certificado.validade|format_date }}{% endif %}).</small>{% endif %}
+                    <button type="button" class="qb-btn-branco" id="btnCertVincular" onclick="certVincular({{ cliente.id }})"><i class="fas fa-lock"></i> Validar e vincular</button>
+                </div>
+                <div id="certMsg" style="margin-top:12px; display:none;"></div>
             </section>
 
             <!-- RESPONSÁVEIS -->
@@ -969,7 +1048,7 @@
             </section>
 
             <!-- ENDEREÇOS -->
-            <section class="qb-b s6 qb-topo" id="enderecos">
+            <section class="qb-b s4 qb-end-col" id="enderecos">
                 <div class="qb-bh"><span class="qb-ico i-verde"><i class="fas fa-location-dot"></i></span><h3>Endereços</h3>
                     <span class="qb-bh-dir"><button type="button" class="qb-add" onclick="showAddAddressModal()"><i class="fas fa-plus"></i> Endereço</button></span></div>
                 <div class="qb-lista2">
@@ -992,7 +1071,7 @@
 
             <!-- CONTATOS -->
             {% set sem_cel = contatos | rejectattr('celular') | list | length %}
-            <section class="qb-b s6 qb-topo" id="contatos" data-copiar-secao>
+            <section class="qb-b s8" id="contatos" data-copiar-secao>
                 <div class="qb-bh"><span class="qb-ico i-azul"><i class="fas fa-address-book"></i></span><h3>Contatos</h3>
                     {% if contatos %}<span class="qb-selo {{ 'qb-selo-amb' if sem_cel else 'qb-selo-ok' }}">{{ contatos|length }} · {{ (sem_cel ~ ' sem celular') if sem_cel else 'todos com celular' }}</span>{% else %}{{ selo(['contato', 'email']) }}{% endif %}
                     <span class="qb-bh-dir">{% if contatos %}<button type="button" class="qb-add qb-add-cinza" data-copiar-secao-btn title="Copia os dados de todos os contatos"><i class="far fa-copy"></i></button>{% endif %}
@@ -1000,7 +1079,8 @@
                 <div class="qb-pessoas">
                     {% for contato in contatos %}
                     {% set dig = (contato.celular or '') | replace('(', '') | replace(')', '') | replace('-', '') | replace(' ', '') %}
-                    <div class="qb-pessoa" data-copiar-bloco data-copiar-titulo="Contato: {{ contato.nome }}">
+                    <div class="qb-pessoa" data-copiar-bloco data-copiar-titulo="Contato: {{ contato.nome }}" title="Clique para alterar este contato"
+                         data-ct='{{ {"id": contato.id, "nome": contato.nome, "cargo": contato.cargo or "", "email": contato.email or "", "telefone": contato.telefone or "", "celular": contato.celular or "", "principal": contato.principal and 1 or 0, "departamentos": contato.departamentos}|tojson|forceescape }}'>
                         <span class="qb-av" style="background:{{ rs_cores[(contato.id or 0) % 8] }}">{{ rs_ini(contato.nome) }}</span>
                         <div class="qb-pessoa-t">
                             <b data-copiar="{{ contato.nome }}" data-copiar-rotulo="Nome">{{ contato.nome | nome_proprio }}</b>{% if contato.principal %} <span class="qb-tag-resp">principal</span>{% endif %}
@@ -1020,8 +1100,7 @@
                         <div class="qb-pessoa-acs">
                             {% if dig %}<a class="qb-mini" href="https://wa.me/55{{ dig }}" target="_blank" rel="noopener" title="WhatsApp"><i class="fab fa-whatsapp"></i></a>{% endif %}
                             <button type="button" class="qb-mini" data-copiar-bloco-btn title="Copiar os dados deste contato"><i class="far fa-copy"></i></button>
-                            <button type="button" class="qb-mini" title="Editar este contato"
-                                    onclick='editarContato({{ {"id": contato.id, "nome": contato.nome, "cargo": contato.cargo or "", "email": contato.email or "", "telefone": contato.telefone or "", "celular": contato.celular or "", "principal": contato.principal and 1 or 0, "departamentos": contato.departamentos}|tojson }})'><i class="fas fa-pen"></i></button>
+                            <button type="button" class="qb-mini qb-ct-editar" title="Editar este contato"><i class="fas fa-pen"></i></button>
                             <form action="{{ url_for('clientes.excluir_contato', id=contato.id) }}" method="POST" style="display:inline;">
                                 <button type="submit" class="qb-mini qb-mini-perigo" onclick="return confirm('Deseja excluir este contato?')" title="Excluir contato"><i class="fas fa-trash"></i></button>
                             </form>
@@ -1032,324 +1111,79 @@
                 </div>
             </section>
 
-            <!-- CERTIFICADO E CONTADOR (detalhes, vínculo e captura) -->
-            <section class="qb-b s12 qb-reuso" id="certificado-bloco">
-            <!-- Certificado Digital Tab -->
-            <div id="certificado" class="tab-pane">
-                <div class="card" id="contadores">
-                    <div class="card-header">
-                        <h3 class="card-title">Contadores responsáveis</h3>
-                    </div>
-                    <div class="card-body">
-                        <p style="color:#64748b; font-size:13px; margin-bottom:14px;">
-                            Contadores (cadastros marcados como Contador) responsáveis por esta
-                            empresa. Cada um usa o certificado digital DELE — vinculado na tela
-                            do próprio cadastro do contador.
-                        </p>
-
-                        {% if contadores %}
-                        {# Mesma marcação serve desktop e mobile: no mobile o CSS .cert-tbl
-                           converte cada <tr> em cartão e o data-label vira o rótulo da
-                           linha. Nada duplicado, o botão Remover é o mesmo. #}
-                        <table class="table cert-tbl" style="width:100%; font-size:14px;">
-                            <thead>
-                                <tr>
-                                    <th>Contador</th><th>Documento</th><th>Finalidade</th>
-                                    <th>Certificado</th><th style="width:90px;"></th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                            {% for ct in contadores %}
-                                <tr>
-                                    <td data-label="Contador">
-                                        {% if ct.numero_cliente %}{{ ct.numero_cliente }} - {% endif %}
-                                        {{ ct.nome_razao_social }}
-                                    </td>
-                                    <td data-label="Documento">{{ ct.cpf_cnpj }}</td>
-                                    <td data-label="Finalidade">{{ ct.finalidade or '—' }}</td>
-                                    <td data-label="Certificado">
-                                        {% if ct.tem_certificado %}
-                                        <span class="badge badge-success">{{ ct.cert_tipo_doc }} {{ ct.cert_doc }}</span>
-                                        {% else %}
-                                        <span class="badge badge-warning">SEM CERTIFICADO</span>
-                                        {% endif %}
-                                    </td>
-                                    <td class="cert-td-act">
-                                        <form method="POST"
-                                              action="{{ url_for('clientes.desvincular_contador', cliente_id=cliente.id, contador_id=ct.id) }}"
-                                              onsubmit="return confirm('Remover {{ ct.nome_razao_social }} dos contadores desta empresa?');">
-                                            <button type="submit" class="btn btn-sm"
-                                                    style="background:#fee2e2; color:#991b1b;">
-                                                <i class="fas fa-times"></i> Remover
-                                            </button>
-                                        </form>
-                                    </td>
-                                </tr>
-                            {% endfor %}
-                            </tbody>
-                        </table>
-
-                        {% if contadores | rejectattr('tem_certificado') | list %}
-                        <div style="margin-top:10px; padding:10px 12px; border-radius:6px;
-                                    background:#fffbeb; border:1px solid #f59e0b;
-                                    color:#92400e; font-size:13px;">
-                            <strong>&#x26A0;&#xFE0F;</strong> Há contador vinculado
-                            <strong>sem certificado</strong>. O vínculo só serve para captura
-                            quando o contador tiver o .pfx dele vinculado no próprio cadastro.
-                        </div>
-                        {% endif %}
-                        {% else %}
-                        <p style="color:#64748b;">Nenhum contador vinculado a esta empresa.</p>
-                        {% endif %}
-
-                        <hr style="margin:18px 0; border:none; border-top:1px solid #e5e7eb;">
-                        {% if contadores_disponiveis %}
-                        <form method="POST"
-                              action="{{ url_for('clientes.vincular_contador', cliente_id=cliente.id) }}"
-                              style="display:flex; gap:10px; align-items:flex-end; flex-wrap:wrap;">
-                            <div class="form-group" style="margin:0; min-width:280px;">
-                                <label for="contador_id">Adicionar contador</label>
-                                <select id="contador_id" name="contador_id" class="form-control" required>
-                                    <option value="">Selecione...</option>
-                                    {% for ct in contadores_disponiveis %}
-                                    <option value="{{ ct.id }}">
-                                        {% if ct.numero_cliente %}{{ ct.numero_cliente }} - {% endif %}{{ ct.nome_razao_social }}
-                                        {% if not ct.tem_certificado %} (sem certificado){% endif %}
-                                    </option>
-                                    {% endfor %}
-                                </select>
-                            </div>
-                            <div class="form-group" style="margin:0; min-width:180px;">
-                                <label for="finalidade">Finalidade (opcional)</label>
-                                <input type="text" id="finalidade" name="finalidade"
-                                       class="form-control" maxlength="30"
-                                       placeholder="ex.: fiscal, contabil">
-                            </div>
-                            <button type="submit" class="btn btn-primary">
-                                <i class="fas fa-plus"></i> Vincular
-                            </button>
-                        </form>
-                        {% else %}
-                        <p style="color:#64748b; font-size:13px;">
-                            Nenhum cadastro disponível. Marque um cadastro como
-                            <strong>Contador</strong> na tela de edição dele para poder vinculá-lo aqui.
-                        </p>
-                        {% endif %}
-                    </div>
+            <!-- CONTADOR RESPONSÁVEL (cartão de pessoa) -->
+            <section class="qb-b s6" id="contadores">
+                <div class="qb-bh"><span class="qb-ico i-roxo"><i class="fas fa-user-check"></i></span>
+                    <div><h3>Contador responsável</h3><small class="qb-sub2">usa o certificado dele, vinculado no cadastro dele</small></div>
+                    {{ selo(['contador']) }}</div>
+                {% for ct in contadores %}
+                <div class="qb-ct">
+                    <span class="qb-av qb-av-g" style="background:{{ rs_cores[ct.id % 8] }}">{{ rs_ini(ct.nome_razao_social) }}</span>
+                    <div class="qb-ct-t"><b>{{ ct.nome_razao_social | nome_proprio }}</b>
+                        <small>{% if ct.numero_cliente %}Cadastro {{ ct.numero_cliente }} · {% endif %}{{ ct.cpf_cnpj }}{% if ct.finalidade %} · {{ ct.finalidade }}{% endif %}</small>
+                        {% if ct.tem_certificado %}<span class="qb-chip-ok"><i class="fas fa-certificate"></i> certificado dele: {{ ct.cert_tipo_doc }} {{ ct.cert_doc }}</span>
+                        {% else %}<span class="qb-chip-am"><i class="fas fa-triangle-exclamation"></i> sem certificado: não serve para buscar notas</span>{% endif %}</div>
+                    <form method="POST" action="{{ url_for('clientes.desvincular_contador', cliente_id=cliente.id, contador_id=ct.id) }}"
+                          onsubmit="return confirm('Remover {{ ct.nome_razao_social }} dos contadores desta empresa?');">
+                        <button type="submit" class="qb-mini qb-mini-perigo" title="Remover este contador"><i class="fas fa-xmark"></i></button>
+                    </form>
                 </div>
+                {% else %}
+                <div class="qb-vazio"><i class="fas fa-user-check"></i> Nenhum contador vinculado a esta empresa.</div>
+                {% endfor %}
+                {% if contadores_disponiveis %}
+                <details class="qb-ct-add"{% if not contadores %} open{% endif %}><summary><i class="fas fa-plus"></i> {{ 'Vincular outro contador' if contadores else 'Vincular contador' }}</summary>
+                    <form method="POST" action="{{ url_for('clientes.vincular_contador', cliente_id=cliente.id) }}" class="qb-ct-form">
+                        <select id="contador_id" name="contador_id" class="qb-inp" required>
+                            <option value="">Escolha o contador…</option>
+                            {% for ct in contadores_disponiveis %}<option value="{{ ct.id }}">{% if ct.numero_cliente %}{{ ct.numero_cliente }} - {% endif %}{{ ct.nome_razao_social }}{% if not ct.tem_certificado %} (sem certificado){% endif %}</option>{% endfor %}
+                        </select>
+                        <input type="text" id="finalidade" name="finalidade" class="qb-inp" maxlength="30" placeholder="finalidade (opcional)">
+                        <button type="submit" class="qb-add"><i class="fas fa-check"></i> Vincular</button>
+                    </form>
+                </details>
+                {% endif %}
+            </section>
 
-                <div class="card fv-cert-hero">
-                    <div class="card-header">
-                        <h3 class="card-title"><i class="fas fa-certificate"></i> Certificado Digital (A1)
-                            {# link discreto para o guia em PDF (static/docs) — pedido de 13/09/2026 #}
-                            <a href="{{ url_for('static', filename='docs/certificado-digital-instrucoes.pdf') }}"
-                               target="_blank" rel="noopener"
-                               style="font-size:12px; font-weight:500; margin-left:12px; color:#dcfce7; opacity:.9; text-decoration:none; border:1px solid rgba(220,252,231,.45); border-radius:999px; padding:2px 10px; vertical-align:middle;"
-                               title="Como enviar e instalar o certificado (PDF)">
-                                <i class="fas fa-file-pdf"></i> instruções
-                            </a>
-                        </h3>
-                    </div>
-                    <div class="card-body">
-                        <div id="certVinculoAtual">
-                            {% if certificado %}
-                            <div class="info-grid">
-                                <div class="info-item">
-                                    <label>Status</label>
-                                    {% if certificado.cert_status and certificado.cert_status.nivel == 'vencido' %}
-                                    <span class="badge badge-danger">VENCIDO em {{ certificado.validade|format_date }}</span>
-                                    {% elif certificado.cert_status and certificado.cert_status.nivel == 'laranja' %}
-                                    <span class="badge badge-warning">VENCE EM {{ certificado.cert_status.dias }} DIAS</span>
-                                    {% else %}
-                                    <span class="badge badge-success">Vinculado</span>
-                                    {% endif %}
-                                </div>
-                                <div class="info-item">
-                                    <label>{{ certificado.tipo_doc }}</label>
-                                    <span>{{ certificado.cnpj }}</span>
-                                </div>
-                                {% if certificado.procuracao %}
-                                <div class="info-item">
-                                    <label>Vínculo</label>
-                                    <span class="badge badge-warning">PROCURAÇÃO (terceiro)</span>
-                                </div>
-                                {% endif %}
-                                {% if certificado.validade %}
-                                <div class="info-item">
-                                    <label>Validade</label>
-                                    {% if certificado.cert_status and certificado.cert_status.nivel == 'vencido' %}
-                                    <span style="color:#dc2626; font-weight:700;">{{ certificado.validade|format_date }}</span>
-                                    {% elif certificado.cert_status and certificado.cert_status.nivel == 'laranja' %}
-                                    <span style="color:#d97706; font-weight:700;">{{ certificado.validade|format_date }}</span>
-                                    {% else %}
-                                    <span>{{ certificado.validade|format_date }}</span>
-                                    {% endif %}
-                                </div>
-                                {% endif %}
-                                <div class="info-item full-width">
-                                    <label>Arquivo</label>
-                                    {# só o nome: o caminho interno de armazenamento não é assunto do usuário (13/09/2026) #}
-                                    <span style="word-break: break-all;">{{ (certificado.dropbox_path or '').rsplit('/', 1)[-1] }}</span>
-                                </div>
-                            </div>
-                            {% else %}
-                            <p style="color:#64748b;">Nenhum certificado vinculado a esta empresa.</p>
-                            {% endif %}
-                        </div>
-
-                        <div style="margin-top:16px;">
-                            <p style="color:#64748b; font-size:13px; margin-bottom:12px;">
-                                Envie o arquivo <strong>.pfx</strong> ou <strong>.p12</strong> pelo
-                                <strong>Q-Colabore</strong>, nomeado com o
-                                <strong>número do cadastro</strong>
-                                ({{ (cliente.numero_cliente or 's/nº') }}.pfx) ou o
-                                <strong>CPF/CNPJ</strong>. Se o nome trouxer a palavra
-                                <strong>senha</strong> seguida da senha
-                                (ex.: <code>{{ (cliente.numero_cliente or '175') }} senha 1234.pfx</code>),
-                                o sistema vincula sozinho em até 5 minutos. Senão, clique
-                                abaixo — o sistema localiza o arquivo e pede a senha.
-                            </p>
-
-                            <button type="button" class="btn btn-primary" id="btnCertBuscar"
-                                    onclick="certBuscar({{ cliente.id }})">
-                                <i class="fas fa-certificate"></i>
-                                {{ 'Revincular Certificado' if certificado else 'Vincular Certificado' }}
-                            </button>
-
-                            <div id="certSenhaBox" style="display:none; margin-top:16px; max-width:420px;">
-                                <div class="form-group">
-                                    <label for="certSenha">
-                                        Senha do certificado (<strong id="certArquivoNome"></strong>)
-                                    </label>
-                                    <input type="password" id="certSenha" class="form-control"
-                                           autocomplete="off" placeholder="Digite a senha do .pfx">
-                                </div>
-
-                                {% if certificado %}
-                                <div style="margin-top:10px; padding:10px 12px; border-radius:6px;
-                                            background:#fffbeb; border:1px solid #f59e0b;
-                                            color:#92400e; font-size:13px;">
-                                    <strong>&#x26A0;&#xFE0F; Já existe certificado vinculado</strong>
-                                    ({{ certificado.tipo_doc }} {{ certificado.cnpj }}{% if certificado.validade %},
-                                    válido até {{ certificado.validade|format_date }}{% endif %}).
-                                    Vincular outro <strong>substitui</strong> este registro — a empresa
-                                    segue com 1 certificado só.
-                                </div>
-                                {% endif %}
-                                <button type="button" class="btn btn-primary" style="margin-top:10px;"
-                                        id="btnCertVincular" onclick="certVincular({{ cliente.id }})">
-                                    <i class="fas fa-lock"></i> Validar e Vincular
-                                </button>
-                            </div>
-
-                            <div id="certMsg" style="margin-top:14px; display:none;"></div>
-                        </div>
-
-                        {# Captura disponível quando há cert PRÓPRIO **ou** um contador
-                           vinculado com certificado — espelha a eleição que
-                           dfe_captura._resolver_certificado faz no backend. #}
-                        {% set contador_cert = (contadores | selectattr('tem_certificado') | first) %}
-                        {% if certificado or contador_cert %}
-                        <hr style="margin:20px 0; border:none; border-top:1px solid #e5e7eb;">
-                        <div>
-                            <h4 style="margin:0 0 6px; font-size:15px;">Captura de NF-e (SEFAZ)</h4>
-
-                            {% if not certificado and contador_cert %}
-                            <div style="margin-bottom:12px; padding:10px 12px; border-radius:6px;
-                                        background:#eff6ff; border:1px solid #3b82f6;
-                                        color:#1e40af; font-size:13px;">
-                                Esta empresa não tem certificado próprio. A captura vai usar o
-                                certificado do contador
-                                <strong>{{ contador_cert.numero_cliente }} - {{ contador_cert.nome_razao_social }}</strong>
-                                ({{ contador_cert.cert_tipo_doc }} {{ contador_cert.cert_doc }}).
-                                A consulta continua sendo feita com o CNPJ <strong>desta empresa</strong>.
-                            </div>
-                            {% endif %}
-
-                            <p style="color:#64748b; font-size:13px; margin-bottom:12px;">
-                                Busca os documentos fiscais destinados a esta empresa na SEFAZ
-                                (distribuição por NSU). <strong>Só leitura</strong> — o sistema nunca manifesta.
-                                Use "Consultar (teste)" primeiro para ver o que viria sem gravar nada.
-                            </p>
-                            {# Consultar/capturar gasta a cota do CNPJ na SEFAZ: permissão
-                               própria (clientes.dfe_captura), conferida também no portão. #}
-                            {% if pode_rota('dfe.dfe_capturar') %}
-                            <button type="button" class="btn" style="background:#64748b; color:#fff;"
-                                    id="btnDfeConsultar" onclick="dfeConsultar({{ cliente.id }})">
-                                <i class="fas fa-vial"></i> Consultar (teste)
-                            </button>
-                            <button type="button" class="btn btn-primary"
-                                    id="btnDfeCapturar" onclick="dfeCapturar({{ cliente.id }})">
-                                <i class="fas fa-cloud-download-alt"></i> Capturar agora
-                            </button>
-                            {% else %}
-                            <p style="color:#64748b; font-size:13px;"><i class="fas fa-lock"></i>
-                                A captura manual é feita por quem tem a permissão "Captura manual na SEFAZ".</p>
-                            {% endif %}
-                            <div id="dfeMsg" style="margin-top:14px; display:none;"></div>
-
-                            {% if current_user.is_admin() and dfe_cursor %}
-                            {# ESTADO DO CURSOR, sempre visível.
-                               O 656 é invisível por natureza: a empresa some da captura e
-                               ninguém percebe até faltar nota — foi o que aconteceu com o
-                               162 (2 dias) e o Serafim (uma semana). Mostrar o atraso aqui
-                               faz o problema aparecer ao abrir o cliente, sem depender de
-                               ninguém rodar "Consultar (teste)" no celular. #}
-                            <div style="margin-top:16px; padding:12px 14px; border-radius:8px; font-size:13px;
-                                        background:{{ '#fef2f2' if dfe_cursor.travado else '#f0fdf4' }};
-                                        border:1px solid {{ '#fecaca' if dfe_cursor.travado else '#bbf7d0' }};
-                                        color:{{ '#991b1b' if dfe_cursor.travado else '#166534' }};">
-                                {% if dfe_cursor.travado %}
-                                <b>Captura travada.</b> A SEFAZ está recusando com
-                                <code>656 — consumo indevido</code> e há
-                                <b>{{ dfe_cursor.atraso }} documento(s)</b> represado(s).
-                                {% else %}
-                                <b>Captura em dia.</b>
-                                {% endif %}
-                                <div style="margin-top:6px; opacity:.85;">
-                                    nosso cursor: <b>{{ dfe_cursor.ult_nsu }}</b>
-                                    {% if dfe_cursor.sefaz_ult %} · a SEFAZ aponta:
-                                    <b>{{ dfe_cursor.sefaz_ult }}</b>{% endif %}
-                                    {% if dfe_cursor.ult_sucesso %} · última captura com sucesso:
-                                    {{ dfe_cursor.ult_sucesso.strftime('%d/%m/%Y %H:%M') }}{% endif %}
-                                </div>
-                            </div>
-                            {% endif %}
-
-                            {% if current_user.is_admin() %}
-                            {# Alavanca perigosa: recolhida atrás de um clique e marcada como avançada.
-                               Abre SOZINHA quando o cursor está travado — é exatamente quando ela
-                               serve, e no celular ninguém vai caçar um <details> fechado. #}
-                            <details class="fv-nsu-adv" style="margin-top:16px;"
-                                     {% if dfe_cursor and dfe_cursor.travado %}open{% endif %}>
-                                <summary>Ajuste avançado (admin) — semear cursor de NSU</summary>
-                                <div style="margin-top:10px; padding:12px; border:1px dashed #d1d5db; border-radius:6px; background:#fafafa;">
-                                    <div style="font-size:13px; color:#64748b; margin-bottom:8px;">
-                                        Use só quando a SEFAZ retornar 656 informando um ultNSU e o cursor
-                                        local estiver desalinhado (ex.: o CNPJ já foi consumido por outro
-                                        sistema). <strong>Os documentos anteriores a esse NSU NÃO serão
-                                        capturados</strong> — se precisar deles, obtenha por outro meio
-                                        (importação manual do XML).
-                                    </div>
-                                    {# value já vem preenchido com o ultNSU que a SEFAZ mandou
-                                       usar: no celular, digitar número de 5 dígitos a partir de
-                                       um log é convite a errar. O campo segue editável. #}
-                                    <input type="number" id="dfeSeedNsu" min="0"
-                                           placeholder="ultNSU informado pela SEFAZ"
-                                           {% if dfe_cursor and dfe_cursor.travado %}value="{{ dfe_cursor.sefaz_ult }}"{% endif %}
-                                           style="width:240px; max-width:100%; padding:8px; margin-right:6px;">
-                                    <button type="button" class="btn" style="background:#b45309; color:#fff; padding:10px 16px;"
-                                            onclick="dfeSeed({{ cliente.id }})">Semear cursor de NSU</button>
-                                </div>
-                            </details>
-                            {% endif %}
-                        </div>
-                        {% endif %}
-                    </div>
+            <!-- NOTAS RECEBIDAS (busca automática das notas destinadas à empresa) -->
+            <section class="qb-b s6" id="notas-recebidas">
+                <div class="qb-bh"><span class="qb-ico i-azul"><i class="fas fa-cloud-arrow-down"></i></span>
+                    <div><h3>Notas recebidas</h3><small class="qb-sub2">o sistema busca sozinho as notas emitidas para esta empresa</small></div></div>
+                {% if certificado or contador_cert %}
+                {% if dfe_cursor %}
+                <div class="qb-estado {{ 'qb-estado-ruim' if dfe_cursor.travado else ('qb-estado-am' if dfe_cursor.atraso else '') }}">
+                    <span class="qb-estado-ic"><i class="fas fa-{{ 'triangle-exclamation' if dfe_cursor.travado or dfe_cursor.atraso else 'check' }}"></i></span>
+                    <div><b>{% if dfe_cursor.travado %}Busca parada{% elif dfe_cursor.atraso %}Atrasada{% else %}Em dia{% endif %}</b>
+                        <small>{% if dfe_cursor.travado %}A Receita recusou as últimas buscas e há {{ dfe_cursor.atraso }} nota(s) esperando.
+                        {% elif dfe_cursor.atraso %}{{ dfe_cursor.atraso }} nota(s) ainda por buscar.
+                        {% else %}nada pendente{% endif %}{% if dfe_cursor.ult_sucesso %} · última busca com sucesso {{ dfe_cursor.ult_sucesso.strftime('%d/%m às %H:%M') }}{% endif %}</small></div>
                 </div>
-            </div>
-
-
+                {% else %}
+                <div class="qb-estado qb-estado-am"><span class="qb-estado-ic"><i class="fas fa-hourglass-half"></i></span><div><b>Ainda não buscou</b><small>a primeira busca acontece no próximo ciclo automático</small></div></div>
+                {% endif %}
+                {% if not certificado and contador_cert %}<p class="qb-nota-azul"><i class="fas fa-circle-info"></i> Sem certificado próprio: a busca usa o do contador <b>{{ contador_cert.nome_razao_social | nome_proprio }}</b>, sempre com o CNPJ desta empresa.</p>{% endif %}
+                {% if pode_rota('dfe.dfe_capturar') %}
+                <div class="qb-cert-acoes" style="margin-top:14px">
+                    <button type="button" class="qb-add qb-add-cinza" id="btnDfeConsultar" onclick="dfeConsultar({{ cliente.id }})" title="Mostra o que viria, sem gravar nada"><i class="fas fa-eye"></i> Ver o que viria</button>
+                    <button type="button" class="qb-add" id="btnDfeCapturar" onclick="dfeCapturar({{ cliente.id }})"><i class="fas fa-cloud-arrow-down"></i> Buscar agora</button>
+                </div>
+                {% endif %}
+                <div id="dfeMsg" style="margin-top:12px; display:none;"></div>
+                {% if current_user.is_admin() %}
+                <details class="fv-nsu-adv qb-adv"{% if dfe_cursor and dfe_cursor.travado %} open{% endif %}>
+                    <summary>Ajuste avançado (administrador)</summary>
+                    <div class="qb-adv-box">
+                        {% if dfe_cursor %}<div class="qb-adv-num">nosso cursor <b>{{ dfe_cursor.ult_nsu }}</b>{% if dfe_cursor.sefaz_ult %} · a Receita aponta <b>{{ dfe_cursor.sefaz_ult }}</b>{% endif %}</div>{% endif %}
+                        <p>Use só quando a Receita recusar (656) informando um ultNSU e o cursor estiver desalinhado. <b>As notas anteriores a esse número NÃO serão buscadas</b> — se precisar delas, importe o XML.</p>
+                        <input type="number" id="dfeSeedNsu" min="0" class="qb-inp" placeholder="ultNSU informado"
+                               {% if dfe_cursor and dfe_cursor.travado %}value="{{ dfe_cursor.sefaz_ult }}"{% endif %} style="max-width:220px">
+                        <button type="button" class="qb-add" style="color:#b45309;background:#fffbeb;border-color:#fcd34d" onclick="dfeSeed({{ cliente.id }})">Semear cursor</button>
+                    </div>
+                </details>
+                {% endif %}
+                {% else %}
+                <div class="qb-vazio"><i class="fas fa-certificate"></i> Para buscar notas, vincule o certificado da empresa ou um contador com certificado.</div>
+                {% endif %}
             </section>
 
             <!-- CADASTROS ADICIONAIS -->
@@ -2467,7 +2301,7 @@ function closeAddAddressModal() {
 }
 
 const CT_URL_NOVO = "{{ url_for('clientes.novo_contato', cliente_id=cliente.id) }}";
-const CT_URL_EDITAR = "{{ url_for('clientes.editar_contato', id=0) }}";
+const CT_URL_EDITAR = "{{ url_for('clientes.editar_contato', id=987654321) }}";   // o id real entra no lugar de 987654321
 const CT_URL_CELULAR = "{{ url_for('clientes.api_contato_por_celular', digitos='0000000000') }}";
 
 function contatoLimpar() {
@@ -2484,11 +2318,17 @@ function showAddContactModal() {
     document.getElementById('addContactModal').style.display = 'block';
     document.getElementById('ct_celular').focus();
 }
+document.addEventListener('click', function (e) {
+    var card = e.target.closest('.qb-pessoa[data-ct]');
+    if (!card) return;
+    if (e.target.closest('a, form, button:not(.qb-ct-editar), .cp-btn, .cp-tudo')) return;
+    try { editarContato(JSON.parse(card.getAttribute('data-ct'))); } catch (err) {}
+});
 function editarContato(c) {
     contatoLimpar();
     document.getElementById('ctModalTitulo').textContent = 'Editar contato';
     document.getElementById('ctSalvar').textContent = 'Salvar';
-    document.getElementById('ctForm').action = CT_URL_EDITAR.replace(/0$/, String(c.id));
+    document.getElementById('ctForm').action = CT_URL_EDITAR.replace('987654321', String(c.id));
     document.getElementById('ct_celular').value = c.celular || '';
     document.getElementById('ct_telefone').value = c.telefone || '';
     document.getElementById('ct_nome').value = c.nome || '';
