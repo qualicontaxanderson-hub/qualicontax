@@ -2567,7 +2567,10 @@ function atualizarResumo() {
         }
         itens.push([cobOk, cobSel ? 'Cobrança dos honorários' : 'Cobrança (o Financeiro define)', 'v']);
         if (pj) itens.push([!!val('email') || contatoEmail || (typeof CT_EXISTENTES !== 'undefined' && CT_EXISTENTES > 0), 'E-mail (do CNPJ ou de um contato)', 'v']);
-        else itens.push([temContato, 'Contato (nome e celular)', 'v']);
+        else {
+            itens.push([temContato, 'Contato (nome e celular)', 'v']);
+            itens.push([PF_DOCS.length > 0 && !pfDocFaltas().length, 'Documento de identificação', 'v']);
+        }
         itens.push([typeof CT_SEM_CEL === 'undefined' || !CT_SEM_CEL, 'Celular de todos os contatos', 'a']);
         itens.push([grupo, 'Grupo de empresas', 'c']);
         itens.push([cel.length >= 10, 'Celular', 'c']);
@@ -2578,7 +2581,7 @@ function atualizarResumo() {
             itens.push([!!((ab && ab.checked) || val('contabilidade_anterior_id')), 'Origem (aberta pela casa ou contabilidade anterior)', 'c']);
         }
     } else if (tipo && ehAvulso) {
-        itens.push([!!val('email'), 'E-mail', 'v']);
+        itens.push([!!val('email'), pj ? 'E-mail' : 'E-mail (preencha na ficha, depois de salvar)', 'v']);
         if (pj) itens.push([regime, 'Regime tributário', 'v']);
         itens.push([typeof CT_SEM_CEL === 'undefined' || !CT_SEM_CEL, 'Celular de todos os contatos', 'a']);
         itens.push([cel.length >= 10, 'Celular', 'a']);

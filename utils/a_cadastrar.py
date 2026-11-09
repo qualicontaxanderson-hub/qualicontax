@@ -23,6 +23,9 @@ PENDENCIAS_EMPRESA = [
     ('email', 'Contato com e-mail', 'verm', 'nenhum contato com e-mail (é por eles que vão boletos e documentos)'),
     ('contato_celular', 'Celular do contato', 'amb', 'há contato sem celular (obrigatório desde 05/11/2026)'),
     ('contato', 'Contato', 'verm', 'pessoa física sem nenhum contato (nome + celular)'),
+    # 09/11/2026 (Anderson): "O A CADASTRAR deve passar a cobrar o documento da pessoa física? SIM" — desde
+    # que o Novo grava incompleto, o documento deixou de travar o salvar e passou a ser cobrado aqui.
+    ('documento', 'Documento', 'verm', 'pessoa física sem documento de identificação (RG, CNH, CIN...)'),
     ('grupo', 'Grupo', 'cinza', 'grupo de empresas'),
     ('celular', 'Celular', 'cinza', 'celular de contato'),
     ('ramo', 'Ramo', 'cinza', 'ramo de atividade'),
@@ -52,6 +55,7 @@ SELECT c.id, c.numero_cliente, c.nome_razao_social, c.nome_fantasia, c.cpf_cnpj,
        COALESCE(r.n, 0) AS n_ramos,
        COALESCE(k2.n, 0) AS n_contadores,
        COALESCE(ie.n, 0) AS n_ie_isenta,
+       COALESCE(dc.n, 0) AS n_docs,
        e.cidade, e.uf
   FROM clientes c
   LEFT JOIN (SELECT cliente_id, COUNT(*) AS n FROM socios_clientes WHERE ativo = 1 GROUP BY cliente_id) s ON s.cliente_id = c.id
@@ -63,6 +67,7 @@ SELECT c.id, c.numero_cliente, c.nome_razao_social, c.nome_fantasia, c.cpf_cnpj,
   LEFT JOIN (SELECT cliente_id, COUNT(*) AS n FROM cliente_ramo_atividade_relacao GROUP BY cliente_id) r ON r.cliente_id = c.id
   LEFT JOIN (SELECT cliente_id, COUNT(*) AS n FROM cliente_contadores GROUP BY cliente_id) k2 ON k2.cliente_id = c.id
   LEFT JOIN (SELECT cliente_id, COUNT(*) AS n FROM clientes_inscricoes_estaduais WHERE isenta = 1 GROUP BY cliente_id) ie ON ie.cliente_id = c.id
+  LEFT JOIN (SELECT cliente_id, COUNT(*) AS n FROM clientes_pf_documentos GROUP BY cliente_id) dc ON dc.cliente_id = c.id
   LEFT JOIN (SELECT cliente_id, MAX(cidade) AS cidade, MAX(estado) AS uf FROM enderecos_clientes GROUP BY cliente_id) e ON e.cliente_id = c.id
  WHERE c.avulso = 0 AND c.numero_cliente IS NOT NULL AND c.situacao = 'ATIVO'
  ORDER BY CAST(c.numero_cliente AS UNSIGNED), c.numero_cliente
@@ -117,6 +122,8 @@ def _pend_empresa(c):
         p.append('email')
     if not pj and not c['n_contatos']:
         p.append('contato')          # PF: sem e-mail no cadastro, o contato é obrigatório (05/11/2026)
+    if not pj and not c['n_docs']:
+        p.append('documento')        # PF: documento de identificação (09/11/2026)
     if c['n_contatos_sem_celular']:
         p.append('contato_celular')
     if not c['n_grupos']:
@@ -196,7 +203,7 @@ ALVO = {
     'cobranca': 'campo-cobranca', 'celular': 'campo-celular', 'ramo': 'campo-ramos',
     'origem': 'campo-origem', 'conferir': 'campo-observacoes',
     'grupo': 'campo-grupo', 'socios': 'socios', 'email': 'contatos', 'contato_celular': 'contatos',
-    'contato': 'contatos', 'contador': 'contadores',
+    'contato': 'contatos', 'contador': 'contadores', 'documento': 'dados-pessoais',
 }
 
 _SQL_UM = """
@@ -214,6 +221,7 @@ SELECT c.id, c.avulso, c.tipo_pessoa, c.nire, c.inscricao_municipal, c.inscricao
        (SELECT GROUP_CONCAT(k2.nome_razao_social SEPARATOR ', ') FROM cliente_contadores cc JOIN clientes k2 ON k2.id = cc.contador_id WHERE cc.cliente_id = c.id) AS contadores,
        (SELECT COUNT(*) FROM cliente_contadores cc WHERE cc.cliente_id = c.id) AS n_contadores,
        (SELECT COUNT(*) FROM clientes_inscricoes_estaduais ie WHERE ie.cliente_id = c.id AND ie.isenta = 1) AS n_ie_isenta,
+       (SELECT COUNT(*) FROM clientes_pf_documentos d WHERE d.cliente_id = c.id) AS n_docs,
        (SELECT nome FROM contabilidades ca WHERE ca.id = c.contabilidade_anterior_id) AS contab_nome
   FROM clientes c
  WHERE c.id = %s
@@ -256,6 +264,8 @@ def pendencias_do_cadastro(cliente_id):
             return 'todos têm' if c['n_contatos'] else 'nenhum contato'
         if k == 'contato':
             return f"{c['n_contatos']} contato(s)"
+        if k == 'documento':
+            return f"{c['n_docs']} documento(s)"
         if k == 'grupo':
             return c['grupos']
         if k == 'celular':
@@ -270,7 +280,7 @@ def pendencias_do_cadastro(cliente_id):
 
     # O que não se aplica a este cadastro (ex.: NIRE de pessoa física) não entra em nenhuma das listas.
     so_pj = {'nire', 'im', 'ie', 'socios', 'regime', 'email', 'origem'} if not avulso else {'regime'}
-    so_pf = {'contato'} if not avulso else set()
+    so_pf = {'contato', 'documento'} if not avulso else set()
     faltam, ok = [], []
     for k, rotulo, cor, ajuda in catalogo:
         if (k in so_pj and not pj) or (k in so_pf and pj):

@@ -811,7 +811,7 @@
             <a href="#regime"><i class="qb-pt qb-pt-{{ bol(['regime', 'origem', 'conferir']) }}"></i>{{ 'Regime' if pj else 'Contrato' }}</a>
             <a href="#contato-empresa"><i class="qb-pt qb-pt-{{ bol(['celular'] + (['email'] if falta.avulso else [])) }}"></i>Contato</a>
             <a href="#grupo-ramo"><i class="qb-pt qb-pt-{{ bol(['grupo', 'ramo', 'contador']) }}"></i>Grupo e ramo</a>
-            {% if not pj %}<a href="#dados-pessoais"><i class="qb-pt qb-pt-ok"></i>Dados pessoais</a>{% endif %}
+            {% if not pj %}<a href="#dados-pessoais"><i class="qb-pt qb-pt-{{ bol(['documento']) }}"></i>Dados pessoais</a>{% endif %}
             <a href="#socios"><i class="qb-pt qb-pt-{{ bol(['socios']) }}"></i>Sócios</a>
             <a href="#responsaveis"><i class="qb-pt qb-pt-{{ 'amb' if rs_faltam else 'ok' }}"></i>Responsáveis</a>
             <a href="#enderecos"><i class="qb-pt qb-pt-{{ 'ok' if enderecos else 'amb' }}"></i>Endereços</a>
