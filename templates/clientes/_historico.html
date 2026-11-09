@@ -1,66 +1,97 @@
-{# D3 — partial (AJAX) do Histórico do cliente. Renderiza o seletor de visão,
-   os cards (mais recente → mais antigo) e a paginação. Só cartões: nada de
-   tabela que faça a página rolar de lado no celular. #}
-<div class="hist-toggle">
-  <button type="button" class="hist-tab {{ 'on' if view == 'alteracoes' else '' }}"
-          data-view="alteracoes">Alterações</button>
-  {% if is_admin %}
-  <button type="button" class="hist-tab {{ 'on' if view == 'consultas' else '' }}"
-          data-view="consultas">Consultas</button>
+{# Histórico da ficha em CARTÕES (09/11/2026) — montado em utils/hist_cartoes.py.
+   Partial (AJAX): visão, filtros por assunto, busca, cartões por dia e paginação.
+   Filtro e busca agem só na página carregada (JS em detalhes.html, por delegação). #}
+{% macro mudancas(lista, limite) %}
+  {% for m in lista[:limite] %}
+  <div class="hc-mud">
+    {% if not m.so_valor %}<small>{{ m.rotulo }}</small>{% endif %}
+    {% if m.sensivel %}<div><span class="hc-para">alterada</span> <i class="fas fa-lock hc-cad"></i></div>
+    {% else %}
+    <div>{% if m.antes %}<span class="hc-de">{{ m.antes }}</span>{% else %}<span class="hc-nada">vazio</span>{% endif %}
+      <i class="fas fa-arrow-right hc-seta"></i>
+      {% if m.depois %}<span class="hc-para">{{ m.depois }}</span>{% else %}<span class="hc-nada">vazio</span>{% endif %}</div>
+    {% endif %}
+  </div>
+  {% endfor %}
+{% endmacro %}
+
+<div class="hc-topo">
+  <div class="hist-toggle">
+    <button type="button" class="hist-tab {{ 'on' if view == 'alteracoes' else '' }}" data-view="alteracoes"><i class="fas fa-pen"></i> Alterações</button>
+    {% if is_admin %}
+    <button type="button" class="hist-tab {{ 'on' if view == 'consultas' else '' }}" data-view="consultas"><i class="fas fa-eye"></i> Consultas</button>
+    {% endif %}
+  </div>
+  {% if total %}
+  <label class="hc-busca"><i class="fas fa-magnifying-glass"></i>
+    <input type="search" class="hc-busca-inp" placeholder="Buscar no histórico" autocomplete="off"></label>
   {% endif %}
 </div>
 
 {% if total == 0 %}
-  <div class="hist-vazio">
-    Sem histórico — a auditoria começou em {{ auditoria_inicio }}.
-  </div>
+  <div class="hist-vazio">Sem histórico — a auditoria começou em {{ auditoria_inicio }}.</div>
 {% else %}
-  <div class="hist-lista">
-    {% for it in itens %}
-    <div class="hist-card">
-      <div class="hist-head">
-        <span class="hist-dt">{{ it.data_hora }}</span>
-        <span class="hist-sep">·</span>
-        <span class="hist-autor">{{ it.autor }}</span>
-        <span class="hist-sep">·</span>
-        <span class="hist-verbo">{{ it.verbo }}</span>
-      </div>
-      {# empresa fica oculta aqui: a ficha já é de uma empresa só (D4.2). #}
-      {% if it.busca %}<div class="hist-busca">buscou: <b>{{ it.busca }}</b></div>{% endif %}
-      {% if it.detalhe %}<div class="hist-detalhe">{{ it.detalhe }}</div>{% endif %}
-      {% if it.campos %}
-      <div class="hist-campos">
-        {% for c in it.campos %}
-        <div class="hist-campo">
-          {% if c.tipo == 'sensivel' %}
-            <span class="hist-lbl">{{ c.label }} alterada</span>
-          {% elif c.tipo == 'novo' %}
-            <span class="hist-lbl">{{ c.label }}:</span>
-            <span class="hist-v">{{ c.depois }}</span>
-          {% elif c.tipo == 'removido' %}
-            <span class="hist-lbl">{{ c.label }}:</span>
-            <span class="hist-v hist-old">{{ c.antes }}</span>
-          {% else %}
-            <span class="hist-lbl">{{ c.label }}:</span>
-            <span class="hist-v hist-old">{{ c.antes }}</span>
-            <span class="hist-arrow">→</span>
-            <span class="hist-v">{{ c.depois }}</span>
-          {% endif %}
-        </div>
-        {% endfor %}
-      </div>
-      {% endif %}
-    </div>
-    {% endfor %}
+  {% if categorias|length > 1 %}
+  <div class="hc-filtros">
+    <button type="button" class="hc-f on" data-cat="">Tudo <b>{{ n_cartoes }}</b></button>
+    {% for c, nome in categorias %}<button type="button" class="hc-f" data-cat="{{ c }}">{{ nome }} <b>{{ cont[c] }}</b></button>{% endfor %}
   </div>
+  {% endif %}
+
+
+    <div class="hc-grade">
+      {% for e in eventos %}
+      <article class="hc-ev hc-c-{{ e.cor }}" data-cats="{{ e.cats|join(' ') }}" data-texto="{{ e.texto }}">
+        <div class="hc-cab">
+          <span class="hc-ic"><i class="fas {{ e.ico }}"></i></span>
+          <div class="hc-tit">{{ e.titulo }}</div>
+          <span class="hc-hora" title="{{ e.semana }}"><b>{{ e.quando }}</b>{{ e.hora }}</span>
+        </div>
+
+        {% if e.mudancas %}
+        <div class="hc-muds">{{ mudancas(e.mudancas, 4) }}</div>
+        {% if e.mudancas|length > 4 %}
+        <details class="hc-mais"><summary>mais {{ e.mudancas|length - 4 }} mudança{{ 's' if e.mudancas|length > 5 }}</summary>
+          <div class="hc-muds">{{ mudancas(e.mudancas[4:], 999) }}</div></details>
+        {% endif %}
+        {% endif %}
+
+        {% if e.tags %}<div class="hc-tags">{% for t in e.tags %}<span>{{ t }}</span>{% endfor %}{% if e.mais_tags %}<span class="hc-tag-mais">+{{ e.mais_tags }}</span>{% endif %}</div>{% endif %}
+        {% if e.nota %}<p class="hc-nota">{{ e.nota }}</p>{% endif %}
+
+        {% if e.dados %}
+        <details class="hc-mais"><summary>ver os dados ({{ e.dados|length }})</summary>
+          <dl class="hc-dl">{% for r, v in e.dados %}<dt>{{ r }}</dt><dd>{{ v }}</dd>{% endfor %}</dl></details>
+        {% endif %}
+
+        {% if e.filhos %}
+        <details class="hc-mais"><summary>ver as {{ e.filhos|length }} mudanças</summary>
+          <div class="hc-filhos">
+            {% for f in e.filhos %}
+            <div class="hc-filho">
+              <span class="hc-ic hc-ic-p hc-c-{{ f.cor }}"><i class="fas {{ f.ico }}"></i></span>
+              <div><div class="hc-tit">{{ f.titulo }} <span class="hc-hora">{{ f.hora }}</span></div>
+                {% if f.mudancas %}<div class="hc-muds">{{ mudancas(f.mudancas, 999) }}</div>{% endif %}
+                {% if f.tags %}<div class="hc-tags">{% for t in f.tags %}<span>{{ t }}</span>{% endfor %}</div>{% endif %}
+                {% if f.nota %}<p class="hc-nota">{{ f.nota }}</p>{% endif %}
+                {% if f.dados %}<dl class="hc-dl">{% for r, v in f.dados %}<dt>{{ r }}</dt><dd>{{ v }}</dd>{% endfor %}</dl>{% endif %}
+              </div>
+            </div>
+            {% endfor %}
+          </div></details>
+        {% endif %}
+
+        <div class="hc-quem"><span class="hc-av">{{ e.ini }}</span><span>{{ e.autor | nome_proprio }}{% if e.autor_extra %} <small>· {{ e.autor_extra }}</small>{% endif %}</span></div>
+      </article>
+      {% endfor %}
+    </div>
+  <div class="hist-vazio hc-nenhum" style="display:none">Nada encontrado nesta página do histórico.</div>
 
   {% if total_paginas > 1 %}
   <div class="hist-pag">
-    <button type="button" class="hist-pg" data-view="{{ view }}" data-page="{{ page - 1 }}"
-            {{ 'disabled' if page <= 1 else '' }}>‹ Anterior</button>
+    <button type="button" class="hist-pg" data-view="{{ view }}" data-page="{{ page - 1 }}" {{ 'disabled' if page <= 1 else '' }}>‹ Mais recentes</button>
     <span class="hist-pg-info">Página {{ page }} de {{ total_paginas }} · {{ total }} registro(s)</span>
-    <button type="button" class="hist-pg" data-view="{{ view }}" data-page="{{ page + 1 }}"
-            {{ 'disabled' if page >= total_paginas else '' }}>Próxima ›</button>
+    <button type="button" class="hist-pg" data-view="{{ view }}" data-page="{{ page + 1 }}" {{ 'disabled' if page >= total_paginas else '' }}>Mais antigos ›</button>
   </div>
   {% endif %}
 {% endif %}

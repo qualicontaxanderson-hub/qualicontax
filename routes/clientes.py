@@ -10,6 +10,7 @@ from decimal import Decimal, InvalidOperation
 from utils.auth_helper import admin_required, login_required, permission_required
 from utils.atividade import registrar, rotulo_empresa
 from utils.auditoria_fmt import AUDITORIA_INICIO, hist_preparar
+from utils import hist_cartoes as HC
 from utils.form_helpers import limpar_form
 from utils.db_helper import execute_query
 from utils.acesso import filtrar_lista, empresas_ocultas, pode_ver_empresa
@@ -3776,10 +3777,11 @@ def historico(id):
         # filhas endereços/sócios/contratos (cliente_id vive no JSON do log).
         cond = ("acao LIKE 'escrita.%%' AND ("
                 "(tabela_afetada IN ('clientes','dfe_certificados') AND registro_id = %s) "
-                "OR (tabela_afetada IN ('enderecos_clientes','socios_clientes','contratos') AND "
+                "OR (tabela_afetada IN ('enderecos_clientes','socios_clientes','contratos','contatos_clientes') AND "
                 "(JSON_UNQUOTE(JSON_EXTRACT(dados_novos,'$.cliente_id')) = %s "
-                "OR JSON_UNQUOTE(JSON_EXTRACT(dados_anteriores,'$.cliente_id')) = %s)))")
-        params = [id, sid, sid]
+                "OR JSON_UNQUOTE(JSON_EXTRACT(dados_anteriores,'$.cliente_id')) = %s "
+                "OR JSON_UNQUOTE(JSON_EXTRACT(dados_novos,'$.excluido.cliente_id')) = %s)))")
+        params = [id, sid, sid, sid]
     else:
         # Consultas: abrir ficha (registro_id) + buscas/exportações desta empresa
         # (cliente_id no filtro) + captura SEFAZ (cliente_id no corpo).
@@ -3806,8 +3808,15 @@ def historico(id):
                                tuple(faltam), fetch=True) or []:
             nomes[u['id']] = u['nome']
 
-    itens = [hist_preparar(r, nomes) for r in rows]
+    # 09/11/2026: Histórico em CARTÕES ("assim como está fica cansativo") — utils/hist_cartoes.
+    if view == 'alteracoes':
+        ref = HC.nomes_referenciados(rows, execute_query)
+        eventos, cont, n_cartoes = HC.montar(rows, nomes, ref)
+    else:
+        eventos, cont, n_cartoes = HC.consultas(rows, nomes)
     total_paginas = max(1, (total + per - 1) // per)
-    return render_template('clientes/_historico.html', itens=itens, view=view, page=page,
+    return render_template('clientes/_historico.html', eventos=eventos, cont=cont, n_cartoes=n_cartoes,
+                           categorias=[c for c in HC.CATEGORIAS if cont.get(c[0])],
+                           view=view, page=page,
                            total=total, total_paginas=total_paginas, cliente_id=id,
                            auditoria_inicio=AUDITORIA_INICIO, is_admin=current_user.is_admin())
