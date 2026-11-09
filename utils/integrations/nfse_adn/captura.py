@@ -255,9 +255,11 @@ def capturar_empresa(empresa_id, cnpj, ambiente=client.Ambiente.PRODUCAO_RESTRIT
             if deadline_seg and (time.monotonic() - t0) > deadline_seg:
                 parada = 'deadline do ciclo'
                 break
-            lote = client.buscar_lote(
-                sessao, nsu, ambiente=ambiente,
-                cnpj_consulta=cnpj if cert.por_raiz else None)
+            # CNPJ SEMPRE informado (08/11/2026): desde 31/10/2026 ~09h o ADN recusa a consulta
+            # pelo CNPJ do certificado sem cnpjConsulta (TipoConsulta "InscricaoCertificado" ->
+            # REJEICAO, HTTP 400, Erros vazio); com cnpjConsulta responde ("CnpjBase"). Antes ia
+            # só quando o certificado era de outra unidade (por_raiz) — 8 dias sem captura.
+            lote = client.buscar_lote(sessao, nsu, ambiente=ambiente, cnpj_consulta=cnpj)
             lotes += 1
             if lote.vazio:
                 break
