@@ -473,6 +473,9 @@ OP_PROVADOS = {1, 3}
 # Municípios fora do Emissor Nacional cujo sistema próprio já fala com o motor (DPS nacional no
 # webservice do município). Senador Canedo = ISSWeb/Fiorilli (provado na homologação, 06/11/2026).
 PROVEDOR_DO_MUNICIPIO = {'5220454': 'fiorilli'}
+# Prefeituras que RECUSAM a nota sem a inscrição municipal do prestador (provado pela recusa).
+# Goiatuba: E0116 em 06/11/2026 (NH Goiatuba). Entra aqui só município com recusa vista.
+MUNICIPIOS_EXIGEM_IM = {'5209101': 'Goiatuba'}
 
 
 def empresa_da_matriz(cliente_id):
@@ -611,7 +614,11 @@ def faltas_da_matriz(emp, cfg, series, sugestao=None, aceita=False):
             from utils.integrations.nfse_adn.convenio import aceita_emissor_nacional
             aceita = aceita_emissor_nacional(cfg.get('municipio_ibge'), ambiente=1)
         cidade = emp.get('cidade') or _dig(cfg.get('municipio_ibge'))
-        if (_dig(cfg.get('municipio_ibge')) != '3550308' and not _dig(cfg.get('inscricao_municipal'))
+        if _dig(cfg.get('municipio_ibge')) in MUNICIPIOS_EXIGEM_IM and not _dig(cfg.get('inscricao_municipal')):
+            trava('matriz', f"{MUNICIPIOS_EXIGEM_IM[_dig(cfg.get('municipio_ibge'))]} exige a inscrição "
+                            'municipal da empresa: sem ela a prefeitura recusa a nota. Preencha a inscrição '
+                            'municipal (está no alvará ou no cadastro da prefeitura).')
+        elif (_dig(cfg.get('municipio_ibge')) != '3550308' and not _dig(cfg.get('inscricao_municipal'))
                 and aceita == 'sim'):
             aviso('matriz', 'Sem inscrição municipal: algumas prefeituras recusam a nota sem ela.')
         if aceita in ('nao', 'sem_convenio') and emissor == 'fiorilli':
@@ -707,6 +714,7 @@ def contexto_da_matriz(cliente_id, emp=None):
         'faltas': faltas, 'cartoes': {c['chave']: c for c in cartoes}, 'cartoes_lista': cartoes,
         'prontos': sum(1 for c in cartoes if c['ok']) if salvo else 0,
         'aceita': aceita, 'provedor': PROVEDOR_DO_MUNICIPIO.get(ibge, ''),
+        'exige_im': MUNICIPIOS_EXIGEM_IM.get(ibge, ''),
         'atividades': S.atividades_da_empresa(emp['documento'], emp.get('cnae'), emp.get('cnae_descricao')),
         'historico': [{'ctrib': c, 'ctrib_fmt': S.fmt_ctrib(c), 'nome': S.nome_servico(c), 'nbs': n, 'qtd': q}
                       for c, n, q in S.historico_de_notas(cliente_id, emp['documento'])],
