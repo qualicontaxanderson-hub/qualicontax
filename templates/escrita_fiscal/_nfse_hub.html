@@ -55,7 +55,39 @@
 .hub-esc input { width:100%; box-sizing:border-box; padding:11px 12px 11px 36px; border:1px solid rgba(255,255,255,.28); border-radius:11px;
                  font-size:13px; font-weight:600; color:#fff; background:rgba(255,255,255,.12); }
 .hub-esc input::placeholder { color:#cdebdc; }
+.hub-esc input:focus::placeholder { color:#94a3b8; }
+.hub-esc input:focus + .hub-pick, .hub-esc:focus-within i { color:#16a34a; }
 .hub-esc input:focus { outline:none; background:#fff; color:#0f3d2e; border-color:#fff; box-shadow:0 0 0 3px rgba(134,239,172,.35); }
+/* seletor de empresa (09/11/2026) — no lugar do <datalist> do navegador */
+.hub-pick { position:fixed; z-index:1050; background:#fff; border:1px solid #e3ece7;
+            border-radius:16px; box-shadow:0 18px 44px rgba(15,61,46,.22); overflow:hidden; display:flex; flex-direction:column; max-height:min(560px, 70vh); }
+.hub-pick-chips { display:flex; gap:6px; padding:10px 12px; border-bottom:1px solid #eef2f0; overflow-x:auto; scrollbar-width:none; flex:none; }
+.hub-pick-chips::-webkit-scrollbar { display:none; }
+.hub-pick-chips button { border:1px solid #e3ece7; background:#fff; border-radius:8px; padding:4px 10px; font-size:12px; font-weight:700; color:#334155;
+                         white-space:nowrap; cursor:pointer; font-family:inherit; }
+.hub-pick-chips button em { font-style:normal; opacity:.55; margin-left:3px; }
+.hub-pick-chips button.on { background:#0f3d2e; border-color:#0f3d2e; color:#fff; }
+.hub-pick-lista { overflow-y:auto; padding:6px; flex:1; }
+.hub-pick-it { display:flex; align-items:center; gap:11px; width:100%; text-align:left; border:0; background:none; border-radius:11px; padding:8px 10px;
+               cursor:pointer; font-family:inherit; color:#0f172a; }
+.hub-pick-it:hover, .hub-pick-it.on { background:#f0fdf4; }
+.hub-pick-ava { min-width:38px; height:38px; padding:0 5px; border-radius:10px; display:flex; align-items:center; justify-content:center; font-weight:800;
+                font-size:12.5px; color:#fff; background:linear-gradient(135deg,#94a3b8,#475569); flex:none; box-sizing:border-box; }
+.hub-pick-ava.ok { background:linear-gradient(135deg,#16a34a,#0f3d2e); }
+.hub-pick-ava.warn { background:linear-gradient(135deg,#f59e0b,#b45309); }
+.hub-pick-ava.info { background:linear-gradient(135deg,#8b5cf6,#5b21b6); }
+.hub-pick-txt { flex:1; min-width:0; }
+.hub-pick-txt b { display:block; font-size:13px; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.hub-pick-txt b mark { background:#fef08a; color:inherit; padding:0 1px; border-radius:3px; }
+.hub-pick-txt small { font-size:11.5px; color:#64748b; font-family:ui-monospace, Consolas, monospace; }
+.hub-pick-it .hub-sit { font-size:11px; padding:3px 9px; }
+.hub-pick-it .hub-sit.off { background:#f1f5f9; color:#64748b; }
+.hub-pick-nada { padding:22px; text-align:center; color:#64748b; font-size:13px; }
+.hub-pick-pe { padding:7px 14px; font-size:11.5px; color:#64748b; border-top:1px solid #eef2f0; flex:none; }
+.hub-pick-pe:empty { display:none; }
+@media (max-width: 600px) {
+  .hub-pick-it .hub-sit { display:none; }
+}
 .hub-sit { display:inline-flex; align-items:center; gap:6px; border-radius:99px; padding:4px 11px; font-size:11.5px; font-weight:800; white-space:nowrap; }
 .hub-sit.ok { background:#dcfce7; color:#15803d; }
 .hub-sit.warn { background:#fef3c7; color:#92400e; }
@@ -101,12 +133,24 @@
             {% endif %}
         </div>
         {% if hub_aba != 'conferencia' and _hl %}
-        <div class="hub-esc">
+        <div class="hub-esc" id="hubEsc">
             <i class="fas fa-magnifying-glass"></i>
-            <input id="hubEmp" list="hubEmpLista" autocomplete="off" placeholder="{{ 'Trocar de empresa' if _he else 'Escolher a empresa (número ou nome)' }}" aria-label="Escolher a empresa">
-            <datalist id="hubEmpLista">
-                {% for e in _hl %}<option data-id="{{ e.id }}" value="{{ e.numero_cliente or '' }} - {{ e.nome_razao_social }}">{{ _sit[e.situacao_nfse][0] }}</option>{% endfor %}
-            </datalist>
+            <input id="hubEmp" type="text" autocomplete="off" spellcheck="false" role="combobox" aria-expanded="false" aria-controls="hubPickLista"
+                   placeholder="{{ 'Trocar de empresa' if _he else 'Escolher a empresa: número, nome ou CNPJ' }}" aria-label="Escolher a empresa">
+            {# Seletor próprio (09/11/2026): o <datalist> do navegador abria uma lista enorme por
+               cima da tela — Anderson: "Horrivel essa consulta da configuração". #}
+            <div class="hub-pick" id="hubPick" hidden>
+                <div class="hub-pick-chips" id="hubPickChips">
+                    {% set _cont = {'liberada': 0, 'configurada': 0, 'financeiro': 0, 'sem': 0} %}
+                    {% for e in _hl %}{% set _ = _cont.update({e.situacao_nfse: _cont[e.situacao_nfse] + 1}) %}{% endfor %}
+                    <button type="button" class="on" data-s="">Todas <em>{{ _hl|length }}</em></button>
+                    {% for k in ('liberada', 'configurada', 'financeiro', 'sem') %}{% if _cont[k] %}
+                    <button type="button" data-s="{{ k }}">{{ {'liberada': 'Liberadas', 'configurada': 'Falta conferir', 'financeiro': 'Pelo Financeiro', 'sem': 'Sem configuração'}[k] }} <em>{{ _cont[k] }}</em></button>
+                    {% endif %}{% endfor %}
+                </div>
+                <div class="hub-pick-lista" id="hubPickLista" role="listbox"></div>
+                <div class="hub-pick-pe" id="hubPickPe"></div>
+            </div>
         </div>
         {% endif %}
     </div>
@@ -121,18 +165,85 @@
 {% if hub_aba != 'conferencia' and _hl %}
 <script>
 (function () {
-    var inp = document.getElementById('hubEmp'), lista = document.getElementById('hubEmpLista');
+    var inp = document.getElementById('hubEmp'), pick = document.getElementById('hubPick'),
+        lista = document.getElementById('hubPickLista'), pe = document.getElementById('hubPickPe'),
+        chips = document.getElementById('hubPickChips'), box = document.getElementById('hubEsc');
     if (!inp) return;
+    document.body.appendChild(pick);   // fora da faixa verde: lá dentro a lista ficava por baixo das abas
     var DESTINOS = {{ _destinos|tojson }}, ABA = {{ hub_aba|tojson }};
     var alvo = DESTINOS[ABA] || DESTINOS.emitir;
-    function ir() {
-        var v = inp.value.trim();
-        for (var i = 0; i < lista.options.length; i++) {
-            if (lista.options[i].value === v) { location.href = alvo.replace('987654321', lista.options[i].dataset.id); return; }
-        }
+    var SIT = {{ {'liberada': ['Liberada', 'ok'], 'configurada': ['Falta conferir', 'warn'], 'financeiro': ['Pelo Financeiro', 'info'], 'sem': ['Sem configuração', 'off']}|tojson }};
+    var ORDEM = { liberada: 0, configurada: 1, financeiro: 2, sem: 3 };
+    var DADOS = [{% for e in _hl %}{{ {'id': e.id, 'n': (e.numero_cliente or '')|string, 'nome': e.nome_razao_social, 'doc': (e.cpf_cnpj or ''), 's': e.situacao_nfse}|tojson }}{{ ',' if not loop.last }}{% endfor %}];
+    var LIMITE = 40, filtroS = '', marcado = 0, vistos = [];
+    function sem(t) { return String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase(); }
+    function dig(t) { return String(t || '').replace(/\D/g, ''); }
+    DADOS.forEach(function (e) { e._nome = sem(e.nome); e._doc = dig(e.doc); });
+    function esc(t) { return String(t).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+    function grifa(texto, q) {
+        if (!q) return esc(texto);
+        var i = sem(texto).indexOf(q);
+        if (i < 0) return esc(texto);
+        return esc(texto.slice(0, i)) + '<mark>' + esc(texto.slice(i, i + q.length)) + '</mark>' + esc(texto.slice(i + q.length));
     }
-    inp.addEventListener('change', ir);
-    inp.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); ir(); } });
+    function desenhar() {
+        var q = sem(inp.value.trim()), qd = dig(inp.value);
+        var achou = DADOS.filter(function (e) {
+            if (filtroS && e.s !== filtroS) return false;
+            if (!q) return true;
+            return e.n === q || e.n.indexOf(q) === 0 || e._nome.indexOf(q) >= 0 || (qd.length >= 3 && e._doc.indexOf(qd) >= 0);
+        });
+        achou.sort(function (a, b) {
+            if (q) { var ax = a.n === q ? 0 : 1, bx = b.n === q ? 0 : 1; if (ax !== bx) return ax - bx; }
+            else if (ORDEM[a.s] !== ORDEM[b.s]) return ORDEM[a.s] - ORDEM[b.s];
+            return (parseInt(a.n, 10) || 1e9) - (parseInt(b.n, 10) || 1e9);
+        });
+        vistos = achou.slice(0, LIMITE);
+        marcado = Math.min(marcado, Math.max(vistos.length - 1, 0));
+        lista.innerHTML = vistos.map(function (e, i) {
+            var s = SIT[e.s] || SIT.sem;
+            return '<button type="button" role="option" class="hub-pick-it' + (i === marcado ? ' on' : '') + '" data-i="' + i + '">' +
+                '<span class="hub-pick-ava ' + s[1] + '">' + esc(e.n || '—') + '</span>' +
+                '<span class="hub-pick-txt"><b>' + grifa(e.nome, q) + '</b><small>' + esc(e.doc || '') + '</small></span>' +
+                '<span class="hub-sit ' + s[1] + '">' + s[0] + '</span></button>';
+        }).join('') || '<div class="hub-pick-nada">Nenhuma empresa com “' + esc(inp.value.trim()) + '”.</div>';
+        pe.textContent = achou.length > LIMITE ? 'Mostrando ' + LIMITE + ' de ' + achou.length + ' · digite mais para filtrar' :
+                         (achou.length ? achou.length + ' empresa' + (achou.length === 1 ? '' : 's') : '');
+    }
+    function posicionar() {      // a faixa verde corta o que passa dela: o painel mede a tela
+        var r = inp.getBoundingClientRect(), vw = document.documentElement.clientWidth;
+        var w = Math.min(560, vw - 24), left = Math.min(Math.max(12, r.right - w), vw - w - 12);
+        pick.style.width = w + 'px'; pick.style.left = left + 'px'; pick.style.top = (r.bottom + 8) + 'px';
+        pick.style.maxHeight = Math.max(240, Math.min(560, window.innerHeight - r.bottom - 20)) + 'px';
+    }
+    function abrir() { pick.hidden = false; inp.setAttribute('aria-expanded', 'true'); posicionar(); desenhar(); }
+    window.addEventListener('resize', function () { if (!pick.hidden) posicionar(); });
+    window.addEventListener('scroll', function () { if (!pick.hidden) posicionar(); }, true);
+    function fechar() { pick.hidden = true; inp.setAttribute('aria-expanded', 'false'); }
+    function ir(e) { if (e) location.href = alvo.replace('987654321', e.id); }
+    function marcar(i) {
+        marcado = Math.max(0, Math.min(i, vistos.length - 1));
+        lista.querySelectorAll('.hub-pick-it').forEach(function (b, j) { b.classList.toggle('on', j === marcado); if (j === marcado) b.scrollIntoView({ block: 'nearest' }); });
+    }
+    inp.addEventListener('focus', abrir);
+    inp.addEventListener('click', abrir);
+    inp.addEventListener('input', function () { marcado = 0; abrir(); });
+    inp.addEventListener('keydown', function (e) {
+        if (e.key === 'ArrowDown') { e.preventDefault(); if (pick.hidden) abrir(); else marcar(marcado + 1); }
+        else if (e.key === 'ArrowUp') { e.preventDefault(); marcar(marcado - 1); }
+        else if (e.key === 'Enter') { e.preventDefault(); ir(vistos[marcado]); }
+        else if (e.key === 'Escape') { fechar(); inp.blur(); }
+    });
+    lista.addEventListener('mousedown', function (e) { e.preventDefault(); });   // não perde o foco antes do clique
+    lista.addEventListener('click', function (e) { var b = e.target.closest('.hub-pick-it'); if (b) ir(vistos[+b.dataset.i]); });
+    chips.addEventListener('mousedown', function (e) { e.preventDefault(); });
+    chips.addEventListener('click', function (e) {
+        var b = e.target.closest('button'); if (!b) return;
+        filtroS = b.dataset.s; marcado = 0;
+        chips.querySelectorAll('button').forEach(function (x) { x.classList.toggle('on', x === b); });
+        desenhar();
+    });
+    document.addEventListener('mousedown', function (e) { if (!box.contains(e.target) && !pick.contains(e.target)) fechar(); });
 })();
 </script>
 {% endif %}
