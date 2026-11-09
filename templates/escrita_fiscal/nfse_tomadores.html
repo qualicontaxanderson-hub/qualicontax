@@ -1,45 +1,112 @@
 {% extends "base.html" %}
-{% block title %}Tomadores - {{ emp.nome }} - Qualicontax{% endblock %}
+{% block title %}Tomadores{{ ' - ' ~ emp.nome if emp }} - NFS-e - Qualicontax{% endblock %}
 
 {% block extra_css %}
 <style>
-/* Tomadores da empresa (os clientes do cliente) — 08/11/2026. Prefixo tm-. */
-.tm-header { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; margin:6px 0 16px; }
-.tm-header h1 { font-size:22px; font-weight:700; color:#1e293b; margin:0; }
-.tm-header p { margin:2px 0 0; color:#64748b; font-size:13px; }
-.tm-filtro { display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-bottom:14px; }
-.tm-filtro input[type=text] { flex:1; min-width:0; max-width:420px; }
-.tm-grade { display:grid; grid-template-columns:repeat(auto-fill,minmax(300px,1fr)); gap:12px; }
-.tm-card { background:#fff; border:1px solid #e2e8f0; border-radius:12px; padding:14px 16px; min-width:0; font-size:13px; }
+/* Tomadores (os clientes do cliente) — 08/11/2026; repaginado 09/11/2026 em cartões como Clientes.
+   Regra do Anderson (09/11): emitindo pela FDF só aparecem os tomadores da FDF; a equipe do
+   escritório pode ver de todas as empresas e, abrindo um tomador, o contato que CADA empresa
+   cadastrou. O contato de uma empresa nunca aparece na lista de outra. Prefixo tm-. */
+.tm-escopo { display:flex; flex-wrap:wrap; gap:12px; align-items:center; justify-content:space-between; background:#fff;
+             border:1px solid #e3ece7; border-radius:15px; padding:11px 14px; margin-bottom:14px; }
+.tm-seg { display:inline-flex; border:1px solid #e3ece7; border-radius:11px; overflow:hidden; }
+.tm-seg a, .tm-seg span { padding:8px 13px; font-size:13px; font-weight:700; color:#64748b; display:inline-flex; gap:7px; align-items:center;
+                          text-decoration:none; white-space:nowrap; background:#fff; }
+.tm-seg .on { background:#0f3d2e; color:#fff; }
+.tm-seg span.off { color:#cbd5e1; cursor:not-allowed; }
+.tm-busca { display:flex; gap:8px; flex-wrap:wrap; align-items:center; flex:1 1 320px; min-width:0; justify-content:flex-end; }
+.tm-busca input[type=text] { flex:1 1 220px; min-width:0; max-width:380px; }
+.tm-busca label { font-size:12.5px; color:#475569; white-space:nowrap; }
+.tm-acoes-top { display:flex; gap:8px; flex-wrap:wrap; }
+.tm-n { font-size:12.5px; color:#64748b; margin:0 2px 10px; }
+.tm-grade { display:grid; grid-template-columns:repeat(auto-fill,minmax(310px,1fr)); gap:14px; }
+.tm-card { background:#fff; border:1px solid #e3ece7; border-radius:15px; padding:15px 17px 13px; display:flex; flex-direction:column; gap:10px;
+           min-width:0; cursor:pointer; transition:border-color .15s, box-shadow .15s; }
+.tm-card:hover { border-color:#bfe3cc; box-shadow:0 8px 22px rgba(16,120,70,.08); }
 .tm-card.inativo { opacity:.55; }
-.tm-card strong { display:block; font-size:14px; color:#0f172a; overflow-wrap:anywhere; }
-.tm-card small { color:#64748b; display:block; overflow-wrap:anywhere; }
-.tm-card .tm-acoes { display:flex; gap:8px; flex-wrap:wrap; margin-top:10px; }
-.tm-box { background:#fff; border:1px solid #e2e8f0; border-radius:12px; padding:16px 18px; margin-bottom:16px; }
-.tm-box h3 { font-size:15px; margin:0 0 12px; }
-.tm-sem { color:#b45309; }
+.tm-head { display:flex; align-items:center; gap:12px; }
+.tm-ava { width:42px; height:42px; border-radius:12px; flex-shrink:0; display:flex; align-items:center; justify-content:center; font-weight:800; font-size:13px;
+          color:#fff; background:linear-gradient(135deg,#16a34a,#0f3d2e); }
+.tm-ava.pf { background:linear-gradient(135deg,#8b5cf6,#5b21b6); }
+.tm-tit { flex:1; min-width:0; }
+.tm-tit h3 { margin:0; font-size:14px; font-weight:800; color:#0f172a; line-height:1.25; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+.tm-tit small { font-size:12px; color:#64748b; }
+.tm-tit small b { font-family:ui-monospace, Consolas, monospace; color:#0f3d2e; }
+.tm-tipo { font-size:11.5px; font-weight:700; padding:3px 10px; border-radius:99px; background:#dcfce7; color:#166534; flex-shrink:0; }
+.tm-tipo.pf { background:#ede9fe; color:#6d28d9; }
+.tm-rot { display:block; font-size:9.5px; font-weight:800; letter-spacing:.6px; text-transform:uppercase; color:#7d968a; }
+.tm-contato { display:flex; flex-wrap:wrap; gap:3px 14px; align-items:center; font-size:12.5px; color:#334155; padding:8px 11px;
+              border:1px dashed #bbf7d0; border-radius:10px; background:#f7fdf9; overflow-wrap:anywhere; }
+.tm-contato .tm-rot { width:100%; }
+.tm-contato .sem { color:#b45309; }
+.tm-num { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px; padding:8px 11px; background:#f7fbf8; border:1px solid #e8f1ec; border-radius:11px; }
+.tm-num b { display:block; font-size:13px; color:#0f3d2e; font-variant-numeric:tabular-nums; }
+.tm-pe { display:flex; align-items:center; justify-content:space-between; gap:8px; border-top:1px solid #eef2f0; padding-top:9px; flex-wrap:wrap; }
+.tm-fonte { font-size:11.5px; font-weight:700; border-radius:99px; padding:2px 9px; background:#e0f2fe; color:#0369a1; }
+.tm-fonte.cadastro { background:#dcfce7; color:#15803d; } .tm-fonte.manual { background:#f1f5f9; color:#475569; }
+.tm-pe-acts { display:flex; gap:6px; align-items:center; }
+.tm-pe-acts form { margin:0; }
+.tm-btn { display:inline-flex; align-items:center; gap:6px; border-radius:9px; padding:6px 11px; font-size:12.5px; font-weight:700; border:1px solid #e3ece7;
+          background:#fff; color:#0f3d2e; text-decoration:none; white-space:nowrap; cursor:pointer; font-family:inherit; }
+.tm-btn:hover { border-color:#86efac; color:#0f3d2e; }
+.tm-btn.pri { background:#16a34a; border-color:#16a34a; color:#fff; }
+.tm-btn.pri:hover { background:#15803d; color:#fff; }
+.tm-btn.mini { padding:5px 8px; color:#64748b; }
+.tm-box { background:#fff; border:1px solid #bbf7d0; border-radius:15px; padding:16px 18px; margin-bottom:16px; box-shadow:0 8px 22px rgba(16,120,70,.08); }
+.tm-box h3 { font-size:15px; margin:0 0 12px; color:#0f3d2e; }
+.tm-regra { display:flex; gap:9px; align-items:flex-start; margin-top:14px; font-size:12.5px; background:#f0fdf4; border:1px solid #bbf7d0; color:#14532d; border-radius:11px; padding:10px 13px; }
+.tm-regra.azul { background:#eff6ff; border-color:#bfdbfe; color:#1e3a8a; }
+.tm-regra i { margin-top:2px; }
+.tm-vazio { background:#fff; border:1px dashed #cbd5e1; border-radius:14px; padding:22px; color:#64748b; font-size:13px; text-align:center; }
+/* visão de todas as empresas */
+.tm-multi { cursor:default; }
+.tm-quem { display:flex; flex-direction:column; gap:8px; }
+.tm-q { display:grid; grid-template-columns:auto minmax(0,1.1fr) minmax(0,1fr) auto; gap:10px; align-items:center; border:1px solid #e3ece7; border-radius:12px; padding:9px 12px; }
+.tm-q .tm-ava { width:34px; height:34px; font-size:11.5px; }
+.tm-q-emp b { display:block; font-size:13px; color:#0f172a; } .tm-q-emp small { font-size:11.5px; color:#64748b; }
+.tm-q-ct { font-size:12.5px; color:#334155; line-height:1.6; overflow-wrap:anywhere; }
+.tm-q-ct .sem { color:#b45309; }
+@media (max-width: 600px) {
+  .tm-seg { width:100%; } .tm-seg a, .tm-seg span { flex:1; justify-content:center; padding:8px 6px; font-size:12px; }
+  .tm-busca { justify-content:flex-start; }
+  .tm-grade { grid-template-columns:minmax(0,1fr); }
+  .tm-q { grid-template-columns:auto minmax(0,1fr); } .tm-q-ct, .tm-q .tm-btn { grid-column:1 / -1; } .tm-q .tm-btn { justify-content:center; }
+}
 </style>
 {% endblock %}
 
+{% macro doc_fmt(d) %}{{ d|format_cnpj if (d or '')|length == 14 else d|format_cpf }}{% endmacro %}
+{% macro iniciais(nome) %}{% set p = (nome or '?').replace('.', ' ').split() %}{{ (p[0][:1] ~ (p[1][:1] if p|length > 1 else ''))|upper }}{% endmacro %}
+
 {% block content %}
 {% include 'escrita_fiscal/_nav_fiscal.html' %}
-
 {% include 'escrita_fiscal/_nfse_hub.html' %}
 
-<div class="tm-header">
-    <div>
-        <p>Para quem esta empresa emite nota. A lista é só dela. Quem recebe uma nota entra aqui sozinho.</p>
+<div class="tm-escopo">
+    <div class="tm-seg" role="tablist" aria-label="Quais tomadores">
+        {% if emp %}<span class="on"><i class="fas fa-building"></i> Só os desta empresa</span>
+        {% elif volta_emp %}<a href="{{ url_for('escrita_fiscal.nfse_tomadores', cliente_id=volta_emp.id) }}"><i class="fas fa-building"></i> Só os da nº {{ volta_emp.numero_cliente }}</a>
+        {% else %}<span class="off" title="Escolha a empresa no alto da página"><i class="fas fa-building"></i> Só os de uma empresa</span>{% endif %}
+        {% if modo == 'todas' %}<span class="on"><i class="fas fa-users"></i> De todas as empresas <i class="fas fa-lock" title="Só a equipe do escritório"></i></span>
+        {% else %}<a href="{{ url_for('escrita_fiscal.nfse_tomadores_todos', emp=emp.id) }}"><i class="fas fa-users"></i> De todas as empresas <i class="fas fa-lock" title="Só a equipe do escritório"></i></a>{% endif %}
     </div>
-    <div style="display:flex; gap:8px; flex-wrap:wrap;">
-        {% if liberada %}<a class="btn btn-primary" href="{{ url_for('escrita_fiscal.nfse_nova', cliente_id=emp.id) }}"><i class="fas fa-file-invoice"></i> Nova nota</a>{% endif %}
-        <a class="btn btn-outline" href="{{ url_for('escrita_fiscal.nfse_tomadores', cliente_id=emp.id, novo=1) }}"><i class="fas fa-plus"></i> Novo tomador</a>
-    </div>
+    <form class="tm-busca" method="GET">
+        {% if modo == 'todas' and volta_emp %}<input type="hidden" name="emp" value="{{ volta_emp.id }}">{% endif %}
+        <input type="text" name="q" class="form-control" value="{{ busca }}" placeholder="Procurar: nome, CNPJ/CPF ou e-mail">
+        {% if modo == 'uma' %}<label><input type="checkbox" name="inativos" value="1" {{ 'checked' if inativos }} onchange="this.form.submit()"> desativados</label>{% endif %}
+        <button class="tm-btn"><i class="fas fa-magnifying-glass"></i> Procurar</button>
+        {% if modo == 'uma' %}
+        <a class="tm-btn" href="{{ url_for('escrita_fiscal.nfse_tomadores', cliente_id=emp.id, novo=1) }}"><i class="fas fa-plus"></i> Novo tomador</a>
+        {% if liberada %}<a class="tm-btn pri" href="{{ url_for('escrita_fiscal.nfse_nova', cliente_id=emp.id) }}"><i class="fas fa-paper-plane"></i> Nova nota</a>{% endif %}
+        {% endif %}
+    </form>
 </div>
 
+{% if modo == 'uma' %}
 {% if editar or novo %}
 {% set t = editar or {} %}
-<div class="tm-box">
-    <h3>{{ 'Editar tomador' if editar else 'Novo tomador' }}</h3>
+<div class="tm-box" id="tmForm">
+    <h3>{{ 'Alterar tomador' if editar else 'Novo tomador' }} <small style="font-weight:400;color:#64748b;font-size:12.5px">· o contato fica só na lista desta empresa</small></h3>
     <form method="POST" action="{{ url_for('escrita_fiscal.nfse_tomadores_salvar', cliente_id=emp.id) }}" autocomplete="off">
         <input type="hidden" name="csrf_token" value="{{ csrf }}">
         {% if editar %}<input type="hidden" name="tomador_id" value="{{ t.id }}">{% endif %}
@@ -81,44 +148,90 @@
 </div>
 {% endif %}
 
-<form class="tm-filtro" method="GET">
-    <input type="text" name="q" class="form-control" value="{{ busca }}" placeholder="Procurar: nome, CNPJ/CPF ou e-mail">
-    <label style="font-size:13px;"><input type="checkbox" name="inativos" value="1" {{ 'checked' if inativos }} onchange="this.form.submit()"> mostrar desativados</label>
-    <button class="btn btn-outline"><i class="fas fa-magnifying-glass"></i> Procurar</button>
-    <span style="color:#64748b; font-size:13px;">{{ tomadores|length }} tomador(es)</span>
-</form>
-
+<p class="tm-n">{{ tomadores|length }} tomador{{ '' if tomadores|length == 1 else 'es' }} desta empresa · clique no cartão para alterar</p>
 {% if tomadores %}
 <div class="tm-grade">
     {% for t in tomadores %}
-    <div class="tm-card {{ 'inativo' if not t.ativo }}">
-        <strong>{{ t.nome }}</strong>
-        <small>{{ t.documento|format_cnpj if t.documento|length == 14 else t.documento|format_cpf }}{{ ' · ' ~ t.cidade ~ '/' ~ t.uf if t.cidade }}</small>
-        <small>{% if t.email %}{{ t.email }}{% else %}<span class="tm-sem">sem e-mail</span>{% endif %}</small>
-        <small>{{ ('Última nota em ' ~ t.ultima_nota_em.strftime('%d/%m/%Y')) if t.ultima_nota_em else 'Nenhuma nota ainda' }}</small>
-        <div class="tm-acoes">
-            {% if liberada and t.ativo %}<a class="btn btn-primary btn-sm" href="{{ url_for('escrita_fiscal.nfse_nova', cliente_id=emp.id, tomador=t.id) }}">Emitir para este</a>{% endif %}
-            <a class="btn btn-outline btn-sm" href="{{ url_for('escrita_fiscal.nfse_tomadores', cliente_id=emp.id, editar=t.id) }}">Editar</a>
-            <form method="POST" action="{{ url_for('escrita_fiscal.nfse_tomadores_salvar', cliente_id=emp.id) }}" style="display:inline;">
-                <input type="hidden" name="csrf_token" value="{{ csrf }}"><input type="hidden" name="acao" value="alternar">
-                <input type="hidden" name="tomador_id" value="{{ t.id }}">
-                <button class="btn btn-outline btn-sm">{{ 'Desativar' if t.ativo else 'Reativar' }}</button>
-            </form>
+    {% set pf = (t.documento or '')|length == 11 %}
+    {% set nn = numeros.get(t.documento) %}
+    <article class="tm-card {{ 'inativo' if not t.ativo }}" tabindex="0" role="link"
+             data-open-url="{{ url_for('escrita_fiscal.nfse_tomadores', cliente_id=emp.id, editar=t.id) }}#tmForm">
+        <header class="tm-head">
+            <span class="tm-ava {{ 'pf' if pf }}">{{ iniciais(t.nome_fantasia or t.nome) }}</span>
+            <div class="tm-tit"><h3>{{ t.nome }}</h3><small>{{ 'CPF' if pf else 'CNPJ' }} <b>{{ doc_fmt(t.documento) }}</b>{{ ' · ' ~ t.cidade|title ~ '/' ~ t.uf if t.cidade }}</small></div>
+            <span class="tm-tipo {{ 'pf' if pf }}">{{ 'PF' if pf else 'PJ' }}</span>
+        </header>
+        <div class="tm-contato"><span class="tm-rot">Contato desta empresa</span>
+            {% if t.email %}<span><i class="fas fa-envelope"></i> {{ t.email }}</span>{% else %}<span class="sem"><i class="fas fa-envelope"></i> sem e-mail · a nota não vai sozinha</span>{% endif %}
+            {% if t.fone %}<span><i class="fas fa-phone"></i> {{ t.fone }}</span>{% endif %}</div>
+        <div class="tm-num">
+            <div><span class="tm-rot">Notas</span><b>{{ nn.qtd if nn else '—' }}</b></div>
+            <div><span class="tm-rot">Total</span><b>{{ nn.total|format_currency if nn else '—' }}</b></div>
+            <div><span class="tm-rot">Última</span><b>{{ nn.ultima.strftime('%d/%m/%Y') if nn and nn.ultima else (t.ultima_nota_em.strftime('%d/%m/%Y') if t.ultima_nota_em else '—') }}</b></div>
         </div>
-    </div>
+        <footer class="tm-pe">
+            <span class="tm-fonte {{ t.fonte or 'manual' }}">{{ {'receita': 'da Receita', 'cadastro': 'do cadastro', 'manual': 'digitado'}.get(t.fonte or 'manual', 'digitado') }}</span>
+            <span class="tm-pe-acts">
+                <form method="POST" action="{{ url_for('escrita_fiscal.nfse_tomadores_salvar', cliente_id=emp.id) }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf }}"><input type="hidden" name="acao" value="alternar">
+                    <input type="hidden" name="tomador_id" value="{{ t.id }}">
+                    <button class="tm-btn mini" title="{{ 'Desativar' if t.ativo else 'Reativar' }}"><i class="fas fa-{{ 'eye-slash' if t.ativo else 'eye' }}"></i></button>
+                </form>
+                {% if liberada and t.ativo %}<a class="tm-btn pri" href="{{ url_for('escrita_fiscal.nfse_nova', cliente_id=emp.id, tomador=t.id) }}"><i class="fas fa-paper-plane"></i> Emitir para este</a>{% endif %}
+            </span>
+        </footer>
+    </article>
     {% endfor %}
 </div>
 {% else %}
-<p style="color:#64748b;">{{ 'Nada encontrado.' if busca else 'Nenhum tomador ainda. Eles entram aqui ao emitir a primeira nota, ou pelo botão Novo tomador.' }}</p>
+<div class="tm-vazio">{{ 'Nada encontrado.' if busca else 'Nenhum tomador ainda. Eles entram aqui ao emitir a primeira nota, ou pelo botão Novo tomador.' }}</div>
+{% endif %}
+<div class="tm-regra"><i class="fas fa-shield-halved"></i><span>Esta lista é só desta empresa. Se outra empresa também emite para o mesmo cliente, o contato que ela cadastrou não aparece aqui.</span></div>
+
+{% else %}
+<p class="tm-n">{{ grupos|length }} tomador{{ '' if grupos|length == 1 else 'es' }} em todas as empresas que você vê · o contato de cada linha é da empresa que cadastrou</p>
+{% if grupos %}
+<div class="tm-grade" style="grid-template-columns:repeat(auto-fill,minmax(440px,1fr))">
+    {% for g in grupos %}
+    {% set pf = (g.documento or '')|length == 11 %}
+    <article class="tm-card tm-multi">
+        <header class="tm-head">
+            <span class="tm-ava {{ 'pf' if pf }}">{{ iniciais(g.nome) }}</span>
+            <div class="tm-tit"><h3>{{ g.nome }}</h3><small>{{ 'CPF' if pf else 'CNPJ' }} <b>{{ doc_fmt(g.documento) }}</b>{{ ' · ' ~ g.cidade|title ~ '/' ~ g.uf if g.cidade }}</small></div>
+            <span class="tm-tipo">{{ g.linhas|length }} empresa{{ '' if g.linhas|length == 1 else 's' }}</span>
+        </header>
+        <span class="tm-rot">Como cada empresa fala com {{ 'ele' if pf else 'ela' }}</span>
+        <div class="tm-quem">
+            {% for r in g.linhas %}
+            <div class="tm-q">
+                <span class="tm-ava">{{ r.emp_numero or '—' }}</span>
+                <span class="tm-q-emp"><b>{{ r.emp_nome }}</b><small>{{ {'receita': 'dados da Receita', 'cadastro': 'copiado do cadastro', 'manual': 'digitado'}.get(r.fonte or 'manual', 'digitado') }}{{ ' · última nota ' ~ r.ultima_nota_em.strftime('%d/%m/%Y') if r.ultima_nota_em }}</small></span>
+                <span class="tm-q-ct">{% if r.email %}<i class="fas fa-envelope"></i> {{ r.email }}{% else %}<span class="sem"><i class="fas fa-envelope"></i> sem e-mail</span>{% endif %}{% if r.fone %}<br><i class="fas fa-phone"></i> {{ r.fone }}{% endif %}</span>
+                <a class="tm-btn" href="{{ url_for('escrita_fiscal.nfse_tomadores', cliente_id=r.empresa_id, editar=r.id) }}#tmForm">Abrir</a>
+            </div>
+            {% endfor %}
+        </div>
+    </article>
+    {% endfor %}
+</div>
+{% else %}
+<div class="tm-vazio">{{ 'Nada encontrado.' if busca else 'Nenhum tomador ainda. Eles entram na lista de cada empresa ao emitir a primeira nota.' }}</div>
+{% endif %}
+<div class="tm-regra azul"><i class="fas fa-lock"></i><span>Visão da equipe do escritório. Cada contato continua sendo da empresa que cadastrou: mudar o e-mail na linha de uma empresa não mexe no das outras. No futuro portal do cliente, cada empresa verá só a própria lista.</span></div>
 {% endif %}
 {% endblock %}
 
 {% block extra_js %}
 <script>
 (function () {
+    // o cartão inteiro abre a alteração (como em Contatos); botões e links seguem o próprio caminho
+    document.querySelectorAll('.tm-card[data-open-url]').forEach(function (c) {
+        c.addEventListener('click', function (e) { if (!e.target.closest('a,button,form')) location.href = c.dataset.openUrl; });
+        c.addEventListener('keydown', function (e) { if (e.key === 'Enter' && e.target === c) location.href = c.dataset.openUrl; });
+    });
     var b = document.getElementById('tBuscarDoc');
     if (!b) return;
-    var URL_DOC = {{ url_for('escrita_fiscal.nfse_tomador_doc', cliente_id=emp.id)|tojson }};
+    var URL_DOC = {{ (url_for('escrita_fiscal.nfse_tomador_doc', cliente_id=emp.id) if emp else '')|tojson }};
     var CAMPOS = ['nome','nome_fantasia','email','fone','cep','logradouro','numero','complemento','bairro','cidade','uf','municipio_ibge','inscricao_municipal'];
     function $(id) { return document.getElementById(id); }
     b.addEventListener('click', function () {

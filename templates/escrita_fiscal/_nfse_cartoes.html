@@ -1,0 +1,64 @@
+{# ---------------------------------------------------------------------------
+   Cartões de NFS-e (09/11/2026) — fonte ÚNICA do cartão PEQUENO de nota, usado no
+   painel e em Notas emitidas. Anderson: "Notas emitidas em CARDs menores por que assim
+   fica cansativo a leitura". Prefixo nc-.
+   Uso: {% from 'escrita_fiscal/_nfse_cartoes.html' import nota_card, nc_css %}
+        {{ nc_css() }} ... {{ nota_card(n, nomes) }}
+   A nota precisa de n.motivo / n.motivo_cod (routes/fiscal_nfse_nova.com_motivo).
+--------------------------------------------------------------------------- #}
+{% macro nc_css() %}
+<style>
+.nc-grade { display:grid; grid-template-columns:repeat(auto-fill,minmax(240px,1fr)); gap:10px; }
+.nc { background:#fff; border:1px solid #e3ece7; border-top:3px solid #cbd5e1; border-radius:13px; padding:11px 13px;
+      display:flex; flex-direction:column; gap:6px; min-width:0; color:inherit; text-decoration:none;
+      transition:border-color .15s, box-shadow .15s; }
+.nc:hover { border-color:#bfe3cc; box-shadow:0 6px 16px rgba(16,120,70,.08); color:inherit; }
+.nc.autorizada { border-top-color:#22c55e; }
+.nc.rejeitada, .nc.erro { border-top-color:#f87171; }
+.nc.rascunho { border-top-color:#f59e0b; }
+.nc.teste { border-top-color:#a78bfa; background:repeating-linear-gradient(135deg,#fff,#fff 12px,#faf8ff 12px,#faf8ff 24px); }
+.nc-top { display:flex; justify-content:space-between; align-items:center; gap:4px 8px; flex-wrap:wrap; }
+.nc-top b { font-size:14px; color:#0f3d2e; white-space:nowrap; font-variant-numeric:tabular-nums; }
+.nc-sit { font-size:11px; font-weight:800; border-radius:99px; padding:2px 8px; white-space:nowrap; }
+.nc-sit.autorizada { background:#dcfce7; color:#166534; }
+.nc-sit.rejeitada, .nc-sit.erro { background:#fee2e2; color:#b91c1c; }
+.nc-sit.cancelada { background:#f1f5f9; color:#64748b; }
+.nc-sit.rascunho { background:#fef3c7; color:#92400e; }
+.nc-sit.teste { background:#ede9fe; color:#6d28d9; }
+.nc-tit { font-size:13px; font-weight:800; color:#0f172a; }
+.nc-rota { display:flex; align-items:center; gap:5px; font-size:12px; color:#334155; min-width:0; }
+.nc-rota i { color:#94a3b8; flex-shrink:0; font-size:10px; }
+.nc-emp { font-size:10.5px; font-weight:800; background:#0f3d2e; color:#fff; border-radius:5px; padding:0 5px; flex-shrink:0; }
+.nc-nome { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-width:0; }
+.nc-mot { margin:0; font-size:12px; color:#b91c1c; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.nc.teste .nc-mot { color:#5b21b6; }
+.nc-pe { display:flex; justify-content:space-between; align-items:center; gap:8px; border-top:1px solid #eef2f0; padding-top:6px; margin-top:auto;
+         font-size:11.5px; color:#64748b; }
+.nc-pe span { font-weight:700; color:#0f3d2e; }
+.nc-dia { font-size:11px; font-weight:800; letter-spacing:.7px; text-transform:uppercase; color:#64748b; margin:16px 2px 8px; }
+.nc-dia:first-child { margin-top:0; }
+@media (max-width: 600px) { .nc-grade { grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:8px; } .nc { padding:9px 10px; } }
+@media (max-width: 380px) { .nc-grade { grid-template-columns:1fr; } }
+</style>
+{% endmacro %}
+
+{% macro nota_card(n, nomes, SITUACOES, com_empresa=True) %}
+{% set teste = n.ambiente == 2 %}
+{% set e = nomes.get(n.empresa_id) if nomes else None %}
+<a class="nc {{ n.situacao }}{{ ' teste' if teste }}" href="{{ url_for('escrita_fiscal.nfse_nota', nota_id=n.id) }}"
+   title="{{ (n.descricao or '')|truncate(200) }}">
+    <div class="nc-top">
+        <span class="nc-sit {{ 'teste' if teste else n.situacao }}">{% if teste %}<i class="fas fa-flask"></i> Teste · {% endif %}{{ SITUACOES.get(n.situacao, n.situacao) }}</span>
+        <b>{{ n.valor_servico|format_currency }}</b>
+    </div>
+    <span class="nc-tit">{% if n.numero_nfse %}NFS-e {{ n.numero_nfse }} · série {{ n.serie }}{% else %}DPS {{ n.serie }}/{{ n.numero_dps }}{% endif %}</span>
+    <div class="nc-rota">
+        {% if com_empresa %}<span class="nc-emp">{{ (e.numero_cliente if e else '') or n.empresa_id }}</span>
+        <span class="nc-nome">{{ (e.nome_razao_social if e else '')|title }}</span><i class="fas fa-arrow-right"></i>{% endif %}
+        <span class="nc-nome">{{ (n.tomador_nome or '—')|title }}</span>
+    </div>
+    {% if n.motivo %}<p class="nc-mot" title="{{ ('Código do governo: ' ~ n.motivo_cod) if n.motivo_cod else '' }}">{{ n.motivo }}</p>{% endif %}
+    <div class="nc-pe">{{ (n.dh_emissao or n.criado_em).strftime('%d/%m %H:%M') }}
+        {% if n.situacao in ('rejeitada', 'erro') and not teste %}<span><i class="fas fa-rotate-right"></i> corrigir</span>{% endif %}</div>
+</a>
+{% endmacro %}

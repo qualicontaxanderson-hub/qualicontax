@@ -1,0 +1,208 @@
+{# ---------------------------------------------------------------------------
+   PAINEL de NFS-e (09/11/2026) — o mesmo na sub-aba Emitir e na Configuração sem
+   empresa escolhida. Copia a lista de Clientes: fita de números que filtram, filtros em
+   botões e o cartão .gc-card (clientes/_cartao_css.html, fonte única do cartão).
+   Contexto: routes/fiscal_nfse_nova.painel_ctx (painel_com, painel_novas, painel_kpis,
+   painel_notas, nomes, SITUACOES). Prefixo pn-.
+--------------------------------------------------------------------------- #}
+{% from 'escrita_fiscal/_nfse_cartoes.html' import nota_card, nc_css %}
+{% include 'clientes/_cartao_css.html' %}
+{{ nc_css() }}
+{% set k = painel_kpis %}
+{% set pode_cfg = pode_rota('escrita_fiscal.emissao_nfse') %}
+{% set pode_emitir = pode_rota('escrita_fiscal.nfse_emitir') %}
+<style>
+.pn .cli-kpis { margin-top:0; }
+.pn .cli-kpi { text-decoration:none; color:inherit; }
+.pn-filtros { display:grid; grid-template-columns:minmax(0,1.3fr) minmax(0,1fr); gap:12px; margin-bottom:6px; }
+.pn-fbox { background:#fff; border:1px solid #e3ece7; border-radius:14px; padding:11px 14px; min-width:0; }
+.pn-fbox h4 { margin:0 0 8px; font-size:10.5px; letter-spacing:.8px; text-transform:uppercase; color:#64748b; font-weight:800; }
+.pn-chips { display:flex; flex-wrap:wrap; gap:6px; }
+.pn-chip { border:1px solid #e3ece7; background:#fff; border-radius:8px; padding:4px 10px; font-size:12.5px; font-weight:600; color:#334155; cursor:pointer; font-family:inherit; }
+.pn-chip em { font-style:normal; opacity:.6; margin-left:4px; font-weight:800; }
+.pn-chip.on { background:#0f3d2e; border-color:#0f3d2e; color:#fff; }
+.pn-secao { display:flex; align-items:baseline; justify-content:space-between; gap:10px; margin:22px 0 10px; flex-wrap:wrap; }
+.pn-secao h2 { margin:0; font-size:15px; font-weight:800; color:#0f3d2e; display:flex; align-items:center; gap:8px; }
+.pn-secao h2 .pn-n { font-size:11.5px; background:#dcfce7; color:#166534; border-radius:99px; padding:2px 9px; }
+.pn-secao p { margin:0; font-size:12.5px; color:#64748b; }
+.pn-secao a { font-size:12.5px; font-weight:700; color:#15803d; }
+.pn .gc-grid { grid-template-columns:repeat(auto-fill,minmax(320px,1fr)); }
+.pn-card { gap:11px; }
+.pn-card.pn-fora { display:none; }
+.pn-ava-off { background:linear-gradient(135deg,#94a3b8,#475569); }
+.pn-sit-warn { background:#fef3c7; color:#92400e; }
+.pn-sit-fin { background:#ede9fe; color:#6d28d9; }
+.pn-sit-zero { background:#f1f5f9; color:#64748b; }
+.pn-passos { display:grid; grid-template-columns:repeat(5,1fr); gap:4px; }
+.pn-passos i { height:7px; border-radius:99px; background:#f59e0b; }
+.pn-passos i.ok { background:#22c55e; }
+.pn-leg { font-size:11.5px; color:#64748b; margin-top:5px; }
+.pn-prox { display:flex; gap:9px; align-items:flex-start; font-size:12.5px; padding:8px 11px; border-radius:10px;
+           background:#fffbeb; border:1px dashed #fcd34d; color:#92400e; }
+.pn-prox.ok { background:#f0fdf4; border-color:#bbf7d0; color:#166534; }
+.pn-prox i { margin-top:2px; }
+.pn-selo { display:inline-flex; align-items:center; gap:7px; font-size:12px; font-weight:700; padding:5px 10px; border-radius:9px; border:1px solid; white-space:nowrap; }
+.pn-selo.nacional { background:#ecfdf5; border-color:#a7f3d0; color:#047857; }
+.pn-selo.prefeitura { background:#eff6ff; border-color:#bfdbfe; color:#1d4ed8; }
+.pn-selo.financeiro { background:#f5f3ff; border-color:#ddd6fe; color:#6d28d9; }
+.pn-btn { display:inline-flex; align-items:center; gap:6px; border-radius:9px; padding:6px 11px; font-size:12.5px; font-weight:700;
+          border:1px solid #e3ece7; background:#fff; color:#0f3d2e; text-decoration:none; white-space:nowrap; }
+.pn-btn:hover { border-color:#86efac; color:#0f3d2e; }
+.pn-btn.pri { background:#16a34a; border-color:#16a34a; color:#fff; }
+.pn-btn.pri:hover { background:#15803d; color:#fff; }
+.pn-vazio { background:#fff; border:1px dashed #cbd5e1; border-radius:14px; padding:18px; color:#64748b; font-size:13px; text-align:center; }
+.pn-novo .gc-tit h3 { font-size:14px; }
+@media (max-width: 860px) { .pn-filtros { grid-template-columns:minmax(0,1fr); } }
+@media (max-width: 600px) {
+  .pn-chips { flex-wrap:nowrap; overflow-x:auto; padding-bottom:2px; }
+  .pn-chip { white-space:nowrap; }
+  .pn .gc-grid { grid-template-columns:minmax(0,1fr); }
+}
+</style>
+
+<div class="pn">
+    <div class="cli-kpis">
+        <button type="button" class="cli-kpi" data-pn-filtro="liberada" title="Mostrar só as liberadas">
+            <span class="cli-kpi-ico" style="background:#dcfce7;color:#15803d"><i class="fas fa-circle-check"></i></span>
+            <div class="cli-kpi-body"><strong class="cli-kpi-val">{{ k.liberadas }}</strong><span class="cli-kpi-lbl">Liberadas para emitir</span></div></button>
+        <button type="button" class="cli-kpi" data-pn-filtro="configurada" title="Mostrar só as que faltam conferir">
+            <span class="cli-kpi-ico" style="background:#fef3c7;color:#b45309"><i class="fas fa-hourglass-half"></i></span>
+            <div class="cli-kpi-body"><strong class="cli-kpi-val{{ ' cli-warn' if k.conferir }}">{{ k.conferir }}</strong><span class="cli-kpi-lbl">Falta o Fiscal conferir</span></div></button>
+        <a class="cli-kpi" href="#pnNovas" title="Prestam serviço e têm certificado válido">
+            <span class="cli-kpi-ico" style="background:#e0f2fe;color:#0369a1"><i class="fas fa-wand-magic-sparkles"></i></span>
+            <div class="cli-kpi-body"><strong class="cli-kpi-val">{{ k.aptas }}</strong><span class="cli-kpi-lbl">Prontas para começar</span></div></a>
+        <div class="cli-kpi" style="cursor:default" title="Empresas ativas sem configuração de nota">
+            <span class="cli-kpi-ico" style="background:#f1f5f9;color:#64748b"><i class="fas fa-circle-pause"></i></span>
+            <div class="cli-kpi-body"><strong class="cli-kpi-val">{{ k.sem }}</strong><span class="cli-kpi-lbl">Sem configuração</span></div></div>
+        <a class="cli-kpi" href="{{ url_for('escrita_fiscal.nfse_emitidas', situacao='autorizada') }}" title="Autorizadas de verdade neste mês">
+            <span class="cli-kpi-ico" style="background:#ecfdf5;color:#047857"><i class="fas fa-receipt"></i></span>
+            <div class="cli-kpi-body"><strong class="cli-kpi-val">{{ k.mes_qtd }}</strong><span class="cli-kpi-lbl">Notas no mês · {{ k.mes_valor|format_currency }}</span></div></a>
+        <a class="cli-kpi" href="{{ url_for('escrita_fiscal.nfse_emitidas', situacao='rejeitada') }}" title="Recusadas pelo governo">
+            <span class="cli-kpi-ico" style="background:#fee2e2;color:#b91c1c"><i class="fas fa-circle-xmark"></i></span>
+            <div class="cli-kpi-body"><strong class="cli-kpi-val{{ ' cli-bad' if k.recusadas }}">{{ k.recusadas }}</strong><span class="cli-kpi-lbl">Recusadas{% if k.recusadas_teste %} · +{{ k.recusadas_teste }} de teste{% endif %}</span></div></a>
+    </div>
+
+    {% set _via = {'nacional': 0, 'prefeitura': 0, 'financeiro': 0} %}
+    {% for e in painel_com %}{% set _ = _via.update({e.via: _via[e.via] + 1}) %}{% endfor %}
+    <div class="pn-filtros">
+        <div class="pn-fbox"><h4>Situação</h4><div class="pn-chips" data-pn-grupo="sit">
+            <button type="button" class="pn-chip on" data-v="">Todas <em>{{ painel_com|length }}</em></button>
+            <button type="button" class="pn-chip" data-v="liberada">Liberadas <em>{{ k.liberadas }}</em></button>
+            <button type="button" class="pn-chip" data-v="configurada">Falta conferir <em>{{ k.conferir }}</em></button>
+            <button type="button" class="pn-chip" data-v="financeiro">Pelo Financeiro <em>{{ painel_com|length - k.liberadas - k.conferir }}</em></button>
+        </div></div>
+        <div class="pn-fbox"><h4>Por onde a nota sai</h4><div class="pn-chips" data-pn-grupo="via">
+            <button type="button" class="pn-chip on" data-v="">Todas</button>
+            <button type="button" class="pn-chip" data-v="nacional"><i class="fas fa-building-columns"></i> Emissor Nacional <em>{{ _via.nacional }}</em></button>
+            <button type="button" class="pn-chip" data-v="prefeitura"><i class="fas fa-landmark"></i> Sistema da prefeitura <em>{{ _via.prefeitura }}</em></button>
+        </div></div>
+    </div>
+
+    <div class="pn-secao"><h2><i class="fas fa-file-invoice"></i> Empresas com configuração <span class="pn-n">{{ painel_com|length }}</span></h2>
+        <p>Clique no cartão para abrir a configuração.</p></div>
+    {% if painel_com %}
+    <div class="gc-grid" id="pnCom">
+        {% for e in painel_com %}
+        {% set cfg_url = url_for('escrita_fiscal.emissao_nfse_empresa', cliente_id=e.id) %}
+        <article class="gc-card pn-card" data-sit="{{ e.situacao }}" data-via="{{ e.via }}" tabindex="0" role="link"
+                 data-open-url="{{ cfg_url if pode_cfg else '' }}">
+            <header class="gc-head">
+                <span class="gc-ava cli-ava {{ 'cli-ava-4' if (e.numero_cliente or '')|length > 3 }}">{{ e.numero_cliente or '—' }}</span>
+                <div class="gc-tit"><h3 style="white-space:normal;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;line-height:1.25;font-size:14.5px">{{ e.nome_razao_social }}</h3>
+                    <span class="cli-doc">{{ 'CPF' if (e.doc_fmt or '')|length == 14 else 'CNPJ' }} <span class="mono">{{ e.doc_fmt or '—' }}</span></span></div>
+                {% if e.situacao == 'liberada' %}<span class="gc-sit on">Liberada</span>
+                {% elif e.situacao == 'financeiro' %}<span class="gc-sit pn-sit-fin">Financeiro</span>
+                {% else %}<span class="gc-sit pn-sit-warn">{{ e.prontos }} de 5</span>{% endif %}
+            </header>
+            <div class="gc-tags">
+                {% if e.cidade %}<span class="gc-cid gc-cid-{{ (e.cidade|length) % 8 }}"><i class="fas fa-location-dot"></i> {{ e.cidade|title }}/{{ e.uf }}</span>{% endif %}
+                {% if e.regime %}<span class="gc-tag gc-reg-{{ e.regime|lower }}">{{ e.regime_rotulo }}</span>{% endif %}
+            </div>
+            <div>
+                <div class="pn-passos" title="A empresa · Prefeitura · Serviço · Impostos · Numeração">{% for p in e.passos %}<i class="{{ 'ok' if p }}"></i>{% endfor %}</div>
+                <div class="pn-leg">{{ 'Tudo pronto' if e.prontos == 5 else 'Empresa · Prefeitura · Serviço · Impostos · Numeração' }}</div>
+            </div>
+            {% if e.falta %}<div class="pn-prox"><i class="fas fa-triangle-exclamation"></i><span>{{ e.falta }}</span></div>
+            {% elif e.situacao == 'financeiro' %}<div class="pn-prox ok"><i class="fas fa-circle-check"></i><span>Emite pelo Financeiro. Não precisa da liberação do Fiscal.</span></div>
+            {% elif e.situacao == 'liberada' %}<div class="pn-prox ok"><i class="fas fa-circle-check"></i><span>Liberada. Pode emitir.</span></div>
+            {% else %}<div class="pn-prox ok"><i class="fas fa-circle-check"></i><span>Pronta. Falta só o Fiscal conferir e liberar.</span></div>{% endif %}
+            <footer class="cli-pe">
+                {% if e.via == 'financeiro' %}<span class="pn-selo financeiro"><i class="fas fa-coins"></i> Pelo Financeiro</span>
+                {% elif e.via == 'prefeitura' %}<span class="pn-selo prefeitura"><i class="fas fa-landmark"></i> Sistema da prefeitura</span>
+                {% else %}<span class="pn-selo nacional"><i class="fas fa-building-columns"></i> Emissor Nacional</span>{% endif %}
+                {% if e.situacao == 'liberada' and pode_emitir %}
+                <a class="pn-btn pri" href="{{ url_for('escrita_fiscal.nfse_nova', cliente_id=e.id) }}"><i class="fas fa-paper-plane"></i> Emitir nota</a>
+                {% elif e.situacao == 'configurada' and e.prontos == 5 and pode_cfg %}
+                <a class="pn-btn pri" href="{{ cfg_url }}"><i class="fas fa-check-double"></i> Conferir e liberar</a>
+                {% elif pode_cfg %}
+                <a class="pn-btn" href="{{ cfg_url }}">{{ 'Ver configuração' if e.situacao == 'financeiro' else 'Configurar' }}</a>
+                {% endif %}
+            </footer>
+        </article>
+        {% endfor %}
+    </div>
+    <div class="pn-vazio" id="pnNada" hidden>Nenhuma empresa com esse filtro.</div>
+    {% else %}
+    <div class="pn-vazio">Nenhuma empresa configurada ainda. Comece por uma das prontas abaixo, ou escolha qualquer empresa no alto da página.</div>
+    {% endif %}
+
+    {% if painel_novas %}
+    <div class="pn-secao" id="pnNovas"><h2><i class="fas fa-wand-magic-sparkles"></i> Prontas para começar <span class="pn-n">{{ k.aptas }}</span></h2>
+        <p>Prestam serviço e têm certificado válido.{% if k.aptas > painel_novas|length %} Mostrando {{ painel_novas|length }}; as outras pela busca no alto.{% endif %}</p></div>
+    <div class="gc-grid">
+        {% for e in painel_novas %}
+        <article class="gc-card pn-card pn-novo" tabindex="0" role="link"
+                 data-open-url="{{ url_for('escrita_fiscal.emissao_nfse_empresa', cliente_id=e.id) if pode_cfg else '' }}">
+            <header class="gc-head">
+                <span class="gc-ava cli-ava pn-ava-off {{ 'cli-ava-4' if (e.numero_cliente or '')|length > 3 }}">{{ e.numero_cliente or '—' }}</span>
+                <div class="gc-tit"><h3 style="white-space:normal;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;line-height:1.25">{{ e.nome_razao_social }}</h3>
+                    <span class="cli-doc">{{ e.atividade|truncate(60) }}</span></div>
+                <span class="gc-sit pn-sit-zero">0 de 5</span>
+            </header>
+            <footer class="cli-pe">
+                {% if e.regime %}<span class="gc-tag gc-reg-{{ e.regime|lower }}">{{ e.regime_rotulo }}</span>{% else %}<span></span>{% endif %}
+                {% if pode_cfg %}<a class="pn-btn" href="{{ url_for('escrita_fiscal.emissao_nfse_empresa', cliente_id=e.id) }}"><i class="fas fa-plus"></i> Começar</a>{% endif %}
+            </footer>
+        </article>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    {% if painel_notas %}
+    <div class="pn-secao"><h2><i class="fas fa-clock-rotate-left"></i> Últimas notas</h2>
+        <a href="{{ url_for('escrita_fiscal.nfse_emitidas') }}">ver todas</a></div>
+    <div class="nc-grade">{% for n in painel_notas %}{{ nota_card(n, nomes, SITUACOES) }}{% endfor %}</div>
+    {% endif %}
+</div>
+
+<script>
+(function () {
+    var cards = document.querySelectorAll('#pnCom .pn-card'), nada = document.getElementById('pnNada');
+    var filtro = { sit: '', via: '' };
+    function aplicar() {
+        var n = 0;
+        cards.forEach(function (c) {
+            var ok = (!filtro.sit || c.dataset.sit === filtro.sit) && (!filtro.via || c.dataset.via === filtro.via);
+            c.classList.toggle('pn-fora', !ok); if (ok) n++;
+        });
+        if (nada) nada.hidden = n > 0;
+        document.querySelectorAll('[data-pn-grupo]').forEach(function (g) {
+            g.querySelectorAll('.pn-chip').forEach(function (b) { b.classList.toggle('on', b.dataset.v === filtro[g.dataset.pnGrupo]); });
+        });
+        document.querySelectorAll('[data-pn-filtro]').forEach(function (b) { b.classList.toggle('on', !!filtro.sit && b.dataset.pnFiltro === filtro.sit); });
+    }
+    document.querySelectorAll('[data-pn-grupo] .pn-chip').forEach(function (b) {
+        b.addEventListener('click', function () { filtro[b.parentNode.dataset.pnGrupo] = b.dataset.v; aplicar(); });
+    });
+    document.querySelectorAll('[data-pn-filtro]').forEach(function (b) {
+        b.addEventListener('click', function () { filtro.sit = filtro.sit === b.dataset.pnFiltro ? '' : b.dataset.pnFiltro; aplicar(); });
+    });
+    // o cartão inteiro abre (como em Clientes); botões e links dentro dele seguem o próprio caminho
+    document.querySelectorAll('.pn-card[data-open-url]').forEach(function (c) {
+        if (!c.dataset.openUrl) return;
+        c.style.cursor = 'pointer';
+        c.addEventListener('click', function (e) { if (!e.target.closest('a,button')) location.href = c.dataset.openUrl; });
+        c.addEventListener('keydown', function (e) { if (e.key === 'Enter' && e.target === c) location.href = c.dataset.openUrl; });
+    });
+})();
+</script>

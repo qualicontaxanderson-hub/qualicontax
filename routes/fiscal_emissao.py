@@ -54,43 +54,9 @@ def _volta(cliente_id, ancora=''):
 @escrita_fiscal.route('/emissao-nfse/')
 @permission_required(PERM)
 def emissao_nfse():
-    """Escolher a empresa + as que já têm matriz (liberadas e só configuradas)."""
-    empresas = _get_empresas()                       # já sem as reservadas para quem não pode
-    sit = situacao_das_matrizes()
-    com = [dict(e, situacao=sit[e['id']]) for e in empresas if e['id'] in sit]
-    com.sort(key=lambda e: (e['situacao'] != 'liberada', e.get('avulso') or 0,
-                            int(e['numero_cliente']) if str(e.get('numero_cliente') or '').isdigit() else 10 ** 9))
-    # Quanto falta em cada uma (os 5 cartões) e a primeira pendência, para o cartão da lista.
-    from models.nfse_emissao import cartoes_da_matriz
-    for e in com:
-        emp = empresa_da_matriz(e['id'])
-        cfg = NfseConfig.get(e['id'])
-        cs = cartoes_da_matriz(faltas_da_matriz(emp, cfg, NfseEmitida.series(e['id']))) if emp else []
-        e['prontos'] = sum(1 for c in cs if c['ok'])
-        e['falta'] = next((c['travas'][0]['texto'] for c in cs if c['travas']), '')
-        e['regime'] = (emp or {}).get('regime_rotulo', '')
-        e['cidade'] = (emp or {}).get('cidade', '')
-    ids_com = {e['id'] for e in com}
-    # Começar uma nova: certificado válido, regime preenchido, sem configuração e fora do Financeiro.
-    fin = {r['cliente_id'] for r in (execute_query('SELECT cliente_id FROM fin_empresas WHERE ativo = 1', fetch=True) or [])}
-    cert_ok = {r['cliente_id'] for r in (execute_query(
-        'SELECT DISTINCT cliente_id FROM dfe_certificados WHERE validade >= CURDATE()', fetch=True) or [])}
-    from utils.nfse_servicos import CNAE_SERVICO
-    dados = {r['id']: r for r in (execute_query(
-        "SELECT id, regime_tributario, cnae_fiscal, cnae_fiscal_descricao FROM clientes "
-        " WHERE situacao = 'ATIVO' AND regime_tributario IS NOT NULL", fetch=True) or [])}
-    # Só quem PRESTA serviço pela atividade principal (posto de combustível vende mercadoria).
-    novas = [dict(e, regime=REGIMES.get(dados[e['id']]['regime_tributario'] or '', ''),
-                  atividade=dados[e['id']].get('cnae_fiscal_descricao') or '')
-             for e in empresas
-             if e['id'] not in ids_com and e['id'] not in fin and e['id'] in cert_ok and e['id'] in dados
-             and (dados[e['id']].get('cnae_fiscal') or '') in CNAE_SERVICO and not e.get('avulso')]
-    resumo = {'liberadas': sum(1 for e in com if e['situacao'] == 'liberada'),
-              'configuradas': sum(1 for e in com if e['situacao'] == 'configurada'),
-              'aptas': len(novas), 'sem': len(empresas) - len(com)}
-    from routes.fiscal_nfse_nova import hub_ctx
-    return render_template('escrita_fiscal/emissao_nfse.html', empresas=empresas, com=com, resumo=resumo,
-                           novas=novas[:9], emp=None, **hub_ctx('config'))
+    """Painel de NFS-e (09/11/2026): o MESMO da sub-aba Emitir (routes/fiscal_nfse_nova.painel_ctx)."""
+    from routes.fiscal_nfse_nova import hub_ctx, painel_ctx
+    return render_template('escrita_fiscal/emissao_nfse.html', emp=None, **painel_ctx(), **hub_ctx('config'))
 
 
 @escrita_fiscal.route('/emissao-nfse/<int:cliente_id>')

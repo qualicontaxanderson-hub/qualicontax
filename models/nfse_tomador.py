@@ -153,6 +153,42 @@ class NfseTomador:
         execute_query('UPDATE nfse_tomadores SET ultima_nota_em = NOW() WHERE id = %s', (tomador_id,))
 
 
+def numeros_por_tomador(empresa_id):
+    """{documento: {'qtd', 'total', 'ultima'}} das notas AUTORIZADAS de produção desta empresa.
+    Só a empresa emitente: o que outra empresa emitiu para o mesmo CNPJ não entra."""
+    rows = execute_query(
+        "SELECT tomador_doc, COUNT(*) AS qtd, SUM(valor_servico) AS total, MAX(COALESCE(dh_emissao, criado_em)) AS ultima "
+        "  FROM nfse_emitidas WHERE empresa_id = %s AND ambiente = 1 AND situacao = 'autorizada' "
+        " GROUP BY tomador_doc", (empresa_id,), fetch=True) or []
+    return {_dig(r['tomador_doc']): r for r in rows}
+
+
+def tomadores_de_todas(empresa_ids, busca=''):
+    """Visão do ESCRITÓRIO (09/11/2026): o mesmo tomador em todas as empresas que a pessoa vê,
+    agrupado pelo CPF/CNPJ, cada linha com o contato que AQUELA empresa cadastrou.
+    Anderson: "O Usuario daqui verá todos os Tomadores e se quiser ao acessar a Phoenix,
+    consegue ver como cada um se comunica com o cliente". Nunca usar no portal do cliente."""
+    ids = [int(i) for i in (empresa_ids or [])]
+    if not ids:
+        return []
+    cond, params = ['t.ativo = 1', 't.empresa_id IN (' + ','.join(['%s'] * len(ids)) + ')'], list(ids)
+    if busca:
+        like = f'%{busca.strip()}%'
+        cond.append('(t.nome LIKE %s OR t.nome_fantasia LIKE %s OR t.documento LIKE %s OR t.email LIKE %s)')
+        params += [like, like, '%' + (_dig(busca) or busca.strip()) + '%', like]
+    rows = execute_query(
+        'SELECT t.*, c.numero_cliente AS emp_numero, c.nome_razao_social AS emp_nome '
+        '  FROM nfse_tomadores t JOIN clientes c ON c.id = t.empresa_id '
+        ' WHERE ' + ' AND '.join(cond) + ' ORDER BY t.nome, c.numero_cliente LIMIT 2000',
+        tuple(params), fetch=True) or []
+    grupos = {}
+    for r in rows:
+        g = grupos.setdefault(r['documento'], {'documento': r['documento'], 'nome': r['nome'], 'cidade': r.get('cidade'),
+                                               'uf': r.get('uf'), 'linhas': []})
+        g['linhas'].append(r)
+    return sorted(grupos.values(), key=lambda g: (-len(g['linhas']), (g['nome'] or '').upper()))
+
+
 def como_tomador(row):
     """A linha de nfse_tomadores no formato de ``tomador_do_cliente`` (com ``faltas``)."""
     from models.nfse_emissao import faltas_do_tomador, formatar_documento

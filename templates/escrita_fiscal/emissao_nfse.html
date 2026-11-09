@@ -74,40 +74,7 @@ a.vg-emp:hover{border-color:#16a34a;box-shadow:0 2px 12px rgba(22,163,74,.12)}
 {% include 'escrita_fiscal/_nfse_hub.html' %}
 
 {% if not emp %}
-<div class="vg-kpis">
-    <div class="vg-kpi"><span class="vg-ico ok"><i class="fas fa-circle-check"></i></span><div><b>{{ resumo.liberadas }}</b><small>liberadas para emitir</small></div></div>
-    <div class="vg-kpi"><span class="vg-ico warn"><i class="fas fa-hourglass-half"></i></span><div><b>{{ resumo.configuradas }}</b><small>em configuração</small></div></div>
-    <div class="vg-kpi"><span class="vg-ico info"><i class="fas fa-briefcase"></i></span><div><b>{{ resumo.aptas }}</b><small>prestam serviço e têm certificado, ainda sem configuração</small></div></div>
-    <div class="vg-kpi"><span class="vg-ico off"><i class="fas fa-building"></i></span><div><b>{{ resumo.sem }}</b><small>sem configuração no total</small></div></div>
-</div>
-{% if com %}
-<div class="vg-secao"><h2>Configuradas</h2><span>o quanto falta em cada uma</span></div>
-<div class="vg-grade">
-    {% for e in com %}
-    <a class="vg-emp" href="{{ url_for('escrita_fiscal.emissao_nfse_empresa', cliente_id=e.id) }}">
-        <div class="vg-emp-h"><span class="vg-av">{{ e.numero_cliente or '-' }}</span>
-            <div style="min-width:0"><b>{{ e.nome_razao_social }}</b><small>{{ e.cidade or '—' }}{% if e.regime %} · {{ e.regime }}{% endif %}</small></div>
-            {% if e.situacao == 'liberada' %}<span class="mc-chip ok" style="margin-left:auto"><i class="fas fa-check-double"></i> Liberada</span>{% endif %}</div>
-        <div class="vg-barra"><i style="width:{{ e.prontos * 20 }}%;background:{{ '#16a34a' if e.prontos == 5 else '#f59e0b' }}"></i></div>
-        <div class="vg-emp-p"><span>{{ e.prontos }} de 5 prontos</span>
-            <span class="{{ 'warn' if e.falta else 'ok' }}">{% if e.falta %}{{ e.falta|truncate(48) }}{% elif e.situacao != 'liberada' %}pronta para conferir{% else %}emitindo{% endif %}</span></div>
-    </a>
-    {% endfor %}
-</div>
-{% endif %}
-{% if novas %}
-<div class="vg-secao"><h2>Começar uma nova</h2><span>empresas que prestam serviço (pela atividade principal) e têm certificado válido</span></div>
-<div class="vg-grade">
-    {% for e in novas %}
-    <div class="vg-emp vg-linha">
-        <div class="vg-emp-h" style="flex:1;min-width:0"><span class="vg-av off">{{ e.numero_cliente or '-' }}</span>
-            <div style="min-width:0"><b>{{ e.nome_razao_social }}</b><small>{{ e.regime }}{% if e.atividade %} · {{ e.atividade|truncate(40) }}{% endif %}</small></div></div>
-        <a class="mc-btn mc-btn-o" href="{{ url_for('escrita_fiscal.emissao_nfse_empresa', cliente_id=e.id) }}"><i class="fas fa-plus"></i> Configurar</a>
-    </div>
-    {% endfor %}
-</div>
-<p class="em-intro" style="margin-top:12px">Não achou? Escolha qualquer empresa no alto da página.</p>
-{% endif %}
+{% include 'escrita_fiscal/_nfse_painel.html' %}
 
 {% else %}
 

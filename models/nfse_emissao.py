@@ -37,6 +37,29 @@ IND_DEST = {0: 'Destinatário é o tomador', 1: 'Destinatário é outro'}
 IND_FINAL = {0: 'Não é consumidor final', 1: 'Consumidor final'}
 EMISSORES = {'nacional': 'Emissor Nacional (Sefin)', 'fiorilli': 'ISSWeb da prefeitura (Fiorilli)',
              'sp': 'Prefeitura de São Paulo (RPS)'}
+# Recusa do governo em português, para o cartão da nota (09/11/2026, "texto para toda a
+# equipe"). Só os códigos que já apareceram nas nossas notas; o resto mostra o texto do governo.
+MOTIVOS_RECUSA = {
+    'E0037': 'A cidade da empresa não tem convênio com o Emissor Nacional',
+    'E0039': 'A cidade da empresa não está preparada para o Emissor Nacional',
+    'E0116': 'Falta a inscrição municipal da empresa',
+    'E0322': 'Faltou o tipo de serviço (NBS)',
+    'E2243': 'O CPF da empresa não pode consultar por este caminho',
+}
+
+
+def motivo_curto(erro):
+    """(texto curto em português, código do governo) a partir de ``erro_ultimo``."""
+    import re
+    erro = (erro or '').strip()
+    if not erro:
+        return '', ''
+    m = re.match(r'\s*([A-Z]{1,2}\d{2,4})\s*[:\-–]\s*(.*)', erro, re.S)
+    cod, resto = (m.group(1), m.group(2)) if m else ('', erro)
+    texto = MOTIVOS_RECUSA.get(cod) or ' '.join(resto.split())
+    return (texto[:140] + '…') if len(texto) > 140 else texto, cod
+
+
 SITUACOES = {'rascunho': 'Rascunho', 'autorizada': 'Autorizada', 'rejeitada': 'Rejeitada',
              'erro': 'Falha no envio', 'cancelada': 'Cancelada'}
 
