@@ -466,6 +466,8 @@
 .qb #responsaveis .rs-who { flex-direction:column; gap:7px; }
 .qb #responsaveis .rs-av { width:46px; height:46px; flex-basis:46px; font-size:15px; }
 .qb #responsaveis .rs-nome { font-size:13px; font-weight:700; }
+.qb #responsaveis .rs-tile-ninguem .rs-av { background:#e2e8f0; color:#64748b; }
+.qb #responsaveis .rs-tile-ninguem .rs-nome { color:#64748b; }
 .qb #responsaveis .rs-tile-ok { cursor:pointer; transition:background .15s, box-shadow .15s; }
 .qb #responsaveis .rs-tile-ok:hover { background:#f0fdf4; box-shadow:inset 0 0 0 1.5px #86efac; }
 .qb #responsaveis .rs-tile-falta { background:#fff1f2; outline:1.5px dashed #fda4af; outline-offset:-1.5px; }
@@ -754,6 +756,7 @@
 
 {% block content %}
 {# Responsáveis no escritório: ícone por departamento, cor da bolinha pelo id do usuário e iniciais do nome #}
+{% set rs_ninguem = {'Visita': 'Sem visita'} %}{# 09/11/2026: Visita aceita "ninguém" (models/cliente_responsavel.ACEITAM_NINGUEM) #}
 {% set rs_icones = {'Contábil': 'fa-book', 'Fiscal': 'fa-file-invoice-dollar', 'Pessoal': 'fa-users', 'Financeiro': 'fa-coins',
                     'Legalização': 'fa-stamp', 'Certificado Digital': 'fa-certificate', 'Visita': 'fa-handshake'} %}
 {% set rs_cores = ['#0f766e', '#4f46e5', '#b45309', '#be123c', '#7c3aed', '#0369a1', '#15803d', '#c2410c'] %}
@@ -773,7 +776,7 @@
     {% set origem_ops = [['CASA', 'Aberta pela Qualicontax']] %}{% for ca in contabilidades %}{% set _x = origem_ops.append([ca.id|string, ca.nome]) %}{% endfor %}
     {% set grupo_ops = [] %}{% for g in grupos_todos %}{% set _x = grupo_ops.append([g.id|string, g.nome]) %}{% endfor %}
     {% set ramo_ops = [] %}{% for r in ramos_todos %}{% set _x = ramo_ops.append([r.id|string, r.nome]) %}{% endfor %}
-    {% set rs_faltam = responsaveis|rejectattr('usuario_id')|list|length %}
+    {% set rs_faltam = responsaveis|rejectattr('definido')|list|length %}
     {% set cob = cliente.cobranca or 'PENDENTE' %}
 
     {% macro bol(chaves) -%}
@@ -1112,7 +1115,7 @@
             <section class="qb-b s12" id="responsaveis">
                     <!-- Responsáveis no escritório (migração Acessórias, 05/11/2026): um funcionário por departamento,
                          em mosaico; departamento vazio vira azulejo vermelho que abre a janela já nele -->
-                    {% set rs_faltam = responsaveis|rejectattr('usuario_id')|list|length %}
+                    {% set rs_faltam = responsaveis|rejectattr('definido')|list|length %}
                     <div class="fv-card rs-card" id="rs-card" data-copiar-bloco>
                         <div class="rs-head" data-copiar-cab>
                             <span class="rs-title">Responsáveis no escritório</span>
@@ -1137,6 +1140,14 @@
                                     <span class="rs-av" style="--rs-c:{{ rs_cores[r.usuario_id % 8] }}">{{ rs_ini(r.usuario_nome) }}</span>
                                     <span class="rs-txt"><span class="rs-nome" data-copiar data-copiar-rotulo="{{ r.departamento }}">{{ r.usuario_nome }}</span>
                                         {% if r.usuario_situacao == 'INATIVO' %}<span class="rs-inativo">usuário inativo</span>{% endif %}</span>
+                                </div>
+                            </div>
+                            {% elif r.definido %}
+                            <div class="rs-tile rs-tile-ok rs-tile-ninguem" data-rs-dep="{{ r.departamento_id }}" role="button" tabindex="0" title="Clique para escolher quem responde por {{ r.departamento }}">
+                                <span class="rs-dep"><i class="fas {{ rs_icones.get(r.departamento, 'fa-folder') }}"></i> {{ r.departamento }}</span>
+                                <div class="rs-who">
+                                    <span class="rs-av"><i class="fas fa-minus"></i></span>
+                                    <span class="rs-txt"><span class="rs-nome" data-copiar data-copiar-rotulo="{{ r.departamento }}">{{ rs_ninguem.get(r.departamento, 'ninguém') }}</span></span>
                                 </div>
                             </div>
                             {% else %}
@@ -1769,14 +1780,15 @@
         <form id="rs-form" action="{{ url_for('clientes.salvar_responsaveis', id=cliente.id) }}" method="POST" novalidate>
             <div class="rs-mbody">
                 {% for r in responsaveis %}
-                <div class="rs-row{% if not r.usuario_id %} rs-row-falta{% endif %}">
+                <div class="rs-row{% if not r.definido %} rs-row-falta{% endif %}">
                     <span class="rs-rico"><i class="fas {{ rs_icones.get(r.departamento, 'fa-folder') }}"></i></span>
                     <label class="rs-rlbl" for="resp_{{ r.departamento_id }}">{{ r.departamento }}
-                        <small>{% if r.usuario_id %}quem responde hoje{% else %}ninguém escolhido ainda{% endif %}</small></label>
+                        <small>{% if r.usuario_id %}quem responde hoje{% elif r.definido %}ninguém responde{% else %}ninguém escolhido ainda{% endif %}</small></label>
                     <span class="rs-sel">
                         <span class="rs-av"></span>
                         <select id="resp_{{ r.departamento_id }}" name="resp_{{ r.departamento_id }}">
                             <option value="">Escolher…</option>
+                            {% if r.departamento in rs_ninguem %}<option value="SEM" data-ini="—" data-cor="#94a3b8"{% if r.definido and not r.usuario_id %} selected{% endif %}>{{ rs_ninguem[r.departamento] }}</option>{% endif %}
                             {% for dep, us in funcionarios|groupby('departamento') %}
                             <optgroup label="{{ dep }}">
                                 {% for u in us %}

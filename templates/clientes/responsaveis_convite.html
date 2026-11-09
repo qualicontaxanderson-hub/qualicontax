@@ -41,6 +41,7 @@
 {% endblock %}
 
 {% block content %}
+{% set rs_ninguem = {'Visita': 'Sem visita'} %}{# 09/11/2026: Visita aceita "ninguém" (models/cliente_responsavel.ACEITAM_NINGUEM) #}
 {% set rs_icones = {'Contábil': 'fa-book', 'Fiscal': 'fa-file-invoice-dollar', 'Pessoal': 'fa-users', 'Financeiro': 'fa-coins',
                     'Legalização': 'fa-stamp', 'Certificado Digital': 'fa-certificate', 'Visita': 'fa-car-side'} %}
 {% set rs_cores = ['#0f766e', '#4f46e5', '#b45309', '#be123c', '#7c3aed', '#0369a1', '#15803d', '#c2410c'] %}
@@ -58,14 +59,15 @@
         <div class="rs-mbody">
             {% for r in responsaveis %}
             {% set pode = (permitidos is none) or (r.departamento_id in permitidos) %}
-            <div class="rs-row{% if not r.usuario_id and pode %} rs-row-falta{% endif %}{% if not pode %} rs-row-trava{% elif permitidos is not none %} rs-row-minha{% endif %}">
+            <div class="rs-row{% if not r.definido and pode %} rs-row-falta{% endif %}{% if not pode %} rs-row-trava{% elif permitidos is not none %} rs-row-minha{% endif %}">
                 <span class="rs-rico"><i class="fas {{ rs_icones.get(r.departamento, 'fa-folder') }}"></i></span>
                 <label class="rs-rlbl" for="resp_{{ r.departamento_id }}">{{ r.departamento }}
-                    <small>{% if r.usuario_id %}quem responde hoje{% else %}escolha quem responde{% endif %}</small></label>
+                    <small>{% if r.usuario_id %}quem responde hoje{% elif r.definido %}ninguém responde{% else %}escolha quem responde{% endif %}</small></label>
                 <span class="rs-sel">
                     <span class="rs-av"></span>
                     <select id="resp_{{ r.departamento_id }}" name="resp_{{ r.departamento_id }}" {% if not pode %}disabled{% endif %}>
                         <option value="">Escolher…</option>
+                        {% if r.departamento in rs_ninguem %}<option value="SEM" data-ini="—" data-cor="#94a3b8"{% if r.definido and not r.usuario_id %} selected{% endif %}>{{ rs_ninguem[r.departamento] }}</option>{% endif %}
                         {% for dep, us in funcionarios|groupby('departamento') %}
                         <optgroup label="{{ dep }}">
                             {% for u in us %}

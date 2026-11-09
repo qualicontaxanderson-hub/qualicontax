@@ -2615,12 +2615,19 @@ def salvar_responsaveis(id):
     if not cliente:
         flash('Cliente não encontrado!', 'danger')
         return redirect(url_for('clientes.index'))
+    from models.cliente_responsavel import SEM, ACEITAM_NINGUEM
     validos = {u['id']: u['nome'] for u in ClienteResponsavel.usuarios_disponiveis()}
     atuais = ClienteResponsavel.por_cliente(id)
-    antes = {r['departamento']: r['usuario_nome'] for r in atuais}
+    antes = {r['departamento']: (r['usuario_nome'] or ACEITAM_NINGUEM.get(r['departamento']) if r['definido'] else None)
+             for r in atuais}
     depois, escolhas, faltando = {}, {}, []
     for r in atuais:
-        uid = request.form.get('resp_%d' % r['departamento_id'], type=int)
+        bruto = (request.form.get('resp_%d' % r['departamento_id']) or '').strip()
+        if bruto == SEM and r['departamento'] in ACEITAM_NINGUEM:      # "Sem visita"
+            depois[r['departamento']] = ACEITAM_NINGUEM[r['departamento']]
+            escolhas[r['departamento_id']] = SEM
+            continue
+        uid = int(bruto) if bruto.isdigit() else None
         if not uid:
             faltando.append(r['departamento'])
         elif uid not in validos:
@@ -2633,7 +2640,8 @@ def salvar_responsaveis(id):
               % ', '.join(faltando), 'danger')
         return redirect(url_for('clientes.detalhes', id=id))
     for r in atuais:
-        if escolhas[r['departamento_id']] != (r['usuario_id'] or None):
+        atual = r['usuario_id'] or (SEM if r['definido'] else None)
+        if escolhas[r['departamento_id']] != atual:
             ClienteResponsavel.definir(id, r['departamento_id'], escolhas[r['departamento_id']])
     if antes != depois:
         registrar('escrita.alterou_responsaveis', 'cadastros', tabela='clientes', registro_id=id,
@@ -2710,7 +2718,17 @@ def responsaveis_convite_salvar(token):
     for r in atuais:
         if permitidos is not None and r['departamento_id'] not in permitidos:
             continue
-        uid = request.form.get('resp_%d' % r['departamento_id'], type=int)
+        from models.cliente_responsavel import SEM, ACEITAM_NINGUEM
+        bruto = (request.form.get('resp_%d' % r['departamento_id']) or '').strip()
+        if bruto == SEM and r['departamento'] in ACEITAM_NINGUEM:          # "Sem visita" (09/11/2026)
+            if r['definido'] and not r['usuario_id']:
+                continue
+            ClienteResponsavel.definir(v['cliente_id'], r['departamento_id'], SEM)
+            mudou.append(r['departamento'])
+            antes[r['departamento']] = r['usuario_nome']
+            depois[r['departamento']] = ACEITAM_NINGUEM[r['departamento']]
+            continue
+        uid = int(bruto) if bruto.isdigit() else None
         if not uid or uid not in validos or uid == (r['usuario_id'] or None):
             continue
         ClienteResponsavel.convite_responder(v, r['departamento_id'], uid, current_user.id)

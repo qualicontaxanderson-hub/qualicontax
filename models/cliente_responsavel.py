@@ -12,6 +12,13 @@ from models.contato_cliente import DEPARTAMENTOS_CONTATO
 # os mesmos 7 departamentos que o contato recebe são os que têm responsável no escritório
 DEPARTAMENTOS_RESPONSAVEL = list(DEPARTAMENTOS_CONTATO)
 
+# "Sem visita" (09/11/2026): nem toda empresa é visitada. Anderson: "tem que ter a opção SEM VISITA...
+# deixar todos SEM VISITA, e o Rodrigo depois vem colocando qual de fato ele visita". Gravado como a
+# linha do departamento COM usuario_id NULL: o departamento está DEFINIDO (não é pendência), só que
+# ninguém responde. Só vale para os departamentos desta lista.
+SEM = 'SEM'
+ACEITAM_NINGUEM = {'Visita': 'Sem visita'}
+
 
 class ClienteResponsavel:
 
@@ -26,6 +33,7 @@ class ClienteResponsavel:
         ordem = ClienteResponsavel._ordem()
         return execute_query(
             f"""SELECT d.id AS departamento_id, d.nome AS departamento, r.usuario_id,
+                       (r.id IS NOT NULL) AS definido,
                        u.nome AS usuario_nome, u.situacao AS usuario_situacao
                   FROM departamentos d
              LEFT JOIN clientes_responsaveis r ON r.departamento_id = d.id AND r.cliente_id = %s
@@ -35,7 +43,13 @@ class ClienteResponsavel:
 
     @staticmethod
     def definir(cliente_id, departamento_id, usuario_id):
-        """Grava (ou tira, se usuario_id vazio) o responsável de um departamento. Idempotente."""
+        """Grava (ou tira, se usuario_id vazio) o responsável de um departamento. Idempotente.
+        usuario_id == SEM grava "ninguém responde" (ex.: Sem visita)."""
+        if usuario_id == SEM:
+            return execute_query(
+                """INSERT INTO clientes_responsaveis (cliente_id, departamento_id, usuario_id)
+                   VALUES (%s, %s, NULL) ON DUPLICATE KEY UPDATE usuario_id = NULL""",
+                (cliente_id, departamento_id), fetch=False)
         if usuario_id:
             return execute_query(
                 """INSERT INTO clientes_responsaveis (cliente_id, departamento_id, usuario_id)
@@ -124,7 +138,7 @@ class ClienteResponsavel:
 
     @staticmethod
     def convite_fechar_se_completo(convite):
-        if all(r['usuario_id'] for r in ClienteResponsavel.por_cliente(convite['cliente_id'])):
+        if all(r['definido'] for r in ClienteResponsavel.por_cliente(convite['cliente_id'])):
             execute_query('UPDATE clientes_responsaveis_convites SET concluido_em = NOW() WHERE id = %s', (convite['id'],), fetch=False)
             return True
         return False
