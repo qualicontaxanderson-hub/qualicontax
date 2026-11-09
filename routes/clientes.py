@@ -13,6 +13,7 @@ from utils.auditoria_fmt import AUDITORIA_INICIO, hist_preparar
 from utils.form_helpers import limpar_form
 from utils.db_helper import execute_query
 from utils.acesso import filtrar_lista, empresas_ocultas, pode_ver_empresa
+from utils import a_cadastrar as AC
 from models.cliente import Cliente, COBRANCAS
 from models.endereco_cliente import EnderecoCliente
 from utils.cnpj_receita import limpar_logradouro
@@ -1367,6 +1368,7 @@ def detalhes(id):
         from routes.qrobo import csrf_token
         reserva, reserva_csrf = dados_reserva(id), csrf_token()
 
+    _falta = AC.pendencias_do_cadastro(id)   # o "O que falta" da tela única: a regra do A CADASTRAR
     return render_template('clientes/detalhes.html',
                          reserva=reserva,
                          reserva_csrf=reserva_csrf,
@@ -1408,7 +1410,159 @@ def detalhes(id):
                          funcionarios=f_funcionarios.result(),
                          rs_convite=f_rs_convite.result(),
                          contrato=(f_contrato.result() or [None])[0],
-                         areas_atendimento=AREAS_ATENDIMENTO)
+                         areas_atendimento=AREAS_ATENDIMENTO,
+                         falta=_falta,
+                         falta_cor={f['chave']: f['cor'] for f in _falta['faltam']},
+                         alvo_pend=AC.ALVO,
+                         cobrancas=COBRANCAS,
+                         ramos_todos=[r for r in RamoAtividade.get_all(situacao='ATIVO')
+                                      if (r.get('tipo_pessoa') or 'PJ') == ('PF' if cliente.get('tipo_pessoa') == 'PF' else 'PJ')],
+                         contabilidades=_contab_combo(cliente.get('contabilidade_anterior_id')),
+                         grupos_todos=GrupoCliente.get_all(situacao='ATIVO'))
+
+
+# ── Tela única (Modelo C, 08/11/2026) ─────────────────────────────────────────────────────────
+# Anderson (07/11/2026): "ter a FICHA e CADASTRO não está legal... confuso... uma tela só". Na ficha,
+# o valor com sublinhado pontilhado vira campo ao clicar; o "Salvar alterações" do topo manda só o que
+# mudou para cá. Só entram campos SIMPLES (uma coluna, sem efeito colateral). Número, razão social e
+# CNPJ ficam fora: mudar qualquer um renomeia a pasta da empresa no Dropbox, e isso continua no editor.
+_CAMPOS_TEXTO = {'inscricao_estadual': 30, 'inscricao_municipal': 30, 'nire': 20,
+                 'email': 255, 'telefone': 20, 'celular': 20, 'observacoes': 5000}
+_CAMPOS_DATA = ('nire_data_registro', 'data_inicio_contrato')
+_CAMPOS_OPCAO = {'regime_tributario': ('SIMPLES', 'LUCRO_PRESUMIDO', 'LUCRO_REAL', 'MEI'),
+                 'porte_empresa': ('MEI', 'ME', 'EPP', 'MEDIO', 'GRANDE'),
+                 'cobranca': tuple(v for v, _ in COBRANCAS)}
+_ROTULO_CAMPO = {'inscricao_estadual': 'Insc. Estadual', 'inscricao_municipal': 'Insc. Municipal', 'nire': 'NIRE',
+                 'email': 'E-mail', 'telefone': 'Telefone', 'celular': 'Celular', 'observacoes': 'Observações',
+                 'nire_data_registro': 'Data do registro', 'data_inicio_contrato': 'Início do contrato',
+                 'regime_tributario': 'Regime', 'porte_empresa': 'Porte', 'cobranca': 'Cobrança',
+                 'origem': 'Origem', 'ramos': 'Ramo de atividade', 'grupo': 'Grupo'}
+
+
+@clientes.route('/clientes/<int:id>/campos', methods=['POST'])
+@login_required
+def salvar_campos(id):
+    """Grava os campos que mudaram na tela única. Recebe JSON {"campos": {nome: valor}} e devolve
+    {"ok", "salvos": [rótulos], "falta": <O que falta recalculado>} ou {"ok": false, "erro"}."""
+    cliente = Cliente.get_by_id(id)
+    if not cliente:
+        return jsonify(ok=False, erro='Cadastro não encontrado.'), 404
+    campos = (request.get_json(silent=True) or {}).get('campos') or {}
+    if not isinstance(campos, dict) or not campos:
+        return jsonify(ok=False, erro='Nada para salvar.'), 400
+    desconhecidos = [k for k in campos if k not in _ROTULO_CAMPO]
+    if desconhecidos:
+        return jsonify(ok=False, erro='Campo que esta tela não grava: ' + ', '.join(desconhecidos)), 400
+
+    pj = cliente.get('tipo_pessoa') != 'PF'
+    sets, antes, depois, erros = {}, {}, {}, []
+    for k, v in campos.items():
+        v = '' if v is None else str(v).strip() if not isinstance(v, list) else v
+        if k in _CAMPOS_TEXTO:
+            novo = v[:_CAMPOS_TEXTO[k]] or None
+            if k in ('nire', 'inscricao_estadual', 'inscricao_municipal') and novo:
+                novo = novo.upper()
+            if k == 'email' and novo:
+                novo = novo.lower()
+                if not re.fullmatch(r'[^@\s]+@[^@\s]+\.[^@\s]+', novo):
+                    erros.append('E-mail inválido.')
+                    continue
+            if k == 'celular' and not _telefone_valido(novo):
+                erros.append('Celular: digite DDD + número (10 ou 11 dígitos). O celular é obrigatório.')
+                continue
+            if k == 'telefone' and novo and not _telefone_valido(novo):
+                erros.append('Telefone inválido (DDD + número).')
+                continue
+            sets[k] = novo
+        elif k in _CAMPOS_DATA:
+            if v and not _data_iso(v, ate_hoje=False):
+                erros.append(f'{_ROTULO_CAMPO[k]}: data inválida.')
+                continue
+            sets[k] = _data_iso(v, ate_hoje=False).isoformat() if v else None
+        elif k in _CAMPOS_OPCAO:
+            if v and v not in _CAMPOS_OPCAO[k]:
+                erros.append(f'{_ROTULO_CAMPO[k]}: opção inválida.')
+                continue
+            if k == 'regime_tributario' and not pj:
+                continue                      # pessoa física não tem regime (o editor grava SIMPLES fixo)
+            sets[k] = v or ('PENDENTE' if k == 'cobranca' else None)
+        elif k == 'origem' and not pj:
+            continue
+        elif k == 'grupo':
+            g = GrupoCliente.get_by_id(int(v)) if str(v).isdigit() else None
+            if not g or g.get('situacao') != 'ATIVO':
+                erros.append('Grupo é obrigatório: escolha um grupo ativo.')
+                continue
+        elif k == 'ramos':
+            ids = sorted({int(x) for x in (v if isinstance(v, list) else []) if str(x).isdigit()})
+            if not ids:
+                erros.append('Ramo de atividade é obrigatório: escolha ao menos um.')
+                continue
+            tipo = 'PF' if not pj else 'PJ'
+            marcas = ','.join(['%s'] * len(ids))
+            n = (execute_query(f"SELECT COUNT(*) n FROM ramos_atividade WHERE id IN ({marcas}) AND tipo_pessoa = %s",
+                               (*ids, tipo), fetch=True, fetch_one=True) or {}).get('n') or 0
+            if n != len(ids):
+                erros.append('Ramo de atividade de ' + ('pessoa física.' if tipo == 'PF' else 'empresa.'))
+    if erros:
+        return jsonify(ok=False, erro=' '.join(erros)), 400
+
+    salvos = []
+    for k, novo in list(sets.items()):
+        velho = cliente.get(k)
+        velho_cmp = velho.isoformat() if hasattr(velho, 'isoformat') else (velho if velho not in ('',) else None)
+        if (velho_cmp or None) == (novo or None):
+            sets.pop(k)
+            continue
+        antes[k], depois[k] = velho_cmp, novo
+        salvos.append(_ROTULO_CAMPO[k])
+    if sets:
+        execute_query(f"UPDATE clientes SET {', '.join(f'{k} = %s' for k in sets)}, alterado_por = %s, "
+                      f"alterado_em = CURRENT_TIMESTAMP WHERE id = %s",
+                      (*sets.values(), current_user.id, id))
+        registrar('escrita.alterou_cliente', 'cadastros', tabela='clientes', registro_id=id,
+                  antes=antes, depois=depois)
+
+    if 'origem' in campos and pj:
+        v = str(campos.get('origem') or '').strip()
+        from werkzeug.datastructures import MultiDict
+        f = MultiDict({'aberta_pela_casa': '1'} if v == 'CASA' else {'contabilidade_anterior_id': v})
+        if v != 'CASA' and not (v.isdigit() and Contabilidade.get(int(v))):
+            return jsonify(ok=False, erro='Origem: escolha "Aberta pela Qualicontax" ou um escritório da lista.'), 400
+        casa = 1 if v == 'CASA' else 0
+        if casa != (1 if cliente.get('aberta_pela_casa') else 0):
+            execute_query("UPDATE clientes SET aberta_pela_casa = %s, alterado_por = %s, alterado_em = CURRENT_TIMESTAMP "
+                          "WHERE id = %s", (casa, current_user.id, id))
+            registrar('escrita.alterou_cliente', 'cadastros', tabela='clientes', registro_id=id,
+                      antes={'aberta_pela_casa': cliente.get('aberta_pela_casa')}, depois={'aberta_pela_casa': casa})
+        antes_ca = cliente.get('contabilidade_anterior_id')
+        _salvar_origem(id, f, antes_ca)
+        if casa != (1 if cliente.get('aberta_pela_casa') else 0) or (None if casa else int(v)) != (antes_ca or None):
+            salvos.append('Origem')
+
+    if 'grupo' in campos:
+        mud = _salvar_grupo(id, int(campos['grupo']))
+        if mud:
+            registrar('escrita.alterou_grupo_cliente', 'cadastros', tabela='clientes', registro_id=id,
+                      antes={'grupos': mud[0]}, depois={'grupos': [mud[1]]})
+            salvos.append('Grupo')
+
+    if 'ramos' in campos:
+        ids = sorted({int(x) for x in campos['ramos'] if str(x).isdigit()})
+        atuais = RamoAtividade.get_by_cliente(id)
+        if sorted(r['id'] for r in atuais) != ids:
+            for r in atuais:
+                if r['id'] not in ids:
+                    RamoAtividade.remove_cliente(r['id'], id)
+            for rid in ids:
+                if rid not in {r['id'] for r in atuais}:
+                    RamoAtividade.add_cliente(rid, id)
+            registrar('escrita.alterou_ramos_cliente', 'cadastros', tabela='clientes', registro_id=id,
+                      antes={'ramos': sorted(r['nome'] for r in atuais)},
+                      depois={'ramos': sorted(r['nome'] for r in RamoAtividade.get_by_cliente(id))})
+            salvos.append('Ramo de atividade')
+
+    return jsonify(ok=True, salvos=salvos, falta=AC.pendencias_do_cadastro(id))
 
 
 @clientes.route('/clientes/opcoes/<tipo>', methods=['POST'])
@@ -3108,7 +3262,7 @@ def a_cadastrar():
     from utils import a_cadastrar as AC
     lista = AC.empresas_pendentes(empresas_ocultas())
     return render_template('clientes/a_cadastrar.html', acad_aba='empresas', acad_n=_acad_contagens(), lista=lista,
-                           catalogo=AC.PENDENCIAS_EMPRESA, contagem=AC.contadores(lista, AC.PENDENCIAS_EMPRESA))
+                           catalogo=AC.PENDENCIAS_EMPRESA, contagem=AC.contadores(lista, AC.PENDENCIAS_EMPRESA), alvo=AC.ALVO)
 
 
 @clientes.route('/clientes/a-cadastrar/avulsos')
@@ -3118,7 +3272,7 @@ def a_cadastrar_avulsos():
     from utils import a_cadastrar as AC
     lista = AC.avulsos_pendentes(empresas_ocultas())
     return render_template('clientes/a_cadastrar.html', acad_aba='avulsos', acad_n=_acad_contagens(), lista=lista,
-                           catalogo=AC.PENDENCIAS_AVULSO, contagem=AC.contadores(lista, AC.PENDENCIAS_AVULSO))
+                           catalogo=AC.PENDENCIAS_AVULSO, contagem=AC.contadores(lista, AC.PENDENCIAS_AVULSO), alvo=AC.ALVO)
 
 
 @clientes.route('/clientes/socios-pendentes')

@@ -90,40 +90,46 @@ def empresas_pendentes(ocultas=frozenset()):
     for c in execute_query(_SQL_EMPRESAS, fetch=True) or []:
         if c['id'] in ocultas:
             continue
-        pj = c['tipo_pessoa'] != 'PF'
-        p = []
-        if pj and _vazio(c['nire']):
-            p.append('nire')
-        if pj and _vazio(c['inscricao_municipal']):
-            p.append('im')
-        if pj and _vazio(c['inscricao_estadual']) and not c['n_ie_isenta']:
-            p.append('ie')
-        if pj and not c['n_socios']:
-            p.append('socios')
-        if pj and _vazio(c['regime_tributario']):
-            p.append('regime')
-        if (c['cobranca'] or 'PENDENTE') == 'PENDENTE':
-            p.append('cobranca')
-        if pj and _vazio(c['email']) and not c['n_contatos_email']:
-            p.append('email')
-        if not pj and not c['n_contatos']:
-            p.append('contato')          # PF: sem e-mail no cadastro, o contato é obrigatório (05/11/2026)
-        if c['n_contatos_sem_celular']:
-            p.append('contato_celular')
-        if not c['n_grupos']:
-            p.append('grupo')
-        if _vazio(c['celular']):
-            p.append('celular')
-        if not c['n_ramos']:
-            p.append('ramo')
-        if not c['n_contadores']:
-            p.append('contador')
-        if pj and not c['aberta_pela_casa'] and not c['contabilidade_anterior_id']:
-            p.append('origem')
+        p = _pend_empresa(c)
         if p:
             c['pendencias'] = p
             out.append(c)
     return out
+
+
+def _pend_empresa(c):
+    """As chaves que faltam numa linha de empresa (mesma regra para a lista e para a ficha)."""
+    pj = c['tipo_pessoa'] != 'PF'
+    p = []
+    if pj and _vazio(c['nire']):
+        p.append('nire')
+    if pj and _vazio(c['inscricao_municipal']):
+        p.append('im')
+    if pj and _vazio(c['inscricao_estadual']) and not c['n_ie_isenta']:
+        p.append('ie')
+    if pj and not c['n_socios']:
+        p.append('socios')
+    if pj and _vazio(c['regime_tributario']):
+        p.append('regime')
+    if (c['cobranca'] or 'PENDENTE') == 'PENDENTE':
+        p.append('cobranca')
+    if pj and _vazio(c['email']) and not c['n_contatos_email']:
+        p.append('email')
+    if not pj and not c['n_contatos']:
+        p.append('contato')          # PF: sem e-mail no cadastro, o contato é obrigatório (05/11/2026)
+    if c['n_contatos_sem_celular']:
+        p.append('contato_celular')
+    if not c['n_grupos']:
+        p.append('grupo')
+    if _vazio(c['celular']):
+        p.append('celular')
+    if not c['n_ramos']:
+        p.append('ramo')
+    if not c['n_contadores']:
+        p.append('contador')
+    if pj and not c['aberta_pela_casa'] and not c['contabilidade_anterior_id']:
+        p.append('origem')
+    return p
 
 
 def avulsos_pendentes(ocultas=frozenset()):
@@ -131,25 +137,30 @@ def avulsos_pendentes(ocultas=frozenset()):
     for c in execute_query(_SQL_AVULSOS, fetch=True) or []:
         if c['id'] in ocultas:
             continue
-        p = []
-        if _vazio(c['email']):
-            p.append('email')
-        if c['tipo_pessoa'] != 'PF' and _vazio(c['regime_tributario']):
-            p.append('regime')
-        if c['n_contatos_sem_celular']:
-            p.append('contato_celular')
-        if _vazio(c['celular']):
-            p.append('celular')
-        if not c['n_grupos']:
-            p.append('grupo')
-        if not c['n_ramos']:
-            p.append('ramo')
-        if 'conferir' in (c['observacoes'] or '').lower():
-            p.append('conferir')
+        p = _pend_avulso(c)
         if p:  # avulso completo fica só na aba Avulsos (Anderson, 05/11/2026)
             c['pendencias'] = p
             out.append(c)
     return out
+
+
+def _pend_avulso(c):
+    p = []
+    if _vazio(c['email']):
+        p.append('email')
+    if c['tipo_pessoa'] != 'PF' and _vazio(c['regime_tributario']):
+        p.append('regime')
+    if c['n_contatos_sem_celular']:
+        p.append('contato_celular')
+    if _vazio(c['celular']):
+        p.append('celular')
+    if not c['n_grupos']:
+        p.append('grupo')
+    if not c['n_ramos']:
+        p.append('ramo')
+    if 'conferir' in (c['observacoes'] or '').lower():
+        p.append('conferir')
+    return p
 
 
 def pendencias_de(ids):
@@ -175,3 +186,102 @@ def contadores(lista, catalogo):
         for k in c['pendencias']:
             n[k] += 1
     return n
+
+
+# ── Tela única do cadastro (Modelo C, 08/11/2026) ─────────────────────────────────────────────
+# Onde cada pendência se resolve na ficha: a âncora para onde a página rola e, quando é campo, o campo
+# que abre já editável. O A CADASTRAR usa o mesmo mapa: clicar no NIRE leva ao NIRE.
+ALVO = {
+    'nire': 'campo-nire', 'im': 'campo-im', 'ie': 'campo-ie', 'regime': 'campo-regime',
+    'cobranca': 'campo-cobranca', 'celular': 'campo-celular', 'ramo': 'campo-ramos',
+    'origem': 'campo-origem', 'conferir': 'campo-observacoes',
+    'grupo': 'campo-grupo', 'socios': 'socios', 'email': 'contatos', 'contato_celular': 'contatos',
+    'contato': 'contatos', 'contador': 'contadores',
+}
+
+_SQL_UM = """
+SELECT c.id, c.avulso, c.tipo_pessoa, c.nire, c.inscricao_municipal, c.inscricao_estadual, c.email, c.celular,
+       c.cobranca, c.aberta_pela_casa, c.contabilidade_anterior_id, c.regime_tributario, c.observacoes,
+       (SELECT COUNT(*) FROM socios_clientes s WHERE s.cliente_id = c.id AND s.ativo = 1) AS n_socios,
+       (SELECT COALESCE(SUM(s.percentual_participacao), 0) FROM socios_clientes s WHERE s.cliente_id = c.id AND s.ativo = 1) AS pct_socios,
+       (SELECT COUNT(*) FROM contatos_clientes k WHERE k.cliente_id = c.id AND k.ativo = 1) AS n_contatos,
+       (SELECT COUNT(*) FROM contatos_clientes k WHERE k.cliente_id = c.id AND k.ativo = 1 AND k.email IS NOT NULL AND k.email <> '') AS n_contatos_email,
+       (SELECT COUNT(*) FROM contatos_clientes k WHERE k.cliente_id = c.id AND k.ativo = 1 AND (k.celular IS NULL OR k.celular = '')) AS n_contatos_sem_celular,
+       (SELECT GROUP_CONCAT(g.nome ORDER BY g.nome SEPARATOR ', ') FROM cliente_grupo_relacao r JOIN grupos_clientes g ON g.id = r.grupo_id WHERE r.cliente_id = c.id) AS grupos,
+       (SELECT COUNT(*) FROM cliente_grupo_relacao r WHERE r.cliente_id = c.id) AS n_grupos,
+       (SELECT GROUP_CONCAT(ra.nome ORDER BY ra.nome SEPARATOR ', ') FROM cliente_ramo_atividade_relacao r JOIN ramos_atividade ra ON ra.id = r.ramo_atividade_id WHERE r.cliente_id = c.id) AS ramos,
+       (SELECT COUNT(*) FROM cliente_ramo_atividade_relacao r WHERE r.cliente_id = c.id) AS n_ramos,
+       (SELECT GROUP_CONCAT(k2.nome_razao_social SEPARATOR ', ') FROM cliente_contadores cc JOIN clientes k2 ON k2.id = cc.contador_id WHERE cc.cliente_id = c.id) AS contadores,
+       (SELECT COUNT(*) FROM cliente_contadores cc WHERE cc.cliente_id = c.id) AS n_contadores,
+       (SELECT COUNT(*) FROM clientes_inscricoes_estaduais ie WHERE ie.cliente_id = c.id AND ie.isenta = 1) AS n_ie_isenta,
+       (SELECT nome FROM contabilidades ca WHERE ca.id = c.contabilidade_anterior_id) AS contab_nome
+  FROM clientes c
+ WHERE c.id = %s
+"""
+
+_REGIMES = {'SIMPLES': 'Simples', 'LUCRO_PRESUMIDO': 'Lucro Presumido', 'LUCRO_REAL': 'Lucro Real', 'MEI': 'MEI'}
+_COBR = {'PROPRIA': 'própria', 'VIA_GRUPO': 'via grupo'}
+
+
+def pendencias_do_cadastro(cliente_id):
+    """O "O que falta" da ficha: a MESMA regra do A CADASTRAR, para um cadastro só.
+
+    Devolve {'faltam': [{chave, rotulo, cor, ajuda, alvo}], 'ok': [{chave, rotulo, valor}], 'avulso': bool}.
+    Antes o "Antes de salvar" do Editar tinha uma lista própria: a Qualicontax aparecia toda verde lá e com
+    NIRE e Financeiro pendentes no A CADASTRAR (Anderson, 07/11/2026: "ajustar bem")."""
+    c = execute_query(_SQL_UM, (cliente_id,), fetch=True, fetch_one=True)
+    if not c:
+        return {'faltam': [], 'ok': [], 'avulso': False}
+    avulso = bool(c['avulso'])
+    catalogo = PENDENCIAS_AVULSO if avulso else PENDENCIAS_EMPRESA
+    p = set(_pend_avulso(c) if avulso else _pend_empresa(c))
+    pj = c['tipo_pessoa'] != 'PF'
+
+    def valor(k):
+        if k == 'nire':
+            return c['nire']
+        if k == 'im':
+            return c['inscricao_municipal']
+        if k == 'ie':
+            return c['inscricao_estadual'] or ('isenta' if c['n_ie_isenta'] else '')
+        if k == 'socios':
+            return f"{c['n_socios']}, somando {float(c['pct_socios'] or 0):g}%"
+        if k == 'regime':
+            return _REGIMES.get(c['regime_tributario'], c['regime_tributario'])
+        if k == 'cobranca':
+            return _COBR.get(c['cobranca'])
+        if k == 'email':
+            return c['email'] if avulso or c['email'] else f"{c['n_contatos_email']} de {c['n_contatos']} contatos"
+        if k == 'contato_celular':
+            return 'todos têm' if c['n_contatos'] else 'nenhum contato'
+        if k == 'contato':
+            return f"{c['n_contatos']} contato(s)"
+        if k == 'grupo':
+            return c['grupos']
+        if k == 'celular':
+            return c['celular']
+        if k == 'ramo':
+            return c['ramos']
+        if k == 'contador':
+            return c['contadores']
+        if k == 'origem':
+            return 'aberta pela Qualicontax' if c['aberta_pela_casa'] else c['contab_nome']
+        return ''
+
+    # O que não se aplica a este cadastro (ex.: NIRE de pessoa física) não entra em nenhuma das listas.
+    so_pj = {'nire', 'im', 'ie', 'socios', 'regime', 'email', 'origem'} if not avulso else {'regime'}
+    so_pf = {'contato'} if not avulso else set()
+    faltam, ok = [], []
+    for k, rotulo, cor, ajuda in catalogo:
+        if (k in so_pj and not pj) or (k in so_pf and pj):
+            continue
+        if k == 'conferir' and k not in p:
+            continue
+        if k in p:
+            faltam.append({'chave': k, 'rotulo': rotulo, 'cor': cor, 'ajuda': ajuda, 'alvo': ALVO.get(k, '')})
+        else:
+            ok.append({'chave': k, 'rotulo': rotulo, 'valor': valor(k) or ''})
+    # vermelho primeiro, depois âmbar, depois cinza (o que trava mais aparece antes)
+    ordem = {'verm': 0, 'amb': 1, 'cinza': 2}
+    faltam.sort(key=lambda f: ordem.get(f['cor'], 3))
+    return {'faltam': faltam, 'ok': ok, 'avulso': avulso}

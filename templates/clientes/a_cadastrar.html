@@ -38,7 +38,8 @@
     <div class="gc-grid" id="acGrid">
         {% for c in lista %}
         {% set pf = c.tipo_pessoa == 'PF' %}
-        <article class="gc-card acad-card" data-p="{{ c.pendencias|join(' ') }}" data-busca="{{ (c.nome_razao_social ~ ' ' ~ (c.numero_cliente or '') ~ ' ' ~ (c.cpf_cnpj or '') ~ ' ' ~ (c.nome_fantasia or ''))|lower }}">
+        {% set ficha = url_for('clientes.detalhes', id=c.id) %}
+        <article class="gc-card acad-card" data-href="{{ ficha }}" title="Abrir o cadastro" data-p="{{ c.pendencias|join(' ') }}" data-busca="{{ (c.nome_razao_social ~ ' ' ~ (c.numero_cliente or '') ~ ' ' ~ (c.cpf_cnpj or '') ~ ' ' ~ (c.nome_fantasia or ''))|lower }}">
             <header class="gc-head">
                 {% if eh_avulso %}<span class="gc-ava cli-ava cli-ava-av" title="Avulso ainda não tem número">AV</span>
                 {% else %}<span class="gc-ava cli-ava {{ 'cli-ava-pf' if pf }} {{ 'cli-ava-4' if (c.numero_cliente or '')|length > 3 }}">{{ c.numero_cliente }}</span>{% endif %}
@@ -53,7 +54,7 @@
                 <span class="cli-rot">Falta</span>
                 <div class="gc-tags">
                     {% for k, rotulo, cor, ajuda in catalogo if k in c.pendencias %}
-                    <span class="acad-chip acad-{{ cor }}" title="{{ ajuda }}">{{ rotulo }}</span>
+                    <a class="acad-chip acad-{{ cor }}" href="{{ ficha }}#{{ alvo.get(k, '') }}" title="{{ ajuda }} · clique para ir direto ao campo">{{ rotulo }}</a>
                     {% endfor %}
                 </div>
             </div>
@@ -70,8 +71,7 @@
             {% if eh_avulso and c.observacoes %}<p class="acad-obs" title="{{ c.observacoes }}">{{ c.observacoes }}</p>{% endif %}
 
             <footer class="acad-acoes">
-                <a class="btn btn-primary" href="{{ url_for('clientes.editar', id=c.id) }}"><i class="fas fa-pen"></i> Completar cadastro</a>
-                <a class="btn btn-outline" href="{{ url_for('clientes.detalhes', id=c.id) }}"><i class="fas fa-eye"></i> Ficha</a>
+                <a class="btn btn-primary" href="{{ ficha }}"><i class="fas fa-pen"></i> Abrir cadastro</a>
                 {% if eh_avulso %}<a class="btn btn-outline" href="{{ url_for('clientes.avulsos') }}" title="Dar número e virar cliente, na tela de Avulsos"><i class="fas fa-arrow-right"></i> Virar cliente</a>{% endif %}
             </footer>
         </article>
@@ -81,6 +81,9 @@
 </div>
 
 <style>
+.acad-card[data-href] { cursor:pointer; }
+a.acad-chip { text-decoration:none; cursor:pointer; }
+a.acad-chip:hover { filter:brightness(.94); text-decoration:underline; }
 .acad-barra { display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin:0 0 14px; }
 .acad-pills { display:flex; gap:8px; flex-wrap:wrap; }
 .gc-pill { font:inherit; font-size:13px; font-weight:600; background:#fff; border:1px solid #e3ece7; color:#334155; border-radius:99px; padding:7px 14px; cursor:pointer; }
@@ -108,6 +111,12 @@
 
 {% block extra_js %}
 <script>
+// Tela única (08/11/2026): o cartão inteiro abre o cadastro; a pílula leva direto ao campo que falta
+document.addEventListener('click', function (e) {
+    var card = e.target.closest('.acad-card[data-href]');
+    if (!card || e.target.closest('a, button, input, select')) return;
+    location.href = card.getAttribute('data-href');
+});
 (function () {
     var cards = [].slice.call(document.querySelectorAll('.acad-card')), filtro = '';
     function norm(s) { return (s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, ''); }

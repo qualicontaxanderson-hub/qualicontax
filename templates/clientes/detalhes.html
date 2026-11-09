@@ -262,6 +262,141 @@
 .acesso-pessoa small { color:var(--text-secondary, #64748b); }
 .acesso-excecoes[disabled] { opacity:.5; }
 .acesso-form .btn { align-self:flex-start; }
+
+/* ══════ TELA ÚNICA (Modelo C, 08/11/2026): índice | página que rola | O que falta ══════ */
+.tu { --tu-topo:122px; display:grid; grid-template-columns:196px minmax(0, 1fr) 284px; gap:16px; align-items:start; }
+.tu-ind { position:sticky; top:var(--tu-topo); display:flex; flex-direction:column; gap:1px; max-height:calc(100vh - var(--tu-topo) - 14px); overflow-y:auto; scrollbar-width:thin; }
+.tu-ind-tit { font-size:10px; font-weight:800; letter-spacing:1.2px; text-transform:uppercase; color:#94a3b8; margin:12px 10px 5px; }
+.tu-ind-tit:first-child { margin-top:2px; }
+.tu-ind a { display:flex; align-items:center; gap:9px; padding:7px 10px; border-radius:9px; font-size:13px; color:#334155; text-decoration:none; min-width:0; }
+.tu-ind a small { margin-left:auto; padding-left:6px; font-size:11px; color:#94a3b8; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:92px; }
+.tu-ind a:hover { background:#f1f7f3; }
+.tu-ind a.on { background:#e7f5ec; color:#0f3d2e; font-weight:700; }
+.tu-dot { width:8px; height:8px; border-radius:50%; flex:0 0 8px; background:#22c55e; }
+.tu-dot-amb { background:#f59e0b; } .tu-dot-verm { background:#ef4444; } .tu-dot-cinza { background:#cbd5e1; }
+
+.tu-main { min-width:0; }
+.tu-main .tab-pane { display:block !important; animation:none !important; scroll-margin-top:var(--tu-topo); }
+.tu-main .tab-pane + .tab-pane { margin-top:14px; }
+.tu-sec, .tu-main .card { scroll-margin-top:var(--tu-topo); }
+.tu-sec { margin-bottom:14px; }
+.tu-sec:last-child { margin-bottom:0; }
+.tu-main .card { border:1px solid #e3ece7; border-radius:15px; box-shadow:none; overflow:visible; }
+.tu-main .card + .card { margin-top:14px; }
+.tu-main .card-header { background:transparent; border-bottom:1px solid #eef3f0; }
+.tu-main .card-header .card-title { font-size:11px; font-weight:800; letter-spacing:1.2px; text-transform:uppercase; color:#15803d; }
+.tu-main .fv-cert-hero .card-header .card-title { color:#fff; }
+.tu-main .fv-seclabel { flex-wrap:wrap; }
+.tu-tag { font-size:10px; font-weight:700; letter-spacing:.4px; color:#15803d; background:#ecfdf3; border:1px solid #bbf7d0; border-radius:6px; padding:1px 7px; }
+.tu-selo { font-size:10px; font-weight:800; letter-spacing:.5px; border-radius:6px; padding:2px 8px; }
+.tu-selo-amb { color:#b45309; background:#fffbeb; border:1px solid #fcd34d; }
+.tu-selo-verm { color:#b91c1c; background:#fef2f2; border:1px solid #fca5a5; }
+.tu-acao { font-size:12px; font-weight:600; letter-spacing:0; text-transform:none; color:#15803d; background:#f0fdf4; border:1px solid #bbf7d0;
+    border-radius:8px; padding:4px 10px; text-decoration:none; white-space:nowrap; }
+.tu-acao:hover { background:#dcfce7; }
+.tu-dl { grid-template-columns:150px minmax(0, 1fr); gap:6px 16px; align-items:baseline; }
+.tu-dl dt { padding-top:5px; }
+.tu-dl dd { padding:4px 0; min-height:22px; }
+.tu-muted { color:#94a3b8; }
+.tu-link { margin-left:8px; font-size:12px; font-weight:600; color:#15803d; text-decoration:none; white-space:nowrap; }
+.tu-alerta { color:#b91c1c; font-weight:600; }
+/* seção vazia não ocupa meia tela: uma linha só */
+.tu-main .empty-state { display:flex; align-items:center; gap:10px; padding:4px 0; text-align:left; min-height:0; }
+.tu-main .empty-state i { font-size:16px; margin:0; opacity:.5; }
+.tu-main .empty-state p { margin:0; font-size:13px; }
+.tu-main .card-body { padding-top:14px; padding-bottom:14px; }
+/* sócios cabem na coluna do meio (como os contatos) */
+#socios .table th, #socios .table td { padding:9px 6px; font-size:13px; vertical-align:top; }
+#socios .table th { font-size:11.5px; }
+#socios .table td:last-child { white-space:nowrap; }
+
+/* valor editável: sublinhado pontilhado; clicou, vira campo */
+.tu-v.tu-ed { cursor:pointer; border-bottom:1px dashed #cbd5e1; padding-left:6px; padding-right:6px; margin-left:-6px; border-radius:6px 6px 0 0; transition:background .12s; }
+.tu-v.tu-ed:hover, .tu-v.tu-ed:focus-visible { background:#f3faf6; border-bottom-color:#15803d; outline:none; }
+.tu-v.tu-abrindo { cursor:default; background:transparent !important; border-bottom-color:transparent; }
+.tu-vazio { color:#94a3b8; }
+.tu-falta { border:1px solid #fcd34d; border-radius:8px; background:#fffbeb; }
+.tu-falta.tu-ed { border-bottom:1px solid #fcd34d; border-radius:8px; }
+.tu-falta .tu-vazio { color:#b45309; font-weight:600; }
+.tu-falta-verm { border-color:#fca5a5 !important; background:#fef2f2; }
+.tu-falta-verm .tu-vazio { color:#b91c1c; }
+.tu-vazio-falta { color:#b45309; font-weight:600; }
+.tu-mudou, .tu-mudou.tu-falta { background:#fefce8 !important; border-color:#eab308 !important; border-style:solid !important; }
+.tu-mudou .tu-txt::after { content:'alterado'; margin-left:8px; font-size:10px; font-weight:800; letter-spacing:.4px; text-transform:uppercase; color:#a16207; }
+.tu-editor { display:flex; flex-direction:column; gap:4px; }
+.tu-ctl { width:100%; max-width:440px; height:36px; padding:0 10px; border:1px solid #15803d; border-radius:9px; font:inherit; font-size:13px; color:#0f172a; background:#fff;
+    box-shadow:0 0 0 3px rgba(21,128,61,.12); outline:none; }
+textarea.tu-ctl { height:auto; min-height:72px; padding:8px 10px; max-width:none; resize:vertical; }
+.tu-ajuda { font-size:11.5px; color:#64748b; line-height:1.4; }
+.tu-multi { max-width:440px; border:1px solid #15803d; border-radius:10px; padding:8px; box-shadow:0 0 0 3px rgba(21,128,61,.12); background:#fff; display:flex; flex-direction:column; gap:6px; }
+.tu-multi-busca { height:32px; border:1px solid #dbe7df; border-radius:8px; padding:0 9px; font:inherit; font-size:13px; }
+.tu-multi-lista { max-height:210px; overflow-y:auto; display:flex; flex-direction:column; gap:2px; }
+.tu-multi-lista label { display:flex; align-items:center; gap:8px; font-size:13px; padding:4px 6px; border-radius:6px; cursor:pointer; }
+.tu-multi-lista label:hover { background:#f3faf6; }
+.tu-multi-ok { align-self:flex-end; padding:5px 16px; border-radius:8px; }
+.tu-piscar { animation:tu-piscar 1.4s ease; }
+@keyframes tu-piscar { 0%, 60% { box-shadow:0 0 0 4px rgba(245,158,11,.35); } 100% { box-shadow:0 0 0 0 rgba(245,158,11,0); } }
+
+/* lado direito */
+.tu-lado { position:sticky; top:var(--tu-topo); max-height:calc(100vh - var(--tu-topo) - 14px); overflow-y:auto; scrollbar-width:thin; display:flex; flex-direction:column; gap:14px; }
+.tu-box { background:#fff; border:1px solid #e3ece7; border-radius:15px; padding:16px; }
+.tu-box-tit { display:flex; align-items:center; gap:8px; margin:0 0 12px; font-size:14px; font-weight:800; color:#0f172a; }
+.tu-n { font-size:11px; font-weight:800; color:#b91c1c; background:#fee2e2; border-radius:99px; padding:1px 8px; }
+.tu-pend { display:flex; align-items:center; gap:9px; padding:9px 11px; margin-bottom:8px; border-radius:10px; text-decoration:none; font-size:13px; font-weight:700; }
+.tu-pend em { margin-left:auto; font-style:normal; font-size:11.5px; font-weight:700; white-space:nowrap; }
+.tu-pend-amb { background:#fffbeb; border:1px solid #fcd34d; color:#92400e; } .tu-pend-amb i:first-child { color:#f59e0b; }
+.tu-pend-verm { background:#fef2f2; border:1px solid #fca5a5; color:#991b1b; } .tu-pend-verm i:first-child { color:#ef4444; }
+.tu-pend:hover { filter:brightness(.97); }
+.tu-tudo-ok { margin:0 0 6px; font-size:13px; font-weight:600; color:#15803d; }
+.tu-ok-tit { margin:14px 0 6px; font-size:10px; font-weight:800; letter-spacing:1.2px; text-transform:uppercase; color:#94a3b8; }
+.tu-ok { list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:5px; }
+.tu-ok li { display:flex; gap:8px; font-size:12.5px; color:#334155; line-height:1.35; min-width:0; }
+.tu-ok li i { color:#22c55e; margin-top:2px; }
+.tu-ok li span { min-width:0; word-break:break-word; }
+.tu-ok small { color:#64748b; }
+.tu-nota { margin:12px 0 0; font-size:11.5px; color:#7d968a; line-height:1.45; }
+.tu-dica p { margin:0 0 8px; font-size:12px; color:#475569; line-height:1.45; display:grid; grid-template-columns:16px 1fr; gap:6px; }
+.tu-dica p:last-child { margin:0; }
+.tu-dica i { color:#15803d; margin-top:2px; }
+.tu-pont { text-decoration:none; border-bottom:1px dashed #94a3b8; }
+
+/* botão Salvar do topo e aviso */
+.tu-salvar[disabled] { opacity:.55; cursor:default; }
+.tu-salvar b { font-weight:800; }
+.tu-hero-pend { background:#fee2e2 !important; color:#b91c1c !important; border-color:#fecaca !important; }
+.tu-hero-ok { background:#dcfce7 !important; color:#15803d !important; }
+.tu-aviso { position:fixed; left:50%; bottom:22px; transform:translate(-50%, 30px); opacity:0; pointer-events:none; z-index:3000;
+    background:#0f3d2e; color:#fff; font-size:13px; font-weight:600; padding:11px 18px; border-radius:12px; box-shadow:0 12px 30px rgba(0,0,0,.2);
+    transition:opacity .2s, transform .2s; max-width:calc(100vw - 32px); }
+.tu-aviso.on { opacity:1; transform:translate(-50%, 0); pointer-events:auto; }
+.tu-aviso.erro { background:#991b1b; }
+/* barra de baixo: aparece quando algo mudou, para salvar sem voltar ao topo */
+.tu-barra { position:fixed; left:50%; bottom:18px; transform:translate(-50%, 90px); z-index:2900; display:flex; align-items:center; gap:10px;
+    background:#0f3d2e; color:#eafff3; border-radius:14px; padding:8px 8px 8px 16px; box-shadow:0 14px 34px rgba(0,0,0,.25);
+    font-size:13px; font-weight:600; transition:transform .2s; max-width:calc(100vw - 32px); }
+.tu-barra.on { transform:translate(-50%, 0); }
+.tu-barra button { font:inherit; font-size:13px; font-weight:700; border-radius:10px; padding:8px 14px; cursor:pointer; white-space:nowrap; }
+.tu-barra-desf { background:transparent; color:#bfe8cf; border:1px solid rgba(255,255,255,.25); }
+.tu-barra-salvar { background:#22c55e; color:#052e16; border:0; }
+#tuBarraTxt { white-space:nowrap; }
+@media (max-width:480px) { .tu-barra { gap:8px; padding-left:12px; } .tu-barra-sem { display:none; } .tu-barra button { padding:8px 11px; } }
+.tu-barra.on ~ .tu-aviso.on, .tu-barra.on + .tu-aviso { bottom:84px; }
+
+@media (max-width:1320px) {
+    .tu { grid-template-columns:190px minmax(0, 1fr); }
+    .tu-ind { grid-row:1 / span 2; }
+    .tu-lado { grid-column:2; grid-row:1; position:static; }
+    .tu-main { grid-column:2; grid-row:2; }
+    .tu-dica { display:none; }
+}
+@media (max-width:900px) {
+    .tu { grid-template-columns:minmax(0, 1fr); }
+    .tu-ind { display:none; }
+    .tu-lado, .tu-main { grid-column:1; }
+    .tu-dl { grid-template-columns:minmax(0, 1fr); gap:0; }
+    .tu-dl dt { padding-top:10px; }
+    .tu-v.tu-ed { margin-left:0; }
+}
 </style>
 {% endblock %}
 
@@ -296,6 +431,8 @@
                     <span class="ef-hero-badge">{{ 'PF' if cliente.tipo_pessoa == 'PF' else 'PJ' }}</span>
                     {% if cliente.regime_tributario %}<span class="ef-hero-badge">{{ cliente.regime_tributario }}</span>{% endif %}
                     {% if cliente.porte_empresa %}<span class="ef-hero-badge">{{ cliente.porte_empresa }}</span>{% endif %}
+                    {% if falta.faltam %}<a href="#tuFalta" class="ef-hero-badge tu-hero-pend" style="text-decoration:none;"><i class="fas fa-circle-exclamation"></i> {{ falta.faltam|length }} pendência{{ 's' if falta.faltam|length > 1 }} · {{ falta.faltam | map(attribute='rotulo') | join(', ') }}</a>
+                    {% else %}<span class="ef-hero-badge tu-hero-ok"><i class="fas fa-circle-check"></i> cadastro completo</span>{% endif %}
                     {% if reserva and reserva.reservado %}<span class="ef-hero-badge" title="Só administradores e as exceções veem esta empresa"><i class="fas fa-lock"></i> Reservada</span>{% endif %}
                 </div>
             </div>
@@ -331,8 +468,8 @@
                     b.querySelector('span').textContent = 'Clientes';
                 })();
                 </script>
-                {% if pode_rota('clientes.editar') %}
-                <a href="{{ url_for('clientes.editar', id=cliente.id) }}" class="ef-btn ef-btn-primary"><i class="fas fa-edit"></i> Editar</a>
+                {% if pode_rota('clientes.salvar_campos') %}
+                <button type="button" id="tuSalvar" class="ef-btn ef-btn-primary tu-salvar" disabled title="Grava o que você alterou na página"><i class="fas fa-check"></i> Salvar alterações <b id="tuN"></b></button>
                 {% endif %}
                 {% if cliente.situacao == 'ATIVO' and pode_rota('clientes.inativar') %}
                 <form action="{{ url_for('clientes.inativar', id=cliente.id) }}" method="POST">
@@ -344,219 +481,186 @@
             </div>
         </div>
 
-        <ul class="tabs-nav ef-tabstrip">
-            <li class="tabs-item active">
-                <a href="#dados-gerais" class="tabs-link nff-tab">
-                    <i class="fas fa-info-circle"></i>
-                    Dados Gerais
-                </a>
-            </li>
-            <li class="tabs-item">
-                <a href="#enderecos" class="tabs-link nff-tab">
-                    <i class="fas fa-map-marker-alt"></i>
-                    Endereços ({{ enderecos|length }})
-                </a>
-            </li>
-            <li class="tabs-item">
-                <a href="#contatos" class="tabs-link nff-tab">
-                    <i class="fas fa-users"></i>
-                    Contatos ({{ contatos|length }})
-                </a>
-            </li>
-            <li class="tabs-item">
-                <a href="#cadastros-adicionais" class="tabs-link nff-tab">
-                    <i class="fas fa-layer-group"></i>
-                    Cadastros Adicionais ({{ cadastros_adicionais|length + cadastros_anp|length }})
-                </a>
-            </li>
-            <li class="tabs-item">
-                <a href="#socios" class="tabs-link nff-tab">
-                    <i class="fas fa-user-tie"></i>
-                    Sócios ({{ socios|length }})
-                </a>
-            </li>
-            <li class="tabs-item">
-                <a href="#grupos" class="tabs-link nff-tab">
-                    <i class="fas fa-tags"></i>
-                    Grupos ({{ grupos|length }})
-                </a>
-            </li>
-            <li class="tabs-item">
-                <a href="#processos" class="tabs-link nff-tab">
-                    <i class="fas fa-briefcase"></i>
-                    Processos ({{ processos|length }})
-                </a>
-            </li>
-            <li class="tabs-item">
-                <a href="#tarefas" class="tabs-link nff-tab">
-                    <i class="fas fa-tasks"></i>
-                    Tarefas ({{ tarefas|length }})
-                </a>
-            </li>
-            <li class="tabs-item">
-                <a href="#obrigacoes" class="tabs-link nff-tab">
-                    <i class="fas fa-calendar-check"></i>
-                    Obrigações ({{ obrigacoes|length }})
-                </a>
-            </li>
-            <li class="tabs-item">
-                <a href="#certificado" class="tabs-link nff-tab">
-                    <i class="fas fa-certificate"></i>
-                    Certificado Digital
-                </a>
-            </li>
-            <li class="tabs-item">
-                <a href="#historico" class="tabs-link nff-tab">
-                    <i class="fas fa-clock-rotate-left"></i>
-                    Histórico
-                </a>
-            </li>
-            {% if reserva is not none %}
-            <li class="tabs-item">
-                <a href="#acesso" class="tabs-link nff-tab">
-                    <i class="fas fa-lock"></i>
-                    Acesso
-                </a>
-            </li>
-            {% endif %}
-        </ul>
     </div><!-- /fv-hero -->
 
     <div class="ef-body">
-        <!-- Fita de KPIs cadastrais -->
-        <div class="fv-kpis">
-            <div class="fv-kpi">
-                <span class="fv-kpi-ico" style="background:#dcfce7; color:#15803d;"><i class="fas fa-certificate"></i></span>
-                <div class="fv-kpi-body">
-                    <span class="fv-kpi-lbl">Certificado</span>
-                    {% if certificado %}
-                        {% set cs = certificado.cert_status %}
-                        <span class="fv-kpi-val">{% if cs and cs.nivel == 'vencido' %}Vencido{% elif cs and cs.nivel == 'laranja' %}Vence em {{ cs.dias }} dias{% else %}Válido{% endif %}</span>
-                        <span class="fv-kpi-sub">{% if certificado.validade %}até {{ certificado.validade|format_date }}{% else %}—{% endif %}</span>
-                    {% else %}
-                        <span class="fv-kpi-val">Sem certificado</span>
-                        <span class="fv-kpi-sub">—</span>
-                    {% endif %}
-                </div>
-            </div>
-            <div class="fv-kpi">
-                <span class="fv-kpi-ico" style="background:#e0f2fe; color:#0369a1;"><i class="fas fa-address-book"></i></span>
-                <div class="fv-kpi-body">
-                    <span class="fv-kpi-lbl">Contato principal</span>
-                    <span class="fv-kpi-val">{{ cliente.email or '—' }}</span>
-                    <span class="fv-kpi-sub">{{ cliente.telefone or cliente.celular or '—' }}</span>
-                </div>
-            </div>
-            <div class="fv-kpi">
-                <span class="fv-kpi-ico" style="background:#f0f7f3; color:#15803d;"><i class="fas fa-scale-balanced"></i></span>
-                <div class="fv-kpi-body">
-                    <span class="fv-kpi-lbl">Regime</span>
-                    <span class="fv-kpi-val">{{ cliente.regime_tributario or '—' }}</span>
-                    <span class="fv-kpi-sub">{% if cliente.data_inicio_atividade %}atividade desde {{ cliente.data_inicio_atividade|format_date }}{% else %}—{% endif %}</span>
-                </div>
-            </div>
-        </div>
+        {# ══ TELA ÚNICA (Modelo C, 08/11/2026) — Anderson (07/11): "Ficha e Cadastro não está legal... uma tela só".
+           Índice à esquerda (bolinha onde falta), tudo numa página que rola, "O que falta" à direita com a MESMA
+           regra do A CADASTRAR. Valor com sublinhado pontilhado vira campo ao clicar; um só "Salvar alterações". #}
+        {% set pode_ed = pode_rota('clientes.salvar_campos') %}
+        {% set pj = cliente.tipo_pessoa != 'PF' %}
+        {% set fcor = falta_cor %}
+        {% set REGIMES = [('SIMPLES', 'Simples Nacional'), ('LUCRO_PRESUMIDO', 'Lucro Presumido'), ('LUCRO_REAL', 'Lucro Real'), ('MEI', 'MEI')] %}
+        {% set PORTES = [('MEI', 'MEI'), ('ME', 'Microempresa (ME)'), ('EPP', 'Empresa de Pequeno Porte (EPP)'), ('MEDIO', 'Médio Porte'), ('GRANDE', 'Grande Porte')] %}
+        {% set origem_ops = [['CASA', 'Aberta pela Qualicontax']] %}{% for ca in contabilidades %}{% set _x = origem_ops.append([ca.id|string, ca.nome]) %}{% endfor %}
+        {% set grupo_ops = [] %}{% for g in grupos_todos %}{% set _x = grupo_ops.append([g.id|string, g.nome]) %}{% endfor %}
+        {% set ramo_ops = [] %}{% for r in ramos_todos %}{% set _x = ramo_ops.append([r.id|string, r.nome]) %}{% endfor %}
+        {% set rs_faltam = responsaveis|rejectattr('usuario_id')|list|length %}
 
-        <!-- Tab Content -->
+        {% macro bol(chaves) -%}
+            {%- set fs = falta.faltam | selectattr('chave', 'in', chaves) | list -%}
+            {{- 'verm' if fs | selectattr('cor', 'equalto', 'verm') | list else ('amb' if fs else 'ok') -}}
+        {%- endmacro %}
+        {% macro selo(chaves) -%}
+            {%- set fs = falta.faltam | selectattr('chave', 'in', chaves) | list -%}
+            {%- if fs -%}<span class="tu-selo tu-selo-{{ 'verm' if fs | selectattr('cor', 'equalto', 'verm') | list else 'amb' }}">falta: {{ fs | map(attribute='rotulo') | join(', ') }}</span>{%- endif -%}
+        {%- endmacro %}
+        {# Um valor da tela única. tipo: text | date | select | textarea | multi. "valor" é o que vai para o servidor;
+           "exibe" é o que se lê. Sem permissão de editar, é só texto. #}
+        {% macro campo(nome, rotulo, valor, exibe='', tipo='text', ops=None, ancora='', chave='', ph='', ajuda='') -%}
+            <dt>{{ rotulo }}</dt>
+            <dd{% if ancora %} id="{{ ancora }}"{% endif %} class="tu-v{% if pode_rota('clientes.salvar_campos') %} tu-ed{% endif %}{% if chave and chave in falta_cor %} tu-falta tu-falta-{{ 'verm' if falta_cor[chave] == 'verm' else 'amb' }}{% endif %}"
+                data-campo="{{ nome }}" data-tipo="{{ tipo }}" data-rotulo="{{ rotulo }}"
+                data-valor="{{ valor if valor is not none else '' }}"{% if ops is not none %} data-ops="{{ ops | tojson | forceescape }}"{% endif %}{% if ph %} data-ph="{{ ph }}"{% endif %}{% if ajuda %} data-ajuda="{{ ajuda }}"{% endif %}
+                {% if pode_rota('clientes.salvar_campos') %}tabindex="0" title="Clique para alterar"{% endif %}>
+                <span class="tu-txt">{% if exibe %}{{ exibe }}{% elif valor %}{{ valor }}{% else %}<span class="tu-vazio">{{ 'falta preencher' if chave and chave in falta_cor else '—' }}</span>{% endif %}</span>
+            </dd>
+        {%- endmacro %}
+
+        <div class="tu" id="tu">
+            <!-- índice -->
+            <nav class="tu-ind" aria-label="Índice do cadastro">
+                <p class="tu-ind-tit">Cadastro</p>
+                <a href="#identificacao"><i class="tu-dot tu-dot-ok"></i>Identificação</a>
+                {% if pj %}<a href="#registros"><i class="tu-dot tu-dot-{{ bol(['nire', 'im', 'ie']) }}"></i>Registros e Junta<small>{{ falta.faltam | selectattr('chave', 'in', ['nire', 'im', 'ie']) | map(attribute='rotulo') | join(', ') }}</small></a>{% endif %}
+                <a href="#regime"><i class="tu-dot tu-dot-{{ bol(['regime', 'origem']) }}"></i>{{ 'Regime e origem' if pj else 'Situação e contrato' }}<small>{{ falta.faltam | selectattr('chave', 'in', ['regime', 'origem']) | map(attribute='rotulo') | join(', ') }}</small></a>
+                <a href="#financeiro"><i class="tu-dot tu-dot-{{ bol(['cobranca']) if contrato else ('verm' if 'cobranca' in fcor else 'amb') }}"></i>Financeiro<small>{% if 'cobranca' in fcor %}cobrança{% elif not contrato %}sem honorários{% endif %}</small></a>
+                <a href="#contato-empresa"><i class="tu-dot tu-dot-{{ bol(['celular'] + (['email'] if falta.avulso else [])) }}"></i>Contato da empresa</a>
+                <a href="#grupo-ramo"><i class="tu-dot tu-dot-{{ bol(['grupo', 'ramo', 'contador']) }}"></i>Grupo, ramo e contador<small>{{ falta.faltam | selectattr('chave', 'in', ['grupo', 'ramo', 'contador']) | map(attribute='rotulo') | join(', ') }}</small></a>
+                {% if not pj %}<a href="#dados-pessoais"><i class="tu-dot tu-dot-ok"></i>Dados pessoais</a>{% endif %}
+                <a href="#responsaveis"><i class="tu-dot tu-dot-{{ 'amb' if rs_faltam else 'ok' }}"></i>Responsáveis<small>{% if rs_faltam %}{{ rs_faltam }} sem{% endif %}</small></a>
+                <a href="#enderecos"><i class="tu-dot tu-dot-{{ 'ok' if enderecos else 'amb' }}"></i>Endereços<small>{{ enderecos|length }}</small></a>
+                <a href="#contatos"><i class="tu-dot tu-dot-{{ bol(['contato_celular', 'contato'] + ([] if falta.avulso else ['email'])) }}"></i>Contatos<small>{{ contatos|length }}</small></a>
+                <a href="#socios"><i class="tu-dot tu-dot-{{ bol(['socios']) }}"></i>Sócios<small>{{ socios|length }}{% if socios %} · {{ '%g' % socios_total_percentual }}%{% endif %}</small></a>
+                <a href="#contadores"><i class="tu-dot tu-dot-{{ bol(['contador']) }}"></i>Contador e certificado</a>
+                <a href="#cadastros-adicionais"><i class="tu-dot tu-dot-cinza"></i>Cadastros adicionais<small>{{ cadastros_adicionais|length + cadastros_anp|length }}</small></a>
+                <p class="tu-ind-tit">Acompanhamento</p>
+                <a href="#processos"><i class="tu-dot tu-dot-cinza"></i>Processos<small>{{ processos|length }}</small></a>
+                <a href="#tarefas"><i class="tu-dot tu-dot-cinza"></i>Tarefas<small>{{ tarefas|length }}</small></a>
+                <a href="#obrigacoes"><i class="tu-dot tu-dot-cinza"></i>Obrigações<small>{{ obrigacoes|length }}</small></a>
+                <a href="#historico"><i class="tu-dot tu-dot-cinza"></i>Histórico</a>
+                {% if reserva is not none %}<a href="#acesso"><i class="tu-dot tu-dot-cinza"></i>Acesso</a>{% endif %}
+            </nav>
+
+            <div class="tu-main">
         <div class="tabs-content">
-            <!-- Dados Gerais Tab -->
             <div id="dados-gerais" class="tab-pane active">
-                <div class="fv-grid">
-                    <!-- Identificação -->
-                    <div class="fv-card" data-copiar-bloco>
-                        <p class="fv-seclabel">Identificação</p>
-                        <dl class="fv-dl">
-                            <dt>Nº Cliente</dt><dd class="fv-num-hl">{% if cliente.numero_cliente %}#{{ cliente.numero_cliente }}{% else %}—{% endif %}</dd>
-                            <dt>Tipo</dt><dd>{{ 'Pessoa Física' if cliente.tipo_pessoa == 'PF' else 'Pessoa Jurídica' }}</dd>
-                            <dt>{{ 'Nome' if cliente.tipo_pessoa == 'PF' else 'Razão Social' }}</dt><dd>{{ cliente.nome_razao_social or '—' }}</dd>
-                            <dt>Nome Fantasia</dt><dd>{{ cliente.nome_fantasia or '—' }}</dd>
-                            <dt>{{ 'CPF' if cliente.tipo_pessoa == 'PF' else 'CNPJ' }}</dt><dd>{{ cliente.cpf_cnpj or '—' }}</dd>
-                            {% if raiz_papel and raiz_papel[0] %}
-                            <dt>Matriz / filial</dt><dd>
-                                {% if raiz_papel[0] == 'matriz' %}<b>Matriz</b> · {{ raiz_papel[1] }} filia{{ 'l' if raiz_papel[1] == 1 else 'is' }} cadastrada{{ '' if raiz_papel[1] == 1 else 's' }}
-                                {% elif raiz_papel[1] %}<b>Filial</b> de <a href="{{ url_for('clientes.detalhes', id=raiz_papel[1].id) }}">{{ raiz_papel[1].numero }} - {{ raiz_papel[1].nome }}</a>
-                                {% else %}<b>Filial</b> — a matriz (0001) não está cadastrada{% endif %}</dd>
-                            {% endif %}
-                            {% if cliente.tipo_pessoa == 'PJ' %}
-                            <dt>Natureza jurídica</dt><dd>
-                                {% if cliente.natureza_juridica %}<b>{{ natureza[0] }}</b> · {{ natureza[2] }} {{ cliente.natureza_juridica }}
-                                {% else %}— <small>(clique em Editar e em Buscar na Receita)</small>{% endif %}</dd>
-                            {% endif %}
-                            <dt>Insc. Estadual</dt><dd>{{ cliente.inscricao_estadual or '—' }}</dd>
-                            <dt>Insc. Municipal</dt><dd>{{ cliente.inscricao_municipal or '—' }}</dd>
-                            <dt>Ramo</dt><dd>{% if ramos_atividade %}{{ ramos_atividade | map(attribute='nome') | join(', ') }}{% else %}—{% endif %}</dd>
-                        </dl>
-                    </div>
-
-                    <!-- Contato -->
-                    <div class="fv-card" data-copiar-bloco>
-                        <p class="fv-seclabel">Contato</p>
-                        <dl class="fv-dl">
-                            <dt>E-mail</dt><dd>{{ cliente.email or '—' }}</dd>
-                            <dt>Telefone</dt><dd>{{ cliente.telefone or '—' }}</dd>
-                            <dt>Celular</dt><dd>{{ cliente.celular or '—' }}</dd>
-                        </dl>
-                    </div>
-
-                    {% if cliente.tipo_pessoa == 'PF' %}
-                    <!-- Dados pessoais (sócios, passo 3 — 14/10/2026) -->
-                    {% set ps = pessoa or {} %}
-                    <div class="fv-card" data-copiar-bloco>
-                        <p class="fv-seclabel">Dados pessoais</p>
-                        <dl class="fv-dl">
-                            <dt>Nascimento</dt><dd>{{ ps.data_nascimento|format_date if ps.data_nascimento else '—' }}</dd>
-                            <dt>Documentos</dt><dd>{% for d in documentos or [] %}{{ d.tipo }} {{ d.numero }}{% if d.orgao %} · {{ d.orgao }}{% if d.uf %}/{{ d.uf }}{% endif %}{% endif %}{% if d.contrato %} <small>(contrato)</small>{% endif %}{% if not loop.last %}<br>{% endif %}{% else %}—{% endfor %}</dd>
-                            <dt>Estado civil</dt><dd>{{ pessoa_rotulo('estado_civil', ps.estado_civil) or '—' }}{% if ps.regime_bens %}<br><small>{{ pessoa_rotulo('regime_bens', ps.regime_bens) }}</small>{% endif %}</dd>
-                            <dt>Nacionalidade</dt><dd>{{ ps.nacionalidade or '—' }}</dd>
-                            <dt>Profissão</dt><dd>{{ ps.profissao or '—' }}</dd>
-                            <dt>Nome da mãe</dt><dd>{{ ps.nome_mae or '—' }}</dd>
-                            <dt>Conta gov.br</dt><dd>{{ pessoa_rotulo('nivel_govbr', ps.nivel_govbr) or '—' }}</dd>
-                        </dl>
-                    </div>
-                    {% endif %}
-
-                    <!-- Fiscal e contrato -->
-                    <div class="fv-card" data-copiar-bloco>
-                        <p class="fv-seclabel">Fiscal e contrato</p>
-                        <dl class="fv-dl">
-                            <dt>Regime</dt><dd>{{ cliente.regime_tributario or '—' }}</dd>
-                            <dt>Porte</dt><dd>{{ cliente.porte_empresa or '—' }}</dd>
-                            <dt>Início atividade</dt><dd>{{ cliente.data_inicio_atividade|format_date if cliente.data_inicio_atividade else '—' }}</dd>
-                            {% if cliente.tipo_pessoa == 'PJ' %}
-                            <dt>Origem</dt><dd>
-                                {% if cliente.aberta_pela_casa %}Aberta pela Qualicontax
-                                {% elif contab_anterior %}<a href="{{ url_for('contabilidades.index') }}#ca-{{ contab_anterior.id }}">{{ contab_anterior.nome }}</a>
-                                    {% set _ct = [contab_anterior.contato, contab_anterior.telefone, contab_anterior.email]|select|list %}
-                                    {% if _ct %}<br><small>{{ _ct|join(' · ') }}</small>{% endif %}
-                                {% elif cliente.avulso %}—
-                                {% else %}<span style="color:#b91c1c; font-weight:700;">falta informar a contabilidade anterior</span>{% endif %}
-                            </dd>
-                            {% endif %}
-                            <dt>Início contrato</dt><dd>{{ cliente.data_inicio_contrato|format_date if cliente.data_inicio_contrato else '—' }}</dd>
-                            <dt>Fim contrato</dt><dd>{{ cliente.data_fim_contrato|format_date if cliente.data_fim_contrato else '—' }}</dd>
-                            <dt>Situação</dt><dd>{{ cliente.situacao }}</dd>
-                            <dt>Observações</dt><dd>{{ cliente.observacoes|e if cliente.observacoes else '—' }}</dd>
-                        </dl>
-                    </div>
-
-                    <!-- Honorários (06/11/2026): o contrato mensal da empresa, resumido; edição no Financeiro -->
-                    <div class="fv-card" data-copiar-bloco>
-                        <p class="fv-seclabel">Honorários
-                            {% if pode_rota('financeiro.honorarios') %}<a class="btn btn-outline rs-btn" style="order:2; text-decoration:none; text-transform:none; letter-spacing:0; font-weight:600;" href="{{ url_for('financeiro.honorarios', aba='sem' if not contrato else 'com', busca=cliente.numero_cliente or cliente.nome_razao_social) }}"><i class="fas fa-file-signature"></i> {{ 'Cadastrar' if not contrato else 'Editar' }}</a>{% endif %}</p>
-                        {% if contrato %}
-                        <dl class="fv-dl">
-                            <dt>Valor mensal</dt><dd class="fv-num-hl">{{ contrato.valor | float | format_currency }}</dd>
-                            <dt>Vencimento</dt><dd>dia {{ contrato.dia_vencimento }} do mês seguinte à competência</dd>
-                            <dt>Desde</dt><dd>{{ contrato.inicio.strftime('%m/%Y') if contrato.inicio else '—' }}{% if contrato.fim %} até {{ contrato.fim.strftime('%m/%Y') }}{% endif %}</dd>
-                            <dt>13º</dt><dd data-nocopiar>{% if contrato.decimo_tipo == 'DUAS' %}duas parcelas (vencem em novembro e dezembro){% elif contrato.decimo_tipo == 'UNICA' %}parcela única (vence em dezembro){% elif contrato.decimo_tipo == 'PERSONALIZADO' %}personalizado{% else %}sem 13º{% endif %}</dd>
-                            <dt>Reajuste</dt><dd data-nocopiar>{% if contrato.reajuste_tipo == 'SALARIO_MINIMO' %}salário mínimo{% if contrato.proximo_reajuste %}, próximo em {{ contrato.proximo_reajuste.strftime('%m/%Y') }}{% endif %}{% else %}{{ contrato.reajuste_tipo | lower | replace('_', ' ') }}{% if contrato.reajuste_obs %} · {{ contrato.reajuste_obs }}{% endif %}{% endif %}</dd>
-                            {% if contrato.situacao != 'ATIVO' %}<dt>Situação</dt><dd data-nocopiar><span class="rs-falta">{{ contrato.situacao | capitalize }}</span></dd>{% endif %}
-                        </dl>
-                        {% else %}
-                        <p style="margin:0; color:#b91c1c; font-weight:600; font-size:13px;"><i class="fas fa-triangle-exclamation"></i> sem contrato de honorários</p>
+                <!-- Identificação (vem da Receita: muda no editor, que busca o CNPJ e renomeia a pasta) -->
+                <section class="fv-card tu-sec" id="identificacao" data-copiar-bloco>
+                    <p class="fv-seclabel">Identificação <span class="tu-tag">Receita</span>
+                        {% if pode_rota('clientes.editar') %}<a class="tu-acao" style="order:2" href="{{ url_for('clientes.editar', id=cliente.id) }}" title="Número, razão social e CNPJ mudam a pasta da empresa no Dropbox: ficam no editor completo, com a busca na Receita"><i class="fas fa-search"></i> Receita, número e razão</a>{% endif %}</p>
+                    <dl class="fv-dl tu-dl">
+                        <dt>Nº Cliente</dt><dd class="fv-num-hl">{% if cliente.numero_cliente %}#{{ cliente.numero_cliente }}{% else %}— <small>(avulso)</small>{% endif %}</dd>
+                        <dt>{{ 'Nome' if not pj else 'Razão social' }}</dt><dd>{{ cliente.nome_razao_social or '—' }}</dd>
+                        {% if pj %}<dt>Nome fantasia</dt><dd>{{ cliente.nome_fantasia or '—' }}</dd>{% endif %}
+                        <dt>{{ 'CPF' if not pj else 'CNPJ' }}</dt><dd class="fv-num-hl">{{ cliente.cpf_cnpj or '—' }}</dd>
+                        {% if raiz_papel and raiz_papel[0] %}
+                        <dt>Matriz / filial</dt><dd>
+                            {% if raiz_papel[0] == 'matriz' %}<b>Matriz</b> · {{ raiz_papel[1] }} filia{{ 'l' if raiz_papel[1] == 1 else 'is' }} cadastrada{{ '' if raiz_papel[1] == 1 else 's' }}
+                            {% elif raiz_papel[1] %}<b>Filial</b> de <a href="{{ url_for('clientes.detalhes', id=raiz_papel[1].id) }}">{{ raiz_papel[1].numero }} - {{ raiz_papel[1].nome }}</a>
+                            {% else %}<b>Filial</b> — a matriz (0001) não está cadastrada{% endif %}</dd>
                         {% endif %}
-                    </div>
+                        {% if pj %}
+                        <dt>Natureza</dt><dd>
+                            {% if cliente.natureza_juridica %}<b>{{ natureza[2] }}</b> {{ cliente.natureza_juridica }} <small class="tu-muted">· {{ natureza[0] }}</small>
+                            {% else %}— <small class="tu-muted">(Receita, número e razão → Buscar na Receita)</small>{% endif %}</dd>
+                        {% if cliente.cnae_fiscal %}<dt>CNAE</dt><dd>{{ cliente.cnae_fiscal }}{% if cliente.cnae_fiscal_descricao %} · {{ cliente.cnae_fiscal_descricao }}{% endif %}</dd>{% endif %}
+                        <dt>Início atividade</dt><dd>{{ cliente.data_inicio_atividade|format_date if cliente.data_inicio_atividade else '—' }}</dd>
+                        {% endif %}
+                    </dl>
+                </section>
 
+                {% if pj %}
+                <!-- Registros e Junta -->
+                <section class="fv-card tu-sec" id="registros" data-copiar-bloco>
+                    <p class="fv-seclabel">Registros e Junta {{ selo(['nire', 'im', 'ie']) }}</p>
+                    <dl class="fv-dl tu-dl">
+                        {{ campo('inscricao_estadual', 'Insc. Estadual', cliente.inscricao_estadual, ancora='campo-ie', chave='ie', ph='número ou ISENTO') }}
+                        {{ campo('inscricao_municipal', 'Insc. Municipal', cliente.inscricao_municipal, ancora='campo-im', chave='im', ph='inscrição municipal (CCM)') }}
+                        {{ campo('nire', 'NIRE', cliente.nire, ancora='campo-nire', chave='nire', ph='35.2.1234567-8', ajuda='Está no contrato social registrado ou na ficha cadastral da Junta.') }}
+                        {{ campo('nire_data_registro', 'Data do registro', cliente.nire_data_registro.strftime('%Y-%m-%d') if cliente.nire_data_registro else '', exibe=(cliente.nire_data_registro|format_date if cliente.nire_data_registro else ''), tipo='date') }}
+                    </dl>
+                </section>
+                {% endif %}
+
+                <!-- Regime e origem -->
+                <section class="fv-card tu-sec" id="regime" data-copiar-bloco>
+                    <p class="fv-seclabel">{{ 'Regime e origem' if pj else 'Situação e contrato' }} {{ selo(['regime', 'origem']) }}</p>
+                    <dl class="fv-dl tu-dl">
+                        {% if pj %}
+                        {{ campo('regime_tributario', 'Regime', cliente.regime_tributario, exibe=(REGIMES | selectattr(0, 'equalto', cliente.regime_tributario) | map(attribute=1) | first) if cliente.regime_tributario else '', tipo='select', ops=REGIMES, ancora='campo-regime', chave='regime') }}
+                        {{ campo('porte_empresa', 'Porte', cliente.porte_empresa, exibe=(PORTES | selectattr(0, 'equalto', cliente.porte_empresa) | map(attribute=1) | first) if cliente.porte_empresa else '', tipo='select', ops=PORTES) }}
+                        {{ campo('origem', 'Origem', 'CASA' if cliente.aberta_pela_casa else (cliente.contabilidade_anterior_id|string if cliente.contabilidade_anterior_id else ''),
+                                 exibe=('Aberta pela Qualicontax' if cliente.aberta_pela_casa else (contab_anterior.nome if contab_anterior else '')),
+                                 tipo='select', ops=origem_ops, ancora='campo-origem', chave='origem', ajuda='Aberta pela Qualicontax, ou o escritório de onde a empresa veio.') }}
+                        {% endif %}
+                        <dt>Situação</dt><dd>{{ cliente.situacao }} {% if cliente.situacao == 'ATIVO' %}<small class="tu-muted">(Inativar no topo)</small>{% endif %}</dd>
+                        {{ campo('data_inicio_contrato', 'Início do contrato', cliente.data_inicio_contrato.strftime('%Y-%m-%d') if cliente.data_inicio_contrato else '', exibe=(cliente.data_inicio_contrato|format_date if cliente.data_inicio_contrato else ''), tipo='date') }}
+                        {% if cliente.data_fim_contrato %}<dt>Fim do contrato</dt><dd>{{ cliente.data_fim_contrato|format_date }}</dd>{% endif %}
+                        {{ campo('observacoes', 'Observações', cliente.observacoes, tipo='textarea', ancora='campo-observacoes', chave='conferir') }}
+                    </dl>
+                </section>
+
+                <!-- Financeiro: como cobrar + o contrato de honorários -->
+                <section class="fv-card tu-sec" id="financeiro" data-copiar-bloco>
+                    <p class="fv-seclabel">Financeiro {{ selo(['cobranca']) }}
+                        {% if pode_rota('financeiro.honorarios') %}<a class="tu-acao" style="order:2" href="{{ url_for('financeiro.honorarios', aba='sem' if not contrato else 'com', busca=cliente.numero_cliente or cliente.nome_razao_social) }}"><i class="fas fa-file-signature"></i> {{ 'Cadastrar honorários' if not contrato else 'Editar honorários' }}</a>{% endif %}</p>
+                    <dl class="fv-dl tu-dl">
+                        {{ campo('cobranca', 'Cobrança', cliente.cobranca or 'PENDENTE', exibe=(cobrancas | selectattr(0, 'equalto', cliente.cobranca or 'PENDENTE') | map(attribute=1) | first),
+                                 tipo='select', ops=cobrancas, ancora='campo-cobranca', chave='cobranca', ajuda='Pendente segura a empresa em A CADASTRAR e fora de CONTRATOS.') }}
+                        {% if contrato %}
+                        <dt>Valor mensal</dt><dd class="fv-num-hl">{{ contrato.valor | float | format_currency }}</dd>
+                        <dt>Vencimento</dt><dd>dia {{ contrato.dia_vencimento }} do mês seguinte à competência</dd>
+                        <dt>Desde</dt><dd>{{ contrato.inicio.strftime('%m/%Y') if contrato.inicio else '—' }}{% if contrato.fim %} até {{ contrato.fim.strftime('%m/%Y') }}{% endif %}</dd>
+                        <dt>13º</dt><dd data-nocopiar>{% if contrato.decimo_tipo == 'DUAS' %}duas parcelas (novembro e dezembro){% elif contrato.decimo_tipo == 'UNICA' %}parcela única (dezembro){% elif contrato.decimo_tipo == 'PERSONALIZADO' %}personalizado{% else %}sem 13º{% endif %}</dd>
+                        <dt>Reajuste</dt><dd data-nocopiar>{% if contrato.reajuste_tipo == 'SALARIO_MINIMO' %}salário mínimo{% if contrato.proximo_reajuste %}, próximo em {{ contrato.proximo_reajuste.strftime('%m/%Y') }}{% endif %}{% else %}{{ contrato.reajuste_tipo | lower | replace('_', ' ') }}{% if contrato.reajuste_obs %} · {{ contrato.reajuste_obs }}{% endif %}{% endif %}</dd>
+                        {% if contrato.situacao != 'ATIVO' %}<dt>Situação</dt><dd data-nocopiar><span class="rs-falta">{{ contrato.situacao | capitalize }}</span></dd>{% endif %}
+                        {% else %}
+                        <dt>Honorários</dt><dd><span class="tu-alerta"><i class="fas fa-triangle-exclamation"></i> sem contrato de honorários</span></dd>
+                        {% endif %}
+                    </dl>
+                </section>
+
+                <!-- Contato da empresa -->
+                <section class="fv-card tu-sec" id="contato-empresa" data-copiar-bloco>
+                    <p class="fv-seclabel">Contato da empresa {{ selo(['celular'] + (['email'] if falta.avulso else [])) }}</p>
+                    <dl class="fv-dl tu-dl">
+                        {{ campo('email', 'E-mail', cliente.email, ancora='campo-email', chave=('email' if falta.avulso else ''), ph='nome@empresa.com.br', ajuda=('No PJ é o e-mail do CNPJ; boletos e documentos vão para os e-mails dos CONTATOS.' if pj else '')) }}
+                        {{ campo('telefone', 'Telefone', cliente.telefone, ph='(11) 3333-4444') }}
+                        {{ campo('celular', 'Celular', cliente.celular, ancora='campo-celular', chave='celular', ph='(11) 98888-7777', ajuda='Obrigatório: DDD + número.') }}
+                    </dl>
+                </section>
+
+                <!-- Grupo, ramo e contador -->
+                <section class="fv-card tu-sec" id="grupo-ramo" data-copiar-bloco>
+                    <p class="fv-seclabel">Grupo, ramo e contador {{ selo(['grupo', 'ramo', 'contador']) }}</p>
+                    <dl class="fv-dl tu-dl">
+                        {% set g1 = grupos | first if grupos else None %}
+                        {{ campo('grupo', 'Grupo', g1.id|string if g1 else '', exibe=(grupos | map(attribute='nome') | join(', ') if grupos else ''), tipo='select', ops=grupo_ops, ancora='campo-grupo', chave='grupo', ajuda='Trocar o grupo tira a empresa do grupo antigo.') }}
+                        {{ campo('ramos', 'Ramo', ramos_atividade | map(attribute='id') | join(','), exibe=(ramos_atividade | map(attribute='nome') | join(', ') if ramos_atividade else ''), tipo='multi', ops=ramo_ops, ancora='campo-ramos', chave='ramo') }}
+                        <dt>Contador</dt><dd>{% if contadores %}{{ contadores | map(attribute='nome_razao_social') | join(', ') }}{% elif 'contador' in fcor %}<span class="tu-vazio tu-vazio-falta">falta</span>{% else %}—{% endif %}
+                            <a class="tu-link" href="#contadores">{{ 'trocar' if contadores else 'vincular' }} <i class="fas fa-arrow-down"></i></a></dd>
+                    </dl>
+                </section>
+
+                {% if not pj %}
+                <!-- Dados pessoais (PF) -->
+                {% set ps = pessoa or {} %}
+                <section class="fv-card tu-sec" id="dados-pessoais" data-copiar-bloco>
+                    <p class="fv-seclabel">Dados pessoais
+                        {% if pode_rota('clientes.editar') %}<a class="tu-acao" style="order:2" href="{{ url_for('clientes.editar', id=cliente.id) }}"><i class="fas fa-pen"></i> Alterar documentos</a>{% endif %}</p>
+                    <dl class="fv-dl tu-dl">
+                        <dt>Nascimento</dt><dd>{{ ps.data_nascimento|format_date if ps.data_nascimento else '—' }}</dd>
+                        <dt>Documentos</dt><dd>{% for d in documentos or [] %}{{ d.tipo }} {{ d.numero }}{% if d.orgao %} · {{ d.orgao }}{% if d.uf %}/{{ d.uf }}{% endif %}{% endif %}{% if d.contrato %} <small>(contrato)</small>{% endif %}{% if not loop.last %}<br>{% endif %}{% else %}—{% endfor %}</dd>
+                        <dt>Estado civil</dt><dd>{{ pessoa_rotulo('estado_civil', ps.estado_civil) or '—' }}{% if ps.regime_bens %}<br><small>{{ pessoa_rotulo('regime_bens', ps.regime_bens) }}</small>{% endif %}</dd>
+                        <dt>Nacionalidade</dt><dd>{{ ps.nacionalidade or '—' }}</dd>
+                        <dt>Profissão</dt><dd>{{ ps.profissao or '—' }}</dd>
+                        <dt>Nome da mãe</dt><dd>{{ ps.nome_mae or '—' }}</dd>
+                        <dt>Conta gov.br</dt><dd>{{ pessoa_rotulo('nivel_govbr', ps.nivel_govbr) or '—' }}</dd>
+                    </dl>
+                </section>
+                {% endif %}
+                <section class="tu-sec" id="responsaveis">
                     <!-- Responsáveis no escritório (migração Acessórias, 05/11/2026): um funcionário por departamento,
                          em mosaico; departamento vazio vira azulejo vermelho que abre a janela já nele -->
                     {% set rs_faltam = responsaveis|rejectattr('usuario_id')|list|length %}
@@ -598,36 +702,7 @@
                             {% endfor %}
                         </div>
                     </div>
-
-                    <!-- Resumo do Certificado (verde se há; claro se não há) — botões só na aba Certificado -->
-                    {% if certificado %}
-                    {% set cs = certificado.cert_status %}
-                    <div class="fv-certsum fv-certsum-on">
-                        <div class="fv-certsum-top">
-                            <span class="fv-certsum-tit">Certificado digital</span>
-                            <a class="fv-certsum-atalho" href="#certificado" onclick="irParaAba('#certificado'); return false;">Ver certificado <i class="fas fa-arrow-right"></i></a>
-                        </div>
-                        <div class="fv-certsum-row">
-                            <span class="fv-certsel {{ 'fv-sel-bad' if cs and cs.nivel == 'vencido' else 'fv-sel-warn' if cs and cs.nivel == 'laranja' else 'fv-sel-ok' }}">
-                                <i class="fas fa-circle" style="font-size:8px;"></i>
-                                {% if cs and cs.nivel == 'vencido' %}VENCIDO{% elif cs and cs.nivel == 'laranja' %}VENCE EM {{ cs.dias }} DIAS{% else %}VÁLIDO{% endif %}
-                            </span>
-                            <span class="fv-certsum-val">{{ certificado.tipo_doc }} {{ certificado.cnpj }}{% if certificado.validade %} · validade {{ certificado.validade|format_date }}{% endif %}</span>
-                        </div>
-                    </div>
-                    {% else %}
-                    <div class="fv-certsum fv-certsum-off">
-                        <div class="fv-certsum-top">
-                            <span class="fv-certsum-tit">Certificado digital</span>
-                            <a class="fv-certsum-atalho" href="#certificado" onclick="irParaAba('#certificado'); return false;">Vincular certificado <i class="fas fa-arrow-right"></i></a>
-                        </div>
-                        <div class="fv-certsum-row">
-                            <span class="fv-certsel fv-sel-none"><i class="fas fa-circle" style="font-size:8px;"></i> SEM CERTIFICADO</span>
-                            <span class="fv-certsum-val" style="color:#64748b;">Nenhum certificado vinculado a esta empresa.</span>
-                        </div>
-                    </div>
-                    {% endif %}
-                </div>
+                </section>
             </div>
 
             <!-- Endereços Tab -->
@@ -754,267 +829,6 @@
                             <div class="empty-state">
                                 <i class="fas fa-users"></i>
                                 <p>Nenhum contato cadastrado</p>
-                            </div>
-                        {% endif %}
-                    </div>
-                </div>
-            </div>
-
-            <!-- Cadastros Adicionais Tab -->
-            <div id="cadastros-adicionais" class="tab-pane">
-
-                <!-- ANP: Upload de PDF -->
-                <div class="card" style="margin-bottom:20px;">
-                    <div class="card-header">
-                        <h3 class="card-title">
-                            <i class="fas fa-gas-pump" style="color:#e74c3c;"></i>
-                            Cadastro ANP
-                        </h3>
-                    </div>
-
-                    <div class="card-body">
-                        {% if cadastros_anp %}
-                            {% for anp in cadastros_anp %}
-                            {% set bandeira_exibicao = anp.bandeira or '' %}
-                            {% set razao_exibicao = anp.razao_social or cliente.nome_razao_social %}
-                            {% if bandeira_exibicao and 'BANDEIRA' in bandeira_exibicao|upper %}
-                                {% set bandeira_exibicao = bandeira_exibicao.split('BANDEIRA')[-1].strip() %}
-                            {% endif %}
-                            {% if cliente.nome_razao_social and razao_exibicao and (cliente.nome_razao_social|upper).startswith(razao_exibicao|upper) and (cliente.nome_razao_social|length > razao_exibicao|length) %}
-                                {% set razao_exibicao = cliente.nome_razao_social %}
-                            {% endif %}
-                            <div class="anp-list-card">
-                                <div class="card-body" style="padding:14px;">
-                                    <div class="anp-list-top">
-                                        <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
-                                            {% if anp.situacao %}
-                                            <span class="badge badge-{{ 'success' if 'operação' in (anp.situacao|lower) else 'warning' }}">
-                                                {{ anp.situacao }}
-                                            </span>
-                                            {% endif %}
-                                            {% if anp.autorizacao %}
-                                            <strong>{{ anp.autorizacao }}</strong>
-                                            {% endif %}
-                                            <span class="badge badge-secondary" style="font-size:10px;">{{ anp.fonte }}</span>
-                                        </div>
-                                        <div style="display:flex; gap:6px; flex-shrink:0; align-items:flex-start;">
-                                            <a href="{{ url_for('clientes.anp_detalhe', cliente_id=cliente.id, anp_id=anp.id) }}"
-                                               class="btn btn-secondary btn-sm" title="Abrir URL de detalhes do cadastro ANP">
-                                                <i class="fas fa-eye"></i> Ver URL
-                                            </a>
-                                            <button type="button"
-                                                    class="btn-icon"
-                                                    style="background:#25d366; color:#fff; border:none; cursor:pointer;"
-                                                    title="Copiar dados para WhatsApp"
-                                                    data-situacao="{{ anp.situacao or '' }}"
-                                                    data-autorizacao="{{ anp.autorizacao or '' }}"
-                                                    data-cnpj="{{ anp.cnpj_anp | format_cnpj if anp.cnpj_anp else '' }}"
-                                                    data-razao="{{ razao_exibicao }}"
-                                                    data-nome-fantasia="{{ anp.nome_fantasia or '' }}"
-                                                    data-bandeira="{{ bandeira_exibicao }}"
-                                                    data-tipo-posto="{{ anp.tipo_posto or '' }}"
-                                                    data-pmqc="{{ anp.pmqc or '' }}"
-                                                    data-nr-despacho="{{ anp.nr_despacho or '' }}"
-                                                    data-endereco="{{ anp.endereco or '' }}"
-                                                    data-complemento="{{ anp.complemento or '' }}"
-                                                    data-bairro="{{ anp.bairro or '' }}"
-                                                    data-municipio="{{ anp.municipio_uf or '' }}"
-                                                    data-cep="{{ anp.cep or '' }}"
-                                                    data-data-publicacao="{{ anp.data_publicacao | format_date if anp.data_publicacao else '' }}"
-                                                    data-data-inicio-bandeira="{{ anp.data_inicio_bandeira | format_date if anp.data_inicio_bandeira else '' }}"
-                                                    data-latitude="{{ anp.latitude or '' }}"
-                                                    data-longitude="{{ anp.longitude or '' }}"
-                                                    data-socios='{{ anp.socios | map(attribute="nome") | list | tojson | forceescape }}'
-                                                    data-produtos='{{ anp.produtos | tojson | forceescape }}'
-                                                    onclick="copiarAnpWpp(this)">
-                                                <i class="fab fa-whatsapp"></i>
-                                            </button>
-                                            {% if anp.fonte not in ('DROPBOX', 'PDF') %}
-                                            <a href="{{ url_for('clientes.anp_editar', cliente_id=cliente.id, anp_id=anp.id) }}"
-                                               class="btn-icon btn-primary" title="Editar">
-                                                <i class="fas fa-edit"></i>
-                                            </a>
-                                            <form action="{{ url_for('clientes.anp_excluir', cliente_id=cliente.id, anp_id=anp.id) }}"
-                                                  method="POST" style="display:inline;">
-                                                <button type="submit" class="btn-icon btn-danger" title="Excluir"
-                                                        onclick="return confirm('Excluir este cadastro ANP?')">
-                                                    <i class="fas fa-trash"></i>
-                                                </button>
-                                            </form>
-                                            {% endif %}
-                                        </div>
-                                    </div>
-
-                                    <div class="anp-list-grid">
-                                        <div class="anp-info-item">
-                                            <span class="anp-info-label">Razão Social</span>
-                                            <div class="anp-info-value">{{ razao_exibicao or '-' }}</div>
-                                        </div>
-                                        <div class="anp-info-item">
-                                            <span class="anp-info-label">Nome Fantasia</span>
-                                            <div class="anp-info-value">{{ anp.nome_fantasia or '-' }}</div>
-                                        </div>
-                                        <div class="anp-info-item">
-                                            <span class="anp-info-label">CNPJ</span>
-                                            <div class="anp-info-value">{{ anp.cnpj_anp | format_cnpj if anp.cnpj_anp else '-' }}</div>
-                                        </div>
-                                        <div class="anp-info-item">
-                                            <span class="anp-info-label">Bandeira</span>
-                                            <div class="anp-info-value">{{ bandeira_exibicao or '-' }}</div>
-                                        </div>
-                                        <div class="anp-info-item">
-                                            <span class="anp-info-label">Início da Bandeira</span>
-                                            <div class="anp-info-value">{{ anp.data_inicio_bandeira | format_date if anp.data_inicio_bandeira else '-' }}</div>
-                                        </div>
-                                        <div class="anp-info-item">
-                                            <span class="anp-info-label">PMQC</span>
-                                            <div class="anp-info-value">{{ anp.pmqc or '-' }}</div>
-                                        </div>
-                                        <div class="anp-info-item">
-                                            <span class="anp-info-label">Tipo de Posto</span>
-                                            <div class="anp-info-value">{{ anp.tipo_posto or '-' }}</div>
-                                        </div>
-                                        <div class="anp-info-item">
-                                            <span class="anp-info-label">Nr Despacho</span>
-                                            <div class="anp-info-value">{{ anp.nr_despacho or '-' }}</div>
-                                        </div>
-                                        <div class="anp-info-item">
-                                            <span class="anp-info-label">Publicação</span>
-                                            <div class="anp-info-value">{{ anp.data_publicacao | format_date if anp.data_publicacao else '-' }}</div>
-                                        </div>
-                                        <div class="anp-info-item">
-                                            <span class="anp-info-label">Endereço</span>
-                                            <div class="anp-info-value">
-                                                {% if anp.endereco %}{{ anp.endereco }}{% if anp.complemento %}, {{ anp.complemento }}{% endif %}{% else %}-{% endif %}
-                                            </div>
-                                        </div>
-                                        <div class="anp-info-item">
-                                            <span class="anp-info-label">Bairro</span>
-                                            <div class="anp-info-value">{{ anp.bairro or '-' }}</div>
-                                        </div>
-                                        <div class="anp-info-item">
-                                            <span class="anp-info-label">Município / UF</span>
-                                            <div class="anp-info-value">{{ anp.municipio_uf or '-' }}</div>
-                                        </div>
-                                        <div class="anp-info-item">
-                                            <span class="anp-info-label">CEP</span>
-                                            <div class="anp-info-value">{{ anp.cep or '-' }}</div>
-                                        </div>
-                                        <div class="anp-info-item">
-                                            <span class="anp-info-label">Latitude</span>
-                                            <div class="anp-info-value">{{ anp.latitude or '-' }}</div>
-                                        </div>
-                                        <div class="anp-info-item">
-                                            <span class="anp-info-label">Longitude</span>
-                                            <div class="anp-info-value">{{ anp.longitude or '-' }}</div>
-                                        </div>
-                                    </div>
-
-                                    {% if anp.socios %}
-                                    <div class="anp-subsection">
-                                        <div class="anp-subtitle">Sócios</div>
-                                        <ul class="anp-inline-list">
-                                            {% for s in anp.socios %}
-                                            {% if s.nome %}
-                                            <li>{{ s.nome }}</li>
-                                            {% endif %}
-                                            {% endfor %}
-                                        </ul>
-                                    </div>
-                                    {% endif %}
-
-                                    {% if anp.produtos %}
-                                    <div class="anp-subsection">
-                                        <div class="anp-subtitle">Produtos (com tancagem e bicos)</div>
-                                        <div class="table-responsive">
-                                            <table class="anp-prod-table">
-                                                <thead>
-                                                    <tr>
-                                                        <th>Produto</th>
-                                                        <th class="center">Tancagem (m³)</th>
-                                                        <th class="center">Bicos</th>
-                                                    </tr>
-                                                </thead>
-                                                <tbody>
-                                                    {% for p in anp.produtos %}
-                                                    {% if p.produto and p.produto|lower != 'voltar' %}
-                                                    <tr>
-                                                        <td>{{ p.produto }}</td>
-                                                        <td class="center">{{ p.tancagem_m3 if p.tancagem_m3 is not none else '—' }}</td>
-                                                        <td class="center">{{ p.bicos if p.bicos is not none else '—' }}</td>
-                                                    </tr>
-                                                    {% endif %}
-                                                    {% endfor %}
-                                                </tbody>
-                                            </table>
-                                        </div>
-                                    </div>
-                                    {% endif %}
-                                </div>
-                            </div>
-                            {% endfor %}
-                        {% else %}
-                            <div class="empty-state" style="padding:24px 0;">
-                                <i class="fas fa-gas-pump" style="color:#e74c3c; opacity:.4;"></i>
-                                <p>Nenhum cadastro ANP vinculado</p>
-                                <p class="text-muted">A importação é feita automaticamente via
-                                    <a href="https://app.qualicontax.com.br/cadastros/adicionais" target="_blank">
-                                        cadastros/adicionais
-                                    </a>.
-                                </p>
-                            </div>
-                        {% endif %}
-                    </div>
-                </div>
-
-                <!-- Outros cadastros adicionais genéricos -->
-                <div class="card">
-                    <div class="card-header">
-                        <h3 class="card-title">Outros Cadastros Adicionais</h3>
-                        <button class="btn btn-secondary btn-sm" onclick="showAddCadastroAdicionalModal()">
-                            <i class="fas fa-plus"></i>
-                            Adicionar
-                        </button>
-                    </div>
-                    <div class="card-body">
-                        {% if cadastros_adicionais %}
-                            <div class="table-responsive">
-                                <table class="table">
-                                    <thead>
-                                        <tr>
-                                            <th>Tipo</th>
-                                            <th>Campo</th>
-                                            <th>Valor</th>
-                                            <th>Data Referência</th>
-                                            <th>Observações</th>
-                                            <th>Ações</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {% for cadastro in cadastros_adicionais %}
-                                        <tr>
-                                            <td>{{ cadastro.tipo }}</td>
-                                            <td>{{ cadastro.campo }}</td>
-                                            <td>{{ cadastro.valor or '-' }}</td>
-                                            <td>{{ cadastro.data_referencia|format_date if cadastro.data_referencia else '-' }}</td>
-                                            <td>{{ cadastro.observacoes or '-' }}</td>
-                                            <td>
-                                                <form action="{{ url_for('clientes.excluir_cadastro_adicional', id=cadastro.id) }}" method="POST" style="display: inline;">
-                                                    <button type="submit" class="btn-icon btn-danger" onclick="return confirm('Deseja excluir este cadastro adicional?')">
-                                                        <i class="fas fa-trash"></i>
-                                                    </button>
-                                                </form>
-                                            </td>
-                                        </tr>
-                                        {% endfor %}
-                                    </tbody>
-                                </table>
-                            </div>
-                        {% else %}
-                            <div class="empty-state">
-                                <i class="fas fa-layer-group"></i>
-                                <p>Nenhum cadastro adicional genérico</p>
-                                <p class="text-muted">Ex.: IBAMA, alvarás e outros cadastros específicos.</p>
                             </div>
                         {% endif %}
                     </div>
@@ -1149,216 +963,9 @@
                 </div>
             </div>
 
-            <!-- Grupos Tab -->
-            <div id="grupos" class="tab-pane">
-                <div class="card">
-                    <div class="card-header">
-                        <h3 class="card-title">Grupos do Cliente</h3>
-                    </div>
-                    <div class="card-body">
-                        <!-- Formulário para adicionar grupo -->
-                        {% if grupos_disponiveis %}
-                        <form method="POST" action="{{ url_for('clientes.adicionar_grupo', cliente_id=cliente.id) }}" class="form-inline" style="margin-bottom: 20px;">
-                            <div class="form-row">
-                                <div class="form-group" style="flex: 1; margin-right: 10px;">
-                                    <label for="grupo_id" style="margin-right: 10px;">Adicionar ao Grupo:</label>
-                                    <select id="grupo_id" name="grupo_id" class="form-control" required style="min-width: 250px;">
-                                        <option value="">Selecione um grupo...</option>
-                                        {% for grupo in grupos_disponiveis %}
-                                        <option value="{{ grupo.id }}">{{ grupo.nome }}</option>
-                                        {% endfor %}
-                                    </select>
-                                </div>
-                                <button type="submit" class="btn btn-primary">
-                                    <i class="fas fa-plus"></i>
-                                    Adicionar
-                                </button>
-                            </div>
-                        </form>
-                        {% endif %}
-                        
-                        <!-- Lista de grupos -->
-                        {% if grupos %}
-                            <div class="table-responsive">
-                                <table class="table">
-                                    <thead>
-                                        <tr>
-                                            <th>Nome do Grupo</th>
-                                            <th>Descrição</th>
-                                            <th>Situação</th>
-                                            <th>Ações</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {% for grupo in grupos %}
-                                        <tr data-copiar-bloco data-copiar-titulo="Grupo">
-                                            <td>
-                                                <strong data-copiar data-copiar-rotulo="Grupo">{{ grupo.nome }}</strong>
-                                            </td>
-                                            <td>{{ grupo.descricao or '-' }}</td>
-                                            <td>
-                                                <span class="badge badge-{{ 'success' if grupo.situacao == 'ATIVO' else 'danger' }}">
-                                                    {{ grupo.situacao }}
-                                                </span>
-                                            </td>
-                                            <td>
-                                                <form action="{{ url_for('clientes.remover_grupo', cliente_id=cliente.id, grupo_id=grupo.id) }}" method="POST" style="display: inline;">
-                                                    <button type="submit" class="btn-icon btn-danger" onclick="return confirm('Remover cliente deste grupo?')" title="Remover do Grupo">
-                                                        <i class="fas fa-times"></i>
-                                                    </button>
-                                                </form>
-                                            </td>
-                                        </tr>
-                                        {% endfor %}
-                                    </tbody>
-                                </table>
-                            </div>
-                        {% else %}
-                            <div class="empty-state">
-                                <i class="fas fa-tags"></i>
-                                <p>Cliente não pertence a nenhum grupo</p>
-                                {% if grupos_disponiveis %}
-                                <p class="text-muted">Use o formulário acima para adicionar o cliente a um grupo</p>
-                                {% endif %}
-                            </div>
-                        {% endif %}
-                    </div>
-                </div>
-            </div>
-
-            <!-- Processos Tab -->
-            <div id="processos" class="tab-pane">
-                <div class="card">
-                    <div class="card-header">
-                        <h3 class="card-title">Processos</h3>
-                    </div>
-                    <div class="card-body">
-                        {% if processos %}
-                            <div class="table-responsive">
-                                <table class="table">
-                                    <thead>
-                                        <tr>
-                                            <th>Número</th>
-                                            <th>Tipo</th>
-                                            <th>Status</th>
-                                            <th>Abertura</th>
-                                            <th>Conclusão</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {% for processo in processos %}
-                                        <tr>
-                                            <td>{{ processo.numero_processo }}</td>
-                                            <td>{{ processo.tipo }}</td>
-                                            <td><span class="badge badge-info">{{ processo.status }}</span></td>
-                                            <td>{{ processo.data_abertura|format_date if processo.data_abertura else '-' }}</td>
-                                            <td>{{ processo.data_conclusao|format_date if processo.data_conclusao else '-' }}</td>
-                                        </tr>
-                                        {% endfor %}
-                                    </tbody>
-                                </table>
-                            </div>
-                        {% else %}
-                            <div class="empty-state">
-                                <i class="fas fa-briefcase"></i>
-                                <p>Nenhum processo cadastrado</p>
-                            </div>
-                        {% endif %}
-                    </div>
-                </div>
-            </div>
-
-            <!-- Tarefas Tab -->
-            <div id="tarefas" class="tab-pane">
-                <div class="card">
-                    <div class="card-header">
-                        <h3 class="card-title">Tarefas</h3>
-                    </div>
-                    <div class="card-body">
-                        {% if tarefas %}
-                            <div class="table-responsive">
-                                <table class="table">
-                                    <thead>
-                                        <tr>
-                                            <th>Título</th>
-                                            <th>Processo</th>
-                                            <th>Prazo</th>
-                                            <th>Prioridade</th>
-                                            <th>Status</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {% for tarefa in tarefas %}
-                                        <tr>
-                                            <td>{{ tarefa.titulo }}</td>
-                                            <td>{{ tarefa.numero_processo }}</td>
-                                            <td>{{ tarefa.prazo|format_date if tarefa.prazo else '-' }}</td>
-                                            <td><span class="badge badge-warning">{{ tarefa.prioridade }}</span></td>
-                                            <td><span class="badge badge-info">{{ tarefa.status }}</span></td>
-                                        </tr>
-                                        {% endfor %}
-                                    </tbody>
-                                </table>
-                            </div>
-                        {% else %}
-                            <div class="empty-state">
-                                <i class="fas fa-tasks"></i>
-                                <p>Nenhuma tarefa encontrada</p>
-                            </div>
-                        {% endif %}
-                    </div>
-                </div>
-            </div>
-
-            <!-- Obrigações Tab -->
-            <div id="obrigacoes" class="tab-pane">
-                <div class="card">
-                    <div class="card-header">
-                        <h3 class="card-title">Obrigações Fiscais</h3>
-                    </div>
-                    <div class="card-body">
-                        {% if obrigacoes %}
-                            <div class="table-responsive">
-                                <table class="table">
-                                    <thead>
-                                        <tr>
-                                            <th>Tipo</th>
-                                            <th>Descrição</th>
-                                            <th>Vencimento</th>
-                                            <th>Valor</th>
-                                            <th>Status</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {% for obrigacao in obrigacoes %}
-                                        <tr>
-                                            <td>{{ obrigacao.tipo_obrigacao or '-' }}</td>
-                                            <td>{{ obrigacao.descricao }}</td>
-                                            <td>{{ obrigacao.vencimento|format_date if obrigacao.vencimento else '-' }}</td>
-                                            <td>{{ obrigacao.valor|format_currency if obrigacao.valor else '-' }}</td>
-                                            <td>
-                                                <span class="badge badge-{{ 'success' if obrigacao.pago else 'warning' }}">
-                                                    {{ 'Pago' if obrigacao.pago else obrigacao.status }}
-                                                </span>
-                                            </td>
-                                        </tr>
-                                        {% endfor %}
-                                    </tbody>
-                                </table>
-                            </div>
-                        {% else %}
-                            <div class="empty-state">
-                                <i class="fas fa-calendar-check"></i>
-                                <p>Nenhuma obrigação cadastrada</p>
-                            </div>
-                        {% endif %}
-                    </div>
-                </div>
-            </div>
-
             <!-- Certificado Digital Tab -->
             <div id="certificado" class="tab-pane">
-                <div class="card">
+                <div class="card" id="contadores">
                     <div class="card-header">
                         <h3 class="card-title">Contadores responsáveis</h3>
                     </div>
@@ -1671,10 +1278,404 @@
                 </div>
             </div>
 
+            <!-- Cadastros Adicionais Tab -->
+            <div id="cadastros-adicionais" class="tab-pane">
+
+                <!-- ANP: Upload de PDF -->
+                <div class="card" style="margin-bottom:20px;">
+                    <div class="card-header">
+                        <h3 class="card-title">
+                            <i class="fas fa-gas-pump" style="color:#e74c3c;"></i>
+                            Cadastro ANP
+                        </h3>
+                    </div>
+
+                    <div class="card-body">
+                        {% if cadastros_anp %}
+                            {% for anp in cadastros_anp %}
+                            {% set bandeira_exibicao = anp.bandeira or '' %}
+                            {% set razao_exibicao = anp.razao_social or cliente.nome_razao_social %}
+                            {% if bandeira_exibicao and 'BANDEIRA' in bandeira_exibicao|upper %}
+                                {% set bandeira_exibicao = bandeira_exibicao.split('BANDEIRA')[-1].strip() %}
+                            {% endif %}
+                            {% if cliente.nome_razao_social and razao_exibicao and (cliente.nome_razao_social|upper).startswith(razao_exibicao|upper) and (cliente.nome_razao_social|length > razao_exibicao|length) %}
+                                {% set razao_exibicao = cliente.nome_razao_social %}
+                            {% endif %}
+                            <div class="anp-list-card">
+                                <div class="card-body" style="padding:14px;">
+                                    <div class="anp-list-top">
+                                        <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+                                            {% if anp.situacao %}
+                                            <span class="badge badge-{{ 'success' if 'operação' in (anp.situacao|lower) else 'warning' }}">
+                                                {{ anp.situacao }}
+                                            </span>
+                                            {% endif %}
+                                            {% if anp.autorizacao %}
+                                            <strong>{{ anp.autorizacao }}</strong>
+                                            {% endif %}
+                                            <span class="badge badge-secondary" style="font-size:10px;">{{ anp.fonte }}</span>
+                                        </div>
+                                        <div style="display:flex; gap:6px; flex-shrink:0; align-items:flex-start;">
+                                            <a href="{{ url_for('clientes.anp_detalhe', cliente_id=cliente.id, anp_id=anp.id) }}"
+                                               class="btn btn-secondary btn-sm" title="Abrir URL de detalhes do cadastro ANP">
+                                                <i class="fas fa-eye"></i> Ver URL
+                                            </a>
+                                            <button type="button"
+                                                    class="btn-icon"
+                                                    style="background:#25d366; color:#fff; border:none; cursor:pointer;"
+                                                    title="Copiar dados para WhatsApp"
+                                                    data-situacao="{{ anp.situacao or '' }}"
+                                                    data-autorizacao="{{ anp.autorizacao or '' }}"
+                                                    data-cnpj="{{ anp.cnpj_anp | format_cnpj if anp.cnpj_anp else '' }}"
+                                                    data-razao="{{ razao_exibicao }}"
+                                                    data-nome-fantasia="{{ anp.nome_fantasia or '' }}"
+                                                    data-bandeira="{{ bandeira_exibicao }}"
+                                                    data-tipo-posto="{{ anp.tipo_posto or '' }}"
+                                                    data-pmqc="{{ anp.pmqc or '' }}"
+                                                    data-nr-despacho="{{ anp.nr_despacho or '' }}"
+                                                    data-endereco="{{ anp.endereco or '' }}"
+                                                    data-complemento="{{ anp.complemento or '' }}"
+                                                    data-bairro="{{ anp.bairro or '' }}"
+                                                    data-municipio="{{ anp.municipio_uf or '' }}"
+                                                    data-cep="{{ anp.cep or '' }}"
+                                                    data-data-publicacao="{{ anp.data_publicacao | format_date if anp.data_publicacao else '' }}"
+                                                    data-data-inicio-bandeira="{{ anp.data_inicio_bandeira | format_date if anp.data_inicio_bandeira else '' }}"
+                                                    data-latitude="{{ anp.latitude or '' }}"
+                                                    data-longitude="{{ anp.longitude or '' }}"
+                                                    data-socios='{{ anp.socios | map(attribute="nome") | list | tojson | forceescape }}'
+                                                    data-produtos='{{ anp.produtos | tojson | forceescape }}'
+                                                    onclick="copiarAnpWpp(this)">
+                                                <i class="fab fa-whatsapp"></i>
+                                            </button>
+                                            {% if anp.fonte not in ('DROPBOX', 'PDF') %}
+                                            <a href="{{ url_for('clientes.anp_editar', cliente_id=cliente.id, anp_id=anp.id) }}"
+                                               class="btn-icon btn-primary" title="Editar">
+                                                <i class="fas fa-edit"></i>
+                                            </a>
+                                            <form action="{{ url_for('clientes.anp_excluir', cliente_id=cliente.id, anp_id=anp.id) }}"
+                                                  method="POST" style="display:inline;">
+                                                <button type="submit" class="btn-icon btn-danger" title="Excluir"
+                                                        onclick="return confirm('Excluir este cadastro ANP?')">
+                                                    <i class="fas fa-trash"></i>
+                                                </button>
+                                            </form>
+                                            {% endif %}
+                                        </div>
+                                    </div>
+
+                                    <div class="anp-list-grid">
+                                        <div class="anp-info-item">
+                                            <span class="anp-info-label">Razão Social</span>
+                                            <div class="anp-info-value">{{ razao_exibicao or '-' }}</div>
+                                        </div>
+                                        <div class="anp-info-item">
+                                            <span class="anp-info-label">Nome Fantasia</span>
+                                            <div class="anp-info-value">{{ anp.nome_fantasia or '-' }}</div>
+                                        </div>
+                                        <div class="anp-info-item">
+                                            <span class="anp-info-label">CNPJ</span>
+                                            <div class="anp-info-value">{{ anp.cnpj_anp | format_cnpj if anp.cnpj_anp else '-' }}</div>
+                                        </div>
+                                        <div class="anp-info-item">
+                                            <span class="anp-info-label">Bandeira</span>
+                                            <div class="anp-info-value">{{ bandeira_exibicao or '-' }}</div>
+                                        </div>
+                                        <div class="anp-info-item">
+                                            <span class="anp-info-label">Início da Bandeira</span>
+                                            <div class="anp-info-value">{{ anp.data_inicio_bandeira | format_date if anp.data_inicio_bandeira else '-' }}</div>
+                                        </div>
+                                        <div class="anp-info-item">
+                                            <span class="anp-info-label">PMQC</span>
+                                            <div class="anp-info-value">{{ anp.pmqc or '-' }}</div>
+                                        </div>
+                                        <div class="anp-info-item">
+                                            <span class="anp-info-label">Tipo de Posto</span>
+                                            <div class="anp-info-value">{{ anp.tipo_posto or '-' }}</div>
+                                        </div>
+                                        <div class="anp-info-item">
+                                            <span class="anp-info-label">Nr Despacho</span>
+                                            <div class="anp-info-value">{{ anp.nr_despacho or '-' }}</div>
+                                        </div>
+                                        <div class="anp-info-item">
+                                            <span class="anp-info-label">Publicação</span>
+                                            <div class="anp-info-value">{{ anp.data_publicacao | format_date if anp.data_publicacao else '-' }}</div>
+                                        </div>
+                                        <div class="anp-info-item">
+                                            <span class="anp-info-label">Endereço</span>
+                                            <div class="anp-info-value">
+                                                {% if anp.endereco %}{{ anp.endereco }}{% if anp.complemento %}, {{ anp.complemento }}{% endif %}{% else %}-{% endif %}
+                                            </div>
+                                        </div>
+                                        <div class="anp-info-item">
+                                            <span class="anp-info-label">Bairro</span>
+                                            <div class="anp-info-value">{{ anp.bairro or '-' }}</div>
+                                        </div>
+                                        <div class="anp-info-item">
+                                            <span class="anp-info-label">Município / UF</span>
+                                            <div class="anp-info-value">{{ anp.municipio_uf or '-' }}</div>
+                                        </div>
+                                        <div class="anp-info-item">
+                                            <span class="anp-info-label">CEP</span>
+                                            <div class="anp-info-value">{{ anp.cep or '-' }}</div>
+                                        </div>
+                                        <div class="anp-info-item">
+                                            <span class="anp-info-label">Latitude</span>
+                                            <div class="anp-info-value">{{ anp.latitude or '-' }}</div>
+                                        </div>
+                                        <div class="anp-info-item">
+                                            <span class="anp-info-label">Longitude</span>
+                                            <div class="anp-info-value">{{ anp.longitude or '-' }}</div>
+                                        </div>
+                                    </div>
+
+                                    {% if anp.socios %}
+                                    <div class="anp-subsection">
+                                        <div class="anp-subtitle">Sócios</div>
+                                        <ul class="anp-inline-list">
+                                            {% for s in anp.socios %}
+                                            {% if s.nome %}
+                                            <li>{{ s.nome }}</li>
+                                            {% endif %}
+                                            {% endfor %}
+                                        </ul>
+                                    </div>
+                                    {% endif %}
+
+                                    {% if anp.produtos %}
+                                    <div class="anp-subsection">
+                                        <div class="anp-subtitle">Produtos (com tancagem e bicos)</div>
+                                        <div class="table-responsive">
+                                            <table class="anp-prod-table">
+                                                <thead>
+                                                    <tr>
+                                                        <th>Produto</th>
+                                                        <th class="center">Tancagem (m³)</th>
+                                                        <th class="center">Bicos</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {% for p in anp.produtos %}
+                                                    {% if p.produto and p.produto|lower != 'voltar' %}
+                                                    <tr>
+                                                        <td>{{ p.produto }}</td>
+                                                        <td class="center">{{ p.tancagem_m3 if p.tancagem_m3 is not none else '—' }}</td>
+                                                        <td class="center">{{ p.bicos if p.bicos is not none else '—' }}</td>
+                                                    </tr>
+                                                    {% endif %}
+                                                    {% endfor %}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            {% endfor %}
+                        {% else %}
+                            <div class="empty-state" style="padding:24px 0;">
+                                <i class="fas fa-gas-pump" style="color:#e74c3c; opacity:.4;"></i>
+                                <p>Nenhum cadastro ANP vinculado</p>
+                                <p class="text-muted">A importação é feita automaticamente via
+                                    <a href="https://app.qualicontax.com.br/cadastros/adicionais" target="_blank">
+                                        cadastros/adicionais
+                                    </a>.
+                                </p>
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <!-- Outros cadastros adicionais genéricos -->
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Outros Cadastros Adicionais</h3>
+                        <button class="btn btn-secondary btn-sm" onclick="showAddCadastroAdicionalModal()">
+                            <i class="fas fa-plus"></i>
+                            Adicionar
+                        </button>
+                    </div>
+                    <div class="card-body">
+                        {% if cadastros_adicionais %}
+                            <div class="table-responsive">
+                                <table class="table">
+                                    <thead>
+                                        <tr>
+                                            <th>Tipo</th>
+                                            <th>Campo</th>
+                                            <th>Valor</th>
+                                            <th>Data Referência</th>
+                                            <th>Observações</th>
+                                            <th>Ações</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for cadastro in cadastros_adicionais %}
+                                        <tr>
+                                            <td>{{ cadastro.tipo }}</td>
+                                            <td>{{ cadastro.campo }}</td>
+                                            <td>{{ cadastro.valor or '-' }}</td>
+                                            <td>{{ cadastro.data_referencia|format_date if cadastro.data_referencia else '-' }}</td>
+                                            <td>{{ cadastro.observacoes or '-' }}</td>
+                                            <td>
+                                                <form action="{{ url_for('clientes.excluir_cadastro_adicional', id=cadastro.id) }}" method="POST" style="display: inline;">
+                                                    <button type="submit" class="btn-icon btn-danger" onclick="return confirm('Deseja excluir este cadastro adicional?')">
+                                                        <i class="fas fa-trash"></i>
+                                                    </button>
+                                                </form>
+                                            </td>
+                                        </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        {% else %}
+                            <div class="empty-state">
+                                <i class="fas fa-layer-group"></i>
+                                <p>Nenhum cadastro adicional genérico</p>
+                                <p class="text-muted">Ex.: IBAMA, alvarás e outros cadastros específicos.</p>
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <!-- Processos Tab -->
+            <div id="processos" class="tab-pane">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Processos</h3>
+                    </div>
+                    <div class="card-body">
+                        {% if processos %}
+                            <div class="table-responsive">
+                                <table class="table">
+                                    <thead>
+                                        <tr>
+                                            <th>Número</th>
+                                            <th>Tipo</th>
+                                            <th>Status</th>
+                                            <th>Abertura</th>
+                                            <th>Conclusão</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for processo in processos %}
+                                        <tr>
+                                            <td>{{ processo.numero_processo }}</td>
+                                            <td>{{ processo.tipo }}</td>
+                                            <td><span class="badge badge-info">{{ processo.status }}</span></td>
+                                            <td>{{ processo.data_abertura|format_date if processo.data_abertura else '-' }}</td>
+                                            <td>{{ processo.data_conclusao|format_date if processo.data_conclusao else '-' }}</td>
+                                        </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        {% else %}
+                            <div class="empty-state">
+                                <i class="fas fa-briefcase"></i>
+                                <p>Nenhum processo cadastrado</p>
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tarefas Tab -->
+            <div id="tarefas" class="tab-pane">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Tarefas</h3>
+                    </div>
+                    <div class="card-body">
+                        {% if tarefas %}
+                            <div class="table-responsive">
+                                <table class="table">
+                                    <thead>
+                                        <tr>
+                                            <th>Título</th>
+                                            <th>Processo</th>
+                                            <th>Prazo</th>
+                                            <th>Prioridade</th>
+                                            <th>Status</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for tarefa in tarefas %}
+                                        <tr>
+                                            <td>{{ tarefa.titulo }}</td>
+                                            <td>{{ tarefa.numero_processo }}</td>
+                                            <td>{{ tarefa.prazo|format_date if tarefa.prazo else '-' }}</td>
+                                            <td><span class="badge badge-warning">{{ tarefa.prioridade }}</span></td>
+                                            <td><span class="badge badge-info">{{ tarefa.status }}</span></td>
+                                        </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        {% else %}
+                            <div class="empty-state">
+                                <i class="fas fa-tasks"></i>
+                                <p>Nenhuma tarefa encontrada</p>
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <!-- Obrigações Tab -->
+            <div id="obrigacoes" class="tab-pane">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Obrigações Fiscais</h3>
+                    </div>
+                    <div class="card-body">
+                        {% if obrigacoes %}
+                            <div class="table-responsive">
+                                <table class="table">
+                                    <thead>
+                                        <tr>
+                                            <th>Tipo</th>
+                                            <th>Descrição</th>
+                                            <th>Vencimento</th>
+                                            <th>Valor</th>
+                                            <th>Status</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for obrigacao in obrigacoes %}
+                                        <tr>
+                                            <td>{{ obrigacao.tipo_obrigacao or '-' }}</td>
+                                            <td>{{ obrigacao.descricao }}</td>
+                                            <td>{{ obrigacao.vencimento|format_date if obrigacao.vencimento else '-' }}</td>
+                                            <td>{{ obrigacao.valor|format_currency if obrigacao.valor else '-' }}</td>
+                                            <td>
+                                                <span class="badge badge-{{ 'success' if obrigacao.pago else 'warning' }}">
+                                                    {{ 'Pago' if obrigacao.pago else obrigacao.status }}
+                                                </span>
+                                            </td>
+                                        </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        {% else %}
+                            <div class="empty-state">
+                                <i class="fas fa-calendar-check"></i>
+                                <p>Nenhuma obrigação cadastrada</p>
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
             <!-- Histórico Tab (D3) — lazy-load via AJAX -->
             <div id="historico" class="tab-pane">
-                <div id="hist-box" class="hist-box">
-                    <div class="hist-vazio">Carregando…</div>
+                <div class="fv-card">
+                    <p class="fv-seclabel">Histórico de alterações</p>
+                    <div id="hist-box" class="hist-box">
+                        <div class="hist-vazio">Carregando…</div>
+                    </div>
                 </div>
             </div>
 
@@ -1719,9 +1720,43 @@
                 </div>
             </div>
             {% endif %}
-        </div>
-    </div>
+        </div><!-- /tabs-content -->
+            </div><!-- /tu-main -->
+
+            <!-- O que falta: a MESMA lista do A CADASTRAR -->
+            <aside class="tu-lado">
+                <div class="tu-box" id="tuFalta">
+                    <p class="tu-box-tit">O que falta {% if falta.faltam %}<span class="tu-n">{{ falta.faltam|length }}</span>{% endif %}</p>
+                    {% for f in falta.faltam %}
+                    <a class="tu-pend tu-pend-{{ 'verm' if f.cor == 'verm' else 'amb' }}" href="#{{ f.alvo }}" title="{{ f.ajuda }}">
+                        <i class="fas fa-circle-xmark"></i><span>{{ f.rotulo }}</span><em>ir ao campo <i class="fas fa-arrow-right"></i></em></a>
+                    {% else %}
+                    <p class="tu-tudo-ok"><i class="fas fa-circle-check"></i> Cadastro completo.{% if not falta.avulso %} A empresa não aparece no A CADASTRAR.{% endif %}</p>
+                    {% endfor %}
+                    {% if falta.ok %}
+                    <p class="tu-ok-tit">Completo · {{ falta.ok|length }}</p>
+                    <ul class="tu-ok">{% for o in falta.ok %}<li><i class="fas fa-circle-check"></i><span>{{ o.rotulo }}{% if o.valor %} <small>· {{ o.valor }}</small>{% endif %}</span></li>{% endfor %}</ul>
+                    {% endif %}
+                    <p class="tu-nota">A mesma lista do A CADASTRAR, calculada na hora: zerou aqui, a empresa sai de lá.</p>
+                </div>
+                {% if pode_rota('clientes.salvar_campos') %}
+                <div class="tu-box tu-dica">
+                    <p><i class="fas fa-i-cursor"></i><span>Valor com <u class="tu-pont">sublinhado pontilhado</u>: clique e altere. Enter confirma, Esc desfaz.</span></p>
+                    <p><i class="fas fa-floppy-disk"></i><span>Depois, <b>Salvar alterações</b> no topo grava tudo de uma vez.</span></p>
+                </div>
+                {% endif %}
+            </aside>
+        </div><!-- /tu -->
+    </div><!-- /ef-body -->
 </div>
+<div class="tu-aviso" id="tuAviso" role="status" aria-live="polite"></div>
+{% if pode_rota('clientes.salvar_campos') %}
+<div class="tu-barra" id="tuBarra" aria-hidden="true">
+    <span id="tuBarraTxt"></span>
+    <button type="button" class="tu-barra-desf" id="tuDesfazer">Desfazer</button>
+    <button type="button" class="tu-barra-salvar" id="tuSalvar2"><i class="fas fa-check"></i> Salvar</button>
+</div>
+{% endif %}
 
 <!-- Modal para Adicionar Endereço -->
 <div id="addAddressModal" class="modal" style="display: none;">
@@ -2117,6 +2152,235 @@
 
 {% block extra_js %}
 <script>
+// ══ TELA ÚNICA (Modelo C, 08/11/2026): clique no valor edita, um só "Salvar alterações", índice e "ir ao campo" ══
+(function () {
+    var tu = document.getElementById('tu');
+    if (!tu) return;
+    var URL_SALVAR = {{ url_for('clientes.salvar_campos', id=cliente.id) | tojson }};
+    function medirTopo() {
+        var fixos = document.querySelectorAll('.top-bar, .nav-fiscal'), base = 0;
+        fixos.forEach(function (f) { var st = getComputedStyle(f).position; if (st === 'sticky' || st === 'fixed') base = Math.max(base, f.getBoundingClientRect().bottom); });
+        tu.style.setProperty('--tu-topo', Math.round((base || 108) + 14) + 'px');
+    }
+    medirTopo(); window.addEventListener('resize', medirTopo);
+    var pend = {};                       // campo -> valor novo (só o que mudou)
+    var btn = document.getElementById('tuSalvar'), nEl = document.getElementById('tuN');
+    var avisoEl = document.getElementById('tuAviso'), avisoT = null;
+
+    function aviso(txt, erro) {
+        avisoEl.textContent = txt;
+        avisoEl.classList.toggle('erro', !!erro);
+        avisoEl.classList.add('on');
+        clearTimeout(avisoT);
+        avisoT = setTimeout(function () { avisoEl.classList.remove('on'); }, erro ? 9000 : 4000);
+    }
+    try {
+        var a0 = sessionStorage.getItem('tu_aviso');
+        if (a0) { sessionStorage.removeItem('tu_aviso'); setTimeout(function () { aviso(a0); }, 150); }
+    } catch (e) {}
+
+    var barra = document.getElementById('tuBarra');
+    function atualizarBotao() {
+        var n = Object.keys(pend).length;
+        if (!btn) return;
+        btn.disabled = !n;
+        nEl.textContent = n ? '· ' + n : '';
+        if (barra) {
+            barra.classList.toggle('on', n > 0);
+            barra.setAttribute('aria-hidden', n ? 'false' : 'true');
+            document.getElementById('tuBarraTxt').innerHTML = n + (n > 1 ? ' alterações' : ' alteração') + '<span class="tu-barra-sem"> sem salvar</span>';
+        }
+    }
+    function ops(dd) { try { return JSON.parse(dd.getAttribute('data-ops') || '[]'); } catch (e) { return []; } }
+    function valorAtual(dd) { var n = dd.dataset.campo; return Object.prototype.hasOwnProperty.call(pend, n) ? pend[n] : (dd.dataset.valor || ''); }
+    function rotuloDe(dd, v) {
+        var t = dd.dataset.tipo;
+        if (t === 'select') { var o = ops(dd).filter(function (x) { return String(x[0]) === String(v); })[0]; return o ? o[1] : ''; }
+        if (t === 'multi') {
+            var ids = String(v).split(',').filter(Boolean);
+            return ops(dd).filter(function (x) { return ids.indexOf(String(x[0])) >= 0; }).map(function (x) { return x[1]; }).join(', ');
+        }
+        if (t === 'date' && v) { var p = v.split('-'); return p.length === 3 ? p[2] + '/' + p[1] + '/' + p[0] : v; }
+        return v;
+    }
+    function mostrar(dd) {
+        var txt = dd.querySelector('.tu-txt'), r = rotuloDe(dd, valorAtual(dd));
+        txt.textContent = '';
+        if (r) { txt.textContent = r; }
+        else {
+            var s = document.createElement('span');
+            s.className = 'tu-vazio';
+            s.textContent = dd.classList.contains('tu-falta') ? 'falta preencher' : '—';
+            txt.appendChild(s);
+        }
+        dd.classList.toggle('tu-mudou', Object.prototype.hasOwnProperty.call(pend, dd.dataset.campo));
+    }
+    function fechar(dd) {
+        var ed = dd.querySelector('.tu-editor');
+        if (ed) ed.remove();
+        dd.querySelector('.tu-txt').style.display = '';
+        dd.classList.remove('tu-abrindo');
+        dd._confirmar = null;
+    }
+    function confirmar(dd, v) {
+        var n = dd.dataset.campo;
+        if (String(v) === String(dd.dataset.valor || '')) delete pend[n]; else pend[n] = v;
+        fechar(dd); mostrar(dd); atualizarBotao();
+    }
+    function desfazer(dd) { delete pend[dd.dataset.campo]; fechar(dd); mostrar(dd); atualizarBotao(); }
+
+    function abrir(dd) {
+        if (dd.classList.contains('tu-abrindo')) return;
+        document.querySelectorAll('.tu-v.tu-abrindo').forEach(function (o) { if (o._confirmar) o._confirmar(); });
+        dd.classList.add('tu-abrindo');
+        var t = dd.dataset.tipo, v = valorAtual(dd), box = document.createElement('div'), ctl, foco;
+        box.className = 'tu-editor';
+        if (t === 'select') {
+            ctl = document.createElement('select');
+            var o0 = document.createElement('option'); o0.value = ''; o0.textContent = 'Selecione…'; ctl.appendChild(o0);
+            ops(dd).forEach(function (o) {
+                var e = document.createElement('option'); e.value = o[0]; e.textContent = o[1];
+                if (String(o[0]) === String(v)) e.selected = true;
+                ctl.appendChild(e);
+            });
+            ctl.addEventListener('change', function () { confirmar(dd, ctl.value); });
+        } else if (t === 'multi') {
+            ctl = document.createElement('div'); ctl.className = 'tu-multi';
+            var sel = String(v).split(',').filter(Boolean);
+            var busca = document.createElement('input'); busca.type = 'search'; busca.placeholder = 'Filtrar ramos…'; busca.className = 'tu-multi-busca';
+            var lista = document.createElement('div'); lista.className = 'tu-multi-lista';
+            ops(dd).forEach(function (o) {
+                var l = document.createElement('label'), c = document.createElement('input');
+                c.type = 'checkbox'; c.value = o[0]; c.checked = sel.indexOf(String(o[0])) >= 0;
+                l.appendChild(c); l.appendChild(document.createTextNode(o[1])); lista.appendChild(l);
+            });
+            busca.addEventListener('input', function () {
+                var q = busca.value.toLowerCase();
+                lista.querySelectorAll('label').forEach(function (l) { l.style.display = l.textContent.toLowerCase().indexOf(q) >= 0 ? '' : 'none'; });
+            });
+            var ok = document.createElement('button'); ok.type = 'button'; ok.className = 'btn btn-primary tu-multi-ok'; ok.textContent = 'OK';
+            ctl.appendChild(busca); ctl.appendChild(lista); ctl.appendChild(ok);
+            var ler = function () {
+                return Array.prototype.map.call(lista.querySelectorAll('input:checked'), function (c) { return c.value; })
+                    .sort(function (a, b) { return a - b; }).join(',');
+            };
+            ok.addEventListener('click', function (e) { e.stopPropagation(); confirmar(dd, ler()); });
+            dd._confirmar = function () { confirmar(dd, ler()); };
+            foco = busca;
+        } else if (t === 'textarea') {
+            ctl = document.createElement('textarea'); ctl.rows = 3; ctl.value = v;
+        } else {
+            ctl = document.createElement('input'); ctl.type = t === 'date' ? 'date' : 'text'; ctl.value = v;
+            if (dd.dataset.ph) ctl.placeholder = dd.dataset.ph;
+        }
+        if (t !== 'multi') {
+            ctl.className = 'tu-ctl';
+            dd._confirmar = function () { confirmar(dd, (ctl.value || '').trim()); };
+            foco = ctl;
+        }
+        box.appendChild(ctl);
+        var dica = dd.dataset.ajuda || '';
+        if (t === 'text' || t === 'date') dica += (dica ? ' ' : '') + 'Enter confirma, Esc desfaz.';
+        if (dica) { var a = document.createElement('small'); a.className = 'tu-ajuda'; a.textContent = dica; box.appendChild(a); }
+        dd.querySelector('.tu-txt').style.display = 'none';
+        dd.appendChild(box);
+        box.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape') { e.preventDefault(); desfazer(dd); dd.focus(); }
+            else if (e.key === 'Enter' && t !== 'textarea' && t !== 'multi') { e.preventDefault(); dd._confirmar(); dd.focus(); }
+        });
+        foco.focus();
+        if (foco.select && t === 'text') foco.select();
+    }
+
+    // clique (ou Enter no valor focado) abre; clique fora confirma o que estava aberto
+    tu.addEventListener('click', function (e) {
+        var dd = e.target.closest('.tu-v.tu-ed');
+        if (dd && !dd.classList.contains('tu-abrindo') && !e.target.closest('a')) abrir(dd);
+    });
+    tu.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter' && e.target.matches && e.target.matches('.tu-v.tu-ed')) { e.preventDefault(); abrir(e.target); }
+    });
+    document.addEventListener('mousedown', function (e) {
+        document.querySelectorAll('.tu-v.tu-abrindo').forEach(function (o) { if (!o.contains(e.target) && o._confirmar) o._confirmar(); });
+    });
+    tu.addEventListener('focusout', function (e) {
+        var dd = e.target.closest && e.target.closest('.tu-v.tu-abrindo');
+        if (dd && e.relatedTarget && !dd.contains(e.relatedTarget) && dd._confirmar) dd._confirmar();
+    });
+
+    // Salvar alterações: manda só o que mudou; deu certo, recarrega (a lista "O que falta" e o índice se refazem)
+    function restaurarBtn() { btn.innerHTML = '<i class="fas fa-check"></i> Salvar alterações <b id="tuN"></b>'; nEl = document.getElementById('tuN'); atualizarBotao(); }
+    if (btn) btn.addEventListener('click', function () {
+        document.querySelectorAll('.tu-v.tu-abrindo').forEach(function (o) { if (o._confirmar) o._confirmar(); });
+        var campos = {};
+        Object.keys(pend).forEach(function (k) { campos[k] = k === 'ramos' ? String(pend[k]).split(',').filter(Boolean) : pend[k]; });
+        if (!Object.keys(campos).length) return;
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Salvando…';
+        fetch(URL_SALVAR, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ campos: campos }) })
+            .then(function (r) { return r.json().catch(function () { return { ok: false, erro: 'O servidor respondeu algo inesperado (' + r.status + '). Nada foi salvo.' }; }); })
+            .then(function (j) {
+                if (j.ok) {
+                    pend = {};
+                    try { sessionStorage.setItem('tu_aviso', j.salvos && j.salvos.length ? 'Salvo: ' + j.salvos.join(', ') + '.' : 'Nada mudou.'); } catch (e) {}
+                    location.reload();
+                } else { aviso(j.erro || 'Não foi possível salvar.', true); restaurarBtn(); }
+            })
+            .catch(function () { aviso('Sem conexão com o servidor. Nada foi salvo.', true); restaurarBtn(); });
+    });
+    if (barra) {
+        document.getElementById('tuSalvar2').addEventListener('click', function () { btn.click(); });
+        document.getElementById('tuDesfazer').addEventListener('click', function () {
+            document.querySelectorAll('.tu-v.tu-abrindo').forEach(function (o) { fechar(o); });
+            pend = {};
+            document.querySelectorAll('.tu-v.tu-ed').forEach(mostrar);
+            atualizarBotao();
+        });
+    }
+    window.addEventListener('beforeunload', function (e) {
+        if (Object.keys(pend).length) { e.preventDefault(); e.returnValue = ''; }
+    });
+
+    // índice e "ir ao campo": rola até o bloco; se for campo, já abre
+    var APELIDO = { 'grupos': 'campo-grupo', 'dados-gerais': 'identificacao' };   // âncoras das abas antigas (links do Editar)
+    function irPara(id) {
+        id = APELIDO[id] || id;
+        var el = id && document.getElementById(id);
+        if (!el || !tu.contains(el)) return false;
+        var campo = el.matches('.tu-v');
+        el.scrollIntoView({ behavior: 'smooth', block: campo ? 'center' : 'start' });
+        el.classList.remove('tu-piscar'); void el.offsetWidth; el.classList.add('tu-piscar');
+        if (campo && el.matches('.tu-ed')) setTimeout(function () { abrir(el); }, 380);
+        return true;
+    }
+    window.irParaAba = function (hash) { irPara(String(hash || '').replace(/^#/, '')); };
+    document.addEventListener('click', function (e) {
+        var a = e.target.closest('a[href^="#"]');
+        if (!a) return;
+        var id = a.getAttribute('href').slice(1);
+        if (id && irPara(id)) { e.preventDefault(); history.replaceState(null, '', '#' + id); }
+    });
+    if (location.hash.length > 1) setTimeout(function () { irPara(decodeURIComponent(location.hash.slice(1))); }, 250);
+    window.addEventListener('hashchange', function () { if (location.hash.length > 1) irPara(decodeURIComponent(location.hash.slice(1))); });
+
+    // índice acompanha a rolagem
+    var links = Array.prototype.slice.call(document.querySelectorAll('.tu-ind a'));
+    var alvos = links.map(function (l) { return document.getElementById(l.getAttribute('href').slice(1)); });
+    var marcar = function () {
+        var at = 0, melhor = -Infinity;
+        alvos.forEach(function (s, i) { if (!s) return; var t = s.getBoundingClientRect().top; if (t < parseInt(getComputedStyle(tu).getPropertyValue('--tu-topo'), 10) + 40 && t > melhor) { melhor = t; at = i; } });
+        if (window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 4) at = alvos.length - 1;
+        links.forEach(function (l, i) { l.classList.toggle('on', i === at); });
+    };
+    var pedido = false;
+    window.addEventListener('scroll', function () {
+        if (pedido) return; pedido = true;
+        requestAnimationFrame(function () { pedido = false; marcar(); });
+    }, { passive: true });
+    marcar();
+})();
+</script>
+<script>
 (function () {
     var chk = document.getElementById('acesso-reservado');
     var box = document.getElementById('acesso-excecoes');
@@ -2161,12 +2425,13 @@ document.querySelectorAll('.tabs-link').forEach(link => {
                 box.innerHTML = '<div class="hist-vazio">Falha ao carregar o histórico.</div>';
             });
     }
-    var link = document.querySelector('.tabs-link[href="#historico"]');
-    if (link) {
-        link.addEventListener('click', function () {
-            if (!carregado) { carregado = true; carregar('alteracoes', 1); }
-        });
-    }
+    // tela única: carrega quando a pessoa chega perto do Histórico (não a cada abertura da ficha)
+    if ('IntersectionObserver' in window) {
+        var obs = new IntersectionObserver(function (es) {
+            if (es.some(function (e) { return e.isIntersecting; }) && !carregado) { carregado = true; obs.disconnect(); carregar('alteracoes', 1); }
+        }, { rootMargin: '300px 0px' });
+        obs.observe(pane);
+    } else { carregado = true; carregar('alteracoes', 1); }
     // Delegação: os botões vêm do partial recarregado a cada fetch.
     pane.addEventListener('click', function (e) {
         var t = e.target.closest('.hist-tab');
@@ -2176,27 +2441,7 @@ document.querySelectorAll('.tabs-link').forEach(link => {
     });
 })();
 
-// Bloco B: atalho do card-resumo de Certificado → abre a aba
-function irParaAba(hash) {
-    var l = document.querySelector('.tabs-link[href="' + hash + '"]');
-    if (l) l.click();
-}
 
-// Bloco B: no mobile a faixa de pílulas rola sozinha até a aba ATIVA (rola só a
-// faixa, nunca a página). Roda ao abrir e a cada troca de aba.
-(function () {
-    function centralizarAtiva() {
-        var nav = document.querySelector('.ef-hero .tabs-nav');
-        var a = document.querySelector('.ef-hero .tabs-item.active');
-        if (nav && a) { nav.scrollLeft = a.offsetLeft - (nav.clientWidth - a.offsetWidth) / 2; }
-    }
-    document.querySelectorAll('.ef-hero .tabs-link').forEach(function (l) {
-        l.addEventListener('click', function () { setTimeout(centralizarAtiva, 0); });
-    });
-    // vindo de Editar (abas de lá) ou de um link com #aba: a ficha abre já nessa aba (06/11/2026)
-    if (location.hash && location.hash !== '#dados-gerais' && document.querySelector('.ef-hero .tabs-link[href="' + location.hash + '"]')) irParaAba(location.hash);
-    centralizarAtiva();
-})();
 
 // Modal functions
 function showAddAddressModal() {

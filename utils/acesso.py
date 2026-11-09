@@ -85,6 +85,7 @@ MAPA = {
     'clientes.anp_detalhe':            'clientes.index',
     'clientes.cnpj_vigia_status':      'clientes.index',
     'clientes.editar':                 'clientes.edit',
+    'clientes.salvar_campos':          'clientes.edit',   # tela única: o clique no valor grava (08/11/2026)
     'clientes.inativar':               'clientes.edit',
     'clientes.adicionar_grupo':        'clientes.edit',
     'clientes.remover_grupo':          'clientes.edit',
@@ -469,6 +470,7 @@ _EMPRESA_POR_ARG = {
 _EMPRESA_POR_ENDPOINT = {
     'clientes.detalhes':             ('id', None),
     'clientes.editar':               ('id', None),
+    'clientes.salvar_campos':        ('id', None),
     'clientes.salvar_responsaveis':  ('id', None),
     'clientes.responsaveis_convite_novo': ('id', None),
     'clientes.inativar':             ('id', None),
