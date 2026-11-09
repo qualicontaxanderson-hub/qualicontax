@@ -580,6 +580,10 @@ def faltas_da_matriz(emp, cfg, series, sugestao=None):
             aviso('matriz', 'Sem inscrição municipal: alguns municípios exigem na nota (Goiatuba recusou sem ela).')
         if aceita in ('nao', 'sem_convenio') and emissor == 'fiorilli':
             pass                     # o município não aceita o nacional, mas a nota vai pelo ISSWeb dele
+        elif aceita in ('nao', 'sem_convenio') and _dig(cfg.get('municipio_ibge')) in PROVEDOR_DO_MUNICIPIO:
+            trava('matriz', f'A prefeitura de {cidade} não aceita o Emissor Nacional: em "Emissor padrão" escolha '
+                            f'"{EMISSORES[PROVEDOR_DO_MUNICIPIO[_dig(cfg.get("municipio_ibge"))]]}" e preencha o '
+                            'endereço do webservice que a prefeitura informar.')
         elif aceita in ('nao', 'sem_convenio'):
             trava('matriz', f'A prefeitura de {cidade} não aceita o Emissor Nacional: as notas desta empresa '
                             'só saem pelo sistema da própria prefeitura (integração ainda não feita).')

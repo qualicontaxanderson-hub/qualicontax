@@ -16,34 +16,39 @@
 {# Estilos da testeira agora vêm de static/css/identidade.css (Parte 0),
    compartilhado com o departamento Cadastros. #}
 
-{# Lista única de abas — (endpoint, prefixo p/ aba ativa, rótulo). Ordem = exibição. #}
+{# Lista única de abas — (endpoint, prefixo p/ aba ativa, rótulo). Ordem = exibição.
+   NFS-e num lugar só (08/11/2026): conferência, emissão e configuração numa aba; as
+   sub-abas moram em _nfse_hub.html. Vários prefixos separados por "|"; o destino é a
+   primeira sub-aba que a pessoa pode abrir. #}
 {% set _abas = [
     ('escrita_fiscal.index',             '/escrita-fiscal/',                                'INÍCIO'),
     ('escrita_fiscal.conf_compras',      '/escrita-fiscal/conf-compras/',                   'ENTRADAS'),
     ('escrita_fiscal.conf_saidas',       '/escrita-fiscal/conf-saidas/',                    'SAÍDAS'),
     ('escrita_fiscal.q_robo_painel',     '/escrita-fiscal/conf-saidas/q-robo',              'Q-ROBÔ'),
     ('escrita_fiscal.conf_cte',          '/escrita-fiscal/conf-cte/',                       'CT-E'),
-    ('escrita_fiscal.conf_nfse',         '/escrita-fiscal/conf-nfse/',                      'NFS-E'),
-    ('escrita_fiscal.nfse_emitir',       '/escrita-fiscal/nfse-emitir/',                    'NOVA NFS-E'),
-    ('escrita_fiscal.emissao_nfse',      '/escrita-fiscal/emissao-nfse/',                   'EMISSÃO NFS-E'),
+    ((('escrita_fiscal.conf_nfse' if pode_rota('escrita_fiscal.conf_nfse') else
+       ('escrita_fiscal.nfse_emitir' if pode_rota('escrita_fiscal.nfse_emitir') else 'escrita_fiscal.emissao_nfse'))),
+                                         '/escrita-fiscal/conf-nfse/|/escrita-fiscal/nfse-emitir/|/escrita-fiscal/emissao-nfse/', 'NFS-E'),
     ('escrita_fiscal.produtos_catalogo', '/escrita-fiscal/conf-compras/produtos-catalogo/', 'PRODUTOS'),
     ('escrita_fiscal.memorizacoes',      '/escrita-fiscal/memorizacoes/',                   'MEMORIZAÇÕES'),
     ('escrita_fiscal.status_sefaz',      '/escrita-fiscal/status-sefaz/',                   'STATUS SEFAZ'),
 ] %}
 {# Aba ativa = prefixo mais longo que casa com request.path. #}
-{% set _ativa = namespace(pref='') %}
-{% for _ep, _pref, _label in _abas %}
+{% set _ativa = namespace(pref='', label='') %}
+{% for _ep, _prefs, _label in _abas %}
+    {% for _pref in _prefs.split('|') %}
     {% if request.path.startswith(_pref) and _pref|length > _ativa.pref|length %}
-        {% set _ativa.pref = _pref %}
+        {% set _ativa.pref = _pref %}{% set _ativa.label = _label %}
     {% endif %}
+    {% endfor %}
 {% endfor %}
 
 <nav class="nav-fiscal" aria-label="Navegação do Fiscal">
     <div class="nav-fiscal-track">
-        {% for _ep, _pref, _label in _abas %}
-        <a class="nff-tab {% if _pref == _ativa.pref %}active{% endif %}"
+        {% for _ep, _prefs, _label in _abas %}
+        <a class="nff-tab {% if _label == _ativa.label %}active{% endif %}"
            href="{{ url_for(_ep) }}"
-           {% if _pref == _ativa.pref %}aria-current="page"{% endif %}>{{ _label }}</a>
+           {% if _label == _ativa.label %}aria-current="page"{% endif %}>{{ _label }}</a>
         {% endfor %}
     </div>
 </nav>

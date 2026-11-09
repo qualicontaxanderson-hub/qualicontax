@@ -24,10 +24,11 @@
 {% block content %}
 {% include 'escrita_fiscal/_nav_fiscal.html' %}
 
+{% include 'escrita_fiscal/_nfse_hub.html' %}
+
 <div class="tm-header">
     <div>
-        <h1><i class="fas fa-address-book" style="color:#16a34a;"></i> Tomadores</h1>
-        <p>Para quem <b>{{ emp.numero_cliente or '' }} - {{ emp.nome }}</b> emite nota. A lista é só desta empresa. Quem recebe uma nota entra aqui sozinho.</p>
+        <p>Para quem esta empresa emite nota. A lista é só dela. Quem recebe uma nota entra aqui sozinho.</p>
     </div>
     <div style="display:flex; gap:8px; flex-wrap:wrap;">
         {% if liberada %}<a class="btn btn-primary" href="{{ url_for('escrita_fiscal.nfse_nova', cliente_id=emp.id) }}"><i class="fas fa-file-invoice"></i> Nova nota</a>{% endif %}

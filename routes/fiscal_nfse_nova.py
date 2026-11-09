@@ -53,26 +53,92 @@ def _pode_emitir(cliente_id):
     return emp, cfg, ativas, [], ''
 
 
-def _empresas_liberadas():
-    sit = situacao_das_matrizes()
-    fin = {r['cliente_id'] for r in (execute_query('SELECT cliente_id FROM fin_empresas WHERE ativo = 1',
-                                                   fetch=True) or [])}
-    return [e for e in _get_empresas() if sit.get(e['id']) == 'liberada' and e['id'] not in fin]
+def _ids_financeiro():
+    return {r['cliente_id'] for r in (execute_query('SELECT cliente_id FROM fin_empresas WHERE ativo = 1',
+                                                    fetch=True) or [])}
+
+
+def hub_ctx(aba, cliente_id=None, emp=None):
+    """Contexto da cabeça única de NFS-e (_nfse_hub.html): empresas com a situação de cada uma
+    e o cartão da empresa escolhida. ``emp`` já lido evita ler o cadastro duas vezes."""
+    sit, fin = situacao_das_matrizes(), _ids_financeiro()
+    empresas = []
+    for e in _get_empresas():
+        e = dict(e)
+        e['situacao_nfse'] = 'financeiro' if e['id'] in fin else sit.get(e['id'], 'sem')
+        empresas.append(e)
+    card = None
+    if cliente_id:
+        card = dict(emp or empresa_da_matriz(cliente_id) or {})
+        if card:
+            card['situacao_nfse'] = 'financeiro' if cliente_id in fin else sit.get(cliente_id, 'sem')
+        else:
+            card = None
+    return {'hub_aba': aba, 'hub_empresas': empresas, 'hub_emp': card}
 
 
 def _tomador_no_pre(t):
     return {f't_{k}': (str(t.get(k)) if t.get(k) is not None else '') for k in CAMPOS_TOMADOR}
 
 
+def _ids_dos_clientes():
+    """Empresas que a pessoa vê e que emitem pelo Fiscal (sem as do Financeiro)."""
+    fin = _ids_financeiro()
+    return [e['id'] for e in _get_empresas() if e['id'] not in fin]
+
+
 @escrita_fiscal.route('/nfse-emitir/')
 @permission_required(PERM)
 def nfse_emitir():
-    """Escolher a empresa (só as liberadas) + as últimas notas delas."""
-    empresas = _empresas_liberadas()
-    ids = [e['id'] for e in empresas]
-    notas = NfseEmitida.listar(empresa_ids=ids, limite=30) if ids else []
-    return render_template('escrita_fiscal/nfse_nova.html', empresas=empresas, emp=None, notas=notas,
-                           nomes={e['id']: e for e in empresas}, SITUACOES=SITUACOES)
+    """Painel de emissão: números do mês, empresas liberadas, as que faltam conferir e as últimas notas."""
+    ctx = hub_ctx('emitir')
+    emps = [e for e in ctx['hub_empresas'] if e['situacao_nfse'] in ('liberada', 'configurada')]
+    liberadas = [e for e in emps if e['situacao_nfse'] == 'liberada']
+    conferir = [e for e in emps if e['situacao_nfse'] == 'configurada']
+    ids = _ids_dos_clientes()
+    notas = NfseEmitida.listar(empresa_ids=ids, limite=12) if ids else []
+    return render_template('escrita_fiscal/nfse_nova.html', emp=None, notas=notas, liberadas=liberadas,
+                           conferir=conferir, resumo=NfseEmitida.resumo(ids) if ids else {},
+                           nomes={e['id']: e for e in ctx['hub_empresas']}, SITUACOES=SITUACOES, **ctx)
+
+
+@escrita_fiscal.route('/nfse-emitir/escolher/<aba>')
+@permission_required(PERM)
+def nfse_escolher(aba):
+    """Sub-aba que precisa de empresa (Tomadores) aberta sem empresa: pede para escolher."""
+    if aba not in ('tomadores',):
+        abort(404)
+    return render_template('escrita_fiscal/nfse_escolher.html', **hub_ctx(aba))
+
+
+@escrita_fiscal.route('/nfse-emitir/notas')
+@permission_required(PERM)
+def nfse_emitidas():
+    """Todas as notas emitidas pelas empresas dos clientes, com filtro (empresa vem da cabeça)."""
+    emp_raw = request.args.get('emp', '')
+    cid = int(emp_raw) if emp_raw.isdigit() else None
+    ids = _ids_dos_clientes()
+    if cid:
+        if cid not in ids:
+            abort(404)
+        ids = [cid]
+    situacao = request.args.get('situacao', 'todas')
+    if situacao not in ('todas',) + tuple(SITUACOES):
+        situacao = 'todas'
+    busca = (request.args.get('q') or '').strip()
+    mes = request.args.get('mes', '')
+    de = ate = None
+    if len(mes) == 7 and mes[4] == '-' and (mes[:4] + mes[5:]).isdigit():
+        import calendar
+        a, m = int(mes[:4]), int(mes[5:])
+        if 1 <= m <= 12:
+            de, ate = date(a, m, 1), date(a, m, calendar.monthrange(a, m)[1])
+    notas = NfseEmitida.listar(empresa_ids=ids, situacao=situacao, de=de, ate=ate, busca=busca or None,
+                               limite=500) if ids else []
+    ctx = hub_ctx('emitidas', cid)
+    return render_template('escrita_fiscal/nfse_emitidas.html', notas=notas, situacao=situacao, busca=busca,
+                           mes=mes, resumo=NfseEmitida.resumo(ids) if ids else {}, SITUACOES=SITUACOES,
+                           nomes={e['id']: e for e in ctx['hub_empresas']}, **ctx)
 
 
 def _render_nova(cliente_id, pre=None, erro=None):
@@ -87,11 +153,10 @@ def _render_nova(cliente_id, pre=None, erro=None):
     pre.setdefault('local', 'empresa')
     pre.setdefault('iss_retido', '1' if cfg.get('iss_retido') else '')
     return render_template(
-        'escrita_fiscal/nfse_nova.html', empresas=_empresas_liberadas(), emp=emp, cfg=cfg, series=ativas,
-        travas=travas, motivo=motivo, pre=pre, erro=erro, notas=NfseEmitida.listar(empresa_ids=[cliente_id], limite=15),
-        nomes={emp['id']: {'numero_cliente': emp['numero_cliente'], 'nome_razao_social': emp['nome']}},
+        'escrita_fiscal/nfse_nova.html', emp=emp, cfg=cfg, series=ativas,
+        travas=travas, motivo=motivo, pre=pre, erro=erro, notas=NfseEmitida.listar(empresa_ids=[cliente_id], limite=8),
         n_tomadores=NfseTomador.contar(cliente_id), LOCAIS=LOCAIS, SITUACOES=SITUACOES,
-        OP_SIMP_NAC=OP_SIMP_NAC, hoje=hoje, csrf=csrf_token())
+        OP_SIMP_NAC=OP_SIMP_NAC, hoje=hoje, csrf=csrf_token(), **hub_ctx('emitir', cliente_id, emp))
 
 
 @escrita_fiscal.route('/nfse-emitir/<int:cliente_id>')
@@ -224,7 +289,8 @@ def nfse_tomadores(cliente_id):
     return render_template('escrita_fiscal/nfse_tomadores.html', emp=emp, busca=busca, inativos=inativos,
                            tomadores=NfseTomador.listar(cliente_id, busca, limite=1000, so_ativos=not inativos),
                            editar=editar, novo=request.args.get('novo') == '1',
-                           liberada=not _pode_emitir(cliente_id)[4], csrf=csrf_token())
+                           liberada=not _pode_emitir(cliente_id)[4], csrf=csrf_token(),
+                           **hub_ctx('tomadores', cliente_id, emp))
 
 
 @escrita_fiscal.route('/nfse-emitir/<int:cliente_id>/tomadores', methods=['POST'])
@@ -281,7 +347,7 @@ def nfse_nota(nota_id):
     raw = n.get('raw_resposta') if isinstance(n.get('raw_resposta'), dict) else {}
     return render_template('escrita_fiscal/nfse_nota.html', n=n, erros=raw.get('erros') or [],
                            alertas=raw.get('alertas') or [], SITUACOES=SITUACOES, MOTIVOS=MOTIVOS_CANCELAMENTO,
-                           csrf=csrf_token())
+                           csrf=csrf_token(), **hub_ctx('emitidas', n['empresa_id']))
 
 
 @escrita_fiscal.route('/nfse-emitir/nota/<int:nota_id>/xml')

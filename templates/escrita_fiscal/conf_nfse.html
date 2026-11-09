@@ -353,11 +353,8 @@ table.cc-items-table td.r { text-align:right; font-weight:600; color:#4338ca; }
 
 {% block content %}
 {% include 'escrita_fiscal/_nav_fiscal.html' %}
-<div class="cc-header">
-    <div>
-        <h1><i class="fas fa-file-invoice-dollar" style="color:#4f46e5;margin-right:8px;"></i>Conferência de NFS-e</h1>
-    </div>
-</div>
+{% set hub_aba = 'conferencia' %}
+{% include 'escrita_fiscal/_nfse_hub.html' %}
 
 <!-- Seletor empresa / grupo -->
 <div class="cc-empresa-bar">

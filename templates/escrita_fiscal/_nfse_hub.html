@@ -1,0 +1,135 @@
+{# ---------------------------------------------------------------------------
+   NFS-e num lugar só (08/11/2026). Anderson: "NFSe / NOVA NFS-e / Emissão de NFSE...
+   quero algo elegante mas que fiquemos num local só".
+
+   Cabeça única das telas de NFS-e: título, sub-abas e (menos na Conferência) a empresa
+   escolhida UMA vez — trocar de sub-aba leva a empresa junto.
+   Contexto: hub_aba ('conferencia'|'emitir'|'emitidas'|'tomadores'|'config');
+   opcional hub_empresas (lista com situacao_nfse) e hub_emp (cartão), vindos de
+   routes/fiscal_nfse_nova.hub_ctx. Prefixo hub-.
+--------------------------------------------------------------------------- #}
+{% set _he = hub_emp if hub_emp is defined else None %}
+{% set _hl = hub_empresas if hub_empresas is defined else [] %}
+{% set _abas = [
+    ('conferencia', 'Conferência', 'fa-inbox', 'escrita_fiscal.conf_nfse', url_for('escrita_fiscal.conf_nfse')),
+    ('emitir', 'Emitir', 'fa-paper-plane', 'escrita_fiscal.nfse_emitir',
+        url_for('escrita_fiscal.nfse_nova', cliente_id=_he.id) if _he else url_for('escrita_fiscal.nfse_emitir')),
+    ('emitidas', 'Notas emitidas', 'fa-file-lines', 'escrita_fiscal.nfse_emitidas',
+        url_for('escrita_fiscal.nfse_emitidas', emp=_he.id) if _he else url_for('escrita_fiscal.nfse_emitidas')),
+    ('tomadores', 'Tomadores', 'fa-address-book', 'escrita_fiscal.nfse_emitir',
+        url_for('escrita_fiscal.nfse_tomadores', cliente_id=_he.id) if _he else url_for('escrita_fiscal.nfse_escolher', aba='tomadores')),
+    ('config', 'Configuração', 'fa-sliders', 'escrita_fiscal.emissao_nfse',
+        url_for('escrita_fiscal.emissao_nfse_empresa', cliente_id=_he.id) if _he else url_for('escrita_fiscal.emissao_nfse')),
+] %}
+{% set _destinos = {
+    'emitir': url_for('escrita_fiscal.nfse_nova', cliente_id=987654321),
+    'emitidas': url_for('escrita_fiscal.nfse_emitidas') ~ '?emp=987654321',
+    'tomadores': url_for('escrita_fiscal.nfse_tomadores', cliente_id=987654321),
+    'config': url_for('escrita_fiscal.emissao_nfse_empresa', cliente_id=987654321),
+} %}
+{% set _sit = {
+    'liberada': ('Liberada para emitir', 'ok', 'fa-circle-check'),
+    'configurada': ('Falta conferir', 'warn', 'fa-hourglass-half'),
+    'sem': ('Sem configuração', 'off', 'fa-circle-minus'),
+    'financeiro': ('Emite pelo Financeiro', 'info', 'fa-building'),
+} %}
+<style>
+.hub { background:#fff; border:1px solid #e2e8f0; border-radius:16px; margin:6px 0 18px; box-shadow:0 1px 2px rgba(15,23,42,.04); overflow:hidden; }
+.hub-top { display:flex; align-items:center; gap:14px; padding:18px 22px 14px; flex-wrap:wrap; }
+.hub-ico { width:44px; height:44px; border-radius:12px; background:linear-gradient(135deg,#16a34a,#0f766e); color:#fff;
+           display:flex; align-items:center; justify-content:center; font-size:20px; flex:none; }
+.hub-tit { min-width:0; flex:1; }
+.hub-tit h1 { font-size:21px; font-weight:800; color:#0f172a; margin:0; letter-spacing:-.2px; }
+.hub-tit p { margin:2px 0 0; font-size:13px; color:#64748b; }
+.hub-esc { flex:0 1 420px; min-width:0; position:relative; }
+.hub-esc i { position:absolute; left:12px; top:50%; transform:translateY(-50%); color:#94a3b8; font-size:13px; }
+.hub-esc input { width:100%; box-sizing:border-box; padding:10px 12px 10px 34px; border:1.5px solid #e2e8f0; border-radius:10px;
+                 font-size:13px; font-weight:600; color:#0f172a; background:#f8fafc; }
+.hub-esc input:focus { outline:none; border-color:#16a34a; background:#fff; box-shadow:0 0 0 3px rgba(22,163,74,.12); }
+.hub-tabs { display:flex; gap:2px; padding:0 14px; border-top:1px solid #f1f5f9; overflow-x:auto; scrollbar-width:none; }
+.hub-tabs::-webkit-scrollbar { display:none; }
+.hub-tabs a { display:inline-flex; align-items:center; gap:7px; padding:12px 14px; font-size:13px; font-weight:600; color:#64748b;
+              text-decoration:none; border-bottom:2.5px solid transparent; white-space:nowrap; }
+.hub-tabs a:hover { color:#0f172a; }
+.hub-tabs a.on { color:#15803d; border-bottom-color:#16a34a; }
+.hub-tabs a i { font-size:12px; }
+.hub-emp { display:flex; align-items:center; gap:16px; flex-wrap:wrap; padding:14px 22px; background:#f8fafc; border-top:1px solid #f1f5f9; }
+.hub-emp-nome { min-width:0; flex:1 1 280px; }
+.hub-emp-nome strong { display:block; font-size:15px; color:#0f172a; overflow-wrap:anywhere; }
+.hub-emp-nome span { font-size:12px; color:#64748b; }
+.hub-fatos { display:flex; gap:18px; flex-wrap:wrap; font-size:12px; color:#64748b; }
+.hub-fatos b { display:block; color:#0f172a; font-size:13px; font-weight:600; }
+.hub-sit { display:inline-flex; align-items:center; gap:6px; border-radius:99px; padding:5px 12px; font-size:12px; font-weight:700; white-space:nowrap; }
+.hub-sit.ok { background:#dcfce7; color:#15803d; }
+.hub-sit.warn { background:#fef3c7; color:#92400e; }
+.hub-sit.off { background:#f1f5f9; color:#475569; }
+.hub-sit.info { background:#e0f2fe; color:#075985; }
+.hub-sit.bad { background:#fee2e2; color:#b91c1c; }
+@media (max-width: 640px) {
+  .hub-top { padding:14px 16px 12px; }
+  .hub-esc { flex:1 1 100%; }
+  .hub-emp { padding:12px 16px; }
+}
+</style>
+
+<section class="hub">
+    <div class="hub-top">
+        <div class="hub-ico"><i class="fas fa-file-invoice"></i></div>
+        <div class="hub-tit">
+            <h1>NFS-e</h1>
+            <p>{% if hub_aba == 'conferencia' %}As notas de serviço que as empresas receberam e emitiram, capturadas do governo.
+               {% else %}Configurar, emitir e acompanhar as notas de serviço das empresas dos clientes.{% endif %}</p>
+        </div>
+        {% if hub_aba != 'conferencia' and _hl %}
+        <div class="hub-esc">
+            <i class="fas fa-building"></i>
+            <input id="hubEmp" list="hubEmpLista" autocomplete="off" placeholder="Escolha a empresa (número ou nome)"
+                   value="{{ (_he.numero_cliente ~ ' - ' ~ _he.nome) if _he else '' }}">
+            <datalist id="hubEmpLista">
+                {% for e in _hl %}<option data-id="{{ e.id }}" value="{{ e.numero_cliente or '' }} - {{ e.nome_razao_social }}">{{ _sit[e.situacao_nfse][0] }}</option>{% endfor %}
+            </datalist>
+        </div>
+        {% endif %}
+    </div>
+
+    {% if _he and hub_aba != 'conferencia' %}
+    {% set s = _sit[_he.situacao_nfse] %}
+    <div class="hub-emp">
+        <div class="hub-emp-nome">
+            <strong>{{ _he.numero_cliente or '' }} - {{ _he.nome }}</strong>
+            <span>{{ _he.doc_fmt }}{{ ' · ' ~ _he.cidade ~ '/' ~ _he.uf if _he.cidade }}</span>
+        </div>
+        <div class="hub-fatos">
+            <span>Regime<b>{{ _he.regime_rotulo }}</b></span>
+            <span>Certificado<b>{% if _he.certificado %}{% set st = _he.certificado.status %}{% if st.nivel == 'vencido' %}<span style="color:#b91c1c;">Vencido</span>{% elif st.nivel == 'laranja' %}Vence em {{ st.dias }} dias{% else %}Válido{% endif %}{% else %}<span style="color:#b91c1c;">Não tem</span>{% endif %}</b></span>
+        </div>
+        <span class="hub-sit {{ s[1] }}"><i class="fas {{ s[2] }}"></i> {{ s[0] }}</span>
+    </div>
+    {% endif %}
+
+    <nav class="hub-tabs" aria-label="NFS-e">
+        {% for k, rot, ico, ep, href in _abas %}{% if pode_rota(ep) %}
+        <a href="{{ href }}" class="{{ 'on' if hub_aba == k }}" {{ 'aria-current="page"'|safe if hub_aba == k }}><i class="fas {{ ico }}"></i> {{ rot }}</a>
+        {% endif %}{% endfor %}
+    </nav>
+</section>
+
+{% if hub_aba != 'conferencia' and _hl %}
+<script>
+(function () {
+    var inp = document.getElementById('hubEmp'), lista = document.getElementById('hubEmpLista');
+    if (!inp) return;
+    var DESTINOS = {{ _destinos|tojson }}, ABA = {{ hub_aba|tojson }};
+    var alvo = DESTINOS[ABA] || DESTINOS.emitir;
+    function ir() {
+        var v = inp.value.trim();
+        for (var i = 0; i < lista.options.length; i++) {
+            if (lista.options[i].value === v) { location.href = alvo.replace('987654321', lista.options[i].dataset.id); return; }
+        }
+    }
+    inp.addEventListener('change', ir);
+    inp.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); ir(); } });
+    inp.addEventListener('focus', function () { inp.select(); });
+})();
+</script>
+{% endif %}

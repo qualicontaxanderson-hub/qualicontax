@@ -5,7 +5,7 @@
 <style>
 /* A nota emitida pelo Fiscal — 08/11/2026. Prefixo nd-. */
 .nd-header { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; margin:6px 0 16px; }
-.nd-header h1 { font-size:22px; font-weight:700; color:#1e293b; margin:0; }
+.nd-header h1 { font-size:19px; font-weight:700; color:#1e293b; margin:0; }
 .nd-header p { margin:2px 0 0; color:#64748b; font-size:13px; }
 .nd-cols { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:14px; }
 .nd-box { background:#fff; border:1px solid #e2e8f0; border-radius:12px; padding:16px 18px; margin-bottom:14px; min-width:0; }
@@ -28,6 +28,7 @@
 
 {% block content %}
 {% include 'escrita_fiscal/_nav_fiscal.html' %}
+{% include 'escrita_fiscal/_nfse_hub.html' %}
 
 <div class="nd-header">
     <div>
@@ -35,7 +36,7 @@
             {% if n.numero_nfse %}NFS-e nº {{ n.numero_nfse }}{% else %}DPS série {{ n.serie }} nº {{ n.numero_dps }}{% endif %}
             <span class="nd-pill {{ n.situacao }}">{{ SITUACOES.get(n.situacao, n.situacao)|upper }}</span>
             {% if n.ambiente == 2 %}<span class="nd-pill teste">TESTE</span>{% endif %}</h1>
-        <p>{{ n.empresa_numero or '' }} - {{ n.empresa_nome }} · série {{ n.serie }} nº {{ n.numero_dps }}</p>
+        <p><a href="{{ url_for('escrita_fiscal.nfse_emitidas', emp=n.empresa_id) }}"><i class="fas fa-arrow-left"></i> Notas emitidas</a> · série {{ n.serie }} nº {{ n.numero_dps }}</p>
     </div>
     <div class="nd-acoes">
         <a class="btn btn-outline" href="{{ url_for('escrita_fiscal.nfse_nova', cliente_id=n.empresa_id) }}"><i class="fas fa-plus"></i> Nova nota</a>

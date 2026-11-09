@@ -1,0 +1,89 @@
+{% extends "base.html" %}
+{% block title %}Notas emitidas - NFS-e - Qualicontax{% endblock %}
+
+{% block extra_css %}
+<style>
+/* NFS-e → Notas emitidas (08/11/2026). Prefixo ne-. */
+.ne-kpis { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:12px; margin-bottom:16px; }
+.ne-kpi { background:#fff; border:1px solid #e2e8f0; border-radius:14px; padding:14px 16px; }
+.ne-kpi span { display:block; font-size:12px; color:#64748b; font-weight:600; }
+.ne-kpi b { display:block; font-size:24px; color:#0f172a; line-height:1.2; margin-top:4px; }
+.ne-kpi small { color:#64748b; font-size:12px; }
+.ne-kpi.alerta b { color:#b91c1c; }
+.ne-filtro { display:flex; gap:10px; flex-wrap:wrap; align-items:center; background:#fff; border:1px solid #e2e8f0; border-radius:14px; padding:12px 14px; margin-bottom:14px; }
+.ne-filtro input[type=text] { flex:1 1 240px; min-width:0; }
+.ne-filtro input[type=month] { flex:0 0 170px; font-family:inherit; }
+.ne-pills { display:flex; gap:6px; flex-wrap:wrap; }
+.ne-pills a { font-size:12px; font-weight:600; padding:6px 12px; border-radius:99px; border:1px solid #e2e8f0; color:#475569; text-decoration:none; background:#fff; }
+.ne-pills a.on { background:#16a34a; border-color:#16a34a; color:#fff; }
+.ne-box { background:#fff; border:1px solid #e2e8f0; border-radius:14px; overflow:hidden; }
+.ne-tab { width:100%; border-collapse:collapse; font-size:13px; }
+.ne-tab th { text-align:left; color:#64748b; font-size:11px; text-transform:uppercase; letter-spacing:.3px; padding:10px 12px; background:#f8fafc; border-bottom:1px solid #e2e8f0; }
+.ne-tab td { padding:10px 12px; border-bottom:1px solid #f1f5f9; vertical-align:top; }
+.ne-tab tr:hover td { background:#f8fafc; cursor:pointer; }
+.ne-tab td small { color:#64748b; display:block; }
+.ne-pill { display:inline-block; border-radius:99px; padding:2px 9px; font-size:11px; font-weight:700; white-space:nowrap; }
+.ne-pill.autorizada { background:#dcfce7; color:#15803d; }
+.ne-pill.rejeitada, .ne-pill.erro { background:#fee2e2; color:#b91c1c; }
+.ne-pill.cancelada { background:#e2e8f0; color:#475569; }
+.ne-pill.rascunho { background:#fef3c7; color:#92400e; }
+.ne-pill.teste { background:#ede9fe; color:#5b21b6; }
+.ne-vazio { padding:36px 20px; text-align:center; color:#64748b; font-size:13px; }
+.ne-vazio i { font-size:26px; color:#cbd5e1; display:block; margin-bottom:8px; }
+@media (max-width: 720px) {
+  .ne-tab thead { display:none; }
+  .ne-tab tr { display:block; padding:10px 12px; border-bottom:1px solid #e2e8f0; }
+  .ne-tab td { display:block; border:0; padding:1px 0; }
+  .ne-tab td.ne-v { font-weight:700; }
+}
+</style>
+{% endblock %}
+
+{% block content %}
+{% include 'escrita_fiscal/_nav_fiscal.html' %}
+{% include 'escrita_fiscal/_nfse_hub.html' %}
+
+<div class="ne-kpis">
+    <div class="ne-kpi"><span>Autorizadas no mês</span><b>{{ resumo.mes_qtd or 0 }}</b><small>{{ (resumo.mes_valor or 0)|format_currency }}</small></div>
+    <div class="ne-kpi"><span>Autorizadas no ano</span><b>{{ resumo.ano_qtd or 0 }}</b></div>
+    <div class="ne-kpi {{ 'alerta' if resumo.pendentes }}"><span>Recusadas ou com falha</span><b>{{ resumo.pendentes or 0 }}</b></div>
+    <div class="ne-kpi"><span>Testes autorizados</span><b>{{ resumo.testes or 0 }}</b></div>
+</div>
+
+{% set _base = {'emp': hub_emp.id} if hub_emp else {} %}
+<form class="ne-filtro" method="GET">
+    {% if hub_emp %}<input type="hidden" name="emp" value="{{ hub_emp.id }}">{% endif %}
+    <input type="hidden" name="situacao" value="{{ situacao }}">
+    <input type="text" name="q" class="form-control" value="{{ busca }}" placeholder="Procurar: tomador, CNPJ, número, descrição">
+    <input type="month" name="mes" class="form-control" value="{{ mes }}" onchange="this.form.submit()">
+    <div class="ne-pills">
+        {% for k, rot in [('todas', 'Todas'), ('autorizada', 'Autorizadas'), ('rejeitada', 'Recusadas'), ('erro', 'Falha'), ('cancelada', 'Canceladas')] %}
+        <a class="{{ 'on' if situacao == k }}" href="{{ url_for('escrita_fiscal.nfse_emitidas', situacao=k, q=busca or None, mes=mes or None, **_base) }}">{{ rot }}</a>
+        {% endfor %}
+    </div>
+    {% if hub_emp and pode_rota('escrita_fiscal.nfse_emitir') %}<a class="btn btn-primary" style="margin-left:auto;" href="{{ url_for('escrita_fiscal.nfse_nova', cliente_id=hub_emp.id) }}"><i class="fas fa-plus"></i> Nova nota</a>{% endif %}
+</form>
+
+<div class="ne-box">
+{% if notas %}
+<table class="ne-tab">
+    <thead><tr><th>Emissão</th>{% if not hub_emp %}<th>Empresa</th>{% endif %}<th>Tomador</th><th>Número</th><th style="text-align:right;">Valor</th><th>Situação</th></tr></thead>
+    <tbody>
+    {% for n in notas %}
+    <tr onclick="location.href='{{ url_for('escrita_fiscal.nfse_nota', nota_id=n.id) }}'">
+        <td>{{ (n.dh_emissao or n.criado_em).strftime('%d/%m/%Y') }}<small>{{ (n.dh_emissao or n.criado_em).strftime('%H:%M') }}</small></td>
+        {% if not hub_emp %}{% set e = nomes.get(n.empresa_id) %}<td>{{ (e.numero_cliente ~ ' - ' ~ e.nome_razao_social) if e else n.empresa_id }}</td>{% endif %}
+        <td>{{ n.tomador_nome or '—' }}<small>{{ n.descricao|truncate(70) if n.descricao }}</small></td>
+        <td>{{ ('NFS-e ' ~ n.numero_nfse) if n.numero_nfse else '—' }}<small>DPS {{ n.serie }}/{{ n.numero_dps }}</small></td>
+        <td class="ne-v" style="text-align:right; white-space:nowrap;">{{ n.valor_servico|format_currency }}</td>
+        <td><span class="ne-pill {{ n.situacao }}">{{ SITUACOES.get(n.situacao, n.situacao)|upper }}</span>
+            {% if n.ambiente == 2 %}<span class="ne-pill teste">TESTE</span>{% endif %}</td>
+    </tr>
+    {% endfor %}
+    </tbody>
+</table>
+{% else %}
+<div class="ne-vazio"><i class="fas fa-file-lines"></i>{{ 'Nenhuma nota com esse filtro.' if (busca or mes or situacao != 'todas') else 'Nenhuma nota emitida ainda.' }}</div>
+{% endif %}
+</div>
+{% endblock %}

@@ -63,6 +63,33 @@
 .nn-mini li:last-child { border-bottom:none; }
 .nn-mini a { color:inherit; text-decoration:none; display:block; }
 .nn-mini small { color:#64748b; }
+.nn-kpis { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:12px; margin-bottom:20px; }
+.nn-kpi { background:#fff; border:1px solid #e2e8f0; border-radius:14px; padding:14px 16px; }
+.nn-kpi span { display:block; font-size:12px; color:#64748b; font-weight:600; }
+.nn-kpi b { display:block; font-size:26px; color:#0f172a; line-height:1.2; margin-top:4px; }
+.nn-kpi small { color:#64748b; font-size:12px; }
+.nn-kpi.alerta b { color:#b91c1c; }
+.nn-sub { font-size:14px; font-weight:700; color:#334155; margin:4px 0 10px; }
+.nn-card { display:flex; align-items:center; gap:12px; }
+.nn-card.apagado { background:#fcfcfd; }
+.nn-card-ico { width:36px; height:36px; border-radius:10px; background:#dcfce7; color:#15803d; display:flex; align-items:center; justify-content:center; flex:none; }
+.nn-card-ico.warn { background:#fef3c7; color:#92400e; }
+.nn-card-txt { min-width:0; flex:1; }
+.nn-card-seta { color:#cbd5e1; font-size:12px; }
+.nn-vazio { background:#fff; border:1px solid #e2e8f0; border-radius:16px; padding:32px 24px; text-align:center; margin-bottom:18px; }
+.nn-vazio-ico { width:56px; height:56px; border-radius:16px; margin:0 auto 12px; background:#dcfce7; color:#15803d; display:flex; align-items:center; justify-content:center; font-size:22px; }
+.nn-vazio-ico.warn { background:#fef3c7; color:#92400e; }
+.nn-vazio-ico.info { background:#e0f2fe; color:#075985; }
+.nn-vazio h2 { font-size:18px; color:#0f172a; margin:0 0 6px; }
+.nn-vazio p { color:#64748b; font-size:13px; margin:0 auto 14px; max-width:560px; }
+.nn-passos { list-style:none; counter-reset:p; display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:12px; max-width:760px; margin:0 auto; padding:0; text-align:left; }
+.nn-passos li { counter-increment:p; background:#f8fafc; border:1px solid #e2e8f0; border-radius:12px; padding:12px 14px 12px 46px; position:relative; font-size:13px; }
+.nn-passos li::before { content:counter(p); position:absolute; left:14px; top:12px; width:22px; height:22px; border-radius:50%; background:#16a34a; color:#fff; font-size:12px; font-weight:700; display:flex; align-items:center; justify-content:center; }
+.nn-passos b { display:block; color:#0f172a; }
+.nn-passos span { color:#64748b; font-size:12px; }
+.nn-travas { list-style:none; padding:0; margin:0 auto 16px; max-width:560px; text-align:left; font-size:13px; }
+.nn-travas li { padding:6px 0; border-bottom:1px dashed #e2e8f0; color:#334155; }
+.nn-travas i { color:#dc2626; margin-right:6px; }
 @media (max-width: 980px) { .nn-cols { grid-template-columns:minmax(0,1fr); } }
 @media (max-width: 640px) {
   .nn-notas thead { display:none; }
@@ -75,22 +102,7 @@
 {% block content %}
 {% include 'escrita_fiscal/_nav_fiscal.html' %}
 
-<div class="nn-header">
-    <div>
-        <h1><i class="fas fa-file-invoice" style="color:#16a34a;"></i> Nova NFS-e</h1>
-        <p>Nota de serviço das empresas dos clientes. Só aparecem as empresas que o Fiscal conferiu e liberou.</p>
-    </div>
-    {% if emp %}<a class="btn btn-outline" href="{{ url_for('escrita_fiscal.nfse_emitir') }}"><i class="fas fa-arrow-left"></i> Todas</a>{% endif %}
-</div>
-
-<div class="nn-bar">
-    <label for="nnBusca">Empresa que emite</label>
-    <input id="nnBusca" list="nnLista" autocomplete="off" placeholder="Digite o número ou o nome e escolha na lista"
-           value="{{ (emp.numero_cliente ~ ' - ' ~ emp.nome) if emp else '' }}">
-    <datalist id="nnLista">
-        {% for e in empresas %}<option data-id="{{ e.id }}" value="{{ e.numero_cliente or '' }} - {{ e.nome_razao_social }}"></option>{% endfor %}
-    </datalist>
-</div>
+{% include 'escrita_fiscal/_nfse_hub.html' %}
 
 {% macro tabela_notas(lista, com_empresa) %}
 <div style="overflow-x:auto;">
@@ -115,32 +127,72 @@
 {% endmacro %}
 
 {% if not emp %}
-    {% if empresas %}
+    <div class="nn-kpis">
+        <div class="nn-kpi"><span>Liberadas para emitir</span><b>{{ liberadas|length }}</b></div>
+        <div class="nn-kpi"><span>Falta conferir</span><b>{{ conferir|length }}</b></div>
+        <div class="nn-kpi"><span>Notas no mês</span><b>{{ resumo.mes_qtd or 0 }}</b><small>{{ (resumo.mes_valor or 0)|format_currency }}</small></div>
+        <div class="nn-kpi {{ 'alerta' if resumo.pendentes }}"><span>Recusadas ou com falha</span><b>{{ resumo.pendentes or 0 }}</b></div>
+    </div>
+    {% if liberadas %}
+    <h2 class="nn-sub">Emitir para qual empresa?</h2>
     <div class="nn-grade">
-        {% for e in empresas %}
+        {% for e in liberadas %}
         <a class="nn-card" href="{{ url_for('escrita_fiscal.nfse_nova', cliente_id=e.id) }}">
-            <strong>{{ e.numero_cliente or '' }} - {{ e.nome_razao_social }}</strong>
-            <small>{{ e.cpf_cnpj or '' }}</small>
+            <span class="nn-card-ico"><i class="fas fa-paper-plane"></i></span>
+            <span class="nn-card-txt"><strong>{{ e.numero_cliente or '' }} - {{ e.nome_razao_social }}</strong><small>{{ e.cpf_cnpj or '' }}</small></span>
+            <i class="fas fa-chevron-right nn-card-seta"></i>
         </a>
         {% endfor %}
     </div>
     {% else %}
-    <div class="nn-info"><i class="fas fa-info-circle"></i> Nenhuma empresa liberada para emitir ainda. A liberação é feita em
-        <a href="{{ url_for('escrita_fiscal.emissao_nfse') }}">EMISSÃO NFS-E</a>: o Fiscal confere a configuração da empresa e marca <b>Conferido e liberado</b>.</div>
+    <div class="nn-vazio">
+        <div class="nn-vazio-ico"><i class="fas fa-paper-plane"></i></div>
+        <h2>Nenhuma empresa liberada ainda</h2>
+        <p>Para uma empresa emitir pelo sistema, são três passos:</p>
+        <ol class="nn-passos">
+            <li><b>Cadastro completo</b><span>regime, endereço e certificado digital válido</span></li>
+            <li><b>Configuração da nota</b><span>em <a href="{{ url_for('escrita_fiscal.emissao_nfse') }}">Configuração</a>: códigos do serviço e série</span></li>
+            <li><b>Conferido e liberado</b><span>o Fiscal confere e libera; a empresa aparece aqui</span></li>
+        </ol>
+    </div>
+    {% endif %}
+    {% if conferir %}
+    <h2 class="nn-sub">Configuradas, falta o Fiscal conferir</h2>
+    <div class="nn-grade">
+        {% for e in conferir %}
+        <a class="nn-card apagado" href="{{ url_for('escrita_fiscal.emissao_nfse_empresa', cliente_id=e.id) }}">
+            <span class="nn-card-ico warn"><i class="fas fa-hourglass-half"></i></span>
+            <span class="nn-card-txt"><strong>{{ e.numero_cliente or '' }} - {{ e.nome_razao_social }}</strong><small>abrir a configuração</small></span>
+            <i class="fas fa-chevron-right nn-card-seta"></i>
+        </a>
+        {% endfor %}
+    </div>
     {% endif %}
     {% if notas %}
-    <div class="nn-box"><h3><i class="fas fa-clock-rotate-left" style="color:#0369a1;"></i> Últimas notas</h3>{{ tabela_notas(notas, true) }}</div>
+    <div class="nn-box" style="margin-top:18px;"><h3><i class="fas fa-clock-rotate-left" style="color:#0369a1;"></i> Últimas notas
+        <a href="{{ url_for('escrita_fiscal.nfse_emitidas') }}" style="margin-left:auto; font-size:12px;">ver todas</a></h3>{{ tabela_notas(notas, true) }}</div>
     {% endif %}
 
 {% elif motivo %}
-    <div class="nn-aviso">
-        <i class="fas fa-lock"></i>
-        {% if motivo == 'financeiro' %}<b>{{ emp.nome }}</b> é empresa do Financeiro: as notas dela saem por <b>Financeiro → Cobranças</b>.
-        {% elif motivo == 'sem_matriz' %}Esta empresa ainda não tem a configuração da nota. O Fiscal configura em <b>EMISSÃO NFS-E</b>.
-        {% elif motivo == 'nao_liberada' %}A configuração desta empresa ainda não foi <b>conferida e liberada</b> pelo Fiscal.
-        {% else %}A empresa estava liberada, mas hoje há pendência(s) que impedem a nota:{% endif %}
-        {% if travas %}<ul style="margin:8px 0 0 18px;">{% for t in travas %}<li>{{ t.texto }}</li>{% endfor %}</ul>{% endif %}
-        {% if motivo != 'financeiro' %}<div style="margin-top:8px;"><a href="{{ url_for('escrita_fiscal.emissao_nfse_empresa', cliente_id=emp.id) }}">Abrir a configuração desta empresa</a></div>{% endif %}
+    <div class="nn-vazio">
+        <div class="nn-vazio-ico {{ 'info' if motivo == 'financeiro' else 'warn' }}"><i class="fas fa-{{ 'building' if motivo == 'financeiro' else 'lock' }}"></i></div>
+        {% if motivo == 'financeiro' %}
+            <h2>Esta empresa emite pelo Financeiro</h2>
+            <p>As notas dela saem em <b>Financeiro → Cobranças</b>. A configuração é a mesma: o que mudar aqui vale lá.</p>
+        {% elif motivo == 'sem_matriz' %}
+            <h2>Ainda não configurada</h2>
+            <p>Antes da primeira nota, o Fiscal preenche a configuração da empresa (códigos do serviço e série) e libera.</p>
+        {% elif motivo == 'nao_liberada' %}
+            <h2>Falta o Fiscal conferir e liberar</h2>
+            <p>A configuração existe, mas ainda não foi marcada como <b>Conferido e liberado</b>.</p>
+        {% else %}
+            <h2>Liberada, mas com pendência hoje</h2>
+            <p>Algo mudou depois da liberação e impede a nota:</p>
+        {% endif %}
+        {% if travas %}<ul class="nn-travas">{% for t in travas %}<li><i class="fas fa-circle-xmark"></i> {{ t.texto }}</li>{% endfor %}</ul>{% endif %}
+        {% if motivo != 'financeiro' and pode_rota('escrita_fiscal.emissao_nfse') %}
+        <a class="btn btn-primary" href="{{ url_for('escrita_fiscal.emissao_nfse_empresa', cliente_id=emp.id) }}"><i class="fas fa-sliders"></i> Abrir a configuração</a>
+        {% endif %}
     </div>
 
 {% else %}
@@ -298,17 +350,13 @@
 
 <div>
     <div class="nn-box">
-        <h3><i class="fas fa-building" style="color:#0369a1;"></i> Quem emite</h3>
+        <h3><i class="fas fa-route" style="color:#0369a1;"></i> Como a nota sai</h3>
         <dl class="nn-dados">
-            <dt>Empresa</dt><dd>{{ emp.numero_cliente or '' }} - {{ emp.nome }}</dd>
-            <dt>CNPJ</dt><dd>{{ emp.doc_fmt }}</dd>
             <dt>Regime</dt><dd>{{ OP_SIMP_NAC.get(cfg.op_simp_nac, '—') }}</dd>
-            <dt>Município</dt><dd>{{ emp.cidade or '—' }}{{ ' / ' ~ emp.uf if emp.uf }}</dd>
             <dt>Serviço</dt><dd>{{ cfg.cod_trib_nac or '—' }} · NBS {{ cfg.cod_nbs or '—' }}</dd>
-            <dt>Sai por</dt><dd>{{ 'ISSWeb da prefeitura' if cfg.emissor == 'fiorilli' else 'Emissor Nacional' }}</dd>
+            <dt>Por onde</dt><dd>{{ 'ISSWeb da prefeitura' if cfg.emissor == 'fiorilli' else 'Emissor Nacional' }}</dd>
         </dl>
-        <p class="nf-ajuda" style="margin-top:10px;">Regime e códigos vêm da configuração conferida pelo Fiscal. Para mudar:
-            <a href="{{ url_for('escrita_fiscal.emissao_nfse_empresa', cliente_id=emp.id) }}">EMISSÃO NFS-E</a> (a liberação cai e precisa conferir de novo).</p>
+        <p class="nf-ajuda" style="margin-top:10px;">Vem da configuração conferida pelo Fiscal. Mudou algo lá, a liberação cai e precisa conferir de novo.</p>
     </div>
     <div class="nn-box">
         <h3><i class="fas fa-clock-rotate-left" style="color:#0369a1;"></i> Notas desta empresa</h3>
@@ -333,19 +381,6 @@
 {% block extra_js %}
 <script>
 (function () {
-    var inp = document.getElementById('nnBusca'), lista = document.getElementById('nnLista');
-    var base = {{ url_for('escrita_fiscal.nfse_emitir')|tojson }};
-    function ir() {
-        var v = inp.value.trim();
-        for (var i = 0; i < lista.options.length; i++) {
-            if (lista.options[i].value === v) { location.href = base + lista.options[i].dataset.id; return; }
-        }
-    }
-    if (inp && lista) {
-        inp.addEventListener('change', ir);
-        inp.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); ir(); } });
-    }
-
     var form = document.getElementById('nnForm');
     if (!form) return;
     var URL_DOC = {{ (url_for('escrita_fiscal.nfse_tomador_doc', cliente_id=emp.id) if emp else '')|tojson }};

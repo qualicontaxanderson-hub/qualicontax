@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block title %}NFS-e - Qualicontax{% endblock %}
+{% block content %}
+{% include 'escrita_fiscal/_nav_fiscal.html' %}
+{% include 'escrita_fiscal/_nfse_hub.html' %}
+<div style="background:#fff; border:1px solid #e2e8f0; border-radius:16px; padding:36px 24px; text-align:center;">
+    <div style="width:56px; height:56px; border-radius:16px; margin:0 auto 12px; background:#dcfce7; color:#15803d; display:flex; align-items:center; justify-content:center; font-size:22px;">
+        <i class="fas fa-address-book"></i></div>
+    <h2 style="font-size:18px; color:#0f172a; margin:0 0 6px;">Escolha a empresa</h2>
+    <p style="color:#64748b; font-size:13px; margin:0;">Cada empresa tem a sua lista de tomadores (os clientes dela). Escolha a empresa no alto da página.</p>
+</div>
+<script>(function () { var i = document.getElementById('hubEmp'); if (i) i.focus(); })();</script>
+{% endblock %}

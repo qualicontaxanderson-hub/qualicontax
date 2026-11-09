@@ -41,6 +41,11 @@ def _do_financeiro(cliente_id):
     return (r or {}).get('apelido')
 
 
+def _hub(aba, cliente_id, emp):
+    from routes.fiscal_nfse_nova import hub_ctx
+    return hub_ctx(aba, cliente_id, emp)
+
+
 def _volta(cliente_id, ancora=''):
     return redirect(url_for('escrita_fiscal.emissao_nfse_empresa', cliente_id=cliente_id) + ancora)
 
@@ -57,8 +62,9 @@ def emissao_nfse():
     resumo = {'liberadas': sum(1 for e in com if e['situacao'] == 'liberada'),
               'configuradas': sum(1 for e in com if e['situacao'] == 'configurada'),
               'sem': len(empresas) - len(com)}
+    from routes.fiscal_nfse_nova import hub_ctx
     return render_template('escrita_fiscal/emissao_nfse.html', empresas=empresas, com=com, resumo=resumo,
-                           emp=None)
+                           emp=None, **hub_ctx('config'))
 
 
 @escrita_fiscal.route('/emissao-nfse/<int:cliente_id>')
@@ -80,7 +86,8 @@ def emissao_nfse_empresa(cliente_id):
     return render_template(
         'escrita_fiscal/emissao_nfse.html', empresas=_get_empresas(), emp=emp,
         cfg=cfg or sugestao, salva=bool(cfg), series=series, faltas=faltas, travas=travas,
-        liberado_por=liberado_por, financeiro=_do_financeiro(cliente_id), csrf=csrf_token(), **_LISTAS)
+        liberado_por=liberado_por, financeiro=_do_financeiro(cliente_id), csrf=csrf_token(), **_LISTAS,
+        **_hub('config', cliente_id, emp))
 
 
 @escrita_fiscal.route('/emissao-nfse/<int:cliente_id>/salvar', methods=['POST'])
