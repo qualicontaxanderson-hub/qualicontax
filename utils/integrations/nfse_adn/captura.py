@@ -72,6 +72,12 @@ LOTES_MAX_BACKFILL = 200
 # acaba, mas termina a que já começou.
 DEADLINE_PADRAO_S = 960
 
+# Fatia do backfill DENTRO do ciclo (09/11/2026). Com 224 empresas inscritas de uma vez, cada
+# backfill comia o ciclo inteiro (200 lotes) e só ~2 empresas andavam a cada 6 h — umas 4
+# semanas para todas. Com 10 lotes (~500 notas, ~1 min) por empresa por ciclo, todas andam
+# e quem tem pouco histórico termina na primeira passada. Quem não terminou volta no próximo.
+LOTES_POR_CICLO_BACKFILL = 10
+
 
 def _log(empresa_id, cnpj, modo, **kw):
     """Uma linha em nfse_consulta_log. Best-effort: nunca derruba a captura."""
@@ -118,6 +124,12 @@ def _marcar_erro(cnpj, erro, desativar=False):
         '       tentativas_falha = tentativas_falha + 1, ultimo_erro = %s'
         + (', ativo = 0' if desativar else '') + ' WHERE cnpj = %s',
         (str(erro)[:500], cnpj), fetch=False)
+
+
+def _marcar_ok(cnpj):
+    execute_query(
+        'UPDATE dfe_nsu_nfse SET ultima_exec = NOW(), ultimo_sucesso = NOW(), '
+        '       tentativas_falha = 0, ultimo_erro = NULL WHERE cnpj = %s', (cnpj,), fetch=False)
 
 
 def _virar_incremental(cnpj):
@@ -315,6 +327,11 @@ def capturar_empresa(empresa_id, cnpj, ambiente=client.Ambiente.PRODUCAO_RESTRIT
 
     if parada == 'fim da fila' and modo == 'backfill':
         _virar_incremental(cnpj)
+    elif erro is None:
+        # Consulta aceita sem documento novo também é SUCESSO (09/11/2026). Antes só o
+        # _avancar_cursor limpava o erro: empresa sem nota nova seguia "com 34 falhas" e
+        # "(sem detalhe)" dias depois de a Receita voltar a responder — 8 empresas assim.
+        _marcar_ok(cnpj)
 
     dur = int((time.monotonic() - t0) * 1000)
     # qtd_salvos conta TUDO que foi gravado (documento e evento); a quarentena é
@@ -366,7 +383,8 @@ def inscrever_novas(aplicar=True):
 
 
 def executar_incremental(deadline_seg=DEADLINE_PADRAO_S,
-                         ambiente=client.Ambiente.PRODUCAO_RESTRITA) -> dict:
+                         ambiente=client.Ambiente.PRODUCAO_RESTRITA,
+                         lotes_backfill=LOTES_POR_CICLO_BACKFILL) -> dict:
     """O ciclo do cron: todas as empresas ativas, na ordem de quem esperou mais.
 
     PEGA TAMBÉM QUEM ESTÁ EM BACKFILL. Backfill não é um estado especial, é só
@@ -390,10 +408,15 @@ def executar_incremental(deadline_seg=DEADLINE_PADRAO_S,
     # Quem já está em dia vem PRIMEIRO (08/11/2026): com 200 backfills entrando de uma vez, a
     # ordem antiga (nunca teve sucesso = primeiro) faria as empresas já em dia esperarem dias.
     # O backfill fica com o tempo que sobra e drena em alguns ciclos, retomando de onde parou.
+    # Entre os backfills, quem esperou mais vai primeiro (ultima_exec): é o rodízio que faz
+    # todas andarem em vez de as mesmas duas toda vez.
     empresas = execute_query(
         "SELECT n.empresa_id, n.cnpj, n.modo FROM dfe_nsu_nfse n "
         " WHERE n.ativo = 1 "
-        " ORDER BY (n.modo = 'backfill'), n.ultimo_sucesso IS NOT NULL, n.ultimo_sucesso", fetch=True) or []
+        " ORDER BY (n.modo = 'backfill'), "
+        "          CASE WHEN n.modo = 'backfill' THEN n.ultima_exec END IS NOT NULL, "
+        "          CASE WHEN n.modo = 'backfill' THEN n.ultima_exec END, "
+        "          n.ultimo_sucesso IS NOT NULL, n.ultimo_sucesso", fetch=True) or []
 
     resultados = []
     for e in empresas:
@@ -402,9 +425,11 @@ def executar_incremental(deadline_seg=DEADLINE_PADRAO_S,
             logger.info('[nfse-captura] deadline: %d empresa(s) ficaram para o '
                         'próximo ciclo', len(empresas) - len(resultados))
             break
+        modo = e.get('modo') or 'incremental'
         resultados.append(capturar_empresa(
             e['empresa_id'], e['cnpj'], ambiente=ambiente,
-            deadline_seg=restante, modo=e.get('modo') or 'incremental'))
+            deadline_seg=restante, modo=modo,
+            lotes_max=lotes_backfill if modo == 'backfill' else LOTES_MAX_BACKFILL))
 
     return {'empresas': len(resultados), 'pendentes': len(empresas) - len(resultados),
             'salvos': sum(r.get('salvos', 0) for r in resultados),

@@ -431,7 +431,10 @@ def buscar_lote(sessao, nsu: int, ambiente: Ambiente = Ambiente.PRODUCAO_RESTRIT
     """
     params = {'lote': 'true'}
     if cnpj_consulta:
-        params['cnpjConsulta'] = _so_digitos(cnpj_consulta)
+        doc = _so_digitos(cnpj_consulta)
+        # Pessoa física (e-CPF) vai em cpfConsulta: com cnpjConsulta o ADN recusa com E2243
+        # ("mesmo CNPJ Base") e sem nada recusa desde 31/10/2026. Provado em 09/11/2026.
+        params['cpfConsulta' if len(doc) == 11 else 'cnpjConsulta'] = doc
     r = _get(sessao, f'{ambiente.value}/DFe/{int(nsu)}', params)
     return _para_lote(r, ambiente)
 
