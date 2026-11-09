@@ -2577,10 +2577,10 @@ def cte_pdf(cte_id):
 def excluir_cte(cte_id):
     """Exclui um CT-e. SÓ ADMIN — mesmo gate do excluir_nfe: esconder o botão no
     front não impede um não-admin de chamar a URL na mão."""
-    if not current_user.is_admin():
-        logger.warning('[excluir_cte] usuário %s (não-admin) tentou excluir o cte_id=%s',
+    if not current_user.has_permission('escrita_fiscal.conf_cte.excluir'):   # 09/11/2026: era só admin
+        logger.warning('[excluir_cte] usuário %s (sem permissão) tentou excluir o cte_id=%s',
                        getattr(current_user, 'id', '?'), cte_id)
-        msg = 'Apenas administradores podem excluir CT-e.'
+        msg = 'Você não tem permissão para excluir CT-e.'
         if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
             return jsonify({'error': msg}), 403
         flash(msg, 'error')
@@ -2601,10 +2601,10 @@ def excluir_lote_cte():
     empresa entra sempre e uma lista de ids forjada não alcança outra empresa.
     SÓ ADMIN, mesmo gate do excluir_cte, aplicado antes de montar o WHERE.
     As NF-e transportadas (cte_nfe) saem por ON DELETE CASCADE."""
-    if not current_user.is_admin():
-        logger.warning('[excluir_lote_cte] usuário %s (não-admin) tentou excluir CT-e em lote',
+    if not current_user.has_permission('escrita_fiscal.conf_cte.excluir'):   # 09/11/2026: era só admin
+        logger.warning('[excluir_lote_cte] usuário %s (sem permissão) tentou excluir CT-e em lote',
                        getattr(current_user, 'id', '?'))
-        return jsonify({'error': 'Apenas administradores podem excluir CT-e.'}), 403
+        return jsonify({'error': 'Você não tem permissão para excluir CT-e.'}), 403
 
     data = request.get_json(silent=True) or {}
     # Trava: sem ids marcados E sem empresa/grupo o WHERE ficaria vazio e o DELETE
@@ -6597,10 +6597,16 @@ def excluir_nfe(nfe_id):
     front não impede um não-admin de chamar a URL na mão. Usa o mecanismo que já
     existe no app: Usuario.is_admin() (tipo_usuario == 'ADMIN'). Usada pelas duas
     telas (conf-compras e conf-saidas)."""
-    if not current_user.is_admin():
-        logger.warning('[excluir_nfe] usuário %s (não-admin) tentou excluir a nfe_id=%s',
+    # 09/11/2026: deixou de ser só admin — vale a permissão "Excluir" da tela da
+    # nota (Entradas ou Saídas), que nasce sem perfil e o Anderson libera.
+    _tipo = (execute_query("SELECT tipo FROM nfe_importacoes WHERE id = %s", (nfe_id,),
+                           fetch=True, fetch_one=True) or {}).get('tipo')
+    _cod = ('escrita_fiscal.conf_saidas.excluir' if _tipo == 'saida'
+            else 'escrita_fiscal.conf_compras.excluir')
+    if not current_user.has_permission(_cod):
+        logger.warning('[excluir_nfe] usuário %s (sem permissão) tentou excluir a nfe_id=%s',
                        getattr(current_user, 'id', '?'), nfe_id)
-        msg = 'Apenas administradores podem excluir notas fiscais.'
+        msg = 'Você não tem permissão para excluir notas fiscais.'
         if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
             return jsonify({'error': msg}), 403
         flash(msg, 'error')
@@ -6621,10 +6627,10 @@ def excluir_nfe(nfe_id):
 def excluir_lote():
     """Exclui TODAS as notas de entrada que batem com os filtros. SÓ ADMIN —
     mesmo gate do excluir_nfe, aplicado antes de montar qualquer WHERE."""
-    if not current_user.is_admin():
-        logger.warning('[excluir_lote] usuário %s (não-admin) tentou excluir em lote (entradas)',
+    if not current_user.has_permission('escrita_fiscal.conf_compras.excluir'):   # 09/11/2026: era só admin
+        logger.warning('[excluir_lote] usuário %s (sem permissão) tentou excluir em lote (entradas)',
                        getattr(current_user, 'id', '?'))
-        return jsonify({'error': 'Apenas administradores podem excluir notas fiscais.'}), 403
+        return jsonify({'error': 'Você não tem permissão para excluir notas fiscais.'}), 403
 
     data = request.get_json(silent=True) or {}
     # O MESMO WHERE do lote de download (_where_lote_entradas). Até 19/09/2026 esta rota
@@ -9208,10 +9214,10 @@ def api_por_produto_saidas():
 def excluir_lote_saidas():
     """Exclui TODAS as notas de saída que batem com os filtros. SÓ ADMIN —
     mesmo gate do excluir_nfe, aplicado antes de montar qualquer WHERE."""
-    if not current_user.is_admin():
-        logger.warning('[excluir_lote_saidas] usuário %s (não-admin) tentou excluir em lote (saídas)',
+    if not current_user.has_permission('escrita_fiscal.conf_saidas.excluir'):   # 09/11/2026: era só admin
+        logger.warning('[excluir_lote_saidas] usuário %s (sem permissão) tentou excluir em lote (saídas)',
                        getattr(current_user, 'id', '?'))
-        return jsonify({'error': 'Apenas administradores podem excluir notas fiscais.'}), 403
+        return jsonify({'error': 'Você não tem permissão para excluir notas fiscais.'}), 403
 
     data = request.get_json(silent=True) or {}
     # O MESMO WHERE do lote de download (_where_lote_saidas). Até 19/09/2026 esta rota

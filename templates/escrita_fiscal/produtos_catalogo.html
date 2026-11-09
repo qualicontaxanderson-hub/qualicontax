@@ -255,12 +255,14 @@
                         class="lst-act lst-act-edit" title="Editar produto">
                     <i class="fas fa-pen"></i>
                 </button>
+                {% if pode_rota('escrita_fiscal.produtos_catalogo_excluir') %}
                 <form method="POST" action="{{ url_for('escrita_fiscal.produtos_catalogo_excluir', pid=p.id) }}"
                       onsubmit="return confirm('Excluir este produto?')">
                     <button type="submit" class="lst-act lst-act-del" title="Excluir produto">
                         <i class="fas fa-trash-alt"></i>
                     </button>
                 </form>
+                {% endif %}
             </span>
         </div>
     </div>
@@ -375,10 +377,12 @@
             <div class="cat-section" id="catSection{{ cat.id }}">
                 <div class="cat-section-head">
                     <span><i class="fas fa-layer-group" style="color:#16a34a;margin-right:6px;"></i>{{ cat.nome }}</span>
+                    {% if pode_rota('escrita_fiscal.categoria_excluir') %}
                     <form method="POST" action="{{ url_for('escrita_fiscal.categoria_excluir', cid=cat.id) }}"
                           onsubmit="return confirm('Excluir a categoria {{ cat.nome }}? Todas as sub-categorias também serão removidas.')">
                         <button type="submit" class="del-cat-btn"><i class="fas fa-trash-alt"></i> Excluir</button>
                     </form>
+                    {% endif %}
                 </div>
                 <div class="sub-list">
                     {% set cat_subs = subs_db | selectattr('categoria_id', 'equalto', cat.id) | list %}
@@ -386,10 +390,12 @@
                         {% for s in cat_subs %}
                         <span class="sub-tag">
                             {{ s.nome }}
+                            {% if pode_rota('escrita_fiscal.subcategoria_excluir') %}
                             <form method="POST" action="{{ url_for('escrita_fiscal.subcategoria_excluir', sid=s.id) }}"
                                   onsubmit="return confirm('Excluir sub-categoria {{ s.nome }}?')" style="display:inline;">
                                 <button type="submit" title="Excluir sub-categoria"><i class="fas fa-times"></i></button>
                             </form>
+                            {% endif %}
                         </span>
                         {% endfor %}
                     {% else %}

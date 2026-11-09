@@ -1,116 +1,361 @@
 {% extends "base.html" %}
 {% block title %}{{ 'Editar' if perfil else 'Novo' }} Perfil de Acesso{% endblock %}
 {% block content %}
-<div class="page-header">
-    <div>
-        <a href="{{ url_for('configuracoes.perfis') }}" class="back-link">← Perfis de Acesso</a>
-        <h1 class="page-title">{{ 'Editar Perfil' if perfil else 'Novo Perfil de Acesso' }}</h1>
-        <p class="page-subtitle">Marque as permissões que este perfil terá acesso</p>
+{#
+  Perfil de acesso no padrão de Clientes (09/11/2026, modelo aprovado pelo Anderson):
+  um cartão por TELA com Ver / Incluir / Alterar / Excluir e "outras ações".
+  Excluir e irreversível nunca são marcados pelos botões "Marcar" — só um a um.
+  Marcar qualquer ação marca o Ver da tela (o servidor garante o mesmo em
+  normalizar_selecao). O catálogo mora em utils/permissions.py.
+#}
+{% include 'clientes/_cartao_css.html' %}
+{% include 'configuracoes/_painel_css.html' %}
+<style>
+.pf-card .gc-tit h3 { text-transform:uppercase; }
+.pf-card { cursor:default; }
+.pf-ava-ef  { background:linear-gradient(135deg,#16a34a,#0f3d2e); }
+.pf-ava-qr  { background:linear-gradient(135deg,#0ea5e9,#075985); }
+.pf-ava-cad { background:linear-gradient(135deg,#3b82f6,#1e3a8a); }
+.pf-ava-ct  { background:linear-gradient(135deg,#8b5cf6,#5b21b6); }
+.pf-ava-fin { background:linear-gradient(135deg,#f59e0b,#b45309); }
+.pf-ava-pro { background:linear-gradient(135deg,#14b8a6,#115e59); }
+.pf-ava-rel { background:linear-gradient(135deg,#06b6d4,#155e75); }
+.pf-ava-dp  { background:linear-gradient(135deg,#ec4899,#9d174d); }
+.pf-ava-cfg { background:linear-gradient(135deg,#64748b,#334155); }
+.pf-dep-ef  { background:#f0fdf4; color:#15803d; border-color:#bbf7d0; }
+.pf-dep-qr  { background:#f0f9ff; color:#0369a1; border-color:#bae6fd; }
+.pf-dep-cad { background:#eff6ff; color:#1d4ed8; border-color:#bfdbfe; }
+.pf-dep-ct  { background:#f5f3ff; color:#6d28d9; border-color:#ddd6fe; }
+.pf-dep-fin { background:#fffbeb; color:#b45309; border-color:#fde68a; }
+.pf-dep-pro { background:#f0fdfa; color:#0f766e; border-color:#99f6e4; }
+.pf-dep-rel { background:#ecfeff; color:#0e7490; border-color:#a5f3fc; }
+.pf-dep-dp  { background:#fdf2f8; color:#be185d; border-color:#fbcfe8; }
+.pf-dep-cfg { background:#f8fafc; color:#334155; border-color:#e2e8f0; }
+
+.pf-grade { grid-template-columns:1fr 1fr; }
+.pf-campo { min-width:0; }
+.pf-sw { display:flex; align-items:flex-start; gap:8px; margin-top:4px; cursor:pointer; }
+.pf-sw input { position:absolute; opacity:0; pointer-events:none; }
+.pf-sw i.pf-t { flex:none; width:30px; height:17px; border-radius:99px; background:#cbd5e1; position:relative; transition:background .15s; margin-top:1px; }
+.pf-sw i.pf-t::after { content:""; position:absolute; top:2px; left:2px; width:13px; height:13px; border-radius:50%; background:#fff;
+                       box-shadow:0 1px 2px rgba(0,0,0,.2); transition:left .15s; }
+.pf-sw input:checked + i.pf-t { background:#16a34a; }
+.pf-sw input:checked + i.pf-t::after { left:15px; }
+.pf-sw input:focus-visible + i.pf-t { outline:3px solid rgba(34,197,94,.45); outline-offset:2px; }
+.pf-sw span { font-size:12.5px; color:#334155; line-height:1.3; min-width:0; }
+.pf-sw input:checked ~ span { color:#0f3d2e; font-weight:700; }
+.pf-sw + .pf-sw { margin-top:6px; }
+.pf-nada { display:block; margin-top:4px; font-size:13px; color:#94a3b8; }
+.pf-exc .cli-rot { color:#b91c1c; }
+.pf-exc .pf-sw input:checked + i.pf-t { background:#dc2626; }
+.pf-exc .pf-sw input:checked ~ span { color:#b91c1c; }
+
+.pf-chip { display:inline-flex; align-items:center; gap:6px; font-size:12px; font-weight:700; border:1px solid #e2e8f0;
+           background:#f8fafc; color:#64748b; border-radius:99px; padding:2px 10px 2px 4px; cursor:pointer; }
+.pf-chip input { position:absolute; opacity:0; pointer-events:none; }
+.pf-chip i.pf-bol { width:15px; height:15px; border-radius:50%; border:1.5px solid #cbd5e1; background:#fff; flex:none; }
+.pf-chip.on { color:#15803d; background:#f0fdf4; border-color:#bbf7d0; }
+.pf-chip.on i.pf-bol { background:#16a34a; border-color:#16a34a; box-shadow:inset 0 0 0 2.5px #fff; }
+.pf-chip:focus-within { outline:3px solid rgba(34,197,94,.45); outline-offset:2px; }
+.pf-chip.pf-risco { color:#b45309; background:#fffbeb; border-color:#fde68a; }
+.pf-chip.pf-risco.on { color:#fff; background:#d97706; border-color:#d97706; }
+.pf-chip.pf-risco.on i.pf-bol { background:#fff; border-color:#fff; box-shadow:inset 0 0 0 2.5px #d97706; }
+.pf-chip.pf-risco em { font-style:normal; font-size:9.5px; font-weight:800; letter-spacing:.5px; text-transform:uppercase; opacity:.85; }
+.pf-chip.pf-lock { cursor:default; color:#94a3b8; background:#fafafa; border-style:dashed; padding-left:9px; }
+.pf-card.pf-fechada { opacity:.72; }
+.pf-card.pf-fechada:hover, .pf-card.pf-fechada:focus-within { opacity:1; }
+.pf-card[hidden] { display:none; }
+
+.pf-ident { display:grid; grid-template-columns:minmax(0,1.2fr) minmax(0,2fr) minmax(0,.7fr); gap:12px; align-items:end; }
+.pf-ident label { display:block; }
+.pf-ident input, .pf-ident select { width:100%; border:1px solid #d7e3dc; border-radius:9px; padding:8px 11px; font:inherit;
+                                    font-size:13.5px; color:#0f172a; background:#fff; }
+.pf-ident input:focus, .pf-ident select:focus { outline:none; border-color:#16a34a; box-shadow:0 0 0 3px rgba(22,163,74,.15); }
+.pf-acao-dep { display:flex; gap:6px; flex-wrap:wrap; }
+.pf-acao-dep .gc-pill { border-radius:9px; padding:5px 10px; font-size:12.5px; }
+.pf-toast { position:fixed; left:50%; bottom:24px; transform:translateX(-50%); background:#0f3d2e; color:#fff; border-radius:11px;
+            padding:10px 16px; font-size:13px; box-shadow:0 12px 30px rgba(15,61,46,.3); z-index:50; max-width:calc(100% - 32px); }
+.pf-toast[hidden] { display:none; }
+@media (max-width:900px) { .pf-ident { grid-template-columns:1fr; } }
+</style>
+
+<form method="POST" id="pfForm">
+<div class="ef-hero">
+    <div class="ef-hero-inner ef-hero-head">
+        <div>
+            <h1 class="ef-hero-title" id="pfTitulo">{{ perfil.nome if perfil else 'Novo perfil de acesso' }}</h1>
+            <p class="ef-hero-sub">
+                Perfil de acesso ·
+                {% if perfil %}
+                    {% set n = usuarios_perfil|length %}
+                    {{ n }} usuário{{ '' if n == 1 else 's' }}{% if n %}: {{ usuarios_perfil|map(attribute='nome')|join(', ') }}{% endif %}
+                {% else %}
+                    marque o que este perfil pode fazer em cada tela
+                {% endif %}
+            </p>
+        </div>
+        <div class="ef-hero-actions">
+            <a href="{{ url_for('configuracoes.perfis') }}" class="ef-btn"><i class="fas fa-arrow-left"></i> Perfis</a>
+            <button type="submit" class="ef-btn ef-btn-primary"><i class="fas fa-check"></i> Salvar perfil</button>
+        </div>
     </div>
 </div>
 
-<form method="POST">
-<div class="card mb-4">
-    <div class="card-header"><strong>Identificação</strong></div>
-    <div class="card-body">
-        <div class="form-grid-2">
-            <div class="form-group">
-                <label class="form-label">Nome do Perfil *</label>
-                <input type="text" name="nome" class="form-control"
-                       value="{{ perfil.nome if perfil else '' }}"
-                       placeholder="Ex: Fiscal, Contábil Sênior, Apenas Leitura"
-                       required>
-            </div>
-            {% if perfil %}
-            <div class="form-group">
-                <label class="form-label">Status</label>
-                <select name="situacao" class="form-control">
-                    <option value="ATIVO"   {{ 'selected' if perfil.situacao == 'ATIVO' }}>ATIVO</option>
-                    <option value="INATIVO" {{ 'selected' if perfil.situacao == 'INATIVO' }}>INATIVO</option>
-                </select>
-            </div>
-            {% endif %}
-        </div>
-        <div class="form-group">
-            <label class="form-label">Descrição</label>
-            <textarea name="descricao" class="form-control" rows="2"
-                      placeholder="Descreva o objetivo deste perfil">{{ perfil.descricao if perfil else '' }}</textarea>
-        </div>
+<div class="ef-body">
+    <div class="cli-kpis" id="pfKpis">
+        <button type="button" class="cli-kpi" data-kpi="lib" title="Mostrar só as telas liberadas">
+            <span class="cli-kpi-ico" style="background:#dcfce7; color:#15803d;"><i class="fas fa-door-open"></i></span>
+            <div class="cli-kpi-body"><strong class="cli-kpi-val" data-n="lib">0</strong><span class="cli-kpi-lbl" data-l="lib">Telas liberadas</span></div>
+        </button>
+        <button type="button" class="cli-kpi" data-kpi="inc" title="Mostrar as telas em que este perfil inclui">
+            <span class="cli-kpi-ico" style="background:#e0f2fe; color:#0369a1;"><i class="fas fa-plus"></i></span>
+            <div class="cli-kpi-body"><strong class="cli-kpi-val" data-n="inc">0</strong><span class="cli-kpi-lbl">Podem incluir</span></div>
+        </button>
+        <button type="button" class="cli-kpi" data-kpi="alt" title="Mostrar as telas em que este perfil altera">
+            <span class="cli-kpi-ico" style="background:#ede9fe; color:#6d28d9;"><i class="fas fa-pen"></i></span>
+            <div class="cli-kpi-body"><strong class="cli-kpi-val" data-n="alt">0</strong><span class="cli-kpi-lbl">Podem alterar</span></div>
+        </button>
+        <button type="button" class="cli-kpi" data-kpi="exc" title="Mostrar as telas em que este perfil exclui">
+            <span class="cli-kpi-ico" style="background:#fee2e2; color:#b91c1c;"><i class="fas fa-trash-can"></i></span>
+            <div class="cli-kpi-body"><strong class="cli-kpi-val" data-n="exc">0</strong><span class="cli-kpi-lbl">Exclusões liberadas</span></div>
+        </button>
+        <button type="button" class="cli-kpi" data-kpi="irr" title="Mostrar as telas com ação irreversível liberada">
+            <span class="cli-kpi-ico" style="background:#fef3c7; color:#b45309;"><i class="fas fa-triangle-exclamation"></i></span>
+            <div class="cli-kpi-body"><strong class="cli-kpi-val" data-n="irr">0</strong><span class="cli-kpi-lbl">Irreversíveis liberadas</span></div>
+        </button>
+        <button type="button" class="cli-kpi" data-kpi="adm" title="Ações que nenhum perfil recebe">
+            <span class="cli-kpi-ico" style="background:#f1f5f9; color:#475569;"><i class="fas fa-lock"></i></span>
+            <div class="cli-kpi-body"><strong class="cli-kpi-val" data-n="adm">0</strong><span class="cli-kpi-lbl">Só o administrador</span></div>
+        </button>
     </div>
-</div>
 
-<div class="card mb-4">
-    <div class="card-header d-flex justify-content-between align-items-center">
-        <strong>Permissões</strong>
-        <div class="d-flex gap-2">
-            <button type="button" class="btn btn-sm btn-secondary" onclick="marcarTodas(true)">Marcar todas</button>
-            <button type="button" class="btn btn-sm btn-secondary" onclick="marcarTodas(false)">Desmarcar todas</button>
-        </div>
-    </div>
-    <div class="card-body perm-body">
-        {% for grupo, items in catalog.items() %}
-        <div class="perm-group mb-4">
-            <div class="perm-group-header d-flex align-items-center gap-2 mb-2">
-                <strong>{{ grupo }}</strong>
-                <button type="button" class="btn btn-xs btn-light"
-                        onclick="marcarGrupo(this, true)">Marcar</button>
-                <button type="button" class="btn btn-xs btn-light"
-                        onclick="marcarGrupo(this, false)">Desmarcar</button>
-            </div>
-            <div class="perm-items">
-                {% for cod, label in items.items() %}
-                <label class="perm-item">
-                    <input type="checkbox" name="permissoes" value="{{ cod }}"
-                           {{ 'checked' if cod in perms_perfil }}>
-                    <div class="perm-item-content">
-                        <span class="perm-label">{{ label }}</span>
-                        <span class="perm-code">{{ cod }}</span>
-                    </div>
+    <div class="cli-filtros">
+        <div class="cli-f-row">
+            <span class="cli-seg-rot">Identificação</span>
+            <div class="pf-ident">
+                <label>
+                    <input type="text" name="nome" id="pfNome" value="{{ perfil.nome if perfil else '' }}" required
+                           placeholder="Nome do perfil (ex.: Fiscal, Contábil Sênior)" aria-label="Nome do perfil">
                 </label>
+                <label>
+                    <input type="text" name="descricao" value="{{ perfil.descricao if perfil and perfil.descricao else '' }}"
+                           placeholder="Para que serve este perfil" aria-label="Descrição">
+                </label>
+                {% if perfil %}
+                <label>
+                    <select name="situacao" aria-label="Situação">
+                        <option value="ATIVO" {{ 'selected' if perfil.situacao == 'ATIVO' }}>Ativo</option>
+                        <option value="INATIVO" {{ 'selected' if perfil.situacao == 'INATIVO' }}>Inativo</option>
+                    </select>
+                </label>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <div class="cli-filtros">
+        <div class="cli-f-row cli-f-dir">
+            <span class="cli-seg-rot">Departamento</span>
+            <div class="gc-pills cli-pills-seg" id="pfDepPills" role="group" aria-label="Departamento">
+                <button type="button" class="gc-pill on" data-dep="">Todos <b></b></button>
+                {% for d in deps %}
+                <button type="button" class="gc-pill" data-dep="{{ d.cor }}">{{ d.grupo }} <b></b></button>
                 {% endfor %}
             </div>
         </div>
-        {% endfor %}
+        <div class="cli-f-row">
+            <span class="cli-seg-rot">Situação</span>
+            <div class="gc-pills" id="pfSitPills" role="group" aria-label="Situação da tela">
+                <button type="button" class="gc-pill on" data-sit="">Todas <b></b></button>
+                <button type="button" class="gc-pill" data-sit="lib">Liberadas <b></b></button>
+                <button type="button" class="gc-pill" data-sit="fech">Fechadas <b></b></button>
+                <button type="button" class="gc-pill" data-sit="exc">Com exclusão <b></b></button>
+                <button type="button" class="gc-pill" data-sit="irr">Com irreversível <b></b></button>
+            </div>
+        </div>
+        <div class="cli-f-row">
+            <span class="cli-seg-rot" id="pfAcaoRot">Todas as telas</span>
+            <div class="pf-acao-dep">
+                <button type="button" class="gc-pill" id="pfMarcar" title="Liga Ver, Incluir, Alterar e as ações comuns das telas mostradas. Excluir e irreversível ficam como estão."><i class="fas fa-check-double"></i> Marcar (sem excluir)</button>
+                <button type="button" class="gc-pill" id="pfDesmarcar" title="Desliga tudo nas telas mostradas"><i class="fas fa-xmark"></i> Desmarcar</button>
+            </div>
+        </div>
     </div>
-</div>
 
-<div class="form-actions">
-    <button type="submit" class="btn btn-primary">
-        <i class="fas fa-save"></i> Salvar Perfil
-    </button>
-    <a href="{{ url_for('configuracoes.perfis') }}" class="btn btn-secondary">Cancelar</a>
+    <div class="lst-infobar">
+        <span class="lst-count" id="pfCont"></span>
+        <span class="cli-sort" role="group" aria-label="Ordem dos cartões">
+            Ordenar:
+            <button type="button" class="cli-sortchip on" data-sort="dep"><i class="fas fa-layer-group"></i> Departamento</button>
+            <button type="button" class="cli-sortchip" data-sort="az"><i class="fas fa-arrow-down-a-z"></i> A–Z</button>
+            <button type="button" class="cli-sortchip" data-sort="lib"><i class="fas fa-toggle-on"></i> Liberadas primeiro</button>
+        </span>
+    </div>
+
+    <div class="gc-grid" id="pfLista">
+    {% set ns = namespace(ordem=0) %}
+    {% for d in deps %}
+    {% for t in d.telas %}
+    {% set ns.ordem = ns.ordem + 1 %}
+    <article class="gc-card cli-card pf-card" data-dep="{{ d.cor }}" data-ordem="{{ ns.ordem }}" data-nome="{{ t.nome }}"
+             data-trava="{{ (t.trava or [])|length }}">
+        <header class="gc-head">
+            <span class="gc-ava cli-ava pf-ava-{{ d.cor }}">{{ d.sigla }}</span>
+            <div class="gc-tit">
+                <h3 title="{{ t.nome }}">{{ t.nome }}</h3>
+                <span class="cli-doc">Permissão <span class="mono">{{ (t.ver or t.inc)[0] }}</span></span>
+            </div>
+            <span class="gc-sit off" data-sit-pill>Fechada</span>
+        </header>
+        <div class="gc-tags"><span class="gc-tag pf-dep-{{ d.cor }}">{{ d.grupo }}</span></div>
+        <div class="cli-grade pf-grade">
+            {% for chave, rot in [('ver','Ver'), ('inc','Incluir'), ('alt','Alterar')] %}
+            <div class="pf-campo"><span class="cli-rot">{{ rot }}</span>
+                {% if t[chave] %}
+                <label class="pf-sw"><input type="checkbox" name="permissoes" value="{{ t[chave][0] }}" data-acao="{{ chave }}"
+                       {{ 'checked' if t[chave][0] in perms_perfil }}><i class="pf-t"></i><span>{{ t[chave][1] }}</span></label>
+                {% else %}<span class="pf-nada">—</span>{% endif %}
+            </div>
+            {% endfor %}
+            <div class="pf-campo pf-exc"><span class="cli-rot">Excluir</span>
+                {% for cod, txt in (t.exc or []) %}
+                <label class="pf-sw"><input type="checkbox" name="permissoes" value="{{ cod }}" data-acao="exc" data-risco="1"
+                       {{ 'checked' if cod in perms_perfil }}><i class="pf-t"></i><span>{{ txt }}</span></label>
+                {% else %}<span class="pf-nada">—</span>{% endfor %}
+            </div>
+        </div>
+        {% if t.outros or t.trava %}
+        <div class="cli-ativ">
+            <span class="cli-rot">Outras ações</span>
+            <div class="gc-tags">
+                {% for cod, txt, risco in (t.outros or []) %}
+                <label class="pf-chip{{ ' pf-risco' if risco }}"><input type="checkbox" name="permissoes" value="{{ cod }}" data-acao="outro"
+                       data-risco="{{ 1 if risco else 0 }}" {{ 'checked' if cod in perms_perfil }}><i class="pf-bol"></i>{{ txt }}{% if risco %} <em>irreversível</em>{% endif %}</label>
+                {% endfor %}
+                {% for x in (t.trava or []) %}
+                <span class="pf-chip pf-lock" title="Nenhum perfil recebe: só o administrador"><i class="fas fa-lock"></i> {{ x }}: só administrador</span>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+        <footer class="cli-pe" data-selo></footer>
+    </article>
+    {% endfor %}
+    {% endfor %}
+    </div>
+    <p class="gc-nada" id="pfNada" hidden><i class="fas fa-filter-circle-xmark"></i>Nenhuma tela com este filtro.</p>
 </div>
 </form>
-
-<style>
-.form-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-.perm-body { padding: 20px; }
-.perm-group { background: #f9fafb; border-radius: 10px; padding: 16px; border: 1px solid #e5e7eb; }
-.perm-group-header { border-bottom: 1px solid #e5e7eb; padding-bottom: 8px; margin-bottom: 12px; }
-.perm-items { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 8px; }
-.perm-item { display: flex; align-items: flex-start; gap: 8px; padding: 8px 10px; background: #fff;
-             border-radius: 8px; border: 1px solid #e5e7eb; cursor: pointer; transition: all .15s; }
-.perm-item:hover { background: #eff6ff; border-color: #93c5fd; }
-.perm-item input[type="checkbox"] { margin-top: 3px; flex-shrink: 0; width: 16px; height: 16px; }
-.perm-item-content { display: flex; flex-direction: column; }
-.perm-label { font-size: 0.875rem; font-weight: 500; color: #1f2937; }
-.perm-code  { font-size: 0.7rem; color: #9ca3af; font-family: monospace; }
-.btn-xs { padding: 2px 8px; font-size: 0.75rem; }
-.d-flex { display: flex; }
-.align-items-center { align-items: center; }
-.justify-content-between { justify-content: space-between; }
-.gap-2 { gap: 8px; }
-.mb-2 { margin-bottom: 8px; }
-.mb-4 { margin-bottom: 16px; }
-.form-actions { display: flex; gap: 12px; margin-top: 24px; }
-</style>
+<div class="pf-toast" id="pfToast" hidden></div>
 
 <script>
-function marcarTodas(v) {
-    document.querySelectorAll('input[name="permissoes"]').forEach(c => c.checked = v);
-}
-function marcarGrupo(btn, v) {
-    btn.closest('.perm-group').querySelectorAll('input[name="permissoes"]').forEach(c => c.checked = v);
-}
+(function () {
+    var lista = document.getElementById('pfLista');
+    var cards = Array.prototype.slice.call(lista.querySelectorAll('.pf-card'));
+    var fDep = '', fSit = '', ordem = 'dep';
+    var esc = function (s) { return String(s).replace(/[&<>"]/g, function (c) { return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); };
+    function caixas(c) { return Array.prototype.slice.call(c.querySelectorAll('input[name="permissoes"]')); }
+    function marcadas(c, filtro) { return caixas(c).filter(function (i) { return i.checked && (!filtro || filtro(i)); }); }
+    function texto(i) { var s = i.parentNode.querySelector('span'); return s ? s.textContent.trim() : i.parentNode.textContent.replace('irreversível', '').trim(); }
+    function estado(c) {
+        return {
+            lib: marcadas(c).length > 0,
+            inc: marcadas(c, function (i) { return i.dataset.acao === 'inc'; }).length > 0,
+            alt: marcadas(c, function (i) { return i.dataset.acao === 'alt'; }).length > 0,
+            exc: marcadas(c, function (i) { return i.dataset.acao === 'exc'; }),
+            irr: marcadas(c, function (i) { return i.dataset.acao === 'outro' && i.dataset.risco === '1'; }),
+            adm: +c.dataset.trava > 0
+        };
+    }
+    function casa(c, s) {
+        if (!s) return true;
+        var e = estado(c);
+        return s === 'lib' ? e.lib : s === 'fech' ? !e.lib : s === 'exc' ? e.exc.length > 0
+             : s === 'irr' ? e.irr.length > 0 : s === 'inc' ? e.inc : s === 'alt' ? e.alt : s === 'adm' ? e.adm : true;
+    }
+    function selo(c) {
+        var e = estado(c), pe = c.querySelector('[data-selo]');
+        var h;
+        if (!e.lib) h = '<span class="cli-selo cli-selo-sem"><i class="fas fa-lock"></i><span class="cli-selo-t"><b>Fechada para este perfil</b><small>ligue o Ver para abrir a tela</small></span></span>';
+        else if (e.exc.length) h = '<span class="cli-selo cli-selo-bad"><i class="fas fa-trash-can"></i><span class="cli-selo-t"><b>Este perfil exclui aqui</b><small>' + esc(e.exc.map(texto).join(' · ')) + '</small></span></span>';
+        else if (e.irr.length) h = '<span class="cli-selo cli-selo-warn"><i class="fas fa-triangle-exclamation"></i><span class="cli-selo-t"><b>Ação irreversível liberada</b><small>' + esc(e.irr.map(texto).join(' · ')) + '</small></span></span>';
+        else h = '<span class="cli-selo cli-selo-ok"><i class="fas fa-shield-halved"></i><span class="cli-selo-t"><b>Não exclui nada</b><small>excluir fica com o administrador</small></span></span>';
+        pe.innerHTML = h;
+        var pill = c.querySelector('[data-sit-pill]');
+        pill.className = 'gc-sit ' + (e.lib ? 'on' : 'off'); pill.textContent = e.lib ? 'Liberada' : 'Fechada';
+        c.classList.toggle('pf-fechada', !e.lib);
+        caixas(c).forEach(function (i) { if (i.dataset.acao === 'outro') i.parentNode.classList.toggle('on', i.checked); });
+    }
+    function contar() {
+        var n = {lib:0, inc:0, alt:0, exc:0, irr:0, adm:0};
+        cards.forEach(function (c) { var e = estado(c);
+            if (e.lib) n.lib++; if (e.inc) n.inc++; if (e.alt) n.alt++;
+            n.exc += e.exc.length; n.irr += e.irr.length; if (e.adm) n.adm += +c.dataset.trava; });
+        Object.keys(n).forEach(function (k) {
+            var el = document.querySelector('[data-n="' + k + '"]'); el.textContent = n[k];
+            if (k === 'exc') el.classList.toggle('cli-bad', n[k] > 0);
+            if (k === 'irr') el.classList.toggle('cli-warn', n[k] > 0);
+        });
+        document.querySelector('[data-l="lib"]').textContent = 'Telas liberadas · de ' + cards.length;
+        document.querySelectorAll('#pfDepPills .gc-pill').forEach(function (b) {
+            var cs = cards.filter(function (c) { return !b.dataset.dep || c.dataset.dep === b.dataset.dep; });
+            b.querySelector('b').textContent = cs.filter(function (c) { return estado(c).lib; }).length + '/' + cs.length;
+        });
+        document.querySelectorAll('#pfSitPills .gc-pill').forEach(function (b) {
+            b.querySelector('b').textContent = cards.filter(function (c) { return (!fDep || c.dataset.dep === fDep) && casa(c, b.dataset.sit); }).length;
+        });
+    }
+    function mostrar() {
+        var vis = cards.filter(function (c) { var ok = (!fDep || c.dataset.dep === fDep) && casa(c, fSit); c.hidden = !ok; return ok; });
+        var ord = cards.slice();
+        if (ordem === 'az') ord.sort(function (a, b) { return a.dataset.nome.localeCompare(b.dataset.nome, 'pt'); });
+        else if (ordem === 'lib') ord.sort(function (a, b) { return (estado(b).lib - estado(a).lib) || (a.dataset.ordem - b.dataset.ordem); });
+        else ord.sort(function (a, b) { return a.dataset.ordem - b.dataset.ordem; });
+        ord.forEach(function (c) { lista.appendChild(c); });
+        document.getElementById('pfNada').hidden = vis.length > 0;
+        document.getElementById('pfCont').innerHTML = 'Mostrando <b>' + vis.length + '</b> ' + (vis.length === 1 ? 'tela' : 'telas');
+        document.querySelectorAll('.cli-kpi').forEach(function (k) { k.classList.toggle('on', k.dataset.kpi === fSit); });
+        document.querySelectorAll('#pfSitPills .gc-pill').forEach(function (b) { b.classList.toggle('on', b.dataset.sit === fSit); });
+        document.querySelectorAll('#pfDepPills .gc-pill').forEach(function (b) { b.classList.toggle('on', b.dataset.dep === fDep); });
+        var bdep = document.querySelector('#pfDepPills .gc-pill.on');
+        document.getElementById('pfAcaoRot').textContent = fDep ? bdep.firstChild.textContent.trim() : 'Todas as telas';
+    }
+    function tudo() { cards.forEach(selo); contar(); mostrar(); }
+    var toastH;
+    function toast(t) { var el = document.getElementById('pfToast'); el.textContent = t; el.hidden = false;
+        clearTimeout(toastH); toastH = setTimeout(function () { el.hidden = true; }, 2800); }
+
+    lista.addEventListener('change', function (e) {
+        var i = e.target; if (i.name !== 'permissoes') return;
+        var c = i.closest('.pf-card'), ver = c.querySelector('input[data-acao="ver"]'), nome = c.dataset.nome;
+        if (i.checked && i.dataset.acao !== 'ver' && ver && !ver.checked) {
+            ver.checked = true; toast('"Ver" de ' + nome + ' ligado junto: quem mexe precisa abrir a tela.');
+        }
+        if (!i.checked && i.dataset.acao === 'ver') {
+            var outras = marcadas(c); outras.forEach(function (x) { x.checked = false; });
+            if (outras.length) toast('Sem "Ver", as outras ações de ' + nome + ' desligaram junto.');
+        }
+        selo(c); contar();
+    });
+    document.addEventListener('click', function (e) {
+        var b = e.target.closest('button'); if (!b || b.type === 'submit') return;
+        if (b.dataset.dep !== undefined && b.closest('#pfDepPills')) { fDep = b.dataset.dep; contar(); mostrar(); }
+        else if (b.dataset.sit !== undefined && b.closest('#pfSitPills')) { fSit = b.dataset.sit; mostrar(); }
+        else if (b.dataset.kpi) { fSit = fSit === b.dataset.kpi ? '' : b.dataset.kpi; mostrar(); }
+        else if (b.dataset.sort) { ordem = b.dataset.sort;
+            document.querySelectorAll('.cli-sortchip').forEach(function (x) { x.classList.toggle('on', x === b); }); mostrar(); }
+        else if (b.id === 'pfMarcar' || b.id === 'pfDesmarcar') {
+            cards.filter(function (c) { return !c.hidden; }).forEach(function (c) {
+                caixas(c).forEach(function (i) {
+                    if (b.id === 'pfDesmarcar') i.checked = false;
+                    else if (i.dataset.risco !== '1') i.checked = true;
+                });
+            });
+            if (b.id === 'pfMarcar') toast('Ver, Incluir e Alterar ligados. Excluir e irreversível, só um a um.');
+            tudo();
+        }
+    });
+    tudo();
+})();
 </script>
 {% endblock %}

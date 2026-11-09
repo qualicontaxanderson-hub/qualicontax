@@ -1,47 +1,129 @@
 {% extends "base.html" %}
 {% block title %}E-mails automáticos – Configurações{% endblock %}
 {% block content %}
-<div class="page-header">
-    <div>
-        <a href="{{ url_for('configuracoes.index') }}" class="back-link">← Configurações</a>
-        <h1 class="page-title">E-mails automáticos</h1>
-        <p class="page-subtitle">Escolha qual departamento recebe cada aviso. O envio sai de app@qualicontax.com.br só nos dias úteis.</p>
-    </div>
-    <div>
-        <a href="{{ url_for('configuracoes.departamentos') }}" class="btn btn-secondary">
-            <i class="fas fa-sitemap"></i> Departamentos
-        </a>
-    </div>
-</div>
-
-{% if not smtp_ok %}
-<div style="margin:0 0 16px;padding:12px 16px;border-radius:10px;background:#fef3c7;border-left:4px solid #d97706;color:#92400e;font-size:13.5px;overflow-wrap:anywhere;">
-    <div><strong>O envio ainda não está ligado.</strong> Falta a senha da caixa
-    app@qualicontax.com.br na variável <code>SMTP_PASSWORD</code> do Railway. Até lá, nem o teste sai.</div>
-</div>
-{% endif %}
+{# 09/11/2026: no padrão da tela de Clientes (hero verde, fita de KPIs,
+   cartões .gc-card). Só a apresentação mudou: o formulário, os nomes dos
+   campos, o teste e o "Marcar todos" são os mesmos de antes. #}
+{% include 'clientes/_cartao_css.html' %}
+{% include 'configuracoes/_painel_css.html' %}
 
 {% set sem_email = departamentos|selectattr('email', 'none')|list %}
+{# Números da fita — só o que a rota já entrega (último envio de verdade de
+   cada aviso e a grade de quem recebe). #}
+{% set ns = namespace(ok=0, falha=0, nunca=0, ninguem=0) %}
+{% for rel, cfg in relatorios.items() %}
+    {% set r = (ultimos.get(rel, {})).real %}
+    {% if not r %}{% set ns.nunca = ns.nunca + 1 %}
+    {% elif r.status == 'FALHOU' %}{% set ns.falha = ns.falha + 1 %}
+    {% elif r.status in ('ENVIADO', 'VAZIO') %}{% set ns.ok = ns.ok + 1 %}{% endif %}
+    {% set nd = namespace(n=0) %}
+    {% for d in departamentos %}{% if (rel, d.id) in marcados %}{% set nd.n = nd.n + 1 %}{% endif %}{% endfor %}
+    {% if nd.n == 0 %}{% set ns.ninguem = ns.ninguem + 1 %}{% endif %}
+{% endfor %}
+
+<!-- ── HERO ─────────────────────────────────────────────────────────── -->
+<div class="ef-hero">
+    <div class="ef-hero-inner ef-hero-head">
+        <div>
+            <a href="{{ url_for('configuracoes.index') }}" class="pn-voltar">← Configurações</a>
+            <h1 class="ef-hero-title">E-mails automáticos</h1>
+            <p class="ef-hero-sub">Escolha qual departamento recebe cada aviso. O envio sai de app@qualicontax.com.br só nos dias úteis.</p>
+        </div>
+        <div class="ef-hero-actions">
+            <a href="{{ url_for('configuracoes.departamentos') }}" class="ef-btn">
+                <i class="fas fa-sitemap"></i> Departamentos
+            </a>
+            <button type="submit" form="f-destinos" class="ef-btn ef-btn-primary">
+                <i class="fas fa-check"></i> Salvar quem recebe
+            </button>
+        </div>
+    </div>
+</div>
+
+<div class="ef-body">
+    <!-- ── Fita de KPIs. Clicar filtra os cartões (clicar de novo mostra todos). -->
+    <div class="cli-kpis">
+        <button type="button" class="cli-kpi" data-kpi="" title="Mostrar todos os avisos">
+            <span class="cli-kpi-ico" style="background:#dcfce7; color:#15803d;"><i class="fas fa-envelope"></i></span>
+            <div class="cli-kpi-body">
+                <strong class="cli-kpi-val">{{ relatorios|length }}</strong>
+                <span class="cli-kpi-lbl">Avisos automáticos</span>
+            </div>
+        </button>
+        <button type="button" class="cli-kpi" data-kpi="ok" title="Último envio saiu (ou não havia nada a avisar)">
+            <span class="cli-kpi-ico" style="background:#e0f2fe; color:#0369a1;"><i class="fas fa-circle-check"></i></span>
+            <div class="cli-kpi-body">
+                <strong class="cli-kpi-val">{{ ns.ok }}</strong>
+                <span class="cli-kpi-lbl">Último envio certo</span>
+            </div>
+        </button>
+        <button type="button" class="cli-kpi" data-kpi="falha" title="O último envio de verdade falhou">
+            <span class="cli-kpi-ico" style="background:#fee2e2; color:#b91c1c;"><i class="fas fa-circle-xmark"></i></span>
+            <div class="cli-kpi-body">
+                <strong class="cli-kpi-val{{ ' cli-bad' if ns.falha }}">{{ ns.falha }}</strong>
+                <span class="cli-kpi-lbl">Último envio falhou</span>
+            </div>
+        </button>
+        <button type="button" class="cli-kpi" data-kpi="nunca" title="Aviso que ainda não saiu nenhuma vez">
+            <span class="cli-kpi-ico" style="background:#f1f5f9; color:#64748b;"><i class="fas fa-hourglass-half"></i></span>
+            <div class="cli-kpi-body">
+                <strong class="cli-kpi-val">{{ ns.nunca }}</strong>
+                <span class="cli-kpi-lbl">Ainda não saiu</span>
+            </div>
+        </button>
+        <button type="button" class="cli-kpi" data-kpi="ninguem" title="Nenhum departamento marcado: o aviso não vai para ninguém">
+            <span class="cli-kpi-ico" style="background:#fef3c7; color:#b45309;"><i class="fas fa-user-slash"></i></span>
+            <div class="cli-kpi-body">
+                <strong class="cli-kpi-val{{ ' cli-warn' if ns.ninguem }}">{{ ns.ninguem }}</strong>
+                <span class="cli-kpi-lbl">Sem ninguém para receber</span>
+            </div>
+        </button>
+        <a class="cli-kpi" href="{{ url_for('configuracoes.departamentos') }}" title="Departamento sem e-mail não pode ser marcado — clique para cadastrar">
+            <span class="cli-kpi-ico" style="background:#fef3c7; color:#b45309;"><i class="fas fa-at"></i></span>
+            <div class="cli-kpi-body">
+                <strong class="cli-kpi-val{{ ' cli-warn' if sem_email }}">{{ sem_email|length }}</strong>
+                <span class="cli-kpi-lbl">Departamento{{ '' if sem_email|length == 1 else 's' }} sem e-mail</span>
+            </div>
+        </a>
+    </div>
+
+    {% if not smtp_ok %}
+    <div class="nota nota-atencao" style="overflow-wrap:anywhere;">
+        <i class="fas fa-triangle-exclamation"></i>
+        <div><strong>O envio ainda não está ligado.</strong> Falta a senha da caixa
+        app@qualicontax.com.br na variável <code>SMTP_PASSWORD</code> do Railway. Até lá, nem o teste sai.</div>
+    </div>
+    {% endif %}
+
+    <div class="lst-infobar">
+        <span class="lst-count" id="emCont"><strong>{{ relatorios|length }}</strong> aviso{{ '' if relatorios|length == 1 else 's' }}</span>
+    </div>
 
 <form method="POST" id="f-destinos">
 <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
 
 {# Cada aviso é "coisa com estado" (quem recebe, último envio, falhou ou não)
    — cartão, pelo critério da casa. #}
-<div class="ficha-grid em-grid">
+<div class="gc-grid em-grid">
 {% for rel, cfg in relatorios.items() %}
 {% set u = ultimos.get(rel, {}) %}
-<article class="ficha">
-    <header class="ficha-top">
-        <span class="ficha-ini"><i class="fas fa-envelope" style="font-size:15px;"></i></span>
-        <div class="ficha-id">
-            <strong class="ficha-nome">{{ cfg.nome }}</strong>
-            <span class="ficha-sub">{{ cfg.quando }}</span>
+{% set r = u.real %}
+{% set nd = namespace(n=0) %}
+{% for d in departamentos %}{% if (rel, d.id) in marcados %}{% set nd.n = nd.n + 1 %}{% endif %}{% endfor %}
+{% set st = 'nunca' if not r else ('falha' if r.status == 'FALHOU' else ('ok' if r.status in ('ENVIADO', 'VAZIO') else 'outro')) %}
+<article class="gc-card cli-card em-card" data-st="{{ st }}" data-ninguem="{{ '1' if nd.n == 0 else '' }}">
+    <header class="gc-head">
+        <span class="gc-ava {{ 'pn-ava-bad' if st == 'falha' else ('pn-ava-off' if st == 'nunca' else '') }}"><i class="fas fa-envelope"></i></span>
+        <div class="gc-tit">
+            <h3 title="{{ cfg.nome }}">{{ cfg.nome }}</h3>
+            <span class="cli-doc"><i class="far fa-clock"></i> {{ cfg.quando }}</span>
         </div>
+        {% if nd.n %}<span class="gc-sit on">{{ nd.n }} departamento{{ '' if nd.n == 1 else 's' }}</span>
+        {% else %}<span class="gc-sit warn">Ninguém recebe</span>{% endif %}
     </header>
 
-    <div>
-        <div class="em-rot">Quem recebe
+    <div class="em-quem">
+        <div class="em-rot"><span class="cli-rot">Quem recebe</span>
             <label class="em-todos"><input type="checkbox" class="em-todos-cb"> Marcar todos</label>
         </div>
         <div class="em-deps">
@@ -55,41 +137,72 @@
         </div>
     </div>
 
-    <div class="em-ult">
-        {% if u.real %}
-            {% set r = u.real %}
-            {% if r.status == 'ENVIADO' %}<span class="badge badge-success">enviado</span>
-            {% elif r.status == 'VAZIO' %}<span class="badge badge-secondary">nada a avisar</span>
-            {% elif r.status == 'FALHOU' %}<span class="badge badge-danger">falhou</span>
-            {% else %}<span class="badge badge-warning">{{ r.status|lower }}</span>{% endif %}
-            <span>{{ r.concluido_em.strftime('%d/%m às %H:%M') if r.concluido_em else r.criado_em.strftime('%d/%m às %H:%M') }}
-                {% if r.status == 'ENVIADO' %}· {{ r.itens }} ite{{ 'm' if r.itens == 1 else 'ns' }} · {{ r.destinatarios }}{% endif %}</span>
-            {% if r.erro %}<div class="em-erro">{{ r.erro }}</div>{% endif %}
-        {% else %}
-            <span class="ficha-sub">Ainda não saiu nenhum.</span>
+    <div class="cli-grade">
+        <div class="cli-campo"><span class="cli-rot">Último envio</span>
+            <b class="cli-val">{% if r %}{{ r.concluido_em.strftime('%d/%m às %H:%M') if r.concluido_em else r.criado_em.strftime('%d/%m às %H:%M') }}{% else %}—{% endif %}</b></div>
+        <div class="cli-campo"><span class="cli-rot">Itens no aviso</span>
+            <b class="cli-val">{% if r and r.status == 'ENVIADO' %}{{ r.itens }} ite{{ 'm' if r.itens == 1 else 'ns' }}{% else %}—{% endif %}</b></div>
+        {% if r and r.status == 'ENVIADO' and r.destinatarios %}
+        <div class="cli-campo cli-campo-email"><span class="cli-rot">Foi para</span>
+            <span class="cli-val">{{ r.destinatarios }}</span></div>
+        {% endif %}
+        {% if u.teste %}{% set t = u.teste %}
+        <div class="cli-campo cli-campo-email"><span class="cli-rot">Último teste</span>
+            <span class="cli-val">{{ t.concluido_em.strftime('%d/%m às %H:%M') if t.concluido_em else t.criado_em.strftime('%d/%m às %H:%M') }}
+                · {{ {'ENVIADO': 'enviado', 'FALHOU': 'falhou', 'VAZIO': 'nada a avisar'}.get(t.status, t.status|lower) }}</span></div>
         {% endif %}
     </div>
 
-    <footer class="ficha-acoes">
-        <button type="button" class="btn btn-sm btn-secondary em-teste" data-rel="{{ rel }}" data-nome="{{ cfg.nome }}">
-            <i class="fas fa-paper-plane"></i> Enviar teste
-        </button>
+    {% if r and r.erro %}<div class="em-erro"><i class="fas fa-circle-exclamation"></i> {{ r.erro }}</div>{% endif %}
+
+    <footer class="cli-pe">
+        {% if not r %}
+        <span class="cli-selo cli-selo-sem"><i class="fas fa-hourglass-half"></i>
+            <span class="cli-selo-t"><b>Ainda não saiu nenhum</b><small>{{ cfg.quando }}</small></span></span>
+        {% elif r.status == 'ENVIADO' %}
+        <span class="cli-selo cli-selo-ok"><i class="fas fa-circle-check"></i>
+            <span class="cli-selo-t"><b>Enviado</b><small>{{ r.itens }} ite{{ 'm' if r.itens == 1 else 'ns' }}</small></span>
+            <span class="cli-selo-d"><small>em</small><b>{{ (r.concluido_em or r.criado_em).strftime('%d/%m') }}</b></span></span>
+        {% elif r.status == 'VAZIO' %}
+        <span class="cli-selo cli-selo-ok"><i class="fas fa-circle-check"></i>
+            <span class="cli-selo-t"><b>Nada a avisar</b><small>não houve item, não saiu e-mail</small></span>
+            <span class="cli-selo-d"><small>em</small><b>{{ (r.concluido_em or r.criado_em).strftime('%d/%m') }}</b></span></span>
+        {% elif r.status == 'FALHOU' %}
+        <span class="cli-selo cli-selo-bad"><i class="fas fa-circle-xmark"></i>
+            <span class="cli-selo-t"><b>Falhou</b><small>o último envio não saiu</small></span>
+            <span class="cli-selo-d"><small>em</small><b>{{ (r.concluido_em or r.criado_em).strftime('%d/%m') }}</b></span></span>
+        {% else %}
+        <span class="cli-selo cli-selo-warn"><i class="fas fa-triangle-exclamation"></i>
+            <span class="cli-selo-t"><b>{{ r.status|capitalize }}</b><small>envio em andamento</small></span>
+            <span class="cli-selo-d"><small>em</small><b>{{ (r.concluido_em or r.criado_em).strftime('%d/%m') }}</b></span></span>
+        {% endif %}
+        <span class="lst-c-act">
+            <button type="button" class="em-teste" data-rel="{{ rel }}" data-nome="{{ cfg.nome }}" title="Mandar agora um teste deste aviso">
+                <i class="fas fa-paper-plane"></i> Enviar teste
+            </button>
+        </span>
     </footer>
 </article>
 {% endfor %}
 </div>
+<div class="gc-nada" id="emVazio" hidden>
+    <i class="fas fa-envelope"></i>
+    <p>Nenhum aviso neste filtro</p>
+</div>
 
 {% if sem_email %}
-<p class="ficha-sub" style="margin:12px 0 0;">
-    Sem e-mail, não dá para marcar: {{ sem_email|map(attribute='nome')|join(', ') }}.
-    <a href="{{ url_for('configuracoes.departamentos') }}">Cadastrar e-mail</a>.
-</p>
+<div class="nota nota-neutra" style="margin:14px 0 0;">
+    <i class="fas fa-circle-info"></i>
+    <div>Sem e-mail, não dá para marcar: {{ sem_email|map(attribute='nome')|join(', ') }}.
+    <a href="{{ url_for('configuracoes.departamentos') }}">Cadastrar e-mail</a>.</div>
+</div>
 {% endif %}
 
 <div class="em-salvar">
-    <button type="submit" class="btn btn-primary"><i class="fas fa-check"></i> Salvar quem recebe</button>
+    <button type="submit" class="pn-btn"><i class="fas fa-check"></i> Salvar quem recebe</button>
 </div>
 </form>
+</div>
 
 {# Teste: mesmo conteúdo do aviso, com os dados de agora, só para o endereço
    digitado. Não conta como o envio do dia. #}
@@ -109,21 +222,36 @@
 </dialog>
 
 <style>
-.em-grid { grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr)); }
-.em-rot { font-size: 11.5px; text-transform: uppercase; letter-spacing: .05em; color: #64748b; font-weight: 600; margin-bottom: 6px; }
-.em-rot { display: flex; align-items: center; justify-content: space-between; }
-.em-todos { display: inline-flex; align-items: center; gap: 5px; margin: 0; cursor: pointer; text-transform: none; letter-spacing: 0; font-weight: 600; font-size: 12.5px; color: #1e4d2b; }
-.em-deps { display: flex; flex-wrap: wrap; gap: 6px; }
-.em-dep { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border: 1px solid #e3ece7; border-radius: 999px; font-size: 13px; cursor: pointer; background: #f8faf9; }
-.em-dep:has(input:checked) { background: #e3f4e5; border-color: #9fd3a8; color: #1e4d2b; font-weight: 600; }
-.em-dep-off { opacity: .5; cursor: not-allowed; }
-.em-ult { font-size: 13px; color: #475569; display: flex; flex-wrap: wrap; gap: 6px; align-items: baseline; min-width: 0; overflow-wrap: anywhere; }
-.em-erro { flex-basis: 100%; color: #b42318; font-size: 12.5px; }
-.em-salvar { position: sticky; bottom: 0; padding: 12px 0; background: var(--page-bg, #f3f7f5); margin-top: 8px; }
-.em-dlg { border: 1px solid #e3ece7; border-radius: 14px; padding: 20px; width: min(440px, calc(100vw - 32px)); }
-.em-dlg::backdrop { background: rgba(15, 23, 42, .35); }
-.em-msg { margin: 10px 0 0; font-size: 13px; }
-.em-msg.ok { color: #1e6b2c; } .em-msg.erro { color: #b42318; }
+.em-card { cursor:default; }
+.em-card.em-fora { display:none; }
+.em-card .cli-doc i { font-size:11px; margin-right:2px; opacity:.8; }
+.em-rot { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:7px; }
+.em-todos { display:inline-flex; align-items:center; gap:5px; margin:0; cursor:pointer; font-weight:700; font-size:12px; color:#15803d; }
+.em-deps { display:flex; flex-wrap:wrap; gap:6px; }
+.em-dep { display:inline-flex; align-items:center; gap:6px; margin:0; padding:4px 11px 4px 9px; border:1px solid #d7e3dc; border-radius:9px;
+          font-size:12.5px; font-weight:600; color:#475569; cursor:pointer; background:#fff; }
+.em-dep:hover { border-color:#86efac; }
+.em-dep input { accent-color:#15803d; margin:0; }
+.em-dep:has(input:checked) { background:#dcfce7; border-color:#86efac; color:#166534; font-weight:700; }
+.em-dep-off, .em-dep-off:hover { opacity:.5; cursor:not-allowed; border-style:dashed; border-color:#e2e8f0; }
+.em-erro { font-size:12.5px; color:#b91c1c; background:#fef2f2; border:1px solid #fecaca; border-radius:11px; padding:8px 12px;
+           overflow-wrap:anywhere; }
+.em-erro i { margin-right:4px; }
+.em-teste { display:inline-flex; align-items:center; gap:6px; height:30px; padding:0 11px; border-radius:8px; cursor:pointer;
+            font-size:12px; font-weight:700; font-family:inherit; white-space:nowrap;
+            background:#f0f7f3; color:#15803d; border:1px solid #dcfce7; }
+.em-teste:hover { background:#dcfce7; }
+.em-salvar { position:sticky; bottom:0; z-index:3; padding:12px 0; margin-top:10px; background:#f7faf8;
+             display:flex; justify-content:flex-end; border-top:1px solid #e8f1ec; }
+.em-dlg { border:1px solid #e3ece7; border-radius:14px; padding:20px; width:min(440px, calc(100vw - 32px)); }
+.em-dlg::backdrop { background:rgba(15, 23, 42, .35); }
+.em-msg { margin:10px 0 0; font-size:13px; }
+.em-msg.ok { color:#1e6b2c; } .em-msg.erro { color:#b42318; }
+@media (max-width:600px) {
+    .em-salvar .pn-btn { width:100%; justify-content:center; }
+    .cli-pe { flex-wrap:wrap; }
+    .cli-pe .cli-selo { flex-basis:100%; }
+}
 </style>
 {% endblock %}
 
@@ -140,7 +268,7 @@
       // Sugere a caixa dos departamentos marcados NESTE cartão (sem repetir);
       // nenhum marcado, fica o e-mail de quem está logado. Dá para trocar à mão.
       var marcados = [];
-      b.closest('.ficha').querySelectorAll('input[name="destino"]:checked').forEach(function (c) {
+      b.closest('.em-card').querySelectorAll('input[name="destino"]:checked').forEach(function (c) {
         var e = (c.dataset.email || '').trim().toLowerCase();
         if (e && marcados.indexOf(e) < 0) marcados.push(e);
       });
@@ -151,7 +279,7 @@
   });
   // "Marcar todos" de cada cartão: liga/desliga os departamentos com e-mail.
   // Fica marcado se todos estão, e "meio marcado" se só parte está.
-  document.querySelectorAll('.ficha').forEach(function (card) {
+  document.querySelectorAll('.em-card').forEach(function (card) {
     var todos = card.querySelector('.em-todos-cb');
     if (!todos) return;
     var cbs = Array.prototype.slice.call(card.querySelectorAll('input[name="destino"]:not(:disabled)'));
@@ -179,6 +307,25 @@
       .then(function (j) { msg.className = 'em-msg ' + (j.ok ? 'ok' : 'erro'); msg.textContent = j.msg; btn.disabled = false; })
       .catch(function () { msg.className = 'em-msg erro'; msg.textContent = 'Não consegui falar com o servidor. Tente de novo.'; btn.disabled = false; });
   };
+  // Fita de KPIs (09/11/2026): clicar filtra os cartões pelo estado do
+  // último envio; clicar de novo no mesmo (ou em "Avisos") mostra todos.
+  // Só esconde — os cartões fora do filtro continuam no formulário e o
+  // "Salvar quem recebe" grava a grade inteira, como antes.
+  var emKpi = '';
+  function emFiltrar() {
+    var n = 0;
+    document.querySelectorAll('.em-card').forEach(function (c) {
+      var ok = !emKpi || (emKpi === 'ninguem' ? c.dataset.ninguem === '1' : c.dataset.st === emKpi);
+      c.classList.toggle('em-fora', !ok);
+      if (ok) n++;
+    });
+    document.querySelectorAll('.cli-kpi[data-kpi]').forEach(function (k) { k.classList.toggle('on', !!emKpi && k.dataset.kpi === emKpi); });
+    document.getElementById('emCont').innerHTML = '<strong>' + n + '</strong> aviso' + (n === 1 ? '' : 's') + (emKpi ? ' neste filtro' : '');
+    document.getElementById('emVazio').hidden = n > 0;
+  }
+  document.querySelectorAll('.cli-kpi[data-kpi]').forEach(function (k) {
+    k.addEventListener('click', function () { emKpi = (emKpi === k.dataset.kpi) ? '' : k.dataset.kpi; emFiltrar(); });
+  });
 })();
 </script>
 {% endblock %}

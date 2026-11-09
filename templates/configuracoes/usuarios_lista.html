@@ -1,40 +1,35 @@
 {% extends "base.html" %}
 {% block title %}Usuários – Configurações{% endblock %}
 {% block content %}
-<div class="page-header">
-    <div>
-        <a href="{{ url_for('configuracoes.index') }}" class="back-link">← Configurações</a>
-        <h1 class="page-title">Usuários</h1>
-        <p class="page-subtitle">Gerencie os usuários e seus acessos ao sistema</p>
-    </div>
-    <div>
-        <button type="button" class="btn btn-secondary" onclick="abrirGerarLink()">
-            <i class="fas fa-link"></i> Gerar link de cadastro
-        </button>
-        <a href="{{ url_for('configuracoes.usuario_novo') }}" class="btn btn-primary">
-            <i class="fas fa-plus"></i> Novo Usuário
-        </a>
-    </div>
-</div>
+{# 09/11/2026 (Anderson): no padrão da tela de Clientes — hero verde, fita de
+   KPIs que filtra, filtros em botões e o MESMO cartão (.gc-card.cli-card).
+   Só a apresentação mudou: botões, modais e scripts são os de antes. #}
+{% include 'configuracoes/_lista_padrao.html' %}
+{% set k = namespace(ativos=0, inativos=0, admins=0, sem_senha=0, colab=0) %}
+{% for u in usuarios %}
+    {% set cc0 = colabore_por_usuario.get(u.id) %}
+    {% if u.situacao == 'ATIVO' %}{% set k.ativos = k.ativos + 1 %}{% else %}{% set k.inativos = k.inativos + 1 %}{% endif %}
+    {% if u.tipo_usuario == 'ADMIN' %}{% set k.admins = k.admins + 1 %}{% endif %}
+    {% if u.senha_pendente %}{% set k.sem_senha = k.sem_senha + 1 %}{% endif %}
+    {% if cc0 and cc0.tem_chave and cc0.ativo %}{% set k.colab = k.colab + 1 %}{% endif %}
+{% endfor %}
 
-{# ── PROGRAMA DO Q-COLABORE ────────────────────────────────────────────────
-   O instalador é UM arquivo do sistema, não algo por usuário — então mora
-   aqui, visível na página, e não escondido dentro do modal da chave de alguém.
-   O funcionário baixa daqui e NUNCA abre o Dropbox: quem lê a pasta é o
-   servidor, com a credencial que só ele tem.
-
-   Preenchido por colabInstalador() no carregamento da página. Falhando, o
-   ADMIN vê o motivo escrito — sumir calado foi o que fez a primeira versão
-   parecer que nada tinha sido feito. #}
-<div class="colab-inst" id="colabInst" data-admin="{{ '1' if current_user.is_admin() else '0' }}" hidden>
-    <div class="colab-inst-tit">
-        {# A marca de verdade, como no portal do Q-Robô — não um ícone genérico
-           de robozinho do Font Awesome. #}
-        <img src="{{ url_for('static', filename='images/logo.png') }}"
-             alt="" class="colab-inst-logo">
-        <span>Programa do Q-Colabore</span>
+<div class="ef-hero">
+    <div class="ef-hero-inner ef-hero-head">
+        <div>
+            <a href="{{ url_for('configuracoes.index') }}" class="cfg-voltar"><i class="fas fa-arrow-left"></i> Configurações</a>
+            <h1 class="ef-hero-title">Usuários</h1>
+            <p class="ef-hero-sub">Gerencie os usuários e seus acessos ao sistema · {{ usuarios|length }} usuário{{ '' if usuarios|length == 1 else 's' }}</p>
+        </div>
+        <div class="ef-hero-actions">
+            <button type="button" class="ef-btn" onclick="abrirGerarLink()">
+                <i class="fas fa-link"></i> Gerar link de cadastro
+            </button>
+            <a href="{{ url_for('configuracoes.usuario_novo') }}" class="ef-btn ef-btn-primary">
+                <i class="fas fa-plus"></i> Novo Usuário
+            </a>
+        </div>
     </div>
-    <div class="colab-inst-corpo" id="colabInstCorpo"></div>
 </div>
 
 {# Modal do link avulso — para mandar a quem NÃO tem acesso ao sistema. #}
@@ -80,112 +75,247 @@
   </div>
 </div>
 
+<div class="ef-body">
+    <div class="cli-kpis cfg-k5">
+        <button type="button" class="cli-kpi" data-kpi="sit:ATIVO" title="Mostrar só os usuários ativos">
+            <span class="cli-kpi-ico" style="background:#dcfce7; color:#15803d;"><i class="fas fa-circle-check"></i></span>
+            <div class="cli-kpi-body">
+                <strong class="cli-kpi-val">{{ k.ativos }}</strong>
+                <span class="cli-kpi-lbl">Usuários ativos</span>
+            </div>
+        </button>
+        <button type="button" class="cli-kpi" data-kpi="tipo:ADMIN" title="Mostrar só os administradores">
+            <span class="cli-kpi-ico" style="background:#fce7f3; color:#be185d;"><i class="fas fa-user-shield"></i></span>
+            <div class="cli-kpi-body">
+                <strong class="cli-kpi-val">{{ k.admins }}</strong>
+                <span class="cli-kpi-lbl">Administradores</span>
+            </div>
+        </button>
+        <button type="button" class="cli-kpi" data-kpi="senha:sem" title="Aprovados que ainda não criaram a senha">
+            <span class="cli-kpi-ico" style="background:#fef3c7; color:#b45309;"><i class="fas fa-key"></i></span>
+            <div class="cli-kpi-body">
+                <strong class="cli-kpi-val{{ ' cli-warn' if k.sem_senha }}">{{ k.sem_senha }}</strong>
+                <span class="cli-kpi-lbl">Sem senha</span>
+            </div>
+        </button>
+        <button type="button" class="cli-kpi" data-kpi="colab:sim" title="Mostrar só quem tem a chave do Q-Colabore ativa">
+            <span class="cli-kpi-ico" style="background:#e0f2fe; color:#0369a1;"><i class="fas fa-robot"></i></span>
+            <div class="cli-kpi-body">
+                <strong class="cli-kpi-val">{{ k.colab }}</strong>
+                <span class="cli-kpi-lbl">Com Q-Colabore</span>
+            </div>
+        </button>
+        <button type="button" class="cli-kpi" data-kpi="sit:INATIVO" title="Mostrar só os usuários inativos">
+            <span class="cli-kpi-ico" style="background:#f1f5f9; color:#475569;"><i class="fas fa-circle-pause"></i></span>
+            <div class="cli-kpi-body">
+                <strong class="cli-kpi-val">{{ k.inativos }}</strong>
+                <span class="cli-kpi-lbl">Usuários inativos</span>
+            </div>
+        </button>
+    </div>
+
+{# ── PROGRAMA DO Q-COLABORE ────────────────────────────────────────────────
+   O instalador é UM arquivo do sistema, não algo por usuário — então mora
+   aqui, visível na página, e não escondido dentro do modal da chave de alguém.
+   O funcionário baixa daqui e NUNCA abre o Dropbox: quem lê a pasta é o
+   servidor, com a credencial que só ele tem.
+
+   Preenchido por colabInstalador() no carregamento da página. Falhando, o
+   ADMIN vê o motivo escrito — sumir calado foi o que fez a primeira versão
+   parecer que nada tinha sido feito. #}
+<div class="colab-inst" id="colabInst" data-admin="{{ '1' if current_user.is_admin() else '0' }}" hidden>
+    <div class="colab-inst-tit">
+        {# A marca de verdade, como no portal do Q-Robô — não um ícone genérico
+           de robozinho do Font Awesome. #}
+        <img src="{{ url_for('static', filename='images/logo.png') }}"
+             alt="" class="colab-inst-logo">
+        <span>Programa do Q-Colabore</span>
+    </div>
+    <div class="colab-inst-corpo" id="colabInstCorpo"></div>
+</div>
+
+    <div class="cli-filtros">
+        <div class="cli-f-row">
+            <span class="cli-seg-rot">Situação</span>
+            <div class="gc-pills" id="usSitPills" role="group" aria-label="Situação do usuário">
+                <button type="button" class="gc-pill" data-v="">Todos <b></b></button>
+                <button type="button" class="gc-pill" data-v="ATIVO">Ativos <b></b></button>
+                <button type="button" class="gc-pill" data-v="INATIVO">Inativos <b></b></button>
+            </div>
+        </div>
+        <div class="cli-f-row">
+            <span class="cli-seg-rot">Tipo</span>
+            <div class="gc-pills cli-pills-seg" id="usTipoPills" role="group" aria-label="Tipo de conta">
+                <button type="button" class="gc-pill" data-v="">Todos</button>
+                {% for t in tipos_usuario %}{% if usuarios|selectattr('tipo_usuario', 'equalto', t)|list %}
+                <button type="button" class="gc-pill" data-v="{{ t }}">{{ t|capitalize }} <b></b></button>
+                {% endif %}{% endfor %}
+            </div>
+        </div>
+        <div class="cli-f-row">
+            <span class="cli-seg-rot">Perfil</span>
+            <div class="gc-pills cli-pills-seg" id="usPerfilPills" role="group" aria-label="Perfil de acesso">
+                <button type="button" class="gc-pill" data-v="">Todos</button>
+                {% for pf in perfis_disponiveis %}
+                <button type="button" class="gc-pill" data-v="{{ pf.id }}">{{ pf.nome }} <b></b></button>
+                {% endfor %}
+                <button type="button" class="gc-pill cli-seg-sem" data-v="-" title="Usuários sem nenhum perfil de acesso"><i class="fas fa-circle-exclamation"></i> Sem perfil <b></b></button>
+            </div>
+        </div>
+        <div class="cli-f-row">
+            <span class="cli-seg-rot">Buscar</span>
+            <label class="cfg-busca"><i class="fas fa-search"></i>
+                <input type="search" id="usBusca" placeholder="Nome, login ou e-mail…" autocomplete="off"></label>
+        </div>
+    </div>
+
+    <div class="lst-infobar">
+        <span class="lst-count" id="usCont"></span>
+        <span class="cli-sort" role="group" aria-label="Ordem dos cartões">
+            Ordenar:
+            <button type="button" class="cli-sortchip on" data-sort="az" title="Nome de A a Z"><i class="fas fa-arrow-down-a-z"></i> A–Z</button>
+            <button type="button" class="cli-sortchip" data-sort="za" title="Nome de Z a A"><i class="fas fa-arrow-down-z-a"></i> Z–A</button>
+        </span>
+    </div>
+
 {# Usuário é "coisa com estado" (ativo / sem senha / perfil), e pelo critério da
-   casa isso é CARTÃO — não tabela. Aqui vale no desktop também, então a
-   marcação é de cartão de verdade, e não uma tabela disfarçada de grade por
-   media query. Uma forma só, um CSS só. #}
-<div class="ficha-grid">
+   casa isso é CARTÃO — o MESMO cartão de Clientes (.gc-card.cli-card). #}
+<div class="gc-grid" id="usLista">
 {% for u in usuarios %}
 {# Q-Colabore F2: o estado da chave (prefixo/versão/ativo/corte) é lido tanto
-   pelos selos quanto pelos data-* do botão, então o `set` vem antes dos dois. #}
+   pelas etiquetas quanto pelos data-* do botão, então o `set` vem antes dos dois. #}
 {% set cc = colabore_por_usuario.get(u.id) %}
-<article class="ficha">
-    <header class="ficha-top">
-        <span class="ficha-ini">{{ (u.nome or '?')[:1]|upper }}</span>
-        <div class="ficha-id">
-            <strong class="ficha-nome">{{ u.nome }}</strong>
-            <code class="ficha-sub">{{ u.login or '—' }}</code>
+{% set ativo = u.situacao == 'ATIVO' %}
+<article class="gc-card cli-card usr-card {% if not ativo %}cli-off{% endif %}" tabindex="0" role="button"
+         title="Abrir o cadastro do usuário"
+         data-open-url="{{ url_for('configuracoes.usuario_editar', uid=u.id) }}"
+         data-nome="{{ u.nome }}"
+         data-busca="{{ u.nome }} {{ u.login or '' }} {{ u.email or '' }} {{ u.perfis or '' }}"
+         data-f-sit="{{ u.situacao }}" data-f-tipo="{{ u.tipo_usuario }}" data-f-perfil="{{ u.perfis_ids or '' }}"
+         data-f-senha="{{ 'sem' if u.senha_pendente else 'ok' }}"
+         data-f-colab="{{ ('sim' if cc.ativo else 'rev') if cc and cc.tem_chave else 'nao' }}">
+    <header class="gc-head">
+        <span class="gc-ava {% if u.tipo_usuario == 'ADMIN' %}usr-ava-adm{% endif %}">{{ (u.nome or '?')[:1]|upper }}</span>
+        <div class="gc-tit">
+            <h3 title="{{ u.nome }}">{{ u.nome }}</h3>
+            <span class="cli-doc">Login <span class="mono">{{ u.login or '—' }}</span></span>
         </div>
+        <span class="gc-sit {{ 'on' if ativo else 'off' }}">{{ u.situacao|capitalize }}</span>
     </header>
 
-    <div class="ficha-selos">
-        <span class="badge badge-{{ 'danger' if u.tipo_usuario == 'ADMIN' else 'info' }}">
-            {{ u.tipo_usuario }}
-        </span>
-        <span class="status-badge status-{{ 'ativo' if u.situacao == 'ATIVO' else 'inativo' }}">
-            {{ u.situacao }}
+    <div class="gc-tags">
+        <span class="gc-tag {{ 'cfg-tag-adm' if u.tipo_usuario == 'ADMIN' else 'cfg-tag-info' }}">
+            {% if u.tipo_usuario == 'ADMIN' %}<i class="fas fa-user-shield"></i> {% endif %}{{ u.tipo_usuario|capitalize }}
         </span>
         {% if u.senha_pendente %}
-        <span class="badge badge-warning" title="Aprovado — aguardando a pessoa definir a senha">
-            SEM SENHA
+        <span class="gc-tag cfg-tag-warn" title="Aprovado — aguardando a pessoa definir a senha">
+            <i class="fas fa-key"></i> Sem senha
         </span>
         {% endif %}
         {# A chave do Q-Colabore é ESTADO deste usuário, não ação: o lugar dela é
-           aqui com os outros selos. Dentro do botão ela espremia o rótulo em
-           "Q-Colab / ore" em três linhas quando o botão ocupa meia largura. #}
+           aqui com as outras etiquetas. #}
         {% if cc and cc.tem_chave %}
             {% if cc.ativo %}
-            <span class="badge badge-success" title="Chave do agente Q-Colabore ativa">
-                <i class="fas fa-robot"></i> <code>{{ cc.token_prefixo }}…</code>
+            <span class="gc-tag cfg-tag-ok" title="Chave do agente Q-Colabore ativa">
+                <i class="fas fa-robot"></i> Q-Colabore <code>{{ cc.token_prefixo }}…</code>
             </span>
             {% else %}
-            <span class="badge badge-danger" title="Chave do agente Q-Colabore revogada">
-                <i class="fas fa-robot"></i> revogada
+            <span class="gc-tag cfg-tag-bad" title="Chave do agente Q-Colabore revogada">
+                <i class="fas fa-robot"></i> Q-Colabore revogada
             </span>
             {% endif %}
         {% endif %}
     </div>
 
-    <dl class="ficha-dados">
-        <dt>E-mail</dt>
-        <dd>{{ u.email }}</dd>
-        <dt>Perfis</dt>
-        <dd>{% if u.perfis %}{{ u.perfis }}{% else %}<span class="text-muted">—</span>{% endif %}</dd>
-    </dl>
+    <div class="cli-grade">
+        <div class="cli-campo cli-campo-email"><span class="cli-rot">E-mail</span><span class="cli-val" title="{{ u.email or '' }}">{{ u.email or '—' }}</span></div>
+        <div class="cli-campo cfg-linha"><span class="cli-rot">Perfis</span>
+            {% if u.perfis %}
+            <div class="cfg-nomes">{% for n in u.perfis.split(', ') %}<span class="cli-ramo">{{ n }}</span>{% endfor %}</div>
+            {% else %}<span class="cli-val cfg-vazio">Sem perfil</span>{% endif %}
+        </div>
+    </div>
 
-    <footer class="ficha-acoes">
-        <a href="{{ url_for('configuracoes.usuario_editar', uid=u.id) }}"
-           class="btn btn-sm btn-secondary" title="Editar">
-            <i class="fas fa-edit"></i>
-        </a>
-        <button class="btn btn-sm btn-{{ 'warning' if u.situacao == 'ATIVO' else 'success' }}"
-                title="{{ 'Desativar' if u.situacao == 'ATIVO' else 'Ativar' }}"
-                onclick="toggleUsuario({{ u.id }}, this)">
-            <i class="fas fa-{{ 'ban' if u.situacao == 'ATIVO' else 'check' }}"></i>
-        </button>
-        {% set slink = senha_links.get(u.id) %}
-        {% if slink %}
-        <button class="btn btn-sm btn-info" title="Copiar mensagem com o link de senha"
-                data-url="{{ slink }}" data-nome="{{ u.nome }}" data-login="{{ u.login }}"
-                onclick="copiarLista(this)">
-            <i class="fas fa-key"></i> Copiar link de senha
-        </button>
-        {% endif %}
-        {% if u.senha_pendente %}
-            <button class="btn btn-sm btn-primary" title="Gerar novo link de senha (revoga o anterior)"
-                    onclick="gerarLinkSenha({{ u.id }}, this)">
-                <i class="fas fa-rotate"></i> Novo link de senha
-            </button>
+    <footer class="cli-pe">
+        {% if not ativo %}
+        <span class="cli-selo cli-selo-sem"><i class="fas fa-circle-pause"></i>
+            <span class="cli-selo-t"><b>Desativado</b><small>não entra no sistema</small></span></span>
+        {% elif u.senha_pendente %}
+        <span class="cli-selo cli-selo-warn"><i class="fas fa-key"></i>
+            <span class="cli-selo-t"><b>Sem senha</b><small>falta a pessoa criar</small></span></span>
         {% else %}
-            <button class="btn btn-sm btn-warning" title="Redefinir a senha deste usuário"
-                    onclick="abrirRedefinir({{ u.id }}, '{{ u.login|e }}', {{ 'true' if u.id == current_user.id else 'false' }})">
-                <i class="fas fa-key"></i> Redefinir senha
-            </button>
+        <span class="cli-selo cli-selo-ok"><i class="fas fa-circle-check"></i>
+            <span class="cli-selo-t"><b>Com senha</b><small>acesso liberado</small></span></span>
         {% endif %}
-        {# Botão do Q-Colabore: só o verbo. O estado da chave já está nos selos,
-           lá em cima — repetir aqui era o que quebrava o rótulo em três linhas.
-           O modal continua lendo tudo destes data-*. #}
-        <button class="btn btn-sm btn-secondary" title="Chave do agente Q-Colabore deste funcionário"
-                onclick="colabAbrir(this)"
-                data-uid="{{ u.id }}" data-nome="{{ u.nome|e }}"
-                data-tem="{{ '1' if cc and cc.tem_chave else '0' }}"
-                data-ativo="{{ '1' if cc and cc.ativo else '0' }}"
-                data-copia="{{ '1' if cc and cc.tem_copia else '0' }}"
-                data-prefixo="{{ cc.token_prefixo if cc else '' }}"
-                data-versao="{{ cc.versao if cc else '' }}"
-                data-corte="{{ cc.data_inicio_captura.strftime('%d/%m/%Y') if cc and cc.data_inicio_captura else '' }}"
-                {# ISO separado: o <input type="date"> só aceita AAAA-MM-DD, e o
-                   data-corte acima é o formato brasileiro que vai para a tela. #}
-                data-corte-iso="{{ cc.data_inicio_captura.isoformat() if cc and cc.data_inicio_captura else '' }}"
-                data-contato="{{ cc.ultimo_contato.strftime('%d/%m/%Y %H:%M') if cc and cc.ultimo_contato else '' }}">
-            <i class="fas fa-robot"></i> Q-Colabore
-        </button>
+        <span class="lst-c-act">
+            <a href="{{ url_for('configuracoes.usuario_editar', uid=u.id) }}"
+               class="lst-act lst-act-edit" title="Editar">
+                <i class="fas fa-pen"></i>
+            </a>
+            <button class="lst-act {{ 'cfg-act-warn' if u.situacao == 'ATIVO' else 'cfg-act-ok' }}"
+                    title="{{ 'Desativar' if u.situacao == 'ATIVO' else 'Ativar' }}"
+                    onclick="toggleUsuario({{ u.id }}, this)">
+                <i class="fas fa-{{ 'ban' if u.situacao == 'ATIVO' else 'check' }}"></i>
+            </button>
+            {% set slink = senha_links.get(u.id) %}
+            {% if slink %}
+            <button class="lst-act cfg-act-info" title="Copiar mensagem com o link de senha"
+                    data-url="{{ slink }}" data-nome="{{ u.nome }}" data-login="{{ u.login }}"
+                    onclick="copiarLista(this)">
+                <i class="fas fa-paper-plane"></i>
+            </button>
+            {% endif %}
+            {% if u.senha_pendente %}
+                <button class="lst-act cfg-act-info" title="Gerar novo link de senha (revoga o anterior)"
+                        onclick="gerarLinkSenha({{ u.id }}, this)">
+                    <i class="fas fa-rotate"></i>
+                </button>
+            {% else %}
+                <button class="lst-act cfg-act-warn" title="Redefinir a senha deste usuário"
+                        onclick="abrirRedefinir({{ u.id }}, '{{ u.login|e }}', {{ 'true' if u.id == current_user.id else 'false' }})">
+                    <i class="fas fa-key"></i>
+                </button>
+            {% endif %}
+            {# Botão do Q-Colabore: só o verbo. O estado da chave já está nas
+               etiquetas, lá em cima. O modal continua lendo tudo destes data-*. #}
+            <button class="lst-act cfg-act-info" title="Chave do agente Q-Colabore deste funcionário"
+                    onclick="colabAbrir(this)"
+                    data-uid="{{ u.id }}" data-nome="{{ u.nome|e }}"
+                    data-tem="{{ '1' if cc and cc.tem_chave else '0' }}"
+                    data-ativo="{{ '1' if cc and cc.ativo else '0' }}"
+                    data-copia="{{ '1' if cc and cc.tem_copia else '0' }}"
+                    data-prefixo="{{ cc.token_prefixo if cc else '' }}"
+                    data-versao="{{ cc.versao if cc else '' }}"
+                    data-corte="{{ cc.data_inicio_captura.strftime('%d/%m/%Y') if cc and cc.data_inicio_captura else '' }}"
+                    {# ISO separado: o <input type="date"> só aceita AAAA-MM-DD, e o
+                       data-corte acima é o formato brasileiro que vai para a tela. #}
+                    data-corte-iso="{{ cc.data_inicio_captura.isoformat() if cc and cc.data_inicio_captura else '' }}"
+                    data-contato="{{ cc.ultimo_contato.strftime('%d/%m/%Y %H:%M') if cc and cc.ultimo_contato else '' }}">
+                <i class="fas fa-robot"></i>
+            </button>
+        </span>
     </footer>
 </article>
-{% else %}
-<p class="ficha-vazio">Nenhum usuário cadastrado.</p>
 {% endfor %}
 </div>
+<div class="gc-nada" id="usVazio" {% if usuarios %}hidden{% endif %}>
+    <i class="fas fa-users"></i>
+    {% if usuarios %}
+    <p>Nenhum usuário com os filtros escolhidos</p>
+    <button type="button" class="gf-limpar" onclick="usLimpar()"><i class="fas fa-eraser"></i> Limpar filtros</button>
+    {% else %}
+    <p>Nenhum usuário cadastrado.</p>
+    {% endif %}
+</div>
+
+<style>
+/* Cartão de usuário: o de Clientes; aqui só o que é dele */
+.usr-ava-adm { background:linear-gradient(135deg,#db2777,#831843); }
+/* "Copiado!" escreve no próprio botão (copiarLista) — o botão cresce em vez de vazar */
+.usr-card .lst-act { width:auto; min-width:30px; padding:0 8px; white-space:nowrap; }
+.usr-card .cli-pe { flex-wrap:wrap; }
+.usr-card .cli-selo { min-width:150px; }
+</style>
 
 {# ==================================================================== #}
 {# Q-COLABORE Parte 2 — links gerados e fila de pendentes              #}
@@ -321,6 +451,7 @@
         </tbody>
     </table>
 </div>
+</div>{# /ef-body #}
 
 {# ---- Modal: gerar link (o token aparece AQUI e em lugar nenhum mais) ---- #}
 <div class="qc-modal-fundo" id="qcModal" onclick="if(event.target===this) fecharModal()">
@@ -1390,5 +1521,12 @@ function colabCopiar() {
         setTimeout(function () { btn.textContent = 'COPIAR CHAVE'; btn.classList.remove('ok'); }, 1800);
     }).catch(function () { alert('Copie manualmente: ' + txt); });
 }
+</script>
+<script>
+cfgLista({lista: 'usLista', cont: 'usCont', vazio: 'usVazio', rotulo: ['usuário', 'usuários'],
+          busca: 'usBusca', limpar: 'usLimpar',
+          grupos: [{pills: '#usSitPills', campo: 'sit'}, {pills: '#usTipoPills', campo: 'tipo'},
+                   {pills: '#usPerfilPills', campo: 'perfil'}]});
+cfgCartaoAbre('#usLista');
 </script>
 {% endblock %}

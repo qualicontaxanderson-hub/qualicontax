@@ -13,7 +13,7 @@ from utils.atividade import registrar
 from utils.auditoria_fmt import (hist_preparar, coletar_cliente_ids,
                                  MODULO_LABEL, AUDITORIA_INICIO)
 from utils.db_helper import execute_query, transacao
-from utils.permissions import PERMISSION_CATALOG
+from utils.permissions import PERMISSION_CATALOG, DEPARTAMENTOS_PERMISSOES, normalizar_selecao
 from utils import cadastro_token
 from utils import colabore_chaves
 
@@ -958,7 +958,8 @@ def usuarios():
     rows = execute_query(
         """SELECT u.id, u.nome, u.login, u.email, u.tipo_usuario, u.situacao, u.cargo,
                   u.senha_pendente,
-                  GROUP_CONCAT(pa.nome ORDER BY pa.nome SEPARATOR ', ') AS perfis
+                  GROUP_CONCAT(pa.nome ORDER BY pa.nome SEPARATOR ', ') AS perfis,
+                  GROUP_CONCAT(pa.id ORDER BY pa.nome SEPARATOR ',') AS perfis_ids
              FROM usuarios u
              LEFT JOIN usuario_perfis up ON up.usuario_id = u.id
              LEFT JOIN perfis_acesso pa  ON pa.id = up.perfil_id
@@ -1971,7 +1972,30 @@ def perfis():
             ORDER BY pa.nome""",
         fetch=True,
     ) or []
-    return render_template('configuracoes/perfis_lista.html', perfis=rows)
+    # Quem usa cada perfil (para o cartão) e os funcionários ativos com e sem
+    # perfil (para a fita de KPIs) — 09/11/2026, tela no padrão de Clientes.
+    membros = execute_query(
+        """SELECT up.perfil_id, u.nome, u.situacao
+             FROM usuario_perfis up
+             JOIN usuarios u ON u.id = up.usuario_id
+            ORDER BY u.nome""",
+        fetch=True,
+    ) or []
+    por_perfil = {}
+    for m in membros:
+        por_perfil.setdefault(m['perfil_id'], []).append(m)
+    for p in rows:
+        p['membros'] = por_perfil.get(p['id'], [])
+    cob = execute_query(
+        """SELECT SUM(EXISTS(SELECT 1 FROM usuario_perfis up WHERE up.usuario_id = u.id)) AS com_perfil,
+                  SUM(NOT EXISTS(SELECT 1 FROM usuario_perfis up WHERE up.usuario_id = u.id)) AS sem_perfil
+             FROM usuarios u
+            WHERE u.classe_conta = 'FUNCIONARIO' AND u.situacao = 'ATIVO'""",
+        fetch=True, fetch_one=True,
+    ) or {}
+    return render_template('configuracoes/perfis_lista.html', perfis=rows,
+                           usuarios_com_perfil=int(cob.get('com_perfil') or 0),
+                           usuarios_sem_perfil=int(cob.get('sem_perfil') or 0))
 
 
 @configuracoes.route('/perfis/novo', methods=['GET', 'POST'])
@@ -1980,12 +2004,13 @@ def perfil_novo():
     if request.method == 'POST':
         nome      = request.form.get('nome', '').strip()
         descricao = request.form.get('descricao', '').strip()
-        perms_sel = request.form.getlist('permissoes')
+        # 09/11/2026: só códigos do catálogo, e o Ver de cada ação marcada vai junto
+        perms_sel = sorted(normalizar_selecao(request.form.getlist('permissoes')))
 
         if not nome:
             flash('O nome do perfil é obrigatório.', 'danger')
             return render_template('configuracoes/perfil_form.html',
-                                   catalog=PERMISSION_CATALOG, perfil=None, perms_perfil=set())
+                                   catalog=PERMISSION_CATALOG, deps=DEPARTAMENTOS_PERMISSOES, perfil=None, perms_perfil=set(), usuarios_perfil=[])
 
         pid = execute_query(
             "INSERT INTO perfis_acesso (nome, descricao) VALUES (%s, %s)",
@@ -2005,7 +2030,7 @@ def perfil_novo():
         return redirect(url_for('configuracoes.perfis'))
 
     return render_template('configuracoes/perfil_form.html',
-                           catalog=PERMISSION_CATALOG, perfil=None, perms_perfil=set())
+                           catalog=PERMISSION_CATALOG, deps=DEPARTAMENTOS_PERMISSOES, perfil=None, perms_perfil=set(), usuarios_perfil=[])
 
 
 @configuracoes.route('/perfis/<int:pid>/editar', methods=['GET', 'POST'])
@@ -2030,13 +2055,14 @@ def perfil_editar(pid):
         nome      = request.form.get('nome', '').strip()
         descricao = request.form.get('descricao', '').strip()
         situacao  = request.form.get('situacao', 'ATIVO')
-        perms_sel = request.form.getlist('permissoes')
+        # 09/11/2026: só códigos do catálogo, e o Ver de cada ação marcada vai junto
+        perms_sel = sorted(normalizar_selecao(request.form.getlist('permissoes')))
 
         if not nome:
             flash('O nome do perfil é obrigatório.', 'danger')
             return render_template('configuracoes/perfil_form.html',
-                                   catalog=PERMISSION_CATALOG, perfil=perfil,
-                                   perms_perfil=perms_perfil)
+                                   catalog=PERMISSION_CATALOG, deps=DEPARTAMENTOS_PERMISSOES, perfil=perfil,
+                                   perms_perfil=perms_perfil, usuarios_perfil=_usuarios_do_perfil(pid))
 
         execute_query(
             "UPDATE perfis_acesso SET nome=%s, descricao=%s, situacao=%s WHERE id=%s",
@@ -2066,7 +2092,16 @@ def perfil_editar(pid):
         return redirect(url_for('configuracoes.perfis'))
 
     return render_template('configuracoes/perfil_form.html',
-                           catalog=PERMISSION_CATALOG, perfil=perfil, perms_perfil=perms_perfil)
+                           catalog=PERMISSION_CATALOG, deps=DEPARTAMENTOS_PERMISSOES, perfil=perfil,
+                           perms_perfil=perms_perfil, usuarios_perfil=_usuarios_do_perfil(pid))
+
+
+def _usuarios_do_perfil(pid):
+    """Quem usa o perfil (ativos), para o alto da tela de edição."""
+    return execute_query(
+        "SELECT u.id, u.nome FROM usuario_perfis up JOIN usuarios u ON u.id = up.usuario_id "
+        " WHERE up.perfil_id = %s AND u.situacao = 'ATIVO' ORDER BY u.nome",
+        (pid,), fetch=True) or []
 
 
 @configuracoes.route('/perfis/<int:pid>/excluir', methods=['POST'])

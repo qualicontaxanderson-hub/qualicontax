@@ -714,7 +714,7 @@ table.cc-items-table td.r { text-align:right; font-weight:600; color:#166534; }
                 <a onclick="exportarRel('pdf')"><i class="fas fa-file-pdf" style="color:#b91c1c;"></i> PDF</a>
             </div>
         </div>
-        {% if is_admin %}
+        {% if current_user.has_permission('escrita_fiscal.conf_saidas.excluir') %}
         <button onclick="excluirLote()"
                 style="background:#b91c1c;color:#fff;border:none;padding:7px 16px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:6px;">
             <i class="fas fa-trash-alt"></i> Excluir em Lote
@@ -1524,7 +1524,8 @@ document.addEventListener('keydown', (e) => {
 
 // Só ADMIN vê o botão de excluir. O gate de verdade está na rota
 // /conf-compras/excluir/<id>, que devolve 403 para não-admin.
-const IS_ADMIN = {{ 'true' if is_admin else 'false' }};
+// 09/11/2026: o botão segue a permissão "Excluir" da tela (nasce só com o admin).
+const IS_ADMIN = {{ 'true' if current_user.has_permission('escrita_fiscal.conf_saidas.excluir') else 'false' }};
 function delBtn(r) {
     if (!IS_ADMIN) return '';
     return `<button class="btn-del" onclick="excluirNfe(${r.id}, this)" title="Excluir">

@@ -431,6 +431,8 @@ function gcNovoGrupo() {
 
 // ── Caixa do grupo (08/10/2026) ──────────────────────────────────────────
 var GM = null, gmMudou = false, gmTimer = null;
+// O que este usuário pode fazer no grupo (09/11/2026): mesma regra do portão.
+var GM_PODE = {alterar: {{ pode_rota('grupos.renomear')|tojson }}, excluir: {{ pode_rota('grupos.deletar')|tojson }}};
 
 function gmEl(tag, cls, txt) {
     var e = document.createElement(tag);
@@ -545,11 +547,14 @@ function gmDesenhar() {
     if (window.qcxCopiar) window.qcxCopiar.preparar(ul);
 
     var ft = document.getElementById('gmFoot'); ft.innerHTML = '';
+    if (GM_PODE.alterar) {
     var ren = gmEl('button', 'gm-b'); ren.type = 'button';
     ren.innerHTML = '<i class="fas fa-pen"></i> Renomear';
     ren.addEventListener('click', gmRenomear);
     ft.appendChild(ren);
-    if (!n) {
+    }
+    // 09/11/2026: excluir e desativar são a permissão "Excluir" de Grupos (nasce só com o admin)
+    if (!n && GM_PODE.excluir) {
         var exc = gmEl('button', 'gm-b gm-b-red'); exc.type = 'button';
         exc.innerHTML = '<i class="fas fa-trash-alt"></i> Excluir grupo';
         exc.title = 'Só aparece com o grupo vazio';
@@ -560,10 +565,12 @@ function gmDesenhar() {
     var fechar = gmEl('button', 'gm-b', 'Fechar'); fechar.type = 'button';
     fechar.addEventListener('click', gmFechar);
     ft.appendChild(fechar);
+    if (g.ativo ? GM_PODE.excluir : GM_PODE.alterar) {
     var est = gmEl('button', g.ativo ? 'gm-b gm-b-red' : 'gm-b gm-b-ok'); est.type = 'button';
     est.innerHTML = g.ativo ? '<i class="fas fa-ban"></i> Desativar grupo' : '<i class="fas fa-check"></i> Reativar grupo';
     est.addEventListener('click', g.ativo ? function () { gmTela('desat'); } : gmReativar);
     ft.appendChild(est);
+    }
 }
 
 function gmTela(qual) {

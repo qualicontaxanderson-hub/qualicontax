@@ -1,0 +1,207 @@
+{# Padrão de LISTA das Configurações (Perfis, Usuários, Departamentos) — 09/11/2026.
+   O cartão e a fita de KPIs vêm de clientes/_cartao_css.html (fonte única);
+   aqui fica só o que a tela de Clientes tem no próprio index.html e estas três
+   telas também usam: filtros em botões, ordem, busca e o "← Configurações".
+   Valores copiados de clientes/index.html — mudou lá, mude aqui. #}
+{% include 'clientes/_cartao_css.html' %}
+<style>
+.cfg-voltar { display:inline-flex; align-items:center; gap:6px; font-size:12px; font-weight:600; color:#a7d9c0;
+              text-decoration:none; margin-bottom:6px; }
+.cfg-voltar:hover { color:#fff; }
+
+/* Filtros em botões — os mesmos de Clientes */
+.gc-pills { display:flex; gap:6px; flex-wrap:wrap; }
+.gc-pill { border:1px solid #d7e3dc; background:#fff; color:#475569; border-radius:99px; padding:7px 14px;
+           font-size:13px; font-weight:600; cursor:pointer; font-family:inherit; }
+.gc-pill b { margin-left:4px; color:#94a3b8; }
+.gc-pill b:empty { display:none; }
+.gc-pill.on { background:#0f3d2e; border-color:#0f3d2e; color:#fff; }
+.gc-pill.on b { color:#86efac; }
+.gc-pill.gc-pill-zero { opacity:.45; }
+.cli-filtros { display:flex; flex-wrap:wrap; gap:10px; margin-bottom:16px; }
+.cli-f-row { flex:1 1 auto; display:flex; flex-direction:column; gap:7px; min-width:0;
+             background:#fff; border:1px solid #e3ebe6; border-radius:12px; padding:10px 14px; }
+.cli-f-row .gc-pills { gap:5px; }
+.cli-filtros .gc-pill { border-radius:9px; padding:5px 10px; font-size:12.5px; }
+.cli-seg-rot { font-size:11px; font-weight:800; letter-spacing:.06em; text-transform:uppercase; color:#7d968a; }
+.cli-pills-seg .gc-pill { border-radius:10px; }
+.cli-pills-seg .gc-pill i { font-size:12px; margin-right:3px; color:#16a34a; }
+.cli-pills-seg .gc-pill.on i { color:#86efac; }
+.cli-pills-seg .cli-seg-sem:not(.on) { color:#b91c1c; border-color:#fecaca; background:#fef2f2; }
+.cli-pills-seg .cli-seg-sem i { color:#dc2626; }
+.cli-pills-seg .cli-seg-sem.on { background:#b91c1c; border-color:#b91c1c; }
+
+/* Busca: uma caixinha a mais na mesma faixa dos filtros */
+.cfg-busca { position:relative; display:block; }
+.cfg-busca i { position:absolute; left:12px; top:50%; transform:translateY(-50%); color:#94a3b8; font-size:13px; }
+.cfg-busca input { width:100%; height:34px; box-sizing:border-box; border:1px solid #d7e3dc; border-radius:9px;
+                   padding:0 12px 0 34px; font-size:13px; font-family:inherit; background:#fff; }
+.cfg-busca input:focus { outline:none; border-color:#22c55e; box-shadow:0 0 0 3px rgba(34,197,94,.14); }
+
+.gf-limpar { display:inline-flex; align-items:center; gap:6px; height:32px; padding:0 14px; border-radius:9px;
+             border:1px solid #d7e3dc; background:#fff; color:#475569; font-size:12.5px; font-weight:700;
+             cursor:pointer; font-family:inherit; }
+.gf-limpar:hover { border-color:#fca5a5; color:#b91c1c; background:#fef2f2; }
+
+/* Ordem */
+.cli-sort { font-size:11.5px; color:#7d968a; display:flex; align-items:center; gap:6px; }
+.cli-sortchip { border:1px solid #e3ece7; background:#fff; color:#5b7468; border-radius:99px;
+                padding:4px 11px; font-size:12px; font-weight:600; cursor:pointer; font-family:inherit; }
+.cli-sortchip:hover { border-color:#86efac; color:#15803d; }
+.cli-sortchip.on { background:#dcfce7; border-color:#86efac; color:#15803d; }
+
+/* KPI que leva a outra tela (Perfis → Usuários sem perfil) */
+a.cli-kpi { text-decoration:none; }
+.cli-kpis.cfg-k4 { grid-template-columns:repeat(4, minmax(0,1fr)); }
+.cli-kpis.cfg-k5 { grid-template-columns:repeat(5, minmax(0,1fr)); }
+@media (max-width:1100px) { .cli-kpis.cfg-k4, .cli-kpis.cfg-k5 { grid-template-columns:repeat(3, minmax(0,1fr)); } }
+
+/* Etiquetas e nomes dentro do cartão */
+.cfg-tag-ok   { background:#f0fdf4; color:#15803d; border-color:#bbf7d0; }
+.cfg-tag-info { background:#eff6ff; color:#1d4ed8; border-color:#bfdbfe; }
+.cfg-tag-warn { background:#fffbeb; color:#b45309; border-color:#fde68a; }
+.cfg-tag-bad  { background:#fef2f2; color:#b91c1c; border-color:#fecaca; }
+.cfg-tag-sem  { background:#f8fafc; color:#64748b; border-color:#e2e8f0; }
+.cfg-tag-adm  { background:#fdf2f8; color:#be185d; border-color:#fbcfe8; }
+.gc-tag i { font-size:10.5px; margin-right:3px; }
+.gc-tag code { font-size:11.5px; background:none; color:inherit; padding:0; }
+.cfg-linha { grid-column:1 / -1; }
+.cfg-nomes { display:flex; flex-wrap:wrap; gap:5px; margin-top:4px; }
+.cfg-nomes .cli-ramo { font-size:11.5px; padding:1px 9px; }
+.cfg-nomes .cfg-nome-off { color:#64748b; background:#f8fafc; border-color:#e2e8f0; text-decoration:line-through; }
+.cli-val.cfg-vazio { font-size:12.5px; color:#94a3b8; }
+/* Cartões da mesma linha têm alturas diferentes: o rodapé desce para o pé */
+.cli-card .cli-pe { margin-top:auto; }
+.cli-pe .lst-c-act { flex-shrink:0; }
+.cli-pe .lst-c-act form { display:inline; margin:0; }
+.lst-act { font-family:inherit; }
+.lst-act:disabled { opacity:.6; cursor:default; }
+.cfg-act-warn { background:#fffbeb; color:#b45309; border-color:#fde68a; }
+.cfg-act-warn:hover { background:#fef3c7; }
+.cfg-act-ok { background:#f0fdf4; color:#15803d; border-color:#bbf7d0; }
+.cfg-act-ok:hover { background:#dcfce7; }
+.cfg-act-info { background:#eff6ff; color:#1d4ed8; border-color:#bfdbfe; }
+.cfg-act-info:hover { background:#dbeafe; }
+
+/* Aviso amarelo acima da grade (mesmo desenho da vigia de CNPJ de Clientes) */
+.cfg-aviso { margin:0 0 16px; background:#fffbeb; border:1px solid #fcd34d; border-radius:12px; padding:12px 16px;
+             font-size:13px; color:#78350f; overflow-wrap:anywhere; }
+.cfg-aviso i { margin-right:6px; }
+.cfg-aviso a { color:#92400e; font-weight:700; }
+
+@media (max-width:720px) {
+    .gc-grid { grid-template-columns:1fr; }
+    .lst-infobar { flex-wrap:wrap; gap:8px; }
+    .cli-sort { flex-wrap:wrap; }
+}
+@media (max-width:600px) {
+    .ef-hero-head { flex-direction:column; align-items:flex-start; }
+    .ef-hero-title { font-size:21px; }
+    .cli-f-row { flex-basis:100%; }
+}
+</style>
+<script>
+// Filtro na tela, sem recarregar — o mesmo jeito de Clientes, enxuto para
+// listas pequenas. Cada cartão traz data-f-<campo>="v1,v2"; cada grupo de
+// botões filtra um campo; o KPI começa do zero e liga um campo só.
+// Valor "-" casa com campo vazio; "+" com campo preenchido.
+function cfgLista(cfg) {
+    var lista = document.getElementById(cfg.lista), st = {}, ordem = 'az';
+    var itens = [].map.call(lista.querySelectorAll('.cli-card'), function (el) {
+        var f = {};
+        Object.keys(el.dataset).forEach(function (k) {
+            if (k.indexOf('f') === 0 && k.length > 1 && k[1] === k[1].toUpperCase()) {
+                var v = el.dataset[k];
+                f[k.charAt(1).toLowerCase() + k.slice(2)] = v ? v.split(',') : [];
+            }
+        });
+        return {el: el, f: f, nome: el.dataset.nome || '', busca: cfgSemAcento(el.dataset.busca || el.dataset.nome || '')};
+    });
+    function casa(lst, v) { return v === '-' ? !lst.length : (v === '+' ? lst.length > 0 : lst.indexOf(v) >= 0); }
+    function atende(it, menos) {
+        for (var c in st) { if (c !== menos && st[c] && !casa(it.f[c] || [], st[c])) return false; }
+        if (menos !== '__busca' && cfg.busca) {
+            var t = cfgSemAcento(document.getElementById(cfg.busca).value.trim());
+            if (t && it.busca.indexOf(t) < 0) return false;
+        }
+        return true;
+    }
+    function aplicar() {
+        var n = 0;
+        itens.forEach(function (it) { var ok = atende(it); it.el.classList.toggle('cf-fora', !ok); if (ok) n++; });
+        var cont = document.getElementById(cfg.cont);
+        cont.innerHTML = n === itens.length
+            ? 'Mostrando <strong>' + n + '</strong> ' + (n === 1 ? cfg.rotulo[0] : cfg.rotulo[1])
+            : 'Mostrando <strong>' + n + '</strong> de <strong>' + itens.length + '</strong> ' + cfg.rotulo[1];
+        document.getElementById(cfg.vazio).hidden = n > 0;
+        (cfg.grupos || []).forEach(function (g) {
+            document.querySelectorAll(g.pills + ' .gc-pill').forEach(function (b) {
+                var v = b.dataset.v, cb = b.querySelector('b');
+                var k = itens.filter(function (it) { return atende(it, g.campo) && (!v || casa(it.f[g.campo] || [], v)); }).length;
+                if (cb) cb.textContent = k;
+                b.classList.toggle('on', v === (st[g.campo] || ''));
+                if (v) b.classList.toggle('gc-pill-zero', !k && v !== st[g.campo]);
+            });
+        });
+        document.querySelectorAll('.cli-kpi[data-kpi]').forEach(function (k) {
+            var p = k.dataset.kpi.split(':');
+            var outros = Object.keys(st).filter(function (c) { return st[c] && c !== p[0]; }).length;
+            k.classList.toggle('on', st[p[0]] === p[1] && !outros);
+        });
+    }
+    function ordenar(modo) {
+        ordem = modo;
+        itens.slice().sort(function (a, b) {
+            return a.nome.localeCompare(b.nome, 'pt-BR') * (modo === 'za' ? -1 : 1);
+        }).forEach(function (it) { lista.appendChild(it.el); });
+        document.querySelectorAll('.cli-sortchip').forEach(function (c) { c.classList.toggle('on', c.dataset.sort === modo); });
+    }
+    (cfg.grupos || []).forEach(function (g) {
+        document.querySelectorAll(g.pills + ' .gc-pill').forEach(function (b) {
+            b.addEventListener('click', function () {
+                st[g.campo] = (b.dataset.v && st[g.campo] !== b.dataset.v) ? b.dataset.v : '';
+                aplicar();
+            });
+        });
+    });
+    document.querySelectorAll('.cli-kpi[data-kpi]').forEach(function (k) {
+        k.addEventListener('click', function () {
+            var on = k.classList.contains('on'), p = k.dataset.kpi.split(':');
+            st = {};
+            if (!on) st[p[0]] = p[1];
+            aplicar();
+        });
+    });
+    document.querySelectorAll('.cli-sortchip').forEach(function (c) {
+        c.addEventListener('click', function () { ordenar(c.dataset.sort); });
+    });
+    if (cfg.busca) document.getElementById(cfg.busca).addEventListener('input', aplicar);
+    window[cfg.limpar] = function () {
+        st = {};
+        if (cfg.busca) document.getElementById(cfg.busca).value = '';
+        aplicar();
+    };
+    // Atalho pela URL (?perfil=- vindo de Perfis de Acesso)
+    var q = new URLSearchParams(location.search);
+    (cfg.grupos || []).forEach(function (g) { if (q.get(g.campo)) st[g.campo] = q.get(g.campo); });
+    aplicar();
+}
+function cfgSemAcento(s) { return (s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase(); }
+
+// Cartão inteiro abre a edição — o mesmo de Clientes (lá abre a ficha).
+// Cliques em ações (lápis/lixeira/botões) são ignorados.
+function cfgCartaoAbre(sel) {
+    document.querySelectorAll(sel + ' .cli-card[data-open-url]').forEach(function (row) {
+        row.addEventListener('click', function (event) {
+            if (event.target.closest('a, button, form, input, select, textarea, label')) { return; }
+            window.location.href = row.dataset.openUrl;
+        });
+        row.addEventListener('keydown', function (event) {
+            if (event.key !== 'Enter' && event.key !== ' ') { return; }
+            if (event.target.closest('a, button, form, input, select, textarea, label')) { return; }
+            event.preventDefault();
+            window.location.href = row.dataset.openUrl;
+        });
+    });
+}
+</script>

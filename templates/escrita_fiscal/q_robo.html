@@ -364,6 +364,7 @@ function qrMaq(id, cliente, acao, atual, nome) {
         </div>
         {% endif %}
 
+        {% if pode_rota('escrita_fiscal.q_robo_gerar') %}
         <form method="POST" action="{{ url_for('escrita_fiscal.q_robo_gerar') }}">
             <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
             <input type="hidden" name="numero" value="{{ confirmacao.cliente.numero_cliente }}">
@@ -393,6 +394,7 @@ function qrMaq(id, cliente, acao, atual, nome) {
                 <button type="submit" class="qr-btn verde">GERAR A CHAVE</button>
             {% endif %}
         </form>
+        {% endif %}
 
     {% else %}
         {# ---- passo 1: o número ---- #}

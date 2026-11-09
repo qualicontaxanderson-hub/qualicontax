@@ -78,12 +78,14 @@
         <a href="{{ url_for('clientes.detalhes', id=cliente.id) }}#cadastros-adicionais" class="btn btn-secondary">
             <i class="fas fa-arrow-left"></i> Voltar
         </a>
+        {% if pode_rota('clientes.anp_excluir') %}
         <form action="{{ url_for('clientes.anp_excluir', cliente_id=cliente.id, anp_id=anp.id) }}" method="POST" style="display:inline;">
             <button type="submit" class="btn btn-danger"
                     onclick="return confirm('Deseja excluir este cadastro ANP?')">
                 <i class="fas fa-trash"></i> Excluir
             </button>
         </form>
+        {% endif %}
     </div>
 </div>
 

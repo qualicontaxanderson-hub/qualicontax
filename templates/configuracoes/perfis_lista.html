@@ -1,74 +1,179 @@
 {% extends "base.html" %}
 {% block title %}Perfis de Acesso – Configurações{% endblock %}
 {% block content %}
-<div class="page-header">
-    <div>
-        <a href="{{ url_for('configuracoes.index') }}" class="back-link">← Configurações</a>
-        <h1 class="page-title">Perfis de Acesso</h1>
-        <p class="page-subtitle">Crie perfis com conjuntos de permissões e atribua-os aos usuários</p>
-    </div>
-    <div>
-        <a href="{{ url_for('configuracoes.perfil_novo') }}" class="btn btn-primary">
-            <i class="fas fa-plus"></i> Novo Perfil
-        </a>
-    </div>
-</div>
+{# 09/11/2026 (Anderson): no padrão da tela de Clientes — hero verde, fita de
+   KPIs que filtra, filtros em botões e o MESMO cartão (.gc-card.cli-card).
+   CSS do cartão vem de clientes/_cartao_css.html; nada copiado aqui. #}
+{% include 'configuracoes/_lista_padrao.html' %}
+{% set n_ativos = perfis|selectattr('situacao', 'equalto', 'ATIVO')|list|length %}
+{% set n_inativos = perfis|length - n_ativos %}
+{% set n_sem_uso = perfis|selectattr('qtd_usuarios', 'equalto', 0)|list|length %}
 
-{# Perfil é "coisa com estado" (ativo/inativo, quantas permissões, quantos
-   usuários o usam) — e pelo critério da casa isso é CARTÃO, não tabela. Eram 6
-   colunas mais ações: no celular metade ficava fora da tela.
-
-   O cartão é o componente compartilhado .ficha-* do style.css, o MESMO da lista
-   de Usuários. Nada de CSS próprio aqui: se a peça mudar, muda nas duas. #}
-<div class="ficha-grid">
-{% for p in perfis %}
-<article class="ficha">
-    <header class="ficha-top">
-        <span class="ficha-ini">{{ (p.nome or '?')[:1]|upper }}</span>
-        <div class="ficha-id">
-            <strong class="ficha-nome">{{ p.nome }}</strong>
-            <span class="ficha-sub">{{ p.descricao or 'sem descrição' }}</span>
+<div class="ef-hero">
+    <div class="ef-hero-inner ef-hero-head">
+        <div>
+            <a href="{{ url_for('configuracoes.index') }}" class="cfg-voltar"><i class="fas fa-arrow-left"></i> Configurações</a>
+            <h1 class="ef-hero-title">Perfis de Acesso</h1>
+            <p class="ef-hero-sub">Crie perfis com conjuntos de permissões e atribua-os aos usuários · {{ perfis|length }} perfi{{ 'l' if perfis|length == 1 else 's' }}</p>
         </div>
-    </header>
+        <div class="ef-hero-actions">
+            <a href="{{ url_for('configuracoes.perfil_novo') }}" class="ef-btn ef-btn-primary">
+                <i class="fas fa-plus"></i> Novo Perfil
+            </a>
+        </div>
+    </div>
+</div>
 
-    <div class="ficha-selos">
-        <span class="status-badge status-{{ 'ativo' if p.situacao == 'ATIVO' else 'inativo' }}">
-            {{ p.situacao }}
-        </span>
-        <span class="badge badge-info" title="Permissões neste perfil">
-            <i class="fas fa-key"></i> {{ p.qtd_permissoes }} permiss{{ 'ão' if p.qtd_permissoes == 1 else 'ões' }}
-        </span>
-        {# Quantos usuários dependem deste perfil. Vale como AVISO: é o número
-           que diz o tamanho do estrago de uma exclusão. #}
-        <span class="badge badge-{{ 'warning' if p.qtd_usuarios else 'secondary' }}"
-              title="Usuários que usam este perfil">
-            <i class="fas fa-users"></i>
-            {% if p.qtd_usuarios %}
-                {{ p.qtd_usuarios }} usuário{{ '' if p.qtd_usuarios == 1 else 's' }}
-            {% else %}
-                sem usuários
-            {% endif %}
+<div class="ef-body">
+    <div class="cli-kpis cfg-k5">
+        <button type="button" class="cli-kpi" data-kpi="sit:ATIVO" title="Mostrar só os perfis ativos">
+            <span class="cli-kpi-ico" style="background:#dcfce7; color:#15803d;"><i class="fas fa-circle-check"></i></span>
+            <div class="cli-kpi-body">
+                <strong class="cli-kpi-val">{{ n_ativos }}</strong>
+                <span class="cli-kpi-lbl">Perfis ativos</span>
+            </div>
+        </button>
+        <button type="button" class="cli-kpi" data-kpi="uso:sem" title="Mostrar só os perfis que ninguém usa">
+            <span class="cli-kpi-ico" style="background:#f1f5f9; color:#64748b;"><i class="fas fa-user-slash"></i></span>
+            <div class="cli-kpi-body">
+                <strong class="cli-kpi-val">{{ n_sem_uso }}</strong>
+                <span class="cli-kpi-lbl">Perfis sem usuários</span>
+            </div>
+        </button>
+        <a class="cli-kpi" href="{{ url_for('configuracoes.usuarios') }}?perfil=%2B&sit=ATIVO" title="Abrir Usuários: funcionários ativos com pelo menos um perfil">
+            <span class="cli-kpi-ico" style="background:#e0f2fe; color:#0369a1;"><i class="fas fa-user-check"></i></span>
+            <div class="cli-kpi-body">
+                <strong class="cli-kpi-val">{{ usuarios_com_perfil }}</strong>
+                <span class="cli-kpi-lbl">Usuários com perfil</span>
+            </div>
+        </a>
+        <a class="cli-kpi" href="{{ url_for('configuracoes.usuarios') }}?perfil=-&sit=ATIVO" title="Abrir Usuários: funcionários ativos sem nenhum perfil (só entram no que o tipo de conta libera)">
+            <span class="cli-kpi-ico" style="background:#fef3c7; color:#b45309;"><i class="fas fa-user-xmark"></i></span>
+            <div class="cli-kpi-body">
+                <strong class="cli-kpi-val{{ ' cli-warn' if usuarios_sem_perfil }}">{{ usuarios_sem_perfil }}</strong>
+                <span class="cli-kpi-lbl">Usuários sem perfil</span>
+            </div>
+        </a>
+        <button type="button" class="cli-kpi" data-kpi="sit:INATIVO" title="Mostrar só os perfis inativos">
+            <span class="cli-kpi-ico" style="background:#f1f5f9; color:#475569;"><i class="fas fa-circle-pause"></i></span>
+            <div class="cli-kpi-body">
+                <strong class="cli-kpi-val">{{ n_inativos }}</strong>
+                <span class="cli-kpi-lbl">Perfis inativos</span>
+            </div>
+        </button>
+    </div>
+
+    <div class="cli-filtros">
+        <div class="cli-f-row">
+            <span class="cli-seg-rot">Situação</span>
+            <div class="gc-pills" id="pfSitPills" role="group" aria-label="Situação do perfil">
+                <button type="button" class="gc-pill" data-v="">Todos <b></b></button>
+                <button type="button" class="gc-pill" data-v="ATIVO">Ativos <b></b></button>
+                <button type="button" class="gc-pill" data-v="INATIVO">Inativos <b></b></button>
+            </div>
+        </div>
+        <div class="cli-f-row">
+            <span class="cli-seg-rot">Uso</span>
+            <div class="gc-pills cli-pills-seg" id="pfUsoPills" role="group" aria-label="Uso do perfil">
+                <button type="button" class="gc-pill" data-v="">Todos</button>
+                <button type="button" class="gc-pill" data-v="com"><i class="fas fa-users"></i> Com usuários <b></b></button>
+                <button type="button" class="gc-pill cli-seg-sem" data-v="sem"><i class="fas fa-user-slash"></i> Sem usuários <b></b></button>
+            </div>
+        </div>
+        <div class="cli-f-row">
+            <span class="cli-seg-rot">Buscar</span>
+            <label class="cfg-busca"><i class="fas fa-search"></i>
+                <input type="search" id="pfBusca" placeholder="Perfil, descrição ou usuário…" autocomplete="off"></label>
+        </div>
+    </div>
+
+    <div class="lst-infobar">
+        <span class="lst-count" id="pfCont"></span>
+        <span class="cli-sort" role="group" aria-label="Ordem dos cartões">
+            Ordenar:
+            <button type="button" class="cli-sortchip on" data-sort="az" title="Nome de A a Z"><i class="fas fa-arrow-down-a-z"></i> A–Z</button>
+            <button type="button" class="cli-sortchip" data-sort="za" title="Nome de Z a A"><i class="fas fa-arrow-down-z-a"></i> Z–A</button>
         </span>
     </div>
 
-    <footer class="ficha-acoes">
-        <a href="{{ url_for('configuracoes.perfil_editar', pid=p.id) }}"
-           class="btn btn-sm btn-secondary" title="Editar perfil e permissões">
-            <i class="fas fa-edit"></i> Editar
-        </a>
-        <form method="POST" action="{{ url_for('configuracoes.perfil_excluir', pid=p.id) }}"
-              onsubmit="return confirm('Excluir o perfil &quot;{{ p.nome }}&quot;?{% if p.qtd_usuarios %} {{ p.qtd_usuarios }} usuário(s) usam este perfil e perderão as permissões dele.{% endif %} Esta ação não pode ser desfeita.')">
-            <button type="submit" class="btn btn-sm btn-danger" title="Excluir perfil">
-                <i class="fas fa-trash"></i> Excluir
-            </button>
-        </form>
-    </footer>
-</article>
-{% else %}
-<p class="ficha-vazio">
-    Nenhum perfil cadastrado.
-    <a href="{{ url_for('configuracoes.perfil_novo') }}">Criar o primeiro perfil</a>.
-</p>
-{% endfor %}
+    {# Perfil é "coisa com estado" (ativo/inativo, quantas permissões, quantos
+       usuários o usam) — pelo critério da casa é CARTÃO. #}
+    <div class="gc-grid" id="pfLista">
+    {% for p in perfis %}
+    {% set ativo = p.situacao == 'ATIVO' %}
+    <article class="gc-card cli-card {% if not ativo %}cli-off{% endif %}" tabindex="0" role="button"
+             title="Abrir o perfil e as permissões"
+             data-open-url="{{ url_for('configuracoes.perfil_editar', pid=p.id) }}"
+             data-nome="{{ p.nome }}"
+             data-busca="{{ p.nome }} {{ p.descricao or '' }} {{ p.membros|map(attribute='nome')|join(' ') }}"
+             data-f-sit="{{ p.situacao }}" data-f-uso="{{ 'com' if p.qtd_usuarios else 'sem' }}">
+        <header class="gc-head">
+            <span class="gc-ava">{{ (p.nome or '?')[:1]|upper }}</span>
+            <div class="gc-tit">
+                <h3 title="{{ p.nome }}">{{ p.nome }}</h3>
+                <span class="cli-doc">{{ p.descricao or 'sem descrição' }}</span>
+            </div>
+            <span class="gc-sit {{ 'on' if ativo else 'off' }}">{{ p.situacao|capitalize }}</span>
+        </header>
+
+        <div class="gc-tags">
+            <span class="gc-tag cfg-tag-info" title="Permissões neste perfil"><i class="fas fa-key"></i> {{ p.qtd_permissoes }} permiss{{ 'ão' if p.qtd_permissoes == 1 else 'ões' }}</span>
+            {# Quantos usuários dependem deste perfil: é o tamanho do estrago de uma exclusão. #}
+            <span class="gc-tag {{ 'cfg-tag-warn' if p.qtd_usuarios else 'cfg-tag-sem' }}" title="Usuários que usam este perfil"><i class="fas fa-users"></i>
+                {% if p.qtd_usuarios %}{{ p.qtd_usuarios }} usuário{{ '' if p.qtd_usuarios == 1 else 's' }}{% else %}sem usuários{% endif %}</span>
+        </div>
+
+        <div class="cli-grade">
+            <div class="cli-campo cfg-linha"><span class="cli-rot">Usuários com este perfil</span>
+                {% if p.membros %}
+                <div class="cfg-nomes">
+                    {% for m in p.membros %}<span class="cli-ramo {% if m.situacao != 'ATIVO' %}cfg-nome-off{% endif %}" {% if m.situacao != 'ATIVO' %}title="Usuário inativo"{% endif %}>{{ m.nome }}</span>{% endfor %}
+                </div>
+                {% else %}<span class="cli-val cfg-vazio">Ninguém usa este perfil</span>{% endif %}
+            </div>
+        </div>
+
+        <footer class="cli-pe">
+            {% if not ativo %}
+            <span class="cli-selo cli-selo-sem"><i class="fas fa-circle-pause"></i>
+                <span class="cli-selo-t"><b>Perfil inativo</b><small>não libera nada a ninguém</small></span></span>
+            {% elif p.qtd_usuarios %}
+            <span class="cli-selo cli-selo-ok"><i class="fas fa-shield-halved"></i>
+                <span class="cli-selo-t"><b>Em uso</b><small>{{ p.qtd_usuarios }} usuário{{ '' if p.qtd_usuarios == 1 else 's' }} com este perfil</small></span></span>
+            {% else %}
+            <span class="cli-selo cli-selo-warn"><i class="fas fa-user-slash"></i>
+                <span class="cli-selo-t"><b>Sem usuários</b><small>ninguém recebe estas permissões</small></span></span>
+            {% endif %}
+            <span class="lst-c-act">
+                <a href="{{ url_for('configuracoes.perfil_editar', pid=p.id) }}" class="lst-act lst-act-edit" title="Editar perfil e permissões">
+                    <i class="fas fa-pen"></i>
+                </a>
+                <form method="POST" action="{{ url_for('configuracoes.perfil_excluir', pid=p.id) }}"
+                      onsubmit="return confirm('Excluir o perfil &quot;{{ p.nome }}&quot;?{% if p.qtd_usuarios %} {{ p.qtd_usuarios }} usuário(s) usam este perfil e perderão as permissões dele.{% endif %} Esta ação não pode ser desfeita.')">
+                    <button type="submit" class="lst-act lst-act-del" title="Excluir perfil">
+                        <i class="fas fa-trash-alt"></i>
+                    </button>
+                </form>
+            </span>
+        </footer>
+    </article>
+    {% endfor %}
+    </div>
+    <div class="gc-nada" id="pfVazio" {% if perfis %}hidden{% endif %}>
+        <i class="fas fa-id-badge"></i>
+        {% if perfis %}
+        <p>Nenhum perfil com os filtros escolhidos</p>
+        <button type="button" class="gf-limpar" onclick="pfLimpar()"><i class="fas fa-eraser"></i> Limpar filtros</button>
+        {% else %}
+        <p>Nenhum perfil cadastrado. <a href="{{ url_for('configuracoes.perfil_novo') }}">Criar o primeiro perfil</a>.</p>
+        {% endif %}
+    </div>
 </div>
+
+<script>
+cfgLista({lista: 'pfLista', cont: 'pfCont', vazio: 'pfVazio', rotulo: ['perfil', 'perfis'],
+          busca: 'pfBusca', limpar: 'pfLimpar',
+          grupos: [{pills: '#pfSitPills', campo: 'sit'}, {pills: '#pfUsoPills', campo: 'uso'}]});
+cfgCartaoAbre('#pfLista');
+</script>
 {% endblock %}

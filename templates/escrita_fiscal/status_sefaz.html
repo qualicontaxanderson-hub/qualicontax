@@ -250,6 +250,8 @@ const URL_CIENCIA = {{ url_for('escrita_fiscal.status_sefaz_ciencia', cliente_id
 // Ciência é só do administrador (09/11/2026): para os demais a chave aparece como texto, sem botão.
 const PODE_CIENCIA = {{ (pode_rota('escrita_fiscal.status_sefaz_ciencia'))|tojson }};
 const URL_CAPTURA = {{ url_for('escrita_fiscal.status_sefaz_captura', cliente_id=0)|tojson }};
+// Ligar/desligar a captura é ação irreversível do perfil (09/11/2026): sem a permissão, vira texto.
+const PODE_CAPTURA = {{ (pode_rota('escrita_fiscal.status_sefaz_captura'))|tojson }};
 const URL_LOG = {{ url_for('escrita_fiscal.status_sefaz_empresa_log', cliente_id=0)|tojson }};
 $('#gerado').textContent = 'Gerado em ' + D.gerado_em + '.';
 
@@ -377,6 +379,7 @@ const TXT_CAP_OFF = 'Desligar a captura automática de NF-e desta empresa?\n\nO 
 const TXT_CAP_ON = 'Ligar a captura automática de NF-e desta empresa? Volta na próxima rodada do cron.';
 function captura(e){ if(e.fonte==='carona') return '<span class="vazio" title="sem certificado próprio: não há captura">—</span>';
   const selo = e.outro_sistema ? `<span class="ci-quem" style="color:var(--ss-ambar)" title="${e.outro_sistema_n} vezes em 7 dias a SEFAZ estava adiante do nosso cursor: outro sistema consulta este CNPJ. A recuperação fica curta e só de madrugada.">⚠ outro sistema consulta este CNPJ</span>` : '';
+  if(!PODE_CAPTURA) return `<span class="ci ${e.captura_on?'on':''}" title="ligar ou desligar a captura depende de permissão"><span class="sw"></span>${e.captura_on?'ligada':'desligada'}</span>${selo}`;
   return `<form class="ci-form" method="POST" action="${esc(URL_CAPTURA.replace('/0/', '/'+e.cliente_id+'/'))}" onsubmit="return ssConfirmaCaptura(this, ${e.captura_on?1:0})"><input type="hidden" name="ligar" value="${e.captura_on?'0':'1'}"><button type="submit" class="ci ${e.captura_on?'on':''}" title="${e.captura_on?'clique para desligar a captura de NF-e':'liga a captura automática de NF-e'}"><span class="sw"></span>${e.captura_on?'ligada':'desligada'}</button></form>${selo}`; }
 window.ssConfirmaCaptura = function(form, ligada){ if(!confirm(ligada ? TXT_CAP_OFF : TXT_CAP_ON)) return false; ssGuardarEstado(); return true; };
 

@@ -1,0 +1,86 @@
+{# Painéis de Configurações no padrão da tela de Clientes (09/11/2026).
+   O cartão e a fita de KPIs vêm de clientes/_cartao_css.html (incluído antes
+   deste). Aqui fica o que em Clientes mora inline em clientes/index.html —
+   pílulas de filtro, caixinhas de filtro e ordenação — com os MESMOS valores,
+   mais os poucos ajustes comuns aos painéis (E-mails, Q-Colabore, Caixa). #}
+<style>
+/* ── Pílulas e caixinhas de filtro (cópia de clientes/index.html) ── */
+.gc-pills { display:flex; gap:6px; flex-wrap:wrap; }
+.gc-pill { border:1px solid #d7e3dc; background:#fff; color:#475569; border-radius:99px; padding:7px 14px;
+           font-size:13px; font-weight:600; cursor:pointer; font-family:inherit; text-decoration:none;
+           display:inline-flex; align-items:center; }
+.gc-pill:hover { border-color:#86efac; color:#15803d; text-decoration:none; }
+.gc-pill b { margin-left:4px; color:#94a3b8; }
+.gc-pill b:empty { display:none; }
+.gc-pill.on, .gc-pill.on:hover { background:#0f3d2e; border-color:#0f3d2e; color:#fff; }
+.gc-pill.on b { color:#86efac; }
+.cli-filtros { display:flex; flex-wrap:wrap; gap:10px; margin-bottom:16px; }
+.cli-f-row { flex:1 1 auto; display:flex; flex-direction:column; gap:7px; min-width:0;
+             background:#fff; border:1px solid #e3ebe6; border-radius:12px; padding:10px 14px; }
+.cli-f-row .gc-pills { gap:5px; }
+.cli-filtros .gc-pill { border-radius:9px; padding:5px 10px; font-size:12.5px; }
+.cli-seg-rot { font-size:11px; font-weight:800; letter-spacing:.06em; text-transform:uppercase; color:#7d968a; }
+.cli-pills-seg .gc-pill i { font-size:12px; margin-right:5px; color:#16a34a; }
+.cli-pills-seg .gc-pill.on i { color:#86efac; }
+/* Pílula de estado ruim/atenção: a cor fica mesmo sem clicar — número ruim aparece */
+.gc-pill.pl-bad:not(.on)  { color:#b91c1c; border-color:#fecaca; background:#fef2f2; }
+.gc-pill.pl-warn:not(.on) { color:#b45309; border-color:#fde68a; background:#fffbeb; }
+.gc-pill.pl-bad i { color:#dc2626; } .gc-pill.pl-warn i { color:#d97706; }
+.gc-pill.pl-bad.on  { background:#b91c1c; border-color:#b91c1c; }
+.gc-pill.pl-warn.on { background:#b45309; border-color:#b45309; }
+.gc-pill.pl-info { cursor:default; }
+.gc-pill.pl-info:hover { border-color:#d7e3dc; color:#475569; }
+
+/* Ordenação (cópia de clientes/index.html) — aqui os chips são links */
+.cli-sort { font-size:11.5px; color:#7d968a; display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
+.cli-sortchip { border:1px solid #e3ece7; background:#fff; color:#5b7468; border-radius:99px;
+                padding:4px 11px; font-size:12px; font-weight:600; cursor:pointer; font-family:inherit;
+                text-decoration:none; }
+.cli-sortchip:hover { border-color:#86efac; color:#15803d; text-decoration:none; }
+.cli-sortchip.on { background:#dcfce7; border-color:#86efac; color:#15803d; }
+
+/* Campos de formulário dentro das caixinhas de filtro */
+.pn-campos { display:flex; flex-wrap:wrap; gap:10px 12px; align-items:flex-end; }
+.pn-campo { display:flex; flex-direction:column; gap:4px; min-width:0; flex:1 1 150px; }
+.pn-campo > span { font-size:10.5px; font-weight:800; letter-spacing:.05em; text-transform:uppercase; color:#7d968a; }
+.pn-ctrl { height:36px; width:100%; min-width:0; box-sizing:border-box; border:1px solid #d7e3dc; border-radius:9px;
+           padding:0 10px; font-size:13px; color:#0f3d2e; background:#fff; font-family:inherit; }
+.pn-ctrl:focus { border-color:#22c55e; outline:none; box-shadow:0 0 0 3px rgba(34,197,94,.14); }
+.pn-dupla { display:flex; gap:6px; }
+.pn-botoes { display:flex; gap:8px; align-items:center; flex:0 0 auto; }
+.pn-btn { display:inline-flex; align-items:center; gap:6px; height:36px; padding:0 16px; border-radius:9px; border:1px solid #0f3d2e;
+          background:#0f3d2e; color:#fff; font-size:13px; font-weight:700; cursor:pointer; font-family:inherit; }
+.pn-btn:hover { background:#14532d; }
+.pn-limpar { display:inline-flex; align-items:center; gap:6px; height:36px; padding:0 14px; border-radius:9px;
+             border:1px solid #d7e3dc; background:#fff; color:#475569; font-size:12.5px; font-weight:700; text-decoration:none; }
+.pn-limpar:hover { border-color:#fca5a5; color:#b91c1c; background:#fef2f2; text-decoration:none; }
+
+/* Hero: volta para a tela de cima, discreto, no verde */
+.pn-voltar { display:inline-block; font-size:12px; font-weight:600; color:#a7d9c0; text-decoration:none; margin-bottom:6px; }
+.pn-voltar:hover { color:#fff; text-decoration:none; }
+
+/* KPI que é só número (não filtra) e KPI-link */
+a.cli-kpi { text-decoration:none; color:inherit; }
+a.cli-kpi:hover { text-decoration:none; }
+.cli-kpi.pn-fixo { cursor:default; }
+.cli-kpi.pn-fixo:hover { border-color:#e3ece7; }
+.cli-kpi-lbl small { display:block; font-size:10.5px; color:#94a3b8; }
+
+/* Situação no topo do cartão: os 4 estados da casa */
+.gc-sit.warn { background:#fef3c7; color:#b45309; }
+.gc-sit.bad  { background:#fee2e2; color:#b91c1c; }
+.gc-ava.pn-ava-warn { background:linear-gradient(135deg,#f59e0b,#b45309); }
+.gc-ava.pn-ava-bad  { background:linear-gradient(135deg,#ef4444,#991b1b); }
+.gc-ava.pn-ava-off  { background:linear-gradient(135deg,#94a3b8,#475569); }
+.gc-ava i { font-size:16px; }
+
+@media (max-width:720px) {
+    .lst-infobar { flex-wrap:wrap; gap:8px; }
+}
+@media (max-width:600px) {
+    .ef-hero-head { flex-direction:column; align-items:flex-start; }
+    .ef-hero-title { font-size:21px; }
+    .cli-f-row { flex-basis:100%; }
+    .pn-botoes { flex-basis:100%; }
+}
+</style>

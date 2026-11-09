@@ -1,7 +1,7 @@
 """Módulo de autenticação e helpers de segurança"""
 from werkzeug.security import generate_password_hash, check_password_hash
 from functools import wraps
-from flask import redirect, url_for, flash
+from flask import redirect, url_for, flash, request
 from flask_login import current_user
 
 
@@ -78,7 +78,13 @@ def permission_required(codigo):
             if not current_user.is_authenticated:
                 flash('Por favor, faça login para acessar esta página.', 'warning')
                 return redirect(url_for('auth.login'))
-            if not current_user.has_permission(codigo):
+            # 09/11/2026: quando a rota está no MAPA do portão (utils/acesso.py), vale a
+            # regra de lá — é onde mora a ação (Incluir/Alterar/Excluir) que a rota
+            # faz. O código do decorador é o Ver da tela e serve às rotas fora do MAPA.
+            from utils.acesso import MAPA, _atende
+            ok = (_atende(MAPA[request.endpoint]) if request.endpoint in MAPA
+                  else current_user.has_permission(codigo))
+            if not ok:
                 flash('Você não tem permissão para acessar esta página.', 'danger')
                 return redirect(url_for('dashboard.index'))
             return f(*args, **kwargs)

@@ -1,131 +1,194 @@
 {% extends "base.html" %}
 {% block title %}Caixa de entrada - Qualicontax{% endblock %}
 {% block content %}
-<style>
-.ce-erro { background:#fef2f2; border:1px solid #fecaca; color:#991b1b; border-radius:10px;
-    padding:12px 16px; margin-bottom:16px; font-size:13px; }
-.ce-resumo { border:1px solid #e5e7eb; border-radius:12px; background:#f8fdfa; padding:12px 16px; margin-bottom:16px; }
-.ce-resumo-tot { font-weight:800; color:#0f3d2e; margin-bottom:8px; }
-.ce-resumo-lista { display:flex; flex-wrap:wrap; gap:8px; }
-.ce-chip { background:#fff; border:1px solid #d1fae5; border-radius:999px; padding:4px 12px; font-size:12px; color:#334155; }
-.ce-filtros { display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-bottom:16px; }
-.ce-filtros select, .ce-filtros input { height:36px; border:1px solid #d1d5db; border-radius:8px; padding:0 10px; font-size:13px; }
-.ce-filtros input { min-width:180px; }
-.ce-filtros button { background:#0f3d2e; color:#fff; border:none; padding:8px 16px; border-radius:8px; font-weight:700; cursor:pointer; }
-.ce-filtros a { font-size:13px; color:#475569; text-decoration:none; }
-.ce-vazio { color:#64748b; padding:24px 4px; }
+{# 09/11/2026: no padrão da tela de Clientes (hero, fita de KPIs, caixinhas
+   de filtro). Os arquivos viram TABELA .tbl-* — é lista longa para percorrer
+   (passa de 140), não "coisa com estado"; no celular a mesma tabela vira
+   cartão (identidade.css). O filtro por tipo e a busca seguem no servidor
+   (GET ?tipo=&busca=), e o Renomear é o mesmo JS de antes. #}
+{% include 'clientes/_cartao_css.html' %}
+{% include 'configuracoes/_painel_css.html' %}
+{% set ICO_TIPO = {'pfx': 'fa-certificate', 'xml': 'fa-file-code', 'pdf': 'fa-file-pdf', 'zip': 'fa-file-zipper'} %}
+{% set COR_TIPO = {'pfx': 'background:#e0f2fe; color:#0369a1;', 'xml': 'background:#dcfce7; color:#15803d;',
+                   'pdf': 'background:#fee2e2; color:#b91c1c;', 'zip': 'background:#ede9fe; color:#6d28d9;'} %}
+{% set sem_emp = itens|rejectattr('empresa')|list|length %}
 
-/* O cartão do arquivo é o componente compartilhado .ficha-* (style.css), o
-   mesmo de Usuários e Perfis — arquivo parado na caixa também é "coisa com
-   estado": tipo, empresa identificada ou não, e há quanto tempo espera.
-   Aqui ficam só os ajustes próprios desta tela. */
-.ce-ico {
-    width:42px; height:42px; flex-shrink:0; border-radius:12px;
-    background:#ecfdf5; color:#16a34a; font-size:17px;
-    display:flex; align-items:center; justify-content:center;
-}
-/* break-word e NÃO break-all: o nome do arquivo é longo, mas picotar no meio
-   da palavra ("Senh / a", "LT / DA") é pior de ler que uma linha curta. Quebra
-   entre palavras e só parte a palavra quando ela sozinha não couber. */
-.ce-nome { font-size:13.5px; font-weight:700; color:#0f172a;
-    overflow-wrap:break-word; word-break:normal; line-height:1.35; }
-.ce-emp-sem { color:#b45309; font-weight:700; }
-.ce-acoes { flex:1 1 auto; }
-.ce-btn-ren { width:100%; background:#f1f5f9; color:#334155; border:1px solid #e2e8f0;
-    border-radius:8px; padding:7px 14px; font-size:12px; font-weight:600; cursor:pointer; }
-/* flex-basis 100%: a caixa de renomear ocupa a linha inteira do rodapé — o
-   campo precisa de largura para caber um nome de arquivo longo. */
-.ce-ren-box { display:flex; gap:8px; flex-wrap:wrap; align-items:center; flex-basis:100%; }
-.ce-ren-input { flex:1 1 260px; min-width:220px; height:34px; border:1px solid #16a34a; border-radius:8px; padding:0 10px; font-size:13px; }
-.ce-ren-ok { background:#15803d; color:#fff; border:none; border-radius:8px; padding:7px 14px; font-weight:700; cursor:pointer; }
-.ce-ren-cancel { background:#fff; color:#475569; border:1px solid #d1d5db; border-radius:8px; padding:7px 12px; cursor:pointer; }
-</style>
-
-<div class="page-header">
-    <div>
-        <a href="{{ url_for('configuracoes.index') }}" class="back-link">← Configurações</a>
-        <h1 class="page-title">Caixa de entrada</h1>
-        <p class="page-subtitle">Arquivos recebidos que ainda não têm destino — só o nome e o tamanho, nada é baixado</p>
+<!-- ── HERO ─────────────────────────────────────────────────────────── -->
+<div class="ef-hero">
+    <div class="ef-hero-inner ef-hero-head">
+        <div>
+            <a href="{{ url_for('configuracoes.index') }}" class="pn-voltar">← Configurações</a>
+            <h1 class="ef-hero-title">Caixa de entrada</h1>
+            <p class="ef-hero-sub">Arquivos recebidos que ainda não têm destino — só o nome e o tamanho, nada é baixado{% if not erro %} · {{ total }} arquivo(s) na caixa{% if mais_antigo %} · o mais antigo está aqui {{ mais_antigo }}{% endif %}{% endif %}</p>
+        </div>
     </div>
 </div>
 
+<div class="ef-body">
 {% if erro %}
-<div class="ce-erro"><i class="fas fa-triangle-exclamation"></i> {{ erro }}</div>
+    <div class="nota nota-erro" style="margin-top:4px;">
+        <i class="fas fa-triangle-exclamation"></i>
+        <div>{{ erro }}</div>
+    </div>
 {% endif %}
 
 {% if not erro %}
-<div class="ce-resumo">
-    <div class="ce-resumo-tot">
-        {{ total }} arquivo(s) na caixa{% if mais_antigo %} · o mais antigo está aqui {{ mais_antigo }}{% endif %}
-    </div>
-    {% if resumo %}
-    <div class="ce-resumo-lista">
-        {% for t, n in resumo.items() %}<span class="ce-chip">{{ t }}: <b>{{ n }}</b></span>{% endfor %}
-    </div>
-    {% endif %}
-</div>
-
-<form method="get" class="ce-filtros">
-    <select name="tipo">
-        <option value="">Todos os tipos</option>
+    <!-- ── Fita de KPIs: total e um por tipo; clicar filtra (no servidor). -->
+    <div class="cli-kpis">
+        <a class="cli-kpi {{ 'on' if not f_tipo and not busca else '' }}" href="{{ url_for('configuracoes.caixa_entrada') }}" title="Todos os arquivos da caixa">
+            <span class="cli-kpi-ico" style="background:#dcfce7; color:#15803d;"><i class="fas fa-inbox"></i></span>
+            <div class="cli-kpi-body">
+                <strong class="cli-kpi-val">{{ total }}</strong>
+                <span class="cli-kpi-lbl">Arquivos na caixa{% if mais_antigo %}<small>o mais antigo {{ mais_antigo }}</small>{% endif %}</span>
+            </div>
+        </a>
         {% for ext, meta in tipos.items() %}
-        <option value="{{ ext }}" {{ 'selected' if f_tipo == ext else '' }}>{{ meta[0] }}</option>
+        <a class="cli-kpi {{ 'on' if f_tipo == ext else '' }}" href="{{ url_for('configuracoes.caixa_entrada', tipo=ext, busca=busca or None) }}" title="Mostrar só: {{ meta[0] }}">
+            <span class="cli-kpi-ico" style="{{ COR_TIPO.get(ext, 'background:#f1f5f9; color:#64748b;') }}"><i class="fas {{ meta[1] }}"></i></span>
+            <div class="cli-kpi-body">
+                <strong class="cli-kpi-val">{{ resumo.get(meta[0], 0) }}</strong>
+                <span class="cli-kpi-lbl">{{ meta[0] }}</span>
+            </div>
+        </a>
         {% endfor %}
-    </select>
-    <input type="text" name="busca" value="{{ busca }}" placeholder="buscar por nome">
-    <button type="submit">Filtrar</button>
-    <a href="{{ url_for('configuracoes.caixa_entrada') }}">Limpar</a>
-</form>
+        <button type="button" class="cli-kpi" id="ceKpiSem" title="Arquivo cujo nome não traz o número nem o CNPJ/CPF de nenhuma empresa — renomeie para casar">
+            <span class="cli-kpi-ico" style="background:#fef3c7; color:#b45309;"><i class="fas fa-circle-question"></i></span>
+            <div class="cli-kpi-body">
+                <strong class="cli-kpi-val{{ ' cli-warn' if sem_emp }}" id="ceSemN">{{ sem_emp }}</strong>
+                <span class="cli-kpi-lbl">Sem empresa identificada{% if f_tipo or busca %}<small>nesta lista</small>{% endif %}</span>
+            </div>
+        </button>
+    </div>
+
+    <form method="get" class="cli-filtros">
+        <input type="hidden" name="tipo" value="{{ f_tipo }}">
+        <div class="cli-f-row">
+            <span class="cli-seg-rot">Tipo</span>
+            <div class="gc-pills cli-pills-seg">
+                <a class="gc-pill {{ 'on' if not f_tipo else '' }}" href="{{ url_for('configuracoes.caixa_entrada', busca=busca or None) }}">Todos <b>{{ total }}</b></a>
+                {% for ext, meta in tipos.items() %}
+                <a class="gc-pill {{ 'on' if f_tipo == ext else '' }}" href="{{ url_for('configuracoes.caixa_entrada', tipo=ext, busca=busca or None) }}"><i class="fas {{ meta[1] }}"></i>{{ meta[0] }} <b>{{ resumo.get(meta[0], 0) or '' }}</b></a>
+                {% endfor %}
+                {% if resumo.get('Outro') %}<span class="gc-pill pl-info" title="Extensão fora da lista — aparece em Todos"><i class="fas fa-file"></i>Outro <b>{{ resumo.get('Outro') }}</b></span>{% endif %}
+            </div>
+        </div>
+        <div class="cli-f-row">
+            <span class="cli-seg-rot">Buscar</span>
+            <div class="pn-campos">
+                <label class="pn-campo" style="flex-grow:3;"><input class="pn-ctrl" type="text" name="busca" value="{{ busca }}" placeholder="buscar por nome" aria-label="Buscar por nome"></label>
+                <div class="pn-botoes">
+                    <button type="submit" class="pn-btn"><i class="fas fa-magnifying-glass"></i> Filtrar</button>
+                    <a class="pn-limpar" href="{{ url_for('configuracoes.caixa_entrada') }}"><i class="fas fa-eraser"></i> Limpar</a>
+                </div>
+            </div>
+        </div>
+    </form>
+
+    <div class="lst-infobar">
+        <span class="lst-count" id="ceCont"><strong>{{ itens|length }}</strong> arquivo{{ '' if itens|length == 1 else 's' }}{% if f_tipo or busca %} neste filtro{% endif %} · o mais antigo em cima</span>
+    </div>
 
 {% if itens %}
-<div class="ficha-grid">
-    {% for it in itens %}
-    <article class="ficha ce-card" data-nome="{{ it.nome }}">
-        <header class="ficha-top">
-            <span class="ce-ico"><i class="fas {{ it.icone }}"></i></span>
-            <div class="ficha-id">
-                <strong class="ce-nome">{{ it.nome }}</strong>
-            </div>
-        </header>
-
-        <div class="ficha-selos">
-            <span class="badge badge-secondary">{{ it.tipo }}</span>
-            <span class="badge badge-secondary">{{ it.tamanho }}</span>
-            <span class="badge badge-{{ 'secondary' if it.empresa else 'warning' }}">
-                <i class="fas fa-clock"></i> {{ it.idade }}
-            </span>
-        </div>
-
-        <dl class="ficha-dados">
-            <dt>Empresa</dt>
+    <div class="tbl-card">
+    <div class="tbl-scroll">
+    <table class="tbl ce-tbl">
+        <thead><tr>
+            <th>Arquivo</th>
+            <th>Tipo</th>
+            <th class="num">Tamanho</th>
+            <th>Na caixa</th>
+            <th>Empresa</th>
+            <th class="acoes"></th>
+        </tr></thead>
+        <tbody>
+        {% for it in itens %}
+        <tr class="ce-card" data-nome="{{ it.nome }}">
+            <td data-label="Arquivo" class="ce-td-nome">
+                <div class="ce-arq">
+                    <span class="ce-ico" style="{{ COR_TIPO.get(it.ext, 'background:#f1f5f9; color:#64748b;') }}"><i class="fas {{ it.icone }}"></i></span>
+                    <div class="ce-arq-txt">
+                        <strong class="ce-nome">{{ it.nome }}</strong>
+                        <div class="ce-ren-box" style="display:none;">
+                            <input type="text" class="ce-ren-input" value="{{ it.nome }}">
+                            <button type="button" class="ce-ren-ok" onclick="ceRenConfirmar(this)">Confirmar</button>
+                            <button type="button" class="ce-ren-cancel" onclick="ceRenCancelar(this)">Cancelar</button>
+                        </div>
+                    </div>
+                </div>
+            </td>
+            <td data-label="Tipo"><span class="ce-tipo">{{ it.tipo }}</span></td>
+            <td data-label="Tamanho" class="num">{{ it.tamanho }}</td>
+            <td data-label="Na caixa"><span class="lst-sit {{ 'lst-sit-off' if it.empresa else 'lst-sit-warn' }}"><i class="fas fa-clock"></i> {{ it.idade }}</span></td>
             {# classe .ce-emp preservada: o JS do Renomear reescreve este
                elemento quando o nome novo passa a identificar a empresa. #}
-            <dd class="ce-emp {{ 'ce-emp-ok' if it.empresa else 'ce-emp-sem' }}">
+            <td data-label="Empresa"><span class="ce-emp {{ 'ce-emp-ok' if it.empresa else 'ce-emp-sem' }}">
                 {% if it.empresa %}<i class="fas fa-building"></i> {{ it.empresa }}
                 {% else %}<i class="fas fa-circle-question"></i> sem empresa identificada{% endif %}
-            </dd>
-        </dl>
-
-        <footer class="ficha-acoes">
-            {# .ce-acoes envolve o botão porque o JS esconde este bloco inteiro
-               ao abrir a caixa de renomear. #}
-            <div class="ce-acoes">
-                <button type="button" class="ce-btn-ren" onclick="ceRenAbrir(this)">
-                    <i class="fas fa-pen"></i> Renomear</button>
-            </div>
-            <div class="ce-ren-box" style="display:none;">
-                <input type="text" class="ce-ren-input" value="{{ it.nome }}">
-                <button type="button" class="ce-ren-ok" onclick="ceRenConfirmar(this)">Confirmar</button>
-                <button type="button" class="ce-ren-cancel" onclick="ceRenCancelar(this)">Cancelar</button>
-            </div>
-        </footer>
-    </article>
-    {% endfor %}
-</div>
+            </span></td>
+            <td class="acoes">
+                {# .ce-acoes envolve o botão porque o JS esconde este bloco inteiro
+                   ao abrir a caixa de renomear. #}
+                <div class="ce-acoes lst-c-act">
+                    {% if pode_rota('configuracoes.caixa_entrada_renomear') %}
+                    <button type="button" class="ce-btn-ren" onclick="ceRenAbrir(this)">
+                        <i class="fas fa-pen"></i> Renomear</button>
+                    {% endif %}
+                </div>
+            </td>
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    </div>
+    </div>
+    <div class="gc-nada" id="ceVazioSem" hidden>
+        <i class="fas fa-circle-check"></i>
+        <p>Todos os arquivos desta lista já casam com uma empresa</p>
+    </div>
 {% else %}
-<div class="ce-vazio">Nenhum arquivo {{ 'com esse filtro' if (f_tipo or busca) else 'na caixa de entrada' }}.</div>
+    <div class="tbl-card"><div class="tbl-empty">
+        <i class="fas fa-inbox"></i>
+        <p>Nenhum arquivo {{ 'com esse filtro' if (f_tipo or busca) else 'na caixa de entrada' }}.</p>
+    </div></div>
 {% endif %}
 {% endif %}
+</div>
+
+<style>
+.ce-tbl td { min-width:0; }
+.ce-arq { display:flex; align-items:center; gap:10px; min-width:0; }
+.ce-arq-txt { flex:1; min-width:0; }
+.ce-ico { width:34px; height:34px; flex-shrink:0; border-radius:10px; font-size:14px;
+    display:flex; align-items:center; justify-content:center; }
+/* break-word e NÃO break-all: o nome do arquivo é longo, mas picotar no meio
+   da palavra ("Senh / a", "LT / DA") é pior de ler que uma linha curta. Quebra
+   entre palavras e só parte a palavra quando ela sozinha não couber. */
+.ce-nome { display:block; font-size:13px; font-weight:700; color:#0f172a;
+    overflow-wrap:break-word; word-break:normal; line-height:1.35; }
+.ce-tbl .ce-td-nome { min-width:280px; }
+.ce-tipo { font-size:12.5px; color:#475569; white-space:nowrap; }
+.ce-tbl .lst-sit { font-size:11.5px; }
+.ce-tbl .lst-sit i { font-size:10px; margin-right:2px; }
+.ce-emp { font-size:12.5px; font-weight:700; }
+.ce-emp-ok { color:#0f3d2e; }
+.ce-emp-ok i { color:#16a34a; }
+.ce-emp-sem { color:#b45309; }
+.ce-tbl tr.ce-fora { display:none; }
+.ce-btn-ren { display:inline-flex; align-items:center; gap:6px; height:30px; padding:0 11px; border-radius:8px; cursor:pointer;
+    font-size:12px; font-weight:700; font-family:inherit; white-space:nowrap;
+    background:#ecfdf5; color:#15803d; border:1px solid #d1fae5; }
+.ce-btn-ren:hover { background:#d1fae5; }
+/* A caixa de renomear abre logo abaixo do nome, na largura da coluna. */
+.ce-ren-box { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-top:8px; }
+.ce-ren-input { flex:1 1 220px; min-width:0; height:34px; border:1px solid #16a34a; border-radius:8px; padding:0 10px; font-size:13px; font-family:inherit; }
+.ce-ren-ok { background:#15803d; color:#fff; border:none; border-radius:8px; padding:7px 14px; font-weight:700; cursor:pointer; font-family:inherit; }
+.ce-ren-cancel { background:#fff; color:#475569; border:1px solid #d1d5db; border-radius:8px; padding:7px 12px; cursor:pointer; font-family:inherit; }
+@media (max-width:820px) {
+    .ce-tbl .ce-td-nome { min-width:0; }
+    .ce-tbl tbody td.ce-td-nome::before { display:none; }   /* o ícone já diz que é o arquivo */
+    .ce-tbl tbody td.ce-td-nome > .ce-arq { flex:1; }
+}
+</style>
 
 <script>
 function _ceCard(el) { return el.closest('.ce-card'); }
@@ -169,5 +232,29 @@ function ceRenConfirmar(btn) {
         c.querySelector('.ce-acoes').style.display = '';
     }).catch(function () { btn.disabled = false; alert('Erro de rede ao renomear.'); });
 }
+
+// KPI "Sem empresa identificada" (09/11/2026): filtra NA TELA as linhas cuja
+// empresa não casou. Lê a classe .ce-emp-sem na hora do clique, então uma
+// linha renomeada que passou a casar sai da contagem sem recarregar.
+(function () {
+    var k = document.getElementById('ceKpiSem');
+    if (!k) return;
+    var CONT = (document.getElementById('ceCont') || {}).innerHTML;
+    k.addEventListener('click', function () {
+        var on = !k.classList.contains('on');
+        var n = 0;
+        document.querySelectorAll('.ce-tbl tbody tr.ce-card').forEach(function (tr) {
+            var sem = !!tr.querySelector('.ce-emp-sem');
+            if (sem) n++;
+            tr.classList.toggle('ce-fora', on && !sem);
+        });
+        k.classList.toggle('on', on);
+        document.getElementById('ceSemN').textContent = n;
+        var cont = document.getElementById('ceCont');
+        if (cont) cont.innerHTML = on ? '<strong>' + n + '</strong> sem empresa identificada · clique de novo no número para ver todos' : CONT;
+        var vazio = document.getElementById('ceVazioSem');
+        if (vazio) vazio.hidden = !(on && n === 0);
+    });
+})();
 </script>
 {% endblock %}

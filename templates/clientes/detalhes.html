@@ -1174,9 +1174,11 @@
                                    (endereco.cidade or '') ~ ('/' ~ endereco.estado if endereco.estado else ''), ('CEP ' ~ endereco.cep) if endereco.cep else '']|select|join(' - ') %}
                     <div class="qb-end" data-copiar-bloco="{{ _end }}" data-copiar-titulo="Endereço {{ (endereco.tipo or '')|lower }}{{ ' (principal)' if endereco.principal else '' }}">
                         <div class="qb-end-h" data-copiar-cab><span class="qb-end-tp{{ ' on' if endereco.principal }}">{{ endereco.tipo }}{{ ' · PRINCIPAL' if endereco.principal else '' }}</span>
+                            {% if pode_rota('clientes.excluir_endereco') %}
                             <form action="{{ url_for('clientes.excluir_endereco', id=endereco.id) }}" method="POST" style="display:inline;margin-left:auto;">
                                 <button type="submit" class="qb-mini qb-mini-perigo" onclick="return confirm('Deseja excluir este endereço?')" title="Excluir endereço"><i class="fas fa-trash"></i></button>
-                            </form></div>
+                            </form>
+                            {% endif %}</div>
                         <p><b>{{ endereco.logradouro }}{% if endereco.numero %}, {{ endereco.numero }}{% endif %}</b><br>
                             {% if endereco.complemento %}{{ endereco.complemento }} · {% endif %}{{ endereco.bairro }}<br>
                             {{ endereco.cidade }}/{{ endereco.estado }} <span class="qb-muted">· CEP <span data-copiar data-copiar-rotulo="CEP">{{ endereco.cep }}</span></span></p>
@@ -1218,9 +1220,11 @@
                             {% if dig %}<a class="qb-mini" href="https://wa.me/55{{ dig }}" target="_blank" rel="noopener" title="WhatsApp"><i class="fab fa-whatsapp"></i></a>{% endif %}
                             <button type="button" class="qb-mini" data-copiar-bloco-btn title="Copiar os dados deste contato"><i class="far fa-copy"></i></button>
                             <button type="button" class="qb-mini qb-ct-editar" title="Editar este contato"><i class="fas fa-pen"></i></button>
+                            {% if pode_rota('clientes.excluir_contato') %}
                             <form action="{{ url_for('clientes.excluir_contato', id=contato.id) }}" method="POST" style="display:inline;">
                                 <button type="submit" class="qb-mini qb-mini-perigo" onclick="return confirm('Deseja excluir este contato?')" title="Excluir contato"><i class="fas fa-trash"></i></button>
                             </form>
+                            {% endif %}
                         </div>
                     </div>
                     {% endfor %}
@@ -1381,6 +1385,7 @@
                                                class="btn-icon btn-primary" title="Editar">
                                                 <i class="fas fa-edit"></i>
                                             </a>
+                                            {% if pode_rota('clientes.anp_excluir') %}
                                             <form action="{{ url_for('clientes.anp_excluir', cliente_id=cliente.id, anp_id=anp.id) }}"
                                                   method="POST" style="display:inline;">
                                                 <button type="submit" class="btn-icon btn-danger" title="Excluir"
@@ -1388,6 +1393,7 @@
                                                     <i class="fas fa-trash"></i>
                                                 </button>
                                             </form>
+                                            {% endif %}
                                             {% endif %}
                                         </div>
                                     </div>
@@ -1546,11 +1552,13 @@
                                             <td>{{ cadastro.data_referencia|format_date if cadastro.data_referencia else '-' }}</td>
                                             <td>{{ cadastro.observacoes or '-' }}</td>
                                             <td>
+                                                {% if pode_rota('clientes.excluir_cadastro_adicional') %}
                                                 <form action="{{ url_for('clientes.excluir_cadastro_adicional', id=cadastro.id) }}" method="POST" style="display: inline;">
                                                     <button type="submit" class="btn-icon btn-danger" onclick="return confirm('Deseja excluir este cadastro adicional?')">
                                                         <i class="fas fa-trash"></i>
                                                     </button>
                                                 </form>
+                                                {% endif %}
                                             </td>
                                         </tr>
                                         {% endfor %}
@@ -2080,10 +2088,12 @@
                         Use a data da alteração contratual registrada. Depois ajuste a participação de quem ficou para fechar 100%.
                     </small>
                 </div>
+                {% if pode_rota('clientes.excluir_socio') %}
                 <div class="soc-engano">
                     Foi lançado por engano (nunca foi sócio)?
                     <button type="button" class="soc-engano-btn" onclick="apagarSocioEngano()">Apagar o lançamento</button>
                 </div>
+                {% endif %}
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-outline" onclick="fecharSaidaSocio()">Cancelar</button>

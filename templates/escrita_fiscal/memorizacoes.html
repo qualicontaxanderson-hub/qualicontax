@@ -341,9 +341,11 @@
                         onclick="abrirEditar({{ r.id }}, '{{ (r.fornecedor_nome or r.emit_cnpj)|e }}', '{{ r.codigo_produto_xml|e }}', '{{ (r.descricao_produto_xml or '')|e }}', {{ r.produto_catalogo_id or 'null' }})">
                         <i class="fas fa-pen"></i>
                     </button>
+                    {% if pode_rota('escrita_fiscal.memorizacoes_excluir') %}
                     <button class="lst-act lst-act-del" onclick="excluirMem({{ r.id }})" title="Excluir memorização">
                         <i class="fas fa-trash-alt"></i>
                     </button>
+                    {% endif %}
                 </div>
             </div>
             {% endfor %}

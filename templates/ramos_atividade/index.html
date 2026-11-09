@@ -108,6 +108,7 @@
                     <a href="{{ url_for('ramos_atividade.editar', id=ramo.id) }}" class="lst-act lst-act-edit" title="Editar">
                         <i class="fas fa-pen"></i>
                     </a>
+                    {% if pode_rota('ramos_atividade.deletar') %}
                     <form action="{{ url_for('ramos_atividade.deletar', id=ramo.id) }}" method="POST"
                           style="display:inline;" onsubmit="return confirmDelete(this);"
                           data-name="{{ ramo.nome | e }}">
@@ -115,6 +116,7 @@
                             <i class="fas fa-trash-alt"></i>
                         </button>
                     </form>
+                    {% endif %}
                 </div>
             </div>
             {% endfor %}
