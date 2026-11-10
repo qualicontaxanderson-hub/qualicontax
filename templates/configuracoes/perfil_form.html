@@ -76,7 +76,33 @@
 .pf-toast { position:fixed; left:50%; bottom:24px; transform:translateX(-50%); background:#0f3d2e; color:#fff; border-radius:11px;
             padding:10px 16px; font-size:13px; box-shadow:0 12px 30px rgba(15,61,46,.3); z-index:50; max-width:calc(100% - 32px); }
 .pf-toast[hidden] { display:none; }
-@media (max-width:900px) { .pf-ident { grid-template-columns:1fr; } }
+.pf-abas { display:flex; gap:6px; flex-wrap:wrap; }
+.pf-abas button { display:inline-flex; align-items:center; gap:8px; font:inherit; font-size:13px; font-weight:700; padding:8px 14px;
+                  border-radius:99px; border:1.5px solid #d7e3dc; color:#4b6358; background:#fff; cursor:pointer; }
+.pf-abas button b { font-size:11.5px; font-weight:800; padding:2px 8px; border-radius:99px; background:#eef2f0; color:#64748b; }
+.pf-abas button b.tem { background:#dcfce7; color:#15803d; }
+.pf-abas button.on { background:#0f3d2e; border-color:#0f3d2e; color:#fff; }
+.pf-abas button.on b { background:rgba(255,255,255,.18); color:#bbf7d0; }
+.pf-abas .pf-aba-res { border-style:dashed; }
+.pf-abas .pf-aba-res.on { border-style:solid; }
+.pf-usus { display:flex; gap:6px; flex-wrap:wrap; align-items:center; min-width:0; }
+.pf-usu { display:inline-flex; align-items:center; gap:6px; font-size:12.5px; font-weight:700; color:#0f3d2e; background:#f0fdf4;
+          border:1px solid #bbf7d0; border-radius:99px; padding:3px 4px; }
+.pf-usu[hidden] { display:none; }
+.pf-usu input { display:none; }
+.pf-usu .pf-ini { width:22px; height:22px; border-radius:50%; background:#16a34a; color:#fff; font-size:10px; font-weight:800;
+                  display:inline-flex; align-items:center; justify-content:center; flex:none; }
+.pf-usu .pf-adm { font-size:9.5px; font-weight:800; letter-spacing:.4px; color:#b45309; text-transform:uppercase; }
+.pf-usu button { border:0; background:transparent; color:#64748b; width:22px; height:22px; border-radius:50%; cursor:pointer; font-size:12px; }
+.pf-usu button:hover { background:#fee2e2; color:#b91c1c; }
+.pf-usu.novo { background:#eff6ff; border-color:#bfdbfe; }
+.pf-usu.novo .pf-ini { background:#2563eb; }
+.pf-inc { display:inline-flex; gap:6px; align-items:center; }
+.pf-inc select { border:1px solid #d7e3dc; border-radius:9px; padding:6px 10px; font:inherit; font-size:13px; max-width:300px; background:#fff; }
+.pf-usu-vazio { font-size:12.5px; color:#94a3b8; }
+.pf-usu-mud { font-size:12px; font-weight:700; color:#b45309; }
+.pf-usu-mud[hidden], #pfAcaoLinha[hidden] { display:none; }
+@media (max-width:900px) { .pf-ident { grid-template-columns:1fr; } .pf-inc { width:100%; } .pf-inc select { flex:1; max-width:none; min-width:0; } }
 </style>
 
 <form method="POST" id="pfForm">
@@ -88,7 +114,7 @@
                 Perfil de acesso ·
                 {% if perfil %}
                     {% set n = usuarios_perfil|length %}
-                    {{ n }} usuário{{ '' if n == 1 else 's' }}{% if n %}: {{ usuarios_perfil|map(attribute='nome')|join(', ') }}{% endif %}
+                    <span id="pfHeroN">{{ n }} usuário{{ '' if n == 1 else 's' }}</span> · marque, departamento por departamento, o que este perfil pode fazer
                 {% else %}
                     marque o que este perfil pode fazer em cada tela
                 {% endif %}
@@ -153,14 +179,49 @@
         </div>
     </div>
 
+    {% set ids_perfil = usuarios_perfil|map(attribute='id')|list %}
+    <div class="cli-filtros" id="pfUsuBox">
+        <input type="hidden" name="usuarios_enviado" value="1">
+        <div class="cli-f-row">
+            <span class="cli-seg-rot">Usuários com este perfil · <b id="pfUsuN">{{ ids_perfil|length }}</b></span>
+            <div class="pf-usus" id="pfUsus">
+                {% for u in usuarios_todos %}
+                {% set tem = u.id in ids_perfil %}
+                {% set outros = u.perfis|rejectattr('perfil_id', 'equalto', perfil.id if perfil else 0)|map(attribute='nome')|list %}
+                {% set pn = u.nome.split() %}
+                <span class="pf-usu" data-uid="{{ u.id }}" data-nome="{{ u.nome }}" data-orig="{{ 1 if tem else 0 }}"
+                      title="{{ u.nome }}{{ (' · também tem: ' ~ outros|join(', ')) if outros }}" {{ '' if tem else 'hidden' }}>
+                    <input type="checkbox" name="usuarios" value="{{ u.id }}" {{ 'checked' if tem }}>
+                    <span class="pf-ini">{{ pn[0][:1] }}{{ pn[-1][:1] if pn|length > 1 }}</span>
+                    {{ pn[0] }}{{ (' ' ~ pn[-1]) if pn|length > 1 }}
+                    {% if u.tipo_usuario == 'ADMIN' %}<span class="pf-adm">admin</span>{% endif %}
+                    <button type="button" data-tirar="{{ u.id }}" title="Tirar {{ u.nome }} deste perfil" aria-label="Tirar {{ u.nome }} deste perfil"><i class="fas fa-xmark"></i></button>
+                </span>
+                {% endfor %}
+                <span class="pf-usu-vazio" id="pfUsuVazio" {{ 'hidden' if ids_perfil }}>Ninguém usa este perfil ainda.</span>
+            </div>
+            <div class="pf-inc">
+                <select id="pfUsuSel" aria-label="Usuário para incluir">
+                    <option value="">+ Incluir usuário…</option>
+                    {% for u in usuarios_todos if u.id not in ids_perfil %}
+                    {% set outros = u.perfis|map(attribute='nome')|list %}
+                    <option value="{{ u.id }}">{{ u.nome }}{{ (' (já tem: ' ~ outros|join(', ') ~ ')') if outros }}</option>
+                    {% endfor %}
+                </select>
+                <button type="button" class="gc-pill" id="pfUsuInc"><i class="fas fa-user-plus"></i> Incluir</button>
+            </div>
+            <span class="pf-usu-mud" id="pfUsuMud" hidden></span>
+        </div>
+    </div>
+
     <div class="cli-filtros">
         <div class="cli-f-row cli-f-dir">
             <span class="cli-seg-rot">Departamento</span>
-            <div class="gc-pills cli-pills-seg" id="pfDepPills" role="group" aria-label="Departamento">
-                <button type="button" class="gc-pill on" data-dep="">Todos <b></b></button>
+            <div class="pf-abas" id="pfDepPills" role="tablist" aria-label="Departamento">
                 {% for d in deps %}
-                <button type="button" class="gc-pill" data-dep="{{ d.cor }}">{{ d.grupo }} <b></b></button>
+                <button type="button" role="tab" class="{{ 'on' if loop.first }}" data-dep="{{ d.cor }}">{{ d.grupo }} <b></b></button>
                 {% endfor %}
+                <button type="button" role="tab" class="pf-aba-res" data-dep="*" title="Tudo o que este perfil já pode, de todos os departamentos"><i class="fas fa-list-check"></i> Resumo do perfil <b></b></button>
             </div>
         </div>
         <div class="cli-f-row">
@@ -173,11 +234,11 @@
                 <button type="button" class="gc-pill" data-sit="irr">Com irreversível <b></b></button>
             </div>
         </div>
-        <div class="cli-f-row">
-            <span class="cli-seg-rot" id="pfAcaoRot">Todas as telas</span>
+        <div class="cli-f-row" id="pfAcaoLinha">
+            <span class="cli-seg-rot" id="pfAcaoRot">Só este departamento</span>
             <div class="pf-acao-dep">
-                <button type="button" class="gc-pill" id="pfMarcar" title="Liga Ver, Incluir, Alterar e as ações comuns das telas mostradas. Excluir e irreversível ficam como estão."><i class="fas fa-check-double"></i> Marcar (sem excluir)</button>
-                <button type="button" class="gc-pill" id="pfDesmarcar" title="Desliga tudo nas telas mostradas"><i class="fas fa-xmark"></i> Desmarcar</button>
+                <button type="button" class="gc-pill" id="pfMarcar" title="Liga Ver, Incluir, Alterar e as ações comuns das telas mostradas. Excluir e irreversível ficam como estão."><i class="fas fa-check-double"></i> <span id="pfMarcarT">Marcar tudo (sem excluir)</span></button>
+                <button type="button" class="gc-pill" id="pfDesmarcar" title="Desliga tudo nas telas mostradas"><i class="fas fa-xmark"></i> <span id="pfDesmarcarT">Desmarcar tudo</span></button>
             </div>
         </div>
     </div>
@@ -252,7 +313,8 @@
 (function () {
     var lista = document.getElementById('pfLista');
     var cards = Array.prototype.slice.call(lista.querySelectorAll('.pf-card'));
-    var fDep = '', fSit = '', ordem = 'dep';
+    var fDep = (document.querySelector('#pfDepPills button.on') || {dataset: {dep: '*'}}).dataset.dep, fSit = '', ordem = 'dep';
+    function noDep(c) { return fDep === '*' || c.dataset.dep === fDep; }
     var esc = function (s) { return String(s).replace(/[&<>"]/g, function (c) { return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); };
     function caixas(c) { return Array.prototype.slice.call(c.querySelectorAll('input[name="permissoes"]')); }
     function marcadas(c, filtro) { return caixas(c).filter(function (i) { return i.checked && (!filtro || filtro(i)); }); }
@@ -297,16 +359,18 @@
             if (k === 'irr') el.classList.toggle('cli-warn', n[k] > 0);
         });
         document.querySelector('[data-l="lib"]').textContent = 'Telas liberadas · de ' + cards.length;
-        document.querySelectorAll('#pfDepPills .gc-pill').forEach(function (b) {
-            var cs = cards.filter(function (c) { return !b.dataset.dep || c.dataset.dep === b.dataset.dep; });
-            b.querySelector('b').textContent = cs.filter(function (c) { return estado(c).lib; }).length + '/' + cs.length;
+        document.querySelectorAll('#pfDepPills button').forEach(function (b) {
+            var cs = cards.filter(function (c) { return b.dataset.dep === '*' || c.dataset.dep === b.dataset.dep; });
+            var nl = cs.filter(function (c) { return estado(c).lib; }).length, el = b.querySelector('b');
+            el.textContent = b.dataset.dep === '*' ? nl + ' liberadas' : nl + '/' + cs.length;
+            el.classList.toggle('tem', nl > 0);
         });
         document.querySelectorAll('#pfSitPills .gc-pill').forEach(function (b) {
-            b.querySelector('b').textContent = cards.filter(function (c) { return (!fDep || c.dataset.dep === fDep) && casa(c, b.dataset.sit); }).length;
+            b.querySelector('b').textContent = cards.filter(function (c) { return noDep(c) && casa(c, b.dataset.sit); }).length;
         });
     }
     function mostrar() {
-        var vis = cards.filter(function (c) { var ok = (!fDep || c.dataset.dep === fDep) && casa(c, fSit); c.hidden = !ok; return ok; });
+        var vis = cards.filter(function (c) { var ok = noDep(c) && casa(c, fSit); c.hidden = !ok; return ok; });
         var ord = cards.slice();
         if (ordem === 'az') ord.sort(function (a, b) { return a.dataset.nome.localeCompare(b.dataset.nome, 'pt'); });
         else if (ordem === 'lib') ord.sort(function (a, b) { return (estado(b).lib - estado(a).lib) || (a.dataset.ordem - b.dataset.ordem); });
@@ -316,9 +380,17 @@
         document.getElementById('pfCont').innerHTML = 'Mostrando <b>' + vis.length + '</b> ' + (vis.length === 1 ? 'tela' : 'telas');
         document.querySelectorAll('.cli-kpi').forEach(function (k) { k.classList.toggle('on', k.dataset.kpi === fSit); });
         document.querySelectorAll('#pfSitPills .gc-pill').forEach(function (b) { b.classList.toggle('on', b.dataset.sit === fSit); });
-        document.querySelectorAll('#pfDepPills .gc-pill').forEach(function (b) { b.classList.toggle('on', b.dataset.dep === fDep); });
-        var bdep = document.querySelector('#pfDepPills .gc-pill.on');
-        document.getElementById('pfAcaoRot').textContent = fDep ? bdep.firstChild.textContent.trim() : 'Todas as telas';
+        document.querySelectorAll('#pfDepPills button').forEach(function (b) {
+            b.classList.toggle('on', b.dataset.dep === fDep); b.setAttribute('aria-selected', b.dataset.dep === fDep ? 'true' : 'false'); });
+        // Marcar/Desmarcar só existem dentro de UM departamento: no Resumo somem,
+        // para ninguém liberar de uma vez telas de outro setor sem ver (10/11/2026).
+        document.getElementById('pfAcaoLinha').hidden = fDep === '*';
+        if (fDep !== '*') {
+            var nomeDep = document.querySelector('#pfDepPills button.on').firstChild.textContent.trim();
+            document.getElementById('pfAcaoRot').textContent = 'Só ' + nomeDep;
+            document.getElementById('pfMarcarT').textContent = 'Marcar tudo de ' + nomeDep + ' (sem excluir)';
+            document.getElementById('pfDesmarcarT').textContent = 'Desmarcar tudo de ' + nomeDep;
+        }
     }
     function tudo() { cards.forEach(selo); contar(); mostrar(); }
     var toastH;
@@ -339,23 +411,57 @@
     });
     document.addEventListener('click', function (e) {
         var b = e.target.closest('button'); if (!b || b.type === 'submit') return;
-        if (b.dataset.dep !== undefined && b.closest('#pfDepPills')) { fDep = b.dataset.dep; contar(); mostrar(); }
+        if (b.dataset.tirar || b.id === 'pfUsuInc') return;
+        if (b.dataset.dep !== undefined && b.closest('#pfDepPills')) { fDep = b.dataset.dep; fSit = fDep === '*' ? 'lib' : ''; contar(); mostrar(); }
         else if (b.dataset.sit !== undefined && b.closest('#pfSitPills')) { fSit = b.dataset.sit; mostrar(); }
-        else if (b.dataset.kpi) { fSit = fSit === b.dataset.kpi ? '' : b.dataset.kpi; mostrar(); }
+        else if (b.dataset.kpi) { fSit = fSit === b.dataset.kpi ? '' : b.dataset.kpi; fDep = '*'; contar(); mostrar(); }
         else if (b.dataset.sort) { ordem = b.dataset.sort;
             document.querySelectorAll('.cli-sortchip').forEach(function (x) { x.classList.toggle('on', x === b); }); mostrar(); }
         else if (b.id === 'pfMarcar' || b.id === 'pfDesmarcar') {
-            cards.filter(function (c) { return !c.hidden; }).forEach(function (c) {
+            if (fDep === '*') return;
+            cards.filter(function (c) { return !c.hidden && c.dataset.dep === fDep; }).forEach(function (c) {
                 caixas(c).forEach(function (i) {
                     if (b.id === 'pfDesmarcar') i.checked = false;
                     else if (i.dataset.risco !== '1') i.checked = true;
                 });
             });
-            if (b.id === 'pfMarcar') toast('Ver, Incluir e Alterar ligados. Excluir e irreversível, só um a um.');
+            if (b.id === 'pfMarcar') toast('Ver, Incluir e Alterar ligados só neste departamento. Excluir e irreversível, só um a um.');
             tudo();
         }
     });
     tudo();
+
+    // Usuários com este perfil (10/11/2026): tirar e incluir só valem ao Salvar.
+    var usus = document.getElementById('pfUsus'), sel = document.getElementById('pfUsuSel');
+    function usuAtualiza() {
+        var chips = Array.prototype.slice.call(usus.querySelectorAll('.pf-usu'));
+        var com = chips.filter(function (c) { return c.querySelector('input').checked; });
+        document.getElementById('pfUsuN').textContent = com.length;
+        var hn = document.getElementById('pfHeroN');
+        if (hn) hn.textContent = com.length + (com.length === 1 ? ' usuário' : ' usuários');
+        document.getElementById('pfUsuVazio').hidden = com.length > 0;
+        var ent = com.filter(function (c) { return c.dataset.orig === '0'; }).map(function (c) { return c.dataset.nome; });
+        var sai = chips.filter(function (c) { return c.dataset.orig === '1' && !c.querySelector('input').checked; }).map(function (c) { return c.dataset.nome; });
+        var m = [];
+        if (ent.length) m.push('Entra: ' + ent.join(', '));
+        if (sai.length) m.push('Sai: ' + sai.join(', '));
+        var el = document.getElementById('pfUsuMud');
+        el.hidden = !m.length; el.textContent = m.length ? m.join(' · ') + ' — vale quando clicar em Salvar perfil.' : '';
+    }
+    usus.addEventListener('click', function (e) {
+        var b = e.target.closest('[data-tirar]'); if (!b) return;
+        var chip = b.closest('.pf-usu'); chip.querySelector('input').checked = false; chip.hidden = true;
+        var o = document.createElement('option'); o.value = chip.dataset.uid; o.textContent = chip.dataset.nome; sel.appendChild(o);
+        usuAtualiza();
+    });
+    document.getElementById('pfUsuInc').addEventListener('click', function () {
+        if (!sel.value) { sel.focus(); return; }
+        var chip = usus.querySelector('.pf-usu[data-uid="' + sel.value + '"]');
+        chip.querySelector('input').checked = true; chip.hidden = false; chip.classList.toggle('novo', chip.dataset.orig === '0');
+        sel.remove(sel.selectedIndex); sel.value = '';
+        usuAtualiza();
+    });
+    sel.addEventListener('change', function () { if (sel.value) document.getElementById('pfUsuInc').click(); });
 })();
 </script>
 {% endblock %}

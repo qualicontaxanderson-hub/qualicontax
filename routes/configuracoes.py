@@ -2010,7 +2010,8 @@ def perfil_novo():
         if not nome:
             flash('O nome do perfil é obrigatório.', 'danger')
             return render_template('configuracoes/perfil_form.html',
-                                   catalog=PERMISSION_CATALOG, deps=DEPARTAMENTOS_PERMISSOES, perfil=None, perms_perfil=set(), usuarios_perfil=[])
+                                   catalog=PERMISSION_CATALOG, deps=DEPARTAMENTOS_PERMISSOES, perfil=None, perms_perfil=set(), usuarios_perfil=[],
+                                   usuarios_todos=_usuarios_ativos())
 
         pid = execute_query(
             "INSERT INTO perfis_acesso (nome, descricao) VALUES (%s, %s)",
@@ -2022,15 +2023,19 @@ def perfil_novo():
                 (pid, cod), fetch=False,
             )
 
+        _, usu_depois = _sincronizar_usuarios_do_perfil(pid)
+
         registrar('escrita.criou_perfil', 'configuracoes',
                   tabela='perfis_acesso', registro_id=pid,
                   depois={'nome': nome, 'descricao': descricao,
-                          'permissoes': sorted(perms_sel)})
+                          'permissoes': sorted(perms_sel),
+                          'usuarios': usu_depois})
         flash(f'Perfil "{nome}" criado com sucesso.', 'success')
         return redirect(url_for('configuracoes.perfis'))
 
     return render_template('configuracoes/perfil_form.html',
-                           catalog=PERMISSION_CATALOG, deps=DEPARTAMENTOS_PERMISSOES, perfil=None, perms_perfil=set(), usuarios_perfil=[])
+                           catalog=PERMISSION_CATALOG, deps=DEPARTAMENTOS_PERMISSOES, perfil=None, perms_perfil=set(), usuarios_perfil=[],
+                                   usuarios_todos=_usuarios_ativos())
 
 
 @configuracoes.route('/perfis/<int:pid>/editar', methods=['GET', 'POST'])
@@ -2062,7 +2067,8 @@ def perfil_editar(pid):
             flash('O nome do perfil é obrigatório.', 'danger')
             return render_template('configuracoes/perfil_form.html',
                                    catalog=PERMISSION_CATALOG, deps=DEPARTAMENTOS_PERMISSOES, perfil=perfil,
-                                   perms_perfil=perms_perfil, usuarios_perfil=_usuarios_do_perfil(pid))
+                                   perms_perfil=perms_perfil, usuarios_perfil=_usuarios_do_perfil(pid),
+                                   usuarios_todos=_usuarios_ativos())
 
         execute_query(
             "UPDATE perfis_acesso SET nome=%s, descricao=%s, situacao=%s WHERE id=%s",
@@ -2077,6 +2083,8 @@ def perfil_editar(pid):
                 (pid, cod), fetch=False,
             )
 
+        usu_antes, usu_depois = _sincronizar_usuarios_do_perfil(pid)
+
         # A lista de permissoes vai inteira nos dois lados: o diff do
         # registrar mostra quais entraram e quais sairam, que e a pergunta
         # que se faz depois ("quem deu acesso ao financeiro para fulano?").
@@ -2085,15 +2093,18 @@ def perfil_editar(pid):
                   antes={'nome': perfil.get('nome'),
                          'descricao': perfil.get('descricao'),
                          'situacao': perfil.get('situacao'),
-                         'permissoes': sorted(perms_perfil)},
+                         'permissoes': sorted(perms_perfil),
+                         'usuarios': usu_antes},
                   depois={'nome': nome, 'descricao': descricao,
-                          'situacao': situacao, 'permissoes': sorted(perms_sel)})
+                          'situacao': situacao, 'permissoes': sorted(perms_sel),
+                          'usuarios': usu_depois})
         flash(f'Perfil "{nome}" atualizado com sucesso.', 'success')
         return redirect(url_for('configuracoes.perfis'))
 
     return render_template('configuracoes/perfil_form.html',
                            catalog=PERMISSION_CATALOG, deps=DEPARTAMENTOS_PERMISSOES, perfil=perfil,
-                           perms_perfil=perms_perfil, usuarios_perfil=_usuarios_do_perfil(pid))
+                           perms_perfil=perms_perfil, usuarios_perfil=_usuarios_do_perfil(pid),
+                                   usuarios_todos=_usuarios_ativos())
 
 
 def _usuarios_do_perfil(pid):
@@ -2102,6 +2113,48 @@ def _usuarios_do_perfil(pid):
         "SELECT u.id, u.nome FROM usuario_perfis up JOIN usuarios u ON u.id = up.usuario_id "
         " WHERE up.perfil_id = %s AND u.situacao = 'ATIVO' ORDER BY u.nome",
         (pid,), fetch=True) or []
+
+
+def _usuarios_ativos():
+    """Todos os usuarios ativos, com os outros perfis que cada um ja tem —
+    para o quadro "Usuários com este perfil" (10/11/2026)."""
+    us = execute_query(
+        "SELECT id, nome, tipo_usuario FROM usuarios WHERE situacao = 'ATIVO' ORDER BY nome",
+        fetch=True) or []
+    pf = execute_query(
+        "SELECT up.usuario_id, pa.id AS perfil_id, pa.nome FROM usuario_perfis up "
+        "  JOIN perfis_acesso pa ON pa.id = up.perfil_id ORDER BY pa.nome",
+        fetch=True) or []
+    por_u = {}
+    for r in pf:
+        por_u.setdefault(r['usuario_id'], []).append(r)
+    for u in us:
+        u['perfis'] = por_u.get(u['id'], [])
+    return us
+
+
+def _sincronizar_usuarios_do_perfil(pid):
+    """Grava quem usa o perfil conforme o quadro da tela (10/11/2026).
+
+    So mexe se o formulario mandou o quadro (usuarios_enviado=1) e so em
+    usuarios ATIVOS: um inativo que tinha o perfil continua com ele.
+    Devolve (antes, depois) como listas ordenadas de ids, para o log."""
+    antes = sorted(u['id'] for u in _usuarios_do_perfil(pid))
+    if request.form.get('usuarios_enviado') != '1':
+        return antes, antes
+    ativos = {u['id'] for u in (execute_query(
+        "SELECT id FROM usuarios WHERE situacao = 'ATIVO'", fetch=True) or [])}
+    sel = set()
+    for v in request.form.getlist('usuarios'):
+        if str(v).isdigit() and int(v) in ativos:
+            sel.add(int(v))
+    for uid in set(antes) - sel:
+        execute_query("DELETE FROM usuario_perfis WHERE usuario_id = %s AND perfil_id = %s",
+                      (uid, pid), fetch=False)
+    for uid in sel - set(antes):
+        execute_query("INSERT IGNORE INTO usuario_perfis (usuario_id, perfil_id) VALUES (%s, %s)",
+                      (uid, pid), fetch=False)
+    return antes, sorted(sel)
 
 
 @configuracoes.route('/perfis/<int:pid>/excluir', methods=['POST'])
