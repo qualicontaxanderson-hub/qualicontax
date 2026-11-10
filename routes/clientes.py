@@ -89,23 +89,114 @@ def _contatos_do_form(form):
         nome = str(c.get('nome') or '').strip()
         cel = str(c.get('celular') or '').strip()
         if nome and _telefone_valido(cel):
+            email = str(c.get('email') or '').strip().lower()[:255]
+            cel_x, email_x = _meios_extras(c.get('celulares_extra') or [], c.get('emails_extra') or [], cel, email)
             out.append({'nome': nome[:255], 'celular': cel[:20], 'telefone': (str(c.get('telefone') or '').strip() or None),
-                        'email': (str(c.get('email') or '').strip().lower()[:255] or None),
+                        'email': (email if _email_ok(email) else None),
                         'cargo': (str(c.get('cargo') or '').strip()[:100] or None),
-                        'departamentos': [int(d) for d in (c.get('departamentos') or []) if str(d).isdigit()]})
+                        'departamentos': [int(d) for d in (c.get('departamentos') or []) if str(d).isdigit()],
+                        '_extras': (cel_x, email_x)})
     return out
+
+
+def _meios_extras(celulares, emails, celular_principal='', email_principal='', erros=None):
+    """Celulares e e-mails A MAIS (10/11/2026): só os válidos, sem repetir o principal nem entre si.
+    Com ``erros`` (lista), anota os inválidos em vez de só descartar."""
+    cel_x, email_x = [], []
+    base = re.sub(r'\D', '', celular_principal or '')
+    for v in celulares if isinstance(celulares, list) else []:
+        v = str(v or '').strip()
+        d = re.sub(r'\D', '', v)
+        if not d:
+            continue
+        if not _telefone_valido(v):
+            if erros is not None:
+                erros.append('outro celular (%s inválido)' % v)
+        elif d != base and d not in [re.sub(r'\D', '', x) for x in cel_x]:
+            cel_x.append(v[:20])
+    for v in emails if isinstance(emails, list) else []:
+        v = str(v or '').strip().lower()[:255]
+        if not v:
+            continue
+        if not _email_ok(v):
+            if erros is not None:
+                erros.append('outro e-mail (%s não é um e-mail)' % v)
+        elif v != (email_principal or '').lower() and v not in email_x:
+            email_x.append(v)
+    return cel_x, email_x
 
 
 def _gravar_contatos_do_formulario(cliente_id, form=None):
     """Grava os contatos guardados no formulário (novo ou edição). Devolve quantos."""
     n = 0
     for c in _contatos_do_form(form or request.form):
+        cel_x, email_x = c.pop('_extras')
         cid = ContatoCliente.create(cliente_id=cliente_id, ativo=True, **c)
         if cid:
             n += 1
-            registrar('escrita.criou_contato', 'cadastros', tabela='contatos_clientes', registro_id=cid,
-                      depois=dict(c, cliente_id=cliente_id, origem='formulário do cadastro'))
+            ContatoCliente.set_meios(cid, cel_x, email_x)
+            log = dict(c, cliente_id=cliente_id, origem='formulário do cadastro')
+            if cel_x:
+                log['outros_celulares'] = cel_x
+            if email_x:
+                log['outros_emails'] = email_x
+            registrar('escrita.criou_contato', 'cadastros', tabela='contatos_clientes', registro_id=cid, depois=log)
     return n
+
+
+def _contato_da_pessoa_pf(cliente_id, nome):
+    """O contato que é a PRÓPRIA pessoa física (mesmo nome do cadastro), se existir."""
+    from models.contato_cliente import _nome_chave
+    chave = _nome_chave(nome)
+    if not cliente_id or not chave:
+        return None
+    for c in ContatoCliente.get_by_cliente(cliente_id) or []:
+        if _nome_chave(c.get('nome')) == chave:
+            return c
+    return None
+
+
+def _sincronizar_contato_pf(cliente_id, form=None):
+    """Pessoa física: o celular, o telefone fixo e o e-mail do cadastro (e os a mais) SÃO o contato dela.
+    Anderson (10/11/2026): "no Contato tem que ter o local para eu colocar e-mail e se usuário quiser colocar
+    outro contato ai ele terá a opção... Celular + Telefone Fixo + E-mail... e até opções de colocar mais
+    telefones e mais e-mails". Cria o contato com o nome da pessoa (principal, recebe de todos os
+    departamentos) ou atualiza o que já existe com o mesmo nome — cargo, principal e departamentos ficam."""
+    f = form or request.form
+    if f.get('tipo_pessoa') != 'PF':
+        return
+    nome = (next((v for v in f.getlist('nome_razao_social') if v.strip()), '') or '').strip().upper()
+    celular = (f.get('celular') or '').strip()
+    if not nome or not _telefone_valido(celular):
+        return
+    telefone = (f.get('telefone') or '').strip()
+    telefone = telefone if re.sub(r'\D', '', telefone) and _telefone_valido(telefone) else None
+    email = (f.get('email') or '').strip().lower()[:255]
+    email = email if _email_ok(email) else None
+    cel_x, email_x = _meios_extras(f.getlist('celular_extra'), f.getlist('email_extra'), celular, email or '')
+    atual = _contato_da_pessoa_pf(cliente_id, nome)
+    novo = {'nome': nome, 'celular': celular, 'telefone': telefone, 'email': email}
+    if atual:
+        antes = {k: atual.get(k) for k in ('celular', 'telefone', 'email')}
+        antes['outros_celulares'] = atual.get('celulares_extra') or []
+        antes['outros_emails'] = atual.get('emails_extra') or []
+        depois = {'celular': celular, 'telefone': telefone, 'email': email,
+                  'outros_celulares': cel_x, 'outros_emails': email_x}
+        if antes == depois:
+            return
+        ContatoCliente.update(atual['id'], nome=atual['nome'], cargo=atual.get('cargo'), email=email, telefone=telefone,
+                              celular=celular, principal=bool(atual.get('principal')), ativo=bool(atual.get('ativo', True)))
+        ContatoCliente.set_meios(atual['id'], cel_x, email_x)
+        registrar('escrita.alterou_contato', 'cadastros', tabela='contatos_clientes', registro_id=atual['id'],
+                  antes=dict(antes, cliente_id=cliente_id), depois=dict(depois, cliente_id=cliente_id, origem='cadastro da pessoa física'))
+        return
+    deps = [d['id'] for d in ContatoCliente.departamentos_disponiveis()]
+    cid = ContatoCliente.create(cliente_id=cliente_id, ativo=True, principal=True, departamentos=deps, **novo)
+    if cid:
+        ContatoCliente.set_meios(cid, cel_x, email_x)
+        registrar('escrita.criou_contato', 'cadastros', tabela='contatos_clientes', registro_id=cid,
+                  depois=dict(novo, cliente_id=cliente_id, outros_celulares=cel_x, outros_emails=email_x,
+                              origem='cadastro da pessoa física (a própria pessoa)'))
 
 
 def _obrigatorios_faltando(form, avulso=False, cliente_id=None):
@@ -125,7 +216,7 @@ def _obrigatorios_faltando(form, avulso=False, cliente_id=None):
         # obrigatório só o Cadastro do Contato" — ao menos um contato com celular.
         ja_tem = cliente_id and execute_query('SELECT COUNT(*) n FROM contatos_clientes WHERE cliente_id = %s AND ativo = 1',
                                               (cliente_id,), fetch=True, fetch_one=True)['n']
-        if not ja_tem and not _contatos_do_form(form):
+        if not ja_tem and not _contatos_do_form(form) and not _telefone_valido(form.get('celular')):
             falta.append('contato (nome e celular): a pessoa física precisa de ao menos um')
     if not _telefone_valido(form.get('celular')):
         falta.append('celular')
@@ -266,6 +357,10 @@ def _travas(form, avulso=False, cliente_id=None):
         out.append(f)
     if form.get('tipo_pessoa') == 'PF':
         out += IE.erros_rurais(IE.ler_rurais_json(form.get('ies_rurais_json')) or [])
+        em = (form.get('email') or '').strip()
+        if em and not _email_ok(em.lower()):
+            out.append('e-mail (%s não é um e-mail)' % em)
+        _meios_extras(form.getlist('celular_extra'), form.getlist('email_extra'), erros=out)
     for f in _socios_e_contador_faltando(form, cliente_id):
         if f in so_falta:
             continue
@@ -1137,6 +1232,8 @@ def _render_editar(cliente, endereco_principal):
                            departamentos_contato=ContatoCliente.departamentos_disponiveis(),
                            contatos_existentes=len(_cts := ContatoCliente.get_by_cliente(cliente['id'])),
                            contatos_sem_celular=sum(1 for k in _cts if k.get('ativo', 1) and not (k.get('celular') or '').strip()),
+                           pf_contato=(_contato_da_pessoa_pf(cliente['id'], cliente.get('nome_razao_social'))
+                                       if cliente.get('tipo_pessoa') == 'PF' else None),
                            **_ctx_form(cliente))
 
 
@@ -1228,6 +1325,7 @@ def novo():
         cliente_id = Cliente.create(data)
         if cliente_id:
             _gravar_contatos_do_formulario(cliente_id)
+            _sincronizar_contato_pf(cliente_id)
             # vigia de CNPJ armada no formulário ANTES de salvar ganha o dono
             from utils import cnpj_vigia as VG
             VG.vincular_cliente(cpf_cnpj, cliente_id)
@@ -2251,6 +2349,7 @@ def editar(id):
             # Check if sucesso is not None (None indicates error, 0 or positive number indicates success)
             if sucesso is not None:
                 _gravar_contatos_do_formulario(id)
+                _sincronizar_contato_pf(id)
                 # AUDITORIA (D2): grava só os campos de negócio que mudaram
                 # (o helper calcula o diff; alterado_por/criado_por ficam fora).
                 _campos_log = ('numero_cliente', 'tipo_pessoa', 'nome_razao_social',

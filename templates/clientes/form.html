@@ -516,19 +516,23 @@
                 {# 05/11/2026 (Anderson): no PJ o e-mail e o telefone são O QUE ESTÁ NO CNPJ (vêm da busca,
                    travados, podem ficar vazios). Na pessoa física os dois campos SAEM do cadastro: o que vale é o
                    CONTATO (obrigatório). Quem recebe boletos e documentos são sempre os contatos. #}
-                <div class="cf-fg cf-s6 pj-only">
+                {# 10/11/2026 (Anderson): na pessoa física voltam celular + telefone fixo + e-mail, com "+ outro" — eles
+                   SÃO o contato da pessoa (o servidor cria/atualiza o contato com o nome dela). Outra pessoa vai em
+                   "Adicionar outra pessoa". #}
+                <div class="cf-fg cf-s6">
                     <label class="cf-lbl" for="email">E-mail <span class="cf-rf pj-only">Receita</span></label>
                     <div class="cf-field-btn">
                         <input type="email" id="email" name="email" class="cf-ctrl" placeholder="vem da busca do CNPJ"
-                               value="{{ cliente.email if cliente else '' }}">
-                        <button type="button" class="cf-btn-sec" id="btnEmailContato" onclick="ctAbrir({email: document.getElementById('email').value})"
+                               value="{{ ((pf_contato.email if pf_contato and pf_contato.email else cliente.email) or '') if cliente else '' }}">
+                        <button type="button" class="cf-btn-sec pj-only" id="btnEmailContato" onclick="ctAbrir({email: document.getElementById('email').value})"
                                 title="Transformar este e-mail num contato da empresa: nome, celular e departamentos">
                             <i class="fas fa-user-plus"></i> Transformar em contato
                         </button>
                     </div>
-                    <small class="cf-hint">É o e-mail registrado no CNPJ: vem pela busca, não se digita. Se for o e-mail de quem recebe os documentos, transforme em contato.</small>
+                    <small class="cf-hint pj-only">É o e-mail registrado no CNPJ: vem pela busca, não se digita. Se for o e-mail de quem recebe os documentos, transforme em contato.</small>
+                    <small class="cf-hint pf-only">Recebe os boletos, documentos e avisos de todos os departamentos.</small>
                 </div>
-                <div class="cf-fg cf-s3 pj-only">
+                <div class="cf-fg cf-s3">
                     <label class="cf-lbl" for="telefone">Telefone <span class="cf-opt">(fixo)</span> <span class="cf-rf pj-only">Receita</span></label>
                     <input type="text" id="telefone" name="telefone" class="cf-ctrl phone-mask" placeholder="(00) 0000-0000"
                            value="{{ cliente.telefone if cliente else '' }}">
@@ -538,11 +542,19 @@
                     <input type="text" id="celular" name="celular" class="cf-ctrl phone-mask" placeholder="(00) 00000-0000"
                            value="{{ cliente.celular if cliente else '' }}">
                 </div>
+                <div class="cf-fg cf-s6 pf-only">
+                    <div id="pfEmailExtras" class="pf-extras"></div>
+                    <button type="button" class="pf-mais" onclick="pfExtra('email')"><i class="fas fa-plus"></i> outro e-mail</button>
+                </div>
+                <div class="cf-fg cf-s6 pf-only">
+                    <div id="pfCelExtras" class="pf-extras"></div>
+                    <button type="button" class="pf-mais" onclick="pfExtra('celular')"><i class="fas fa-plus"></i> outro celular</button>
+                </div>
             </div>
 
             <p class="cf-seclabel cf-seclabel-sep">Contatos
                 <span class="cf-seclabel-note pj-only">quem recebe boletos, documentos e avisos de cada departamento</span>
-                <span class="cf-seclabel-note pf-only">a pessoa física precisa de ao menos um contato com celular</span>
+                <span class="cf-seclabel-note pf-only">outras pessoas que também recebem (cônjuge, filho, secretária…) — a própria pessoa já é o contato acima</span>
             </p>
             <div id="ctLista" class="ct-lista">
                 {% if cliente and contatos_existentes %}
@@ -551,7 +563,7 @@
                 {% endif %}
                 <div id="ctVazio" class="ct-vazio">Nenhum contato novo. Quando salvar o cadastro, os contatos daqui são gravados junto.</div>
             </div>
-            <button type="button" class="cf-btn-sec" onclick="ctAbrir({})"><i class="fas fa-plus"></i> Adicionar contato</button>
+            <button type="button" class="cf-btn-sec" onclick="ctAbrir({})"><i class="fas fa-plus"></i> <span class="pj-only">Adicionar contato</span><span class="pf-only">Adicionar outra pessoa</span></button>
             <input type="hidden" name="contatos_json" id="contatosJson" value="[]">
 
             <p class="cf-seclabel cf-seclabel-sep">Endereço <span class="cf-seclabel-note">digite o CEP ou busque o CNPJ</span></p>
@@ -713,6 +725,8 @@
                     <label class="cf-lbl" for="ct_celular">Celular <span class="cf-req">*</span></label>
                     <input type="text" id="ct_celular" class="cf-ctrl phone-mask" placeholder="(00) 00000-0000" onblur="ctPorCelular()" autocomplete="off">
                     <small class="cf-hint">Obrigatório. Se este celular já é de alguém em outra empresa, o sistema oferece os dados dele.</small>
+                    <div id="ctCelExtrasF" class="pf-extras"></div>
+                    <button type="button" class="pf-mais" onclick="ctExtraF('celular')"><i class="fas fa-plus"></i> outro celular</button>
                 </div>
                 <div class="cf-fg cf-s6">
                     <label class="cf-lbl" for="ct_telefone">Telefone fixo</label>
@@ -728,6 +742,8 @@
                 <div class="cf-fg cf-s6">
                     <label class="cf-lbl" for="ct_email">E-mail</label>
                     <input type="email" id="ct_email" class="cf-ctrl" placeholder="quem recebe boletos e documentos">
+                    <div id="ctEmailExtrasF" class="pf-extras"></div>
+                    <button type="button" class="pf-mais" onclick="ctExtraF('email')"><i class="fas fa-plus"></i> outro e-mail</button>
                 </div>
                 <div class="cf-fg cf-s6">
                     <label class="cf-lbl" for="ct_cargo">Cargo</label>
@@ -883,6 +899,16 @@ textarea.cf-ctrl { height:auto; padding:10px 12px; line-height:1.5; resize:verti
 .ct-lista { display:flex; flex-direction:column; gap:8px; margin-bottom:10px; }
 .ct-vazio, .ct-existentes { color:#64748b; font-size:13px; }
 .ct-existentes a { color:#1f6f43; font-weight:600; }
+.pf-extras { display:flex; flex-direction:column; gap:6px; margin-top:6px; }
+.pf-extras:empty { display:none; }
+.pf-extra { display:flex; gap:6px; align-items:center; }
+.pf-extra .cf-ctrl { flex:1; min-width:0; }
+.pf-extra-del { width:34px; height:34px; flex:0 0 34px; border:1px solid #e2e8f0; border-radius:9px; background:#fff; color:#94a3b8; cursor:pointer; }
+.pf-extra-del:hover { color:#b91c1c; border-color:#fca5a5; }
+.pf-mais { margin-top:6px; border:0; background:none; color:#1f6f43; font-size:12.5px; font-weight:600; cursor:pointer; padding:2px 0;
+           display:inline-flex; align-items:center; gap:5px; align-self:flex-start; width:auto !important; white-space:nowrap; }
+.pf-mais:hover { text-decoration:underline; }
+.pf-mais i { font-size:10px; }
 .ct-item { display:flex; justify-content:space-between; gap:10px; align-items:center; border:1px solid #d7e3dc; border-radius:9px; padding:8px 12px; background:#fbfdfc; }
 .ct-item small { color:#475569; }
 .ct-acoes { display:flex; gap:6px; }
@@ -1414,6 +1440,7 @@ function toggleTipoFields() {
         if (!el) return;
         el.readOnly = (tipo === 'PJ');
         el.title = (tipo === 'PJ') ? 'Vem do CNPJ pela busca na Receita. Não se digita aqui.' : '';
+        if (id === 'email') el.placeholder = (tipo === 'PJ') ? 'vem da busca do CNPJ' : 'e-mail da pessoa';
     });
 
     const pfNome = document.getElementById('nome_razao_social_pf');
@@ -2225,9 +2252,58 @@ function ctAbrir(pre) {
     const deps = c.departamentos || [];
     document.querySelectorAll('.ct-dep-chk').forEach(function (k) { k.checked = deps.indexOf(parseInt(k.value, 10)) >= 0; });
     const r = document.getElementById('ctReuso'); r.style.display = 'none'; r.innerHTML = '';
+    document.getElementById('ctCelExtrasF').innerHTML = ''; document.getElementById('ctEmailExtrasF').innerHTML = '';
+    (c.celulares_extra || []).forEach(function (v) { ctExtraF('celular', v); });
+    (c.emails_extra || []).forEach(function (v) { ctExtraF('email', v); });
     document.getElementById('ctModal').style.display = 'block';
     document.getElementById(c.celular ? 'ct_nome' : 'ct_celular').focus();
 }
+// ---- celulares e e-mails a mais (10/11/2026): da própria pessoa física e de cada contato do modal ----
+function fmtTel(v) {
+    var d = String(v || '').replace(/\D/g, '').slice(0, 11);
+    if (d.length > 10) return d.replace(/(\d{2})(\d{5})(\d{4})/, '($1) $2-$3');
+    if (d.length > 6) return d.replace(/(\d{2})(\d{4})(\d{1,4})/, '($1) $2-$3');
+    if (d.length > 2) return d.replace(/(\d{2})(\d{1,5})/, '($1) $2');
+    return d;
+}
+function linhaExtra(box, tipo, valor, nome) {
+    var row = document.createElement('div');
+    row.className = 'pf-extra';
+    var inp = document.createElement('input');
+    inp.type = tipo === 'email' ? 'email' : 'text';
+    inp.className = 'cf-ctrl';
+    if (nome) inp.name = nome;
+    inp.placeholder = tipo === 'email' ? 'outro e-mail' : '(00) 00000-0000';
+    inp.value = tipo === 'email' ? (valor || '').toLowerCase() : fmtTel(valor);
+    if (tipo !== 'email') inp.addEventListener('input', function () { inp.value = fmtTel(inp.value); });
+    var del = document.createElement('button');
+    del.type = 'button'; del.className = 'pf-extra-del'; del.title = 'Tirar';
+    del.innerHTML = '<i class="fas fa-xmark"></i>';
+    del.onclick = function () { row.remove(); if (typeof atualizarChecklist === 'function') atualizarChecklist(); };
+    row.appendChild(inp); row.appendChild(del);
+    box.appendChild(row);
+    return inp;
+}
+function pfExtra(tipo, valor) {
+    var box = document.getElementById(tipo === 'email' ? 'pfEmailExtras' : 'pfCelExtras');
+    var inp = linhaExtra(box, tipo, valor, tipo === 'email' ? 'email_extra' : 'celular_extra');
+    if (valor === undefined) inp.focus();
+}
+function ctExtraF(tipo, valor) {
+    var box = document.getElementById(tipo === 'email' ? 'ctEmailExtrasF' : 'ctCelExtrasF');
+    var inp = linhaExtra(box, tipo, valor, null);
+    if (valor === undefined) inp.focus();
+}
+function ctValoresF(id) {
+    return Array.prototype.map.call(document.querySelectorAll('#' + id + ' input'), function (i) { return (i.value || '').trim(); })
+        .filter(Boolean);
+}
+document.addEventListener('DOMContentLoaded', function () {
+    {% if pf_contato %}
+    {{ (pf_contato.celulares_extra or [])|tojson }}.forEach(function (v) { pfExtra('celular', v); });
+    {{ (pf_contato.emails_extra or [])|tojson }}.forEach(function (v) { pfExtra('email', v); });
+    {% endif %}
+});
 function ctFechar() {
     document.getElementById('ctModal').style.display = 'none';
     // "quando ele salvar, volta para onde ele estava no cadastro, na parte do e-mail"
@@ -2268,14 +2344,21 @@ function ctSalvar() {
     const dig = celular.replace(/\D/g, '');
     if (!nome) { alert('Falta o nome do contato.'); document.getElementById('ct_nome').focus(); return; }
     if (dig.length < 10 || dig.length > 11) { alert('O celular é obrigatório (DDD + número).'); document.getElementById('ct_celular').focus(); return; }
+    const celX = ctValoresF('ctCelExtrasF'), emailX = ctValoresF('ctEmailExtrasF').map(function (v) { return v.toLowerCase(); });
+    const emailP = (document.getElementById('ct_email').value || '').trim();
+    const ruins = celX.filter(function (v) { var d = v.replace(/\D/g, ''); return d.length < 10 || d.length > 11; })
+        .concat([emailP].concat(emailX).filter(function (v) { return v && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v); }));
+    if (ruins.length) { alert('Corrija antes de guardar: ' + ruins.join(', ')); return; }
     const deps = [], nomes = [];
     document.querySelectorAll('.ct-dep-chk:checked').forEach(function (k) { deps.push(parseInt(k.value, 10)); nomes.push(k.dataset.nome); });
     const msg = nomes.length
         ? nome + ' é o contato que vai receber boletos, documentos e avisos de: ' + nomes.join(', ') + '.\n\nTem certeza?'
         : nome + ' fica cadastrado SEM receber nada de nenhum departamento (nenhum marcado).\n\nTem certeza?';
-    if (!confirm(msg)) return;
+    const resumo = [emailP.toLowerCase()].concat(emailX).filter(Boolean);
+    if (!confirm(msg.replace('\n\nTem certeza?', '') + (resumo.length ? '\n\nE-mails: ' + resumo.join(', ') : '') +
+                 '\nCelulares: ' + [celular].concat(celX).join(', ') + '\n\nTem certeza?')) return;
     const c = { nome: nome, celular: celular, telefone: (document.getElementById('ct_telefone').value || '').trim(),
-                email: (document.getElementById('ct_email').value || '').trim().toLowerCase(),
+                email: emailP.toLowerCase(), celulares_extra: celX, emails_extra: emailX,
                 cargo: (document.getElementById('ct_cargo').value || '').trim(), departamentos: deps, departamentos_nomes: nomes };
     if (ctEditando >= 0) CONTATOS[ctEditando] = c; else CONTATOS.push(c);
     ctRender(); ctFechar();
@@ -2288,14 +2371,16 @@ function ctRender() {
     CONTATOS.forEach(function (c, i) {
         const el = document.createElement('div'); el.className = 'ct-item';
         el.innerHTML = '<div><b>' + c.nome + '</b>' + (c.cargo ? ' <span class="cf-opt">' + c.cargo + '</span>' : '') +
-            '<br><small>' + c.celular + (c.email ? ' &middot; ' + c.email : '') + '</small><br>' +
+            '<br><small>' + [c.celular].concat(c.celulares_extra || []).join(' / ') +
+            ([c.email].concat(c.emails_extra || []).filter(Boolean).length ? ' &middot; ' + [c.email].concat(c.emails_extra || []).filter(Boolean).join(' / ') : '') + '</small><br>' +
             (c.departamentos_nomes.length ? c.departamentos_nomes.map(function (n) { return '<span class="ct-dep">' + n + '</span>'; }).join('') : '<span class="ct-falta">não recebe nada</span>') + '</div>' +
             '<div class="ct-acoes"><button type="button" class="cf-btn-sec" onclick="ctAbrir({indice:' + i + '})" title="Editar"><i class="fas fa-pen"></i></button>' +
             '<button type="button" class="cf-btn-sec" onclick="ctRemover(' + i + ')" title="Tirar da lista"><i class="fas fa-trash"></i></button></div>';
         lista.appendChild(el);
     });
     document.getElementById('contatosJson').value = JSON.stringify(CONTATOS.map(function (c) {
-        return { nome: c.nome, celular: c.celular, telefone: c.telefone, email: c.email, cargo: c.cargo, departamentos: c.departamentos };
+        return { nome: c.nome, celular: c.celular, telefone: c.telefone, email: c.email, cargo: c.cargo, departamentos: c.departamentos,
+                 celulares_extra: c.celulares_extra || [], emails_extra: c.emails_extra || [] };
     }));
     if (typeof atualizarChecklist === 'function') atualizarChecklist();
 }
@@ -2653,7 +2738,7 @@ function atualizarResumo() {
         itens.push([cobOk, cobSel ? 'Cobrança dos honorários' : 'Cobrança (o Financeiro define)', 'v']);
         if (pj) itens.push([!!val('email') || contatoEmail || (typeof CT_EXISTENTES !== 'undefined' && CT_EXISTENTES > 0), 'E-mail (do CNPJ ou de um contato)', 'v']);
         else {
-            itens.push([temContato, 'Contato (nome e celular)', 'v']);
+            itens.push([temContato || cel.length >= 10, 'Contato (celular da pessoa)', 'v']);
             itens.push([PF_DOCS.length > 0 && !pfDocFaltas().length, 'Documento de identificação', 'v']);
             if (typeof ieRuralMarcado === 'function' && ieRuralMarcado())
                 itens.push([IE_RUR.some(function (x) { return x.uf && x.ie && x.propriedade && x.municipio; }), 'IE de produtor rural', 'v']);
@@ -2668,7 +2753,7 @@ function atualizarResumo() {
             itens.push([!!((ab && ab.checked) || val('contabilidade_anterior_id')), 'Origem (aberta pela casa ou contabilidade anterior)', 'c']);
         }
     } else if (tipo && ehAvulso) {
-        itens.push([!!val('email'), pj ? 'E-mail' : 'E-mail (preencha na ficha, depois de salvar)', 'v']);
+        itens.push([!!val('email'), 'E-mail', 'v']);
         if (pj) itens.push([regime, 'Regime tributário', 'v']);
         itens.push([typeof CT_SEM_CEL === 'undefined' || !CT_SEM_CEL, 'Celular de todos os contatos', 'a']);
         itens.push([cel.length >= 10, 'Celular', 'a']);
