@@ -957,7 +957,9 @@ def dropbox_espaco_atualizar():
 def usuarios():
     rows = execute_query(
         """SELECT u.id, u.nome, u.login, u.email, u.tipo_usuario, u.situacao, u.cargo,
-                  u.senha_pendente,
+                  u.senha_pendente, u.ultimo_login, u.ultimo_acesso, u.ultimo_ip,
+                  (u.login_liberado_ate IS NOT NULL AND u.login_liberado_ate >= NOW()) AS liberado_sem_codigo,
+                  u.login_liberado_ate,
                   GROUP_CONCAT(pa.nome ORDER BY pa.nome SEPARATOR ', ') AS perfis,
                   GROUP_CONCAT(pa.id ORDER BY pa.nome SEPARATOR ',') AS perfis_ids
              FROM usuarios u
@@ -1736,6 +1738,7 @@ def _render_usuario_form(**kw):
         pf['perms'] = sorted(por_p.get(pf['id'], []))
         pf['qtd_telas'] = sum(1 for t in telas if set(t['cod']) & set(pf['perms']))
     kw.setdefault('excecoes_reservadas', [])
+    kw.setdefault('agora', datetime.now())
     return render_template('configuracoes/usuario_form.html', perfis_info=perfis_info,
                            deps_resumo=[{'cor': d['cor'], 'grupo': d['grupo'], 'sigla': d['sigla']}
                                         for d in DEPARTAMENTOS_PERMISSOES],
@@ -1965,6 +1968,23 @@ def usuario_editar(uid):
                            perfis_usuario=perfis_usuario,
                            empresas_usuario=empresas_usuario,
                            excecoes_reservadas=excecoes_reservadas)
+
+
+@configuracoes.route('/usuarios/<int:uid>/liberar-codigo', methods=['POST'])
+@admin_required
+def usuario_liberar_codigo(uid):
+    """Libera a PRÓXIMA entrada sem o código do e-mail, por 24 horas (10/11/2026).
+    Para quando o e-mail não chega: ninguém fica trancado do lado de fora."""
+    u = execute_query("SELECT nome, situacao FROM usuarios WHERE id=%s", (uid,), fetch=True, fetch_one=True)
+    if not u:
+        return jsonify(ok=False, msg='Usuário não encontrado.'), 404
+    if u['situacao'] != 'ATIVO':
+        return jsonify(ok=False, msg='Usuário desativado: ative antes de liberar.'), 400
+    execute_query("UPDATE usuarios SET login_liberado_ate = NOW() + INTERVAL 24 HOUR WHERE id=%s",
+                  (uid,), fetch=False)
+    registrar('escrita.liberou_sem_codigo', 'configuracoes', tabela='usuarios', registro_id=uid,
+              depois={'nome': u['nome'], 'vale_horas': 24})
+    return jsonify(ok=True, msg=f'{u["nome"]} pode entrar sem código nas próximas 24 horas (uma vez).')
 
 
 @configuracoes.route('/usuarios/<int:uid>/toggle', methods=['POST'])

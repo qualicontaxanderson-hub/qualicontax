@@ -29,6 +29,12 @@ from flask_login import current_user
 
 from utils.db_helper import execute_query
 
+
+def _ip_real():
+    # IP de quem acessa, nao o do proxy do Railway (100.64.x.x) — 10/11/2026
+    from utils.login_seguro import ip_cliente
+    return ip_cliente()
+
 logger = logging.getLogger(__name__)
 
 # --------------------------------------------------------------------------
@@ -233,7 +239,7 @@ def registrar(acao, modulo, tabela=None, registro_id=None, antes=None, depois=No
             (usuario_id, usuario_nome, usuario_login,
              acao_curta, modulo_curto, tabela, registro_id,
              a_str, d_str,
-             (request.remote_addr or '')[:45],
+             _ip_real(),
              (request.headers.get('User-Agent') or '')[:255]),
             fetch=False)
     except Exception as e:                       # engole tudo — nunca quebra o fluxo
@@ -263,7 +269,7 @@ def registrar_agente(acao, modulo, usuario_id, usuario_nome, usuario_login=None,
             in_req = has_request_context()
         except Exception:
             in_req = False
-        ip = (request.remote_addr or '')[:45] if in_req else None
+        ip = _ip_real() if in_req else None
         ua = (request.headers.get('User-Agent') or '')[:255] if in_req else None
 
         _antes, d_json = _diff(None, depois)

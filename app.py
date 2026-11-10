@@ -178,6 +178,11 @@ app.register_blueprint(qrobo)
 # restrito. Registrado no APP (não no blueprint) de propósito: precisa rodar
 # antes de TODO request, senão bastaria digitar /escrita-fiscal/... na barra
 # para escapar. Sessão sem o escopo não é tocada — o app segue igual para todos.
+# Login seguro (10/11/2026): sessão parada há mais de 24 h cai (e a volta pede
+# código no e-mail); anota último acesso e IP. Roda ANTES dos portões.
+from utils.login_seguro import vigia_sessao as _vigia_sessao, renovar_depois as _renovar_navegador
+app.before_request(_vigia_sessao)
+app.after_request(_renovar_navegador)
 app.before_request(gate_escopo_instalador)
 
 # Portão central de PERFIL e EMPRESA RESERVADA — também DENY BY DEFAULT: rota

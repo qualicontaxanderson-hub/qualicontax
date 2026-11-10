@@ -1722,6 +1722,35 @@ def _apply_migrations():
                      "SELECT '%s', 'PF', 'ATIVO' FROM DUAL "
                      "WHERE NOT EXISTS (SELECT 1 FROM ramos_atividade WHERE nome = '%s')" % (_nome, _nome))
 
+    # Login seguro (10/11/2026): ultimo login/IP, liberacao sem codigo pelo admin
+    # e os codigos enviados por e-mail (so o hash). Ver utils/login_seguro.py.
+    for _col, _defn in [
+        ('ultimo_login',       'DATETIME NULL'),
+        ('ultimo_ip',          'VARCHAR(45) NULL'),
+        ('login_liberado_ate', 'DATETIME NULL'),
+    ]:
+        _ex = execute_query(
+            "SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.COLUMNS "
+            "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'usuarios' AND COLUMN_NAME = %s",
+            (_col,), fetch=True, fetch_one=True) or {}
+        if _ex.get('cnt', 0) == 0:
+            _migrate(f"ALTER TABLE usuarios ADD COLUMN {_col} {_defn}")
+    _migrate("""
+        CREATE TABLE IF NOT EXISTS login_codigos (
+            id          INT AUTO_INCREMENT PRIMARY KEY,
+            usuario_id  INT          NOT NULL,
+            codigo_hash CHAR(64)     NOT NULL,
+            criado_em   DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            expira_em   DATETIME     NOT NULL,
+            usado_em    DATETIME     NULL,
+            motivo      VARCHAR(20)  NULL,
+            tentativas  INT          NOT NULL DEFAULT 0,
+            ip          VARCHAR(45)  NULL,
+            user_agent  VARCHAR(255) NULL,
+            KEY idx_lc_usuario (usuario_id, usado_em)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    """, fetch=False)
+
     print("✓ Migrations concluídas")
 
 

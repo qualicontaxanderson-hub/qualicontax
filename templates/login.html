@@ -132,7 +132,7 @@
             color: #22c55e;
         }
 
-        /* Lembrar-me + esqueceu */
+        /* linha do esqueceu a senha */
         .form-row {
             display: flex;
             align-items: center;
@@ -215,6 +215,20 @@
         }
         .login-footer a:hover { text-decoration: underline; }
 
+        /* Código por e-mail (10/11/2026) */
+        .cod-quem { display:flex; gap:12px; align-items:center; background:#f0fdf4; border:1px solid #bbf7d0; border-radius:12px;
+                    padding:12px 14px; margin-bottom:18px; color:#0f3d2e; }
+        .cod-quem > i { font-size:22px; color:#16a34a; }
+        .cod-quem b { display:block; font-size:14px; }
+        .cod-quem span { font-size:12.5px; color:#475569; }
+        .cod-quem span b { display:inline; font-size:12.5px; }
+        .cod-input { letter-spacing:6px; font-size:20px !important; font-weight:700; }
+        .cod-dica { font-size:12.5px; color:#64748b; margin:-4px 0 16px; line-height:1.45; }
+        .cod-reenv { display:flex; justify-content:space-between; align-items:center; margin-top:14px; font-size:13px; }
+        .cod-reenv button { border:0; background:none; color:#16a34a; font-weight:600; cursor:pointer; padding:0; font:inherit; }
+        .cod-reenv a { color:#6b7280; text-decoration:none; }
+        .cod-reenv a:hover, .cod-reenv button:hover { text-decoration:underline; }
+
         /* Mobile */
         @media (max-width: 480px) {
             .login-card { padding: 36px 24px 28px; }
@@ -244,6 +258,30 @@
                 {% endif %}
             {% endwith %}
 
+            {% if etapa == 'codigo' %}
+            {# 2a etapa (10/11/2026): código de 6 números enviado ao e-mail #}
+            <div class="cod-quem">
+                <i class="fas fa-envelope-circle-check"></i>
+                <div><b>{{ pend_nome }}</b><span>enviamos um código para <b>{{ pend_email }}</b></span></div>
+            </div>
+            <form method="POST" action="{{ url_for('auth.login_codigo') }}" autocomplete="off">
+                <div class="field-group">
+                    <label class="field-label" for="codigo">Código de 6 números</label>
+                    <div class="field-wrap">
+                        <input type="text" id="codigo" name="codigo" class="field-input cod-input" inputmode="numeric"
+                               pattern="[0-9 ]{6,7}" maxlength="7" placeholder="000000" required autofocus autocomplete="one-time-code">
+                        <i class="fas fa-key field-icon"></i>
+                    </div>
+                </div>
+                <p class="cod-dica">Vale {{ minutos }} minutos. Você ficou mais de 24 horas sem usar o sistema
+                   (ou está num computador novo), por isso pedimos o código. Ele só funciona para <b>{{ pend_nome }}</b>.</p>
+                <button type="submit" class="btn-entrar"><i class="fas fa-check"></i> Confirmar e entrar</button>
+            </form>
+            <form method="POST" action="{{ url_for('auth.login_codigo_reenviar') }}" class="cod-reenv">
+                <button type="submit">Não chegou? Reenviar código</button>
+                <a href="{{ url_for('auth.login') }}">Não sou {{ pend_nome.split()[0] }}</a>
+            </form>
+            {% else %}
             <form method="POST" action="{{ url_for('auth.login') }}">
                 {{ form.hidden_tag() if form }}
 
@@ -265,11 +303,7 @@
                     </div>
                 </div>
 
-                <div class="form-row">
-                    <label class="checkbox-wrap">
-                        <input type="checkbox" name="remember" id="remember">
-                        <span>Lembrar-me</span>
-                    </label>
+                <div class="form-row" style="justify-content:flex-end">
                     <a href="#" class="forgot-link">Esqueceu a senha?</a>
                 </div>
 
@@ -278,6 +312,7 @@
                     Entrar
                 </button>
             </form>
+            {% endif %}
 
             <div class="login-footer">
                 Não tem uma conta? <a href="#">Solicitar acesso</a>

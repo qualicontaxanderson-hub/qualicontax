@@ -207,6 +207,11 @@
         <span class="gc-tag {{ 'cfg-tag-adm' if u.tipo_usuario == 'ADMIN' else 'cfg-tag-info' }}">
             {% if u.tipo_usuario == 'ADMIN' %}<i class="fas fa-user-shield"></i> {% endif %}{{ u.tipo_usuario|capitalize }}
         </span>
+        {% if u.liberado_sem_codigo %}
+        <span class="gc-tag cfg-tag-warn" title="A próxima entrada não pede o código do e-mail">
+            <i class="fas fa-unlock"></i> Liberado sem código até {{ u.login_liberado_ate.strftime('%d/%m %H:%M') }}
+        </span>
+        {% endif %}
         {% if u.senha_pendente %}
         <span class="gc-tag cfg-tag-warn" title="Aprovado — aguardando a pessoa definir a senha">
             <i class="fas fa-key"></i> Sem senha
@@ -234,6 +239,14 @@
             <div class="cfg-nomes">{% for n in u.perfis.split(', ') %}<span class="cli-ramo">{{ n }}</span>{% endfor %}</div>
             {% else %}<span class="cli-val cfg-vazio">Sem perfil</span>{% endif %}
         </div>
+        {# Último acesso e IP (10/11/2026, utils/login_seguro.py) #}
+        <div class="cli-campo"><span class="cli-rot">Último acesso</span>
+            {% if u.ultimo_acesso %}<span class="cli-val" title="Entrou em {{ u.ultimo_login.strftime('%d/%m/%Y %H:%M') if u.ultimo_login else '—' }}">{{ u.ultimo_acesso.strftime('%d/%m/%Y %H:%M') }}</span>
+            {% else %}<span class="cli-val cfg-vazio">ainda não registrado</span>{% endif %}
+        </div>
+        <div class="cli-campo"><span class="cli-rot">IP</span>
+            <span class="cli-val mono">{{ u.ultimo_ip or '—' }}</span>
+        </div>
     </div>
 
     <footer class="cli-pe">
@@ -252,6 +265,12 @@
                class="lst-act lst-act-edit" title="Editar">
                 <i class="fas fa-pen"></i>
             </a>
+            {% if ativo and not u.senha_pendente %}
+            <button class="lst-act" title="Liberar a próxima entrada sem o código do e-mail (24 horas)"
+                    onclick="event.stopPropagation(); liberarSemCodigo({{ u.id }}, this.dataset.nome)" data-nome="{{ u.nome }}">
+                <i class="fas fa-unlock"></i>
+            </button>
+            {% endif %}
             <button class="lst-act {{ 'cfg-act-warn' if u.situacao == 'ATIVO' else 'cfg-act-ok' }}"
                     title="{{ 'Desativar' if u.situacao == 'ATIVO' else 'Ativar' }}"
                     onclick="toggleUsuario({{ u.id }}, this)">
@@ -990,6 +1009,12 @@ function revogarLink(id, prefixo, btn) {
         else { alert(res.d.msg || 'Não foi possível revogar.'); btn.disabled = false; }
     })
     .catch(function () { alert('Sem resposta do servidor.'); btn.disabled = false; });
+}
+
+function liberarSemCodigo(id, nome) {
+    if (!confirm('Liberar ' + nome + ' para entrar SEM o código do e-mail?' + String.fromCharCode(10, 10) + 'Vale uma vez, nas próximas 24 horas. Use quando o e-mail não chegar.')) return;
+    fetch('/configuracoes/usuarios/' + id + '/liberar-codigo', {method:'POST', headers:{'X-CSRF-Token': QC_CSRF}})
+    .then(function (r) { return r.json(); }).then(function (d) { alert(d.msg || 'Erro ao liberar.'); if (d.ok) location.reload(); });
 }
 
 function toggleUsuario(id, btn) {

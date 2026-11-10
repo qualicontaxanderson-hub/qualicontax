@@ -107,6 +107,7 @@
                     {% if usuario %}
                     <span>Login <b>{{ usuario.login }}</b></span>
                     <span>{{ 'Ativo' if usuario.situacao == 'ATIVO' else 'Inativo' }}</span>
+                    {% if usuario.ultimo_acesso %}<span>Último acesso {{ usuario.ultimo_acesso.strftime('%d/%m/%Y às %H:%M') }}{% if usuario.ultimo_ip %} · IP {{ usuario.ultimo_ip }}{% endif %}</span>{% endif %}
                     {% if usuario.criado_em %}<span>Cadastrado em {{ usuario.criado_em.strftime('%d/%m/%Y') }}</span>{% endif %}
                     {% else %}
                     <span>Preencha os dados, escolha o perfil e salve</span>
@@ -238,6 +239,12 @@
             {% endfor %}
         </div>
         <div id="usSelo"></div>
+        {% if usuario and usuario.situacao == 'ATIVO' %}
+        <button type="button" class="ef-btn us-volta" id="usLiberar" style="width:100%;justify-content:center;margin-top:12px"
+                data-id="{{ usuario.id }}" data-nome="{{ usuario.nome }}">
+            <i class="fas fa-unlock"></i> {{ 'Liberado sem código até ' ~ usuario.login_liberado_ate.strftime('%d/%m %H:%M') if usuario.login_liberado_ate and usuario.login_liberado_ate > agora else 'Liberar entrada sem código' }}
+        </button>
+        {% endif %}
         <div class="us-res-acoes">
             <a href="{{ url_for('configuracoes.usuarios') }}" class="ef-btn us-volta">Cancelar</a>
             <button type="submit" class="ef-btn us-salvar"><i class="fas fa-check"></i> {{ 'Salvar' if usuario else 'Criar usuário' }}</button>
@@ -305,6 +312,12 @@
         this.innerHTML = ver ? '<i class="fas fa-eye-slash"></i>' : '<i class="fas fa-eye"></i>';
     });
     soma();
+    var lib = document.getElementById('usLiberar');
+    if (lib) lib.addEventListener('click', function () {
+        if (!confirm('Liberar ' + lib.dataset.nome + ' para entrar SEM o código do e-mail?' + String.fromCharCode(10, 10) + 'Vale uma vez, nas próximas 24 horas. Use quando o e-mail não chegar.')) return;
+        fetch('/configuracoes/usuarios/' + lib.dataset.id + '/liberar-codigo', {method: 'POST'})
+            .then(function (r) { return r.json(); }).then(function (d) { alert(d.msg || 'Erro ao liberar.'); if (d.ok) location.reload(); });
+    });
 })();
 </script>
 {% endblock %}
