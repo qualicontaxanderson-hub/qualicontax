@@ -302,7 +302,8 @@ def _gravar_rascunho(emitida_id, p: Pedido, cfg, emissor, agora):
 
 # --- nacional ---------------------------------------------------------------
 # Municípios cujo CNC não tem cadastro complementar: mandar a IM do prestador é recusado (E0120).
-MUNICIPIOS_SEM_IM = {'3550308'}      # São Paulo
+MUNICIPIOS_SEM_IM = {'3550308',      # São Paulo (E0120, 31/10/2026)
+                     '3547809'}      # Santo André (E0120, 10/11/2026, Rede M6 nº 35)
 
 
 def montar_dps(numero, p: Pedido, cfg, cert, agora, amb):

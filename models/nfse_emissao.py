@@ -43,6 +43,7 @@ MOTIVOS_RECUSA = {
     'E0037': 'A cidade da empresa não tem convênio com o Emissor Nacional',
     'E0039': 'A cidade da empresa não está preparada para o Emissor Nacional',
     'E0116': 'Falta a inscrição municipal da empresa',
+    'E0120': 'A cidade da empresa não aceita a inscrição municipal na nota',
     'E0322': 'Faltou o tipo de serviço (NBS)',
     'E2243': 'O CPF da empresa não pode consultar por este caminho',
 }

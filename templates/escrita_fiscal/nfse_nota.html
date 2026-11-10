@@ -53,7 +53,10 @@
 {% if n.situacao in ('rejeitada', 'erro') %}
 <div class="nd-erro">
     <b>{{ 'O governo recusou a nota:' if n.situacao == 'rejeitada' else 'A nota não chegou ao governo:' }}</b>
-    {% if erros %}<ul style="margin:6px 0 0 18px;">{% for e in erros %}<li>{{ e[0] }} — {{ e[1] }}{% if e[2] %} ({{ e[2] }}){% endif %}</li>{% endfor %}</ul>
+    {% if erros %}<ul style="margin:6px 0 0 18px;">{% for e in erros %}{# o governo devolve {"Codigo", "Descricao"} (10/11/2026: a lista por posição saía vazia) #}
+        {% if e is mapping %}{% set _cod = e.Codigo or e.codigo or '' %}{% set _txt = e.Descricao or e.descricao or e.Mensagem or '' %}
+        <li>{% if MOTIVOS_RECUSA.get(_cod) %}<b>{{ MOTIVOS_RECUSA[_cod] }}</b><br>{% endif %}<small>{{ _cod }}{{ ' — ' if _cod and _txt }}{{ _txt }}</small></li>
+        {% else %}<li>{{ e[0] }} — {{ e[1] }}{% if e[2] %} ({{ e[2] }}){% endif %}</li>{% endif %}{% endfor %}</ul>
     {% else %}<div style="margin-top:4px;">{{ n.erro_ultimo or 'sem detalhe' }}</div>{% endif %}
     <div style="margin-top:8px;">O número {{ n.numero_dps }} ficou registrado como recusado. A próxima nota sai com o número seguinte.</div>
 </div>

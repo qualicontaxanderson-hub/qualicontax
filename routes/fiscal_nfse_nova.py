@@ -16,7 +16,7 @@ from datetime import date
 from flask import Response, abort, flash, jsonify, redirect, render_template, request, url_for
 from flask_login import current_user
 
-from models.nfse_emissao import (OP_SIMP_NAC, SITUACOES, NfseConfig, NfseEmitida, empresa_da_matriz,
+from models.nfse_emissao import (MOTIVOS_RECUSA, OP_SIMP_NAC, SITUACOES, NfseConfig, NfseEmitida, empresa_da_matriz,
                                  faltas_da_matriz, situacao_das_matrizes)
 from models.nfse_tomador import LOCAIS, NfseTomador, como_tomador, pedido_do_fiscal, preencher_por_documento
 from routes.escrita_fiscal import _get_empresas, escrita_fiscal
@@ -433,7 +433,7 @@ def nfse_nota(nota_id):
     n = _nota_ou_404(nota_id)
     raw = n.get('raw_resposta') if isinstance(n.get('raw_resposta'), dict) else {}
     return render_template('escrita_fiscal/nfse_nota.html', n=n, erros=raw.get('erros') or [],
-                           alertas=raw.get('alertas') or [], SITUACOES=SITUACOES, MOTIVOS=MOTIVOS_CANCELAMENTO,
+                           alertas=raw.get('alertas') or [], SITUACOES=SITUACOES, MOTIVOS_RECUSA=MOTIVOS_RECUSA, MOTIVOS=MOTIVOS_CANCELAMENTO,
                            csrf=csrf_token(), **hub_ctx('emitidas', n['empresa_id']))
 
 
