@@ -85,7 +85,23 @@
 .hub-pick-nada { padding:22px; text-align:center; color:#64748b; font-size:13px; }
 .hub-pick-pe { padding:7px 14px; font-size:11.5px; color:#64748b; border-top:1px solid #eef2f0; flex:none; }
 .hub-pick-pe:empty { display:none; }
+/* título pequeno e tira da empresa (no lugar da faixa verde) */
+.hub-cab { display:flex; align-items:baseline; flex-wrap:wrap; gap:4px 12px; margin:16px 0 0; }
+.hub-cab h1 { margin:0; font-size:22px; font-weight:800; letter-spacing:-.4px; color:#0f3d2e; }
+.hub-cab span { font-size:13px; color:#64748b; }
+.hub-emp { display:flex; align-items:center; flex-wrap:wrap; gap:10px 18px; margin:0 0 16px; padding:14px 20px; border-radius:18px; color:#fff;
+           background:linear-gradient(140deg,#0b3b2b 0%,#136c46 55%,#1f9a5c 100%); box-shadow:0 10px 30px rgba(15,61,46,.10); }
+.hub-emp-nome { display:flex; align-items:baseline; flex-wrap:wrap; gap:4px 12px; min-width:0; flex:1 1 380px; }
+.hub-emp-num { font-size:12px; font-weight:800; color:#86efac; letter-spacing:.4px; }
+.hub-emp-nome b { font-size:18px; font-weight:800; letter-spacing:-.3px; overflow-wrap:anywhere; min-width:0; }
+.hub-emp-doc { font-family:ui-monospace, Consolas, monospace; color:#86efac; font-weight:700; font-size:13.5px; }
+.hub-emp-chips { display:flex; flex-wrap:wrap; gap:6px; }
+.hub-emp-chips > span:not(.hub-sit) { display:inline-flex; align-items:center; gap:6px; padding:4px 10px; border-radius:99px; font-size:12px; font-weight:600;
+           background:rgba(255,255,255,.14); color:#e7f7ee; }
+.hub-emp-chips > span.meio { background:#fef3c7; color:#92400e; }
+.hub-emp-chips > span.ruim { background:#fee2e2; color:#b91c1c; }
 @media (max-width: 600px) {
+  .hub-emp { padding:12px 16px; } .hub-emp-nome b { font-size:16px; }
   .hub-pick-it .hub-sit { display:none; }
 }
 .hub-sit { display:inline-flex; align-items:center; gap:6px; border-radius:99px; padding:4px 11px; font-size:11.5px; font-weight:800; white-space:nowrap; }
@@ -148,39 +164,32 @@
     {% endif %}{% endfor %}
 </nav>
 {% endmacro %}
-{# 09/11/2026: na Configuração com empresa escolhida a faixa verde sai — a empresa vai para o
-   cartão verde da ficha dentro de nfse/_matriz_cartoes.html (modelo aprovado: "Aprovado !") #}
-{% set _compacto = _he and hub_aba == 'config' %}
-{% if _compacto %}
-<div class="hub-linha">{{ _abas_nav('hub-tabs-lisas') }}{% if _hl %}{{ _seletor(True) }}{% endif %}</div>
-{% else %}
-<div class="ef-hero hub-hero">
-    <div class="ef-hero-inner ef-hero-head">
-        <div class="hub-hero-tit">
-            {% if _he and hub_aba != 'conferencia' %}
-            {% set s = _sit[_he.situacao_nfse] %}
-            <span class="ef-hero-num">NFS-e · #{{ _he.numero_cliente or '—' }}</span>
-            <h1 class="ef-hero-title">{{ _he.nome }}</h1>
-            <span class="hub-cnpj">{{ _he.doc_fmt }}</span>
-            <div class="ef-hero-badges">
-                {% if _he.cidade %}<span class="ef-hero-badge"><i class="fas fa-location-dot"></i> {{ _he.cidade }}/{{ _he.uf }}</span>{% endif %}
-                {% if _he.regime_rotulo %}<span class="ef-hero-badge">{{ _he.regime_rotulo }}</span>{% endif %}
-                {% if _he.certificado %}{% set st = _he.certificado.status %}
-                <span class="ef-hero-badge" {% if st.nivel == 'vencido' %}style="background:#fee2e2;color:#b91c1c"{% endif %}><i class="fas fa-shield-halved"></i>
-                    {% if st.nivel == 'vencido' %}Certificado vencido{% elif st.nivel == 'laranja' %}Certificado vence em {{ st.dias }} dias{% else %}Certificado válido{% endif %}</span>
-                {% else %}<span class="ef-hero-badge" style="background:#fee2e2;color:#b91c1c"><i class="fas fa-shield"></i> Sem certificado</span>{% endif %}
-                <span class="hub-sit {{ s[1] }}"><i class="fas {{ s[2] }}"></i> {{ s[0] }}</span>
-            </div>
-            {% else %}
-            <h1 class="ef-hero-title">NFS-e</h1>
-            <p class="ef-hero-sub">{{ _sub.get(hub_aba, '') }}</p>
-            {% endif %}
-        </div>
-        {% if hub_aba != 'conferencia' and _hl %}{{ _seletor() }}{% endif %}
+{# 09/11/2026: a faixa verde saiu de todas as abas (Anderson: "pode", depois do modelo
+   "Aprovado !" da Configuração). Cabeça = título pequeno + pílulas soltas como as da ficha e a
+   busca clara à direita. Fora da Configuração (que tem o cartão verde da empresa dentro de
+   nfse/_matriz_cartoes.html) a empresa escolhida vira uma tira verde-escura de uma linha. #}
+{% if not (_he and hub_aba == 'config') %}
+<div class="hub-cab"><h1>NFS-e</h1><span>{{ _sub.get(hub_aba, '') }}</span></div>
+{% endif %}
+<div class="hub-linha">{{ _abas_nav('hub-tabs-lisas') }}{% if hub_aba != 'conferencia' and _hl %}{{ _seletor(True) }}{% endif %}</div>
+{% if _he and hub_aba not in ('config', 'conferencia') %}
+{% set s = _sit[_he.situacao_nfse] %}
+<div class="hub-emp">
+    <div class="hub-emp-nome">
+        <span class="hub-emp-num">#{{ _he.numero_cliente or '—' }}</span>
+        <b>{{ _he.nome }}</b>
+        <span class="hub-emp-doc">{{ _he.doc_fmt }}</span>
+    </div>
+    <div class="hub-emp-chips">
+        {% if _he.cidade %}<span><i class="fas fa-location-dot"></i> {{ _he.cidade }}/{{ _he.uf }}</span>{% endif %}
+        {% if _he.regime_rotulo %}<span>{{ _he.regime_rotulo }}</span>{% endif %}
+        {% if _he.certificado %}{% set st = _he.certificado.status %}
+        <span class="{{ 'ruim' if st.nivel == 'vencido' else ('meio' if st.nivel == 'laranja' else '') }}"><i class="fas fa-shield-halved"></i>
+            {% if st.nivel == 'vencido' %}Certificado vencido{% elif st.nivel == 'laranja' %}Certificado vence em {{ st.dias }} dias{% else %}Certificado válido{% endif %}</span>
+        {% else %}<span class="ruim"><i class="fas fa-shield"></i> Sem certificado</span>{% endif %}
+        <span class="hub-sit {{ s[1] }}"><i class="fas {{ s[2] }}"></i> {{ s[0] }}</span>
     </div>
 </div>
-
-{{ _abas_nav() }}
 {% endif %}
 
 {% if hub_aba != 'conferencia' and _hl %}
