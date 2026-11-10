@@ -315,10 +315,16 @@ def emails_financeiro(cliente_id):
     if not cliente_id:
         return []
     rows = execute_query(
-        """SELECT DISTINCT LOWER(TRIM(c.email)) AS email FROM contatos_clientes c
-             JOIN contatos_departamentos cd ON cd.contato_id = c.id
-            WHERE c.cliente_id = %s AND c.ativo = 1 AND cd.departamento_id = 8 AND c.email LIKE '%%@%%'
-            ORDER BY email""", (cliente_id,), fetch=True) or []
+        """SELECT email FROM (
+               SELECT LOWER(TRIM(c.email)) AS email FROM contatos_clientes c
+                 JOIN contatos_departamentos cd ON cd.contato_id = c.id
+                WHERE c.cliente_id = %s AND c.ativo = 1 AND cd.departamento_id = 8 AND c.email LIKE '%%@%%'
+               UNION                                    -- 10/11/2026: os e-mails a mais do contato também recebem
+               SELECT LOWER(TRIM(m.valor)) FROM contatos_clientes c
+                 JOIN contatos_departamentos cd ON cd.contato_id = c.id
+                 JOIN contatos_meios m ON m.contato_id = c.id AND m.tipo = 'EMAIL'
+                WHERE c.cliente_id = %s AND c.ativo = 1 AND cd.departamento_id = 8 AND m.valor LIKE '%%@%%'
+             ) x ORDER BY email""", (cliente_id, cliente_id), fetch=True) or []
     return [r['email'] for r in rows]
 
 

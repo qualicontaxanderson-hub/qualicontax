@@ -2722,18 +2722,51 @@ def _contato_form():
     tel = (f.get('telefone') or '').strip()
     if re.sub(r'\D', '', tel) and not _telefone_valido(tel):
         falta.append('telefone (número inválido)')
+    email = (f.get('email') or '').strip().lower()[:255]
+    if email and not _email_ok(email):
+        falta.append('e-mail (%s não é um e-mail)' % email)
+    # 10/11/2026 (Anderson): "o contato tem 2 celulares ou 3 e-mails: dar a opção de incluir mais"
+    cel_extra, email_extra = [], []
+    for v in f.getlist('celular_extra'):
+        v = (v or '').strip()
+        if not re.sub(r'\D', '', v):
+            continue
+        if not _telefone_valido(v):
+            falta.append('outro celular (%s inválido)' % v)
+        elif re.sub(r'\D', '', v) != re.sub(r'\D', '', celular) and v not in cel_extra:
+            cel_extra.append(v)
+    for v in f.getlist('email_extra'):
+        v = (v or '').strip().lower()[:255]
+        if not v:
+            continue
+        if not _email_ok(v):
+            falta.append('outro e-mail (%s não é um e-mail)' % v)
+        elif v != email and v not in email_extra:
+            email_extra.append(v)
+    if email_extra and not email:                    # o primeiro vira o principal
+        email = email_extra.pop(0)
     dados = dict(nome=nome, cargo=(f.get('cargo') or '').strip()[:100] or None,
-                 email=(f.get('email') or '').strip().lower()[:255] or None,
+                 email=email or None,
                  telefone=tel or None, celular=celular,
                  principal=f.get('principal') == 'on',
                  departamentos=[int(d) for d in f.getlist('departamentos') if d.isdigit()])
+    dados['_extras'] = (cel_extra, email_extra)
     return dados, falta
+
+
+def _email_ok(v):
+    return bool(re.match(r'^[^@\s]+@[^@\s]+\.[^@\s]+$', v or ''))
 
 
 def _contato_resumo(dados):
     nomes = {d['id']: d['nome'] for d in ContatoCliente.departamentos_disponiveis()}
     r = {k: dados.get(k) for k in ('nome', 'cargo', 'email', 'telefone', 'celular', 'principal')}
     r['departamentos'] = [nomes[i] for i in dados.get('departamentos', []) if i in nomes]
+    cel_extra, email_extra = dados.get('_extras') or ([], [])
+    if cel_extra:
+        r['outros_celulares'] = cel_extra
+    if email_extra:
+        r['outros_emails'] = email_extra
     return r
 
 
@@ -2888,8 +2921,11 @@ def novo_contato(cliente_id):
     if falta:
         flash('Contato não salvo: falta ' + ' e '.join(falta) + '.', 'danger')
         return redirect(url_for('clientes.detalhes', id=cliente_id) + '#contatos')
+    extras = dados.pop('_extras')
     contato_id = ContatoCliente.create(cliente_id=cliente_id, ativo=True, **dados)
     if contato_id:
+        ContatoCliente.set_meios(contato_id, *extras)
+        dados['_extras'] = extras
         registrar('escrita.criou_contato', 'cadastros', tabela='contatos_clientes', registro_id=contato_id,
                   depois=dict(_contato_resumo(dados), cliente_id=cliente_id))
         flash('Contato adicionado.', 'success')
@@ -2912,8 +2948,15 @@ def editar_contato(id):
         return redirect(url_for('clientes.detalhes', id=contato['cliente_id']) + '#contatos')
     antes = {k: contato.get(k) for k in ('nome', 'cargo', 'email', 'telefone', 'celular', 'principal')}
     antes['departamentos'] = contato.get('departamentos') or []
+    if contato.get('celulares_extra'):
+        antes['outros_celulares'] = contato['celulares_extra']
+    if contato.get('emails_extra'):
+        antes['outros_emails'] = contato['emails_extra']
     antes['cliente_id'] = contato['cliente_id']
+    extras = dados.pop('_extras')
     ContatoCliente.update(id, ativo=bool(contato.get('ativo', True)), **dados)
+    ContatoCliente.set_meios(id, *extras)
+    dados['_extras'] = extras
     registrar('escrita.alterou_contato', 'cadastros', tabela='contatos_clientes', registro_id=id,
               antes=antes, depois=dict(_contato_resumo(dados), cliente_id=contato['cliente_id']))
     flash('Contato salvo.', 'success')
@@ -2926,6 +2969,15 @@ def api_contato_por_celular(digitos):
     """Contatos de OUTRAS empresas com este celular — para reaproveitar nome/e-mail (05/11/2026)."""
     cid = request.args.get('cliente_id', type=int)
     return jsonify(ContatoCliente.por_celular(digitos, exceto_cliente_id=cid))
+
+
+@clientes.route('/api/contatos/da-pessoa')
+@login_required
+def api_contato_da_pessoa():
+    """A mesma pessoa como contato em OUTRAS empresas, pelo nome ou por qualquer celular (10/11/2026):
+    a tela mostra o e-mail que ela usa em cada empresa e pergunta qual vale nesta."""
+    cid = request.args.get('cliente_id', type=int)
+    return jsonify(ContatoCliente.da_pessoa(request.args.get('nome'), request.args.getlist('cel'), exceto_cliente_id=cid))
 
 
 @clientes.route('/contatos/<int:id>/excluir', methods=['POST'])

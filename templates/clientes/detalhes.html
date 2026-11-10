@@ -71,6 +71,29 @@
 #contatos .ct-dep { white-space:nowrap; }
 .ct-reuso-item .btn { white-space:nowrap; flex-shrink:0; }
 .ct-hint { display:block; color:var(--text-secondary); font-size:11px; margin-top:3px; }
+/* 10/11/2026: sócio como contato, celulares/e-mails a mais, e-mail por empresa */
+.ct-origem { display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin:0 0 14px; padding:10px 12px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:12px; }
+.ct-origem-t { width:100%; font-size:12.5px; font-weight:600; color:#475569; }
+.ct-socio { display:inline-flex; align-items:center; gap:6px; border:1px solid #cbd5e1; background:#fff; border-radius:99px; padding:5px 12px; font-size:13px; font-weight:600; color:#0f172a; cursor:pointer; }
+.ct-socio small { font-weight:500; color:#64748b; font-size:11.5px; }
+.ct-socio i { color:#1f6f43; } .ct-socio:hover { border-color:#16a34a; background:#f0fdf4; }
+.ct-socio.on { border-color:#16a34a; background:#dcfce7; box-shadow:0 0 0 2px #bbf7d0; }
+.ct-socio-novo i { color:#64748b; }
+.ct-extras { display:flex; flex-direction:column; gap:6px; margin-top:6px; }
+.ct-extras:empty { display:none; }
+.ct-extra { display:flex; gap:6px; align-items:center; }
+.ct-extra .form-control { flex:1; }
+.ct-extra-del { width:34px; height:34px; flex:0 0 34px; border:1px solid #e2e8f0; border-radius:9px; background:#fff; color:#94a3b8; cursor:pointer; }
+.ct-extra-del:hover { color:#b91c1c; border-color:#fca5a5; }
+.ct-mais { margin-top:6px; border:0; background:none; color:#1f6f43; font-size:12.5px; font-weight:600; cursor:pointer; padding:2px 0; }
+.ct-mais:hover { text-decoration:underline; }
+.ct-reuso-cab { font-size:13px; color:#78350f; display:flex; flex-wrap:wrap; gap:6px; align-items:center; }
+.ct-reuso-usar { border:1px solid #f5d58a; background:#fff; border-radius:99px; padding:3px 10px; font-size:12px; font-weight:600; color:#78350f; cursor:pointer; margin-left:auto; }
+.ct-reuso-p { margin:8px 0 4px; font-size:12.5px; color:#78350f; }
+.ct-reuso-em { display:flex; align-items:baseline; gap:8px; flex-wrap:wrap; padding:5px 8px; border-radius:8px; cursor:pointer; font-size:13px; color:#0f172a; }
+.ct-reuso-em:hover { background:#fff; }
+.ct-reuso-em small { color:#92400e; font-size:11.5px; }
+.ct-wa { margin-left:4px; color:#16a34a; }
 .ct-reuso { background:#fff7e6; border:1px solid #f5d58a; border-radius:9px; padding:8px 10px; margin:-4px 0 12px; }
 .ct-reuso-item { display:flex; align-items:center; justify-content:space-between; gap:10px; padding:4px 0; }
 .ct-reuso-item + .ct-reuso-item { border-top:1px dashed #f0d9a0; }
@@ -1269,14 +1292,16 @@
                     {% for contato in contatos %}
                     {% set dig = (contato.celular or '') | replace('(', '') | replace(')', '') | replace('-', '') | replace(' ', '') %}
                     <div class="qb-pessoa" data-copiar-bloco data-copiar-titulo="Contato: {{ contato.nome }}" title="Clique para alterar este contato"
-                         data-ct='{{ {"id": contato.id, "nome": contato.nome, "cargo": contato.cargo or "", "email": contato.email or "", "telefone": contato.telefone or "", "celular": contato.celular or "", "principal": contato.principal and 1 or 0, "departamentos": contato.departamentos}|tojson|forceescape }}'>
+                         data-ct='{{ {"id": contato.id, "nome": contato.nome, "cargo": contato.cargo or "", "email": contato.email or "", "telefone": contato.telefone or "", "celular": contato.celular or "", "principal": contato.principal and 1 or 0, "departamentos": contato.departamentos, "celulares_extra": contato.celulares_extra or [], "emails_extra": contato.emails_extra or []}|tojson|forceescape }}'>
                         <span class="qb-av" style="background:{{ rs_cores[(contato.id or 0) % 8] }}">{{ rs_ini(contato.nome) }}</span>
                         <div class="qb-pessoa-t">
                             <b data-copiar="{{ contato.nome }}" data-copiar-rotulo="Nome">{{ contato.nome | nome_proprio }}</b>{% if contato.principal %} <span class="qb-tag-resp">principal</span>{% endif %}
                             <span class="qb-cargo" data-copiar="{{ contato.cargo or '' }}" data-copiar-rotulo="Cargo">{{ contato.cargo or 'sem cargo' }}</span>
                             <div class="qb-linha2">
                                 {% if contato.email %}<span><i class="fas fa-envelope"></i><span data-copiar data-copiar-rotulo="E-mail">{{ contato.email }}</span></span>{% endif %}
+                                {% for em in contato.emails_extra or [] %}<span><i class="fas fa-envelope"></i><span data-copiar data-copiar-rotulo="Outro e-mail">{{ em }}</span></span>{% endfor %}
                                 {% if contato.celular %}<span><i class="fas fa-mobile-screen"></i><span data-copiar data-copiar-rotulo="Celular">{{ contato.celular }}</span></span>
+                                {% for ce in contato.celulares_extra or [] %}<span><i class="fas fa-mobile-screen"></i><span data-copiar data-copiar-rotulo="Outro celular">{{ ce }}</span>{% set dx = ce | replace('(', '') | replace(')', '') | replace('-', '') | replace(' ', '') %}<a class="ct-wa" href="https://wa.me/55{{ dx }}" target="_blank" rel="noopener" title="WhatsApp deste celular"><i class="fab fa-whatsapp"></i></a></span>{% endfor %}
                                 {% else %}<span class="qb-verm" title="Celular é obrigatório no contato: aparece em A CADASTRAR até ser preenchido"><i class="fas fa-triangle-exclamation"></i>sem celular</span>{% endif %}
                                 {% if contato.telefone %}<span><i class="fas fa-phone"></i><span data-copiar data-copiar-rotulo="Telefone">{{ contato.telefone }}</span></span>{% endif %}
                             </div>
@@ -1983,12 +2008,25 @@
         </div>
         <form id="ctForm" action="{{ url_for('clientes.novo_contato', cliente_id=cliente.id) }}" method="POST" onsubmit="return contatoConfirmar()">
             <div class="modal-body">
+                {% if cliente.tipo_pessoa != 'PF' and socios %}
+                {# 10/11/2026 (Anderson): "Na PJ, no Contato dar a opção de puxar os sócios, ou cadastrar novo" #}
+                <div class="ct-origem" id="ctOrigem">
+                    <span class="ct-origem-t">Quem é o contato?</span>
+                    {% for s in socios %}
+                    <button type="button" class="ct-socio" data-socio='{{ {"nome": s.nome or "", "cargo": s.qualificacao or "Sócio", "email": s.email or "", "telefone": s.telefone or ""}|tojson|forceescape }}'
+                            onclick="contatoDoSocio(this)"><i class="fas fa-user-tie"></i> {{ s.nome | nome_proprio }}<small>{{ s.qualificacao or 'Sócio' }}</small></button>
+                    {% endfor %}
+                    <button type="button" class="ct-socio ct-socio-novo" onclick="contatoNovoSemSocio(this)"><i class="fas fa-user-plus"></i> Outra pessoa<small>cadastrar novo</small></button>
+                </div>
+                {% endif %}
                 <div class="form-row">
                     <div class="form-group">
                         <label for="ct_celular">Celular *</label>
                         <input type="text" id="ct_celular" name="celular" class="form-control" data-mask="celular" placeholder="(00) 00000-0000" required
                                onblur="contatoPorCelular()" autocomplete="off">
                         <small class="ct-hint">Obrigatório. Se este celular já é de alguém em outra empresa, o sistema oferece os dados dele.</small>
+                        <div id="ctCelExtras" class="ct-extras"></div>
+                        <button type="button" class="ct-mais" onclick="contatoExtra('celular')"><i class="fas fa-plus"></i> outro celular</button>
                     </div>
                     <div class="form-group">
                         <label for="ct_telefone">Telefone fixo</label>
@@ -1998,12 +2036,14 @@
                 <div id="ctReuso" class="ct-reuso" style="display:none;"></div>
                 <div class="form-group">
                     <label for="ct_nome">Nome *</label>
-                    <input type="text" id="ct_nome" name="nome" class="form-control" required>
+                    <input type="text" id="ct_nome" name="nome" class="form-control" required onblur="contatoBuscarPessoa()">
                 </div>
                 <div class="form-row">
                     <div class="form-group">
                         <label for="ct_email">E-mail</label>
                         <input type="email" id="ct_email" name="email" class="form-control" placeholder="quem recebe boletos e documentos">
+                        <div id="ctEmailExtras" class="ct-extras"></div>
+                        <button type="button" class="ct-mais" onclick="contatoExtra('email')"><i class="fas fa-plus"></i> outro e-mail</button>
                     </div>
                     <div class="form-group">
                         <label for="ct_cargo">Cargo</label>
@@ -2622,8 +2662,32 @@ function closeAddAddressModal() {
 const CT_URL_NOVO = "{{ url_for('clientes.novo_contato', cliente_id=cliente.id) }}";
 const CT_URL_EDITAR = "{{ url_for('clientes.editar_contato', id=987654321) }}";   // o id real entra no lugar de 987654321
 const CT_URL_CELULAR = "{{ url_for('clientes.api_contato_por_celular', digitos='0000000000') }}";
+const CT_URL_PESSOA = "{{ url_for('clientes.api_contato_da_pessoa') }}";
+// PF (10/11/2026, Anderson): "quando vier de PF, já trazer o nome do cadastro, se precisar alterar colocamos"
+const CT_PF = {{ ({"nome": cliente.nome_razao_social or "", "email": cliente.email or "", "celular": cliente.celular or ""} if cliente.tipo_pessoa == 'PF' else None)|tojson }};
 
+function contatoExtra(tipo, valor) {
+    var box = document.getElementById(tipo === 'email' ? 'ctEmailExtras' : 'ctCelExtras');
+    var row = document.createElement('div'); row.className = 'ct-extra';
+    var inp = document.createElement('input');
+    inp.type = tipo === 'email' ? 'email' : 'text'; inp.className = 'form-control';
+    inp.name = tipo === 'email' ? 'email_extra' : 'celular_extra';
+    inp.placeholder = tipo === 'email' ? 'outro e-mail' : '(00) 00000-0000';
+    inp.value = valor || '';
+    if (tipo !== 'email') { inp.setAttribute('data-mask', 'celular'); inp.addEventListener('blur', contatoPorCelular); }
+    var del = document.createElement('button'); del.type = 'button'; del.className = 'ct-extra-del'; del.title = 'Tirar';
+    del.innerHTML = '<i class="fas fa-times"></i>'; del.onclick = function () { row.remove(); };
+    row.appendChild(inp); row.appendChild(del); box.appendChild(row);
+    if (tipo !== 'email' && typeof maskCelular === 'function') { inp.addEventListener('input', function () { maskCelular(inp); }); if (inp.value) maskCelular(inp); }
+    if (!valor) inp.focus();
+}
+function contatoValoresExtra(nome) {
+    return Array.from(document.querySelectorAll('#ctForm input[name="' + nome + '"]')).map(function (i) { return (i.value || '').trim(); }).filter(Boolean);
+}
 function contatoLimpar() {
+    ['ctCelExtras', 'ctEmailExtras'].forEach(function (id) { document.getElementById(id).innerHTML = ''; });
+    document.querySelectorAll('.ct-socio.on').forEach(function (b) { b.classList.remove('on'); });
+    window._ctEmailEscolhido = null;
     ['ct_celular', 'ct_telefone', 'ct_nome', 'ct_email', 'ct_cargo'].forEach(function (id) { document.getElementById(id).value = ''; });
     document.getElementById('principal_contato').checked = false;
     document.querySelectorAll('.ct-dep-chk').forEach(function (c) { c.checked = false; });
@@ -2635,6 +2699,31 @@ function showAddContactModal() {
     document.getElementById('ctSalvar').textContent = 'Adicionar';
     document.getElementById('ctForm').action = CT_URL_NOVO;
     document.getElementById('addContactModal').style.display = 'block';
+    if (CT_PF) {
+        // a própria pessoa: nome, celular e e-mail do cadastro vêm preenchidos (dá para trocar)
+        document.getElementById('ct_nome').value = CT_PF.nome;
+        if (CT_PF.celular) document.getElementById('ct_celular').value = CT_PF.celular;
+        if (CT_PF.email) document.getElementById('ct_email').value = CT_PF.email;
+        contatoBuscarPessoa();
+    }
+    document.getElementById(CT_PF && CT_PF.celular ? 'ct_email' : 'ct_celular').focus();
+}
+// PJ: puxar um sócio — nome, cargo (qualificação), celular e e-mail do cadastro dele
+function contatoDoSocio(btn) {
+    var s = JSON.parse(btn.getAttribute('data-socio'));
+    contatoLimpar();
+    btn.classList.add('on');
+    document.getElementById('ct_nome').value = s.nome;
+    document.getElementById('ct_cargo').value = s.cargo;
+    var dig = (s.telefone || '').replace(/\D/g, '');
+    if (dig.length === 11) document.getElementById('ct_celular').value = s.telefone;
+    else if (dig.length === 10) document.getElementById('ct_telefone').value = s.telefone;
+    if (s.email) document.getElementById('ct_email').value = s.email;
+    contatoBuscarPessoa();
+}
+function contatoNovoSemSocio(btn) {
+    contatoLimpar();
+    btn.classList.add('on');
     document.getElementById('ct_celular').focus();
 }
 document.addEventListener('click', function (e) {
@@ -2654,6 +2743,8 @@ function editarContato(c) {
     document.getElementById('ct_email').value = c.email || '';
     document.getElementById('ct_cargo').value = c.cargo || '';
     document.getElementById('principal_contato').checked = !!c.principal;
+    (c.celulares_extra || []).forEach(function (v) { contatoExtra('celular', v); });
+    (c.emails_extra || []).forEach(function (v) { contatoExtra('email', v); });
     document.querySelectorAll('.ct-dep-chk').forEach(function (k) { k.checked = (c.departamentos || []).indexOf(k.dataset.nome) >= 0; });
     document.getElementById('addContactModal').style.display = 'block';
 }
@@ -2664,32 +2755,66 @@ function contatoMarcarTodos() {
     document.querySelectorAll('.ct-dep-chk').forEach(function (c) { c.checked = true; });
 }
 // Reaproveitar: "ao digitar o telefone do Anderson, o sistema pergunta: quer utilizar o e-mail dele?"
-function contatoPorCelular() {
-    const dig = (document.getElementById('ct_celular').value || '').replace(/\D/g, '');
+function contatoPorCelular() { contatoBuscarPessoa(); }
+function _ctEsc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (ch) { return {'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[ch]; }); }
+// 10/11/2026 (Anderson): "o Anderson na Qualicontax usa o e-mail tal, na MA o e-mail X e na Prest o e-mail Y —
+// ter essa flexibilidade e pedir para confirmar". Acha a mesma pessoa pelo nome ou por qualquer celular,
+// mostra o e-mail de cada empresa e quem escolhe qual vale AQUI é quem está cadastrando.
+function contatoBuscarPessoa() {
     const box = document.getElementById('ctReuso');
-    box.style.display = 'none'; box.innerHTML = '';
-    if (dig.length < 10) return;
-    fetch(CT_URL_CELULAR.replace('0000000000', dig) + '?cliente_id={{ cliente.id }}')
+    const nome = (document.getElementById('ct_nome').value || '').trim();
+    const cels = [document.getElementById('ct_celular').value].concat(contatoValoresExtra('celular_extra'))
+        .map(function (v) { return (v || '').replace(/\D/g, ''); }).filter(function (d) { return d.length >= 10; });
+    if (!cels.length && nome.length < 5) { box.style.display = 'none'; box.innerHTML = ''; return; }
+    const q = new URLSearchParams({ cliente_id: '{{ cliente.id }}', nome: nome });
+    cels.forEach(function (c) { q.append('cel', c); });
+    fetch(CT_URL_PESSOA + '?' + q.toString())
         .then(function (r) { return r.json(); })
         .then(function (lista) {
+            box.style.display = 'none'; box.innerHTML = '';
             if (!lista || !lista.length) return;
             window._ctReuso = lista;
-            box.innerHTML = lista.map(function (c, i) {
-                return '<div class="ct-reuso-item"><div><b>' + c.nome + '</b>' + (c.email ? ' &middot; ' + c.email : '') +
-                    '<br><small>contato de ' + (c.numero_cliente ? c.numero_cliente + ' - ' : '') + c.empresa +
-                    (c.departamentos.length ? ' (recebe ' + c.departamentos.join(', ') + ')' : '') + '</small></div>' +
-                    '<button type="button" class="btn btn-sm btn-primary" onclick="contatoUsar(' + i + ')">Usar os dados dele</button></div>';
-            }).join('');
+            // e-mails distintos, com as empresas onde cada um é usado
+            var emails = {};
+            lista.forEach(function (c) {
+                [c.email].concat(c.emails_extra || []).filter(Boolean).forEach(function (e) {
+                    e = e.toLowerCase(); (emails[e] = emails[e] || []).push((c.numero_cliente ? c.numero_cliente + ' - ' : '') + c.empresa);
+                });
+            });
+            var p = lista[0];
+            var h = '<div class="ct-reuso-cab"><i class="fas fa-user-check"></i> <b>' + _ctEsc(p.nome) + '</b> já é contato em ' + lista.length +
+                    ' empresa' + (lista.length > 1 ? 's' : '') + '. <button type="button" class="ct-reuso-usar" onclick="contatoUsar(0)">Trazer nome, cargo e celulares</button></div>';
+            var ks = Object.keys(emails);
+            if (ks.length) {
+                h += '<div class="ct-reuso-p">Qual e-mail ele usa <b>nesta empresa</b>?</div>';
+                h += ks.map(function (e) {
+                    return '<label class="ct-reuso-em"><input type="radio" name="ct_email_escolha" value="' + _ctEsc(e) + '" onchange="contatoEscolherEmail(this.value)"> <b>' + _ctEsc(e) +
+                           '</b><small>usa em ' + _ctEsc(emails[e].join(' · ')) + '</small></label>';
+                }).join('');
+                h += '<label class="ct-reuso-em"><input type="radio" name="ct_email_escolha" value="" onchange="contatoEscolherEmail(\'\')"> <b>Outro e-mail</b><small>digite no campo E-mail abaixo</small></label>';
+            }
+            box.innerHTML = h;
             box.style.display = 'block';
+            var atual = (document.getElementById('ct_email').value || '').trim().toLowerCase();
+            box.querySelectorAll('input[name=ct_email_escolha]').forEach(function (r) { if (atual && r.value === atual) r.checked = true; });
         }).catch(function () {});
+}
+function contatoEscolherEmail(v) {
+    var em = document.getElementById('ct_email');
+    window._ctEmailEscolhido = true;
+    em.value = v;
+    if (!v) em.focus();
 }
 function contatoUsar(i) {
     const c = window._ctReuso[i];
-    const nome = document.getElementById('ct_nome'), email = document.getElementById('ct_email'), cargo = document.getElementById('ct_cargo');
+    const nome = document.getElementById('ct_nome'), cargo = document.getElementById('ct_cargo'), cel = document.getElementById('ct_celular');
     if (!nome.value) nome.value = c.nome || '';
-    if (!email.value) email.value = c.email || '';
     if (!cargo.value) cargo.value = c.cargo || '';
-    document.getElementById('ctReuso').style.display = 'none';
+    if (!cel.value) cel.value = c.celular || '';
+    var ja = [cel.value].concat(contatoValoresExtra('celular_extra')).map(function (v) { return (v || '').replace(/\D/g, ''); });
+    [c.celular].concat(c.celulares_extra || []).filter(Boolean).forEach(function (v) {
+        if (ja.indexOf(v.replace(/\D/g, '')) < 0) { contatoExtra('celular', v); ja.push(v.replace(/\D/g, '')); }
+    });
 }
 // Antes de salvar: "tem certeza que esse é o contato que receberá documentos de tal e tal departamento?"
 function contatoConfirmar() {
@@ -2697,9 +2822,14 @@ function contatoConfirmar() {
     const dig = (document.getElementById('ct_celular').value || '').replace(/\D/g, '');
     if (dig.length < 10) { alert('O celular é obrigatório (DDD + número).'); document.getElementById('ct_celular').focus(); return false; }
     const deps = Array.from(document.querySelectorAll('.ct-dep-chk:checked')).map(function (c) { return c.dataset.nome; });
+    const emails = [document.getElementById('ct_email').value].concat(contatoValoresExtra('email_extra')).map(function (v) { return (v || '').trim().toLowerCase(); }).filter(Boolean);
+    const cels = [document.getElementById('ct_celular').value].concat(contatoValoresExtra('celular_extra')).filter(Boolean);
+    const linhaEmail = emails.length ? '\n\nE-mail' + (emails.length > 1 ? 's' : '') + ' nesta empresa: ' + emails.join(', ')
+                                     : '\n\nSem e-mail nesta empresa.';
+    const linhaCel = '\nCelular' + (cels.length > 1 ? 'es' : '') + ': ' + cels.join(', ');
     const msg = deps.length
-        ? nome.toUpperCase() + ' é o contato de {{ cliente.nome_razao_social|e }} que vai receber boletos, documentos e avisos de: ' + deps.join(', ') + '.\n\nTem certeza?'
-        : nome.toUpperCase() + ' fica cadastrado SEM receber nada de nenhum departamento (nenhum marcado).\n\nTem certeza?';
+        ? nome.toUpperCase() + ' é o contato de {{ cliente.nome_razao_social|e }} que vai receber boletos, documentos e avisos de: ' + deps.join(', ') + '.' + linhaEmail + linhaCel + '\n\nTem certeza?'
+        : nome.toUpperCase() + ' fica cadastrado SEM receber nada de nenhum departamento (nenhum marcado).' + linhaEmail + linhaCel + '\n\nTem certeza?';
     return confirm(msg);
 }
 
