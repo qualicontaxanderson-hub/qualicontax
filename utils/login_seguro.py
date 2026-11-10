@@ -110,9 +110,11 @@ def motivo_sem_codigo(user):
     """None = precisa de código. Senão, a razão de dispensar (vai para o log)."""
     if navegador_confirmado(user.id):
         return 'navegador_confirmado'
-    lib = execute_query("SELECT login_liberado_ate FROM usuarios WHERE id = %s",
-                        (user.id,), fetch=True, fetch_one=True) or {}
-    if lib.get('login_liberado_ate') and lib['login_liberado_ate'] >= datetime.now():
+    # 10/11/2026: a hora é a do BANCO (NOW() gravou o prazo em horário de Brasília; o servidor do app
+    # roda em UTC, 3 h à frente — comparar com datetime.now() vencia tudo antes da hora).
+    lib = execute_query("SELECT (login_liberado_ate IS NOT NULL AND login_liberado_ate >= NOW()) AS vale "
+                        "  FROM usuarios WHERE id = %s", (user.id,), fetch=True, fetch_one=True) or {}
+    if lib.get('vale'):
         return 'liberado_pelo_admin'
     if not codigo_ligado():
         return 'codigo_desligado'
@@ -139,7 +141,7 @@ def enviar_codigo(user):
         "VALUES (%s, %s, NOW() + INTERVAL %s MINUTE, %s, %s)",
         (user.id, hashlib.sha256(codigo.encode()).hexdigest(), MINUTOS_CODIGO, ip,
          (request.headers.get('User-Agent') or '')[:255]), fetch=False)
-    agora = datetime.now().strftime('%d/%m/%Y às %H:%M')
+    agora = _agora_brasilia().strftime('%d/%m/%Y às %H:%M')
     nome = user.nome
     assunto = f'{nome}, seu código de acesso ao Qualicontax: {codigo}'
     texto = (f'Olá, {nome} (login {user.login}).\n\n'
@@ -168,13 +170,24 @@ def enviar_codigo(user):
     return ok, erro
 
 
+def _agora_brasilia():
+    try:
+        from zoneinfo import ZoneInfo
+        return datetime.now(ZoneInfo('America/Sao_Paulo'))
+    except Exception:
+        from datetime import timedelta, timezone
+        return datetime.now(timezone.utc) - timedelta(hours=3)
+
+
 def conferir_codigo(uid, codigo):
     """'ok' | 'errado' | 'vencido' (sem código válido, venceu ou estourou as tentativas)."""
     c = execute_query(
-        "SELECT id, codigo_hash, tentativas, expira_em FROM login_codigos "
+        "SELECT id, codigo_hash, tentativas, expira_em, (expira_em < NOW()) AS venceu FROM login_codigos "
         " WHERE usuario_id = %s AND usado_em IS NULL ORDER BY id DESC LIMIT 1",
         (uid,), fetch=True, fetch_one=True)
-    if not c or c['expira_em'] < datetime.now() or c['tentativas'] >= TENTATIVAS:
+    # o prazo é conferido pelo relógio do BANCO, o mesmo que o gravou (o app roda em UTC: 10/11/2026 todo
+    # código nascia "vencido" e ninguém entrava)
+    if not c or c['venceu'] or c['tentativas'] >= TENTATIVAS:
         return 'vencido'
     digitado = ''.join(ch for ch in (codigo or '') if ch.isdigit())
     if hashlib.sha256(digitado.encode()).hexdigest() != c['codigo_hash']:
