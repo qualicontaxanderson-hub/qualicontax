@@ -105,6 +105,8 @@ MAPA = {
     'clientes.excluir_contato':        'clientes.excluir_itens',
     'clientes.api_contato_por_celular': 'clientes.edit',   # reaproveitar contato pelo celular (05/11/2026)
     'clientes.api_contato_da_pessoa':  'clientes.edit',     # mesma pessoa em outras empresas (10/11/2026)
+    'clientes.api_complemento_tipos':      'clientes.index',  # botões do complemento do endereço (10/11/2026)
+    'clientes.api_complemento_tipo_novo':  'clientes.edit',   # tipo novo de complemento, com quem criou
     'clientes.novo_socio':             'clientes.edit',
     'clientes.excluir_socio':          'clientes.excluir_itens',
     'clientes.saida_socio':            'clientes.edit',   # ex-sócio com data de saída

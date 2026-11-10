@@ -10,6 +10,42 @@ def _mai(v):
     return t or None
 
 
+# "Sem número" escrito de um jeito só (10/11/2026). Nos 578 endereços havia S/N, SN, S N, SNR, S/NR —
+# Anderson: "ter um botão para clicar Sem Número até para termos controle futuro e organização".
+SEM_NUMERO = 'S/N'
+_SN_VARIANTES = {'SN', 'S/N', 'S N', 'S.N', 'S.N.', 'S/N.', 'SNR', 'S/NR', 'S/NO', 'S/Nº', 'SN°', 'SNº', 'S/N°',
+                 'SEM NUMERO', 'SEM NÚMERO', 'SEM NUM', 'SEM N', 'S-N'}
+
+
+def _numero(v):
+    t = _mai(v)
+    if t and (t in _SN_VARIANTES or t.replace(' ', '') in _SN_VARIANTES):
+        return SEM_NUMERO
+    return t
+
+
+def complemento_tipos():
+    """Os tipos de complemento (QUADRA, LOTE, SALA...) na ordem dos botões da tela."""
+    return execute_query("""SELECT id, nome FROM enderecos_complemento_tipos WHERE ativo = 1
+                             ORDER BY ordem, nome""", fetch=True) or []
+
+
+def complemento_tipo_criar(nome, usuario_id):
+    """Inclui um tipo novo (fica registrado quem criou). Devolve (id, nome, ja_existia)."""
+    nome = (_mai(nome) or '')[:30]
+    if not nome:
+        return None, None, False
+    ja = execute_query('SELECT id, nome, ativo FROM enderecos_complemento_tipos WHERE nome = %s',
+                       (nome,), fetch=True, fetch_one=True)
+    if ja:
+        if not ja['ativo']:
+            execute_query('UPDATE enderecos_complemento_tipos SET ativo = 1 WHERE id = %s', (ja['id'],), fetch=False)
+        return ja['id'], ja['nome'], True
+    novo = execute_query('INSERT INTO enderecos_complemento_tipos (nome, ordem, criado_por) VALUES (%s, 500, %s)',
+                         (nome, usuario_id))
+    return novo, nome, False
+
+
 class EnderecoCliente:
     """Classe para gestão de endereços de clientes"""
     
@@ -86,7 +122,7 @@ class EnderecoCliente:
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         """
         params = (
-            cliente_id, tipo, cep, _mai(logradouro), _mai(numero), _mai(complemento),
+            cliente_id, tipo, cep, _mai(logradouro), _numero(numero), _mai(complemento),
             _mai(bairro), _mai(cidade), _mai(estado), pais, principal
         )
         return execute_query(query, params)
@@ -127,7 +163,7 @@ class EnderecoCliente:
             WHERE id = %s
         """
         params = (
-            tipo, cep, _mai(logradouro), _mai(numero), _mai(complemento),
+            tipo, cep, _mai(logradouro), _numero(numero), _mai(complemento),
             _mai(bairro), _mai(cidade), _mai(estado), pais, principal, endereco_id
         )
         return execute_query(query, params)

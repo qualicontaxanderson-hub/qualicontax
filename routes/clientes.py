@@ -2971,6 +2971,32 @@ def api_contato_por_celular(digitos):
     return jsonify(ContatoCliente.por_celular(digitos, exceto_cliente_id=cid))
 
 
+@clientes.route('/api/enderecos/complemento-tipos')
+@login_required
+def api_complemento_tipos():
+    """Botões do complemento do endereço: + QUADRA, + LOTE, + SALA... (10/11/2026)."""
+    from models.endereco_cliente import complemento_tipos
+    return jsonify([{'id': t['id'], 'nome': t['nome']} for t in complemento_tipos()])
+
+
+@clientes.route('/api/enderecos/complemento-tipos/novo', methods=['POST'])
+@login_required
+def api_complemento_tipo_novo():
+    """Tipo novo de complemento. Anderson (10/11/2026): "ter o botão de incluir novos, e tudo isso com
+    registro de quem está criando" — criado_por na tabela e a linha no histórico."""
+    from models.endereco_cliente import complemento_tipo_criar
+    nome = ((request.get_json(silent=True) or {}).get('nome') or request.form.get('nome') or '').strip()
+    if len(nome) < 2 or not re.search(r'[A-Za-zÀ-ú]', nome):
+        return jsonify({'ok': False, 'erro': 'Escreva o nome do tipo (ex.: GLEBA, PAVILHÃO).'}), 400
+    tid, nome, ja = complemento_tipo_criar(nome, current_user.id)
+    if not tid:
+        return jsonify({'ok': False, 'erro': 'Não consegui incluir o tipo.'}), 400
+    if not ja:
+        registrar('escrita.criou_tipo_complemento', 'cadastros', tabela='enderecos_complemento_tipos',
+                  registro_id=tid, depois={'nome': nome})
+    return jsonify({'ok': True, 'id': tid, 'nome': nome, 'ja_existia': ja})
+
+
 @clientes.route('/api/contatos/da-pessoa')
 @login_required
 def api_contato_da_pessoa():
