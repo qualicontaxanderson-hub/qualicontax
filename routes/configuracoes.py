@@ -13,7 +13,7 @@ from utils.atividade import registrar
 from utils.auditoria_fmt import (hist_preparar, coletar_cliente_ids,
                                  MODULO_LABEL, AUDITORIA_INICIO)
 from utils.db_helper import execute_query, transacao
-from utils.permissions import PERMISSION_CATALOG, DEPARTAMENTOS_PERMISSOES, normalizar_selecao
+from utils.permissions import PERMISSION_CATALOG, DEPARTAMENTOS_PERMISSOES, normalizar_selecao, codigos_da_tela
 from utils import cadastro_token
 from utils import colabore_chaves
 
@@ -1713,6 +1713,35 @@ def _nome_proprio(nome):
     return ' '.join(partes)
 
 
+def _render_usuario_form(**kw):
+    """Tela de usuario (10/11/2026, padrao de Clientes/Perfis): alem do que a
+    rota manda, leva os perfis com as permissoes de cada um e o catalogo por
+    departamento, para o painel "O que esta pessoa acessa" somar ao vivo."""
+    perfis_info = execute_query(
+        """SELECT pa.id, pa.nome, pa.descricao,
+                  (SELECT COUNT(*) FROM usuario_perfis up JOIN usuarios u ON u.id = up.usuario_id
+                    WHERE up.perfil_id = pa.id AND u.situacao = 'ATIVO') AS qtd_usuarios
+             FROM perfis_acesso pa WHERE pa.situacao = 'ATIVO' ORDER BY pa.nome""",
+        fetch=True) or []
+    perms = execute_query("SELECT perfil_id, permissao_codigo FROM perfil_permissoes", fetch=True) or []
+    por_p = {}
+    for r in perms:
+        por_p.setdefault(r['perfil_id'], []).append(r['permissao_codigo'])
+    telas = []
+    for d in DEPARTAMENTOS_PERMISSOES:
+        for t in d['telas']:
+            telas.append({'dep': d['cor'], 'cod': codigos_da_tela(t),
+                          'exc': [c for c, _ in (t.get('exc') or [])]})
+    for pf in perfis_info:
+        pf['perms'] = sorted(por_p.get(pf['id'], []))
+        pf['qtd_telas'] = sum(1 for t in telas if set(t['cod']) & set(pf['perms']))
+    kw.setdefault('excecoes_reservadas', [])
+    return render_template('configuracoes/usuario_form.html', perfis_info=perfis_info,
+                           deps_resumo=[{'cor': d['cor'], 'grupo': d['grupo'], 'sigla': d['sigla']}
+                                        for d in DEPARTAMENTOS_PERMISSOES],
+                           telas_resumo=telas, **kw)
+
+
 @configuracoes.route('/usuarios/novo', methods=['GET', 'POST'])
 @admin_required
 def usuario_novo():
@@ -1741,7 +1770,7 @@ def usuario_novo():
 
         if not nome or not login or not email or not senha:
             flash('Nome, login, e-mail e senha são obrigatórios.', 'danger')
-            return render_template('configuracoes/usuario_form.html', departamentos=_departamentos_ativos(),
+            return _render_usuario_form( departamentos=_departamentos_ativos(),
                                    perfis=perfis, clientes=clientes, usuario=None,
                                    perfis_usuario=set(), empresas_usuario=set())
 
@@ -1751,7 +1780,7 @@ def usuario_novo():
         )
         if existe_login:
             flash('Já existe um usuário com este login.', 'danger')
-            return render_template('configuracoes/usuario_form.html', departamentos=_departamentos_ativos(),
+            return _render_usuario_form( departamentos=_departamentos_ativos(),
                                    perfis=perfis, clientes=clientes, usuario=None,
                                    perfis_usuario=set(), empresas_usuario=set())
 
@@ -1766,7 +1795,7 @@ def usuario_novo():
 
         if not uid:
             flash('Erro ao criar o usuário. Verifique os dados e tente novamente.', 'danger')
-            return render_template('configuracoes/usuario_form.html', departamentos=_departamentos_ativos(),
+            return _render_usuario_form( departamentos=_departamentos_ativos(),
                                    perfis=perfis, clientes=clientes, usuario=None,
                                    perfis_usuario=set(), empresas_usuario=set())
 
@@ -1794,7 +1823,7 @@ def usuario_novo():
         flash(f'Usuário "{nome}" criado com sucesso.', 'success')
         return redirect(url_for('configuracoes.usuarios'))
 
-    return render_template('configuracoes/usuario_form.html', departamentos=_departamentos_ativos(),
+    return _render_usuario_form( departamentos=_departamentos_ativos(),
                            perfis=perfis, clientes=clientes, usuario=None,
                            perfis_usuario=set(), empresas_usuario=set())
 
@@ -1847,7 +1876,7 @@ def usuario_editar(uid):
 
         if not nome or not login or not email:
             flash('Nome, login e e-mail são obrigatórios.', 'danger')
-            return render_template('configuracoes/usuario_form.html', departamentos=_departamentos_ativos(),
+            return _render_usuario_form( departamentos=_departamentos_ativos(),
                                    perfis=perfis, clientes=clientes, usuario=usuario,
                                    perfis_usuario=perfis_usuario,
                                    empresas_usuario=empresas_usuario)
@@ -1859,7 +1888,7 @@ def usuario_editar(uid):
         )
         if existe_login:
             flash('Já existe outro usuário com este login.', 'danger')
-            return render_template('configuracoes/usuario_form.html', departamentos=_departamentos_ativos(),
+            return _render_usuario_form( departamentos=_departamentos_ativos(),
                                    perfis=perfis, clientes=clientes, usuario=usuario,
                                    perfis_usuario=perfis_usuario,
                                    empresas_usuario=empresas_usuario)
@@ -1931,7 +1960,7 @@ def usuario_editar(uid):
         "  FROM cliente_acesso_excecao e JOIN clientes c ON c.id = e.cliente_id "
         " WHERE e.usuario_id = %s ORDER BY c.nome_razao_social",
         (uid,), fetch=True) or []
-    return render_template('configuracoes/usuario_form.html', departamentos=_departamentos_ativos(),
+    return _render_usuario_form( departamentos=_departamentos_ativos(),
                            perfis=perfis, clientes=clientes, usuario=usuario,
                            perfis_usuario=perfis_usuario,
                            empresas_usuario=empresas_usuario,

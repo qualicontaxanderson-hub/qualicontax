@@ -1,163 +1,310 @@
 {% extends "base.html" %}
 {% block title %}{{ 'Editar' if usuario else 'Novo' }} Usuário – Configurações{% endblock %}
 {% block content %}
-<div class="page-header">
-    <div>
-        <a href="{{ url_for('configuracoes.usuarios') }}" class="back-link">← Usuários</a>
-        <h1 class="page-title">{{ 'Editar Usuário' if usuario else 'Novo Usuário' }}</h1>
-    </div>
-</div>
+{#
+  Usuário no padrão de Clientes / Perfis (10/11/2026): cabeça verde, blocos
+  .cli-filtros, perfis em ladrilhos e, à direita, "O que esta pessoa acessa",
+  somado ao vivo a partir dos perfis marcados (perfis_info + telas_resumo vêm
+  de _render_usuario_form). Os nomes dos campos do formulário são os mesmos
+  de antes: a rota de gravação não mudou.
+#}
+{% include 'clientes/_cartao_css.html' %}
+{% include 'configuracoes/_painel_css.html' %}
+<style>
+.us-cab { display:flex; align-items:center; gap:16px; min-width:0; }
+.us-ava { width:56px; height:56px; border-radius:16px; flex:none; display:flex; align-items:center; justify-content:center;
+          background:rgba(255,255,255,.16); border:1.5px solid rgba(255,255,255,.35); color:#fff; font-size:20px; font-weight:800; }
+.us-cab .ef-hero-sub span + span::before { content:"·"; margin:0 7px; opacity:.6; }
 
-<form method="POST" autocomplete="off">
-<div class="card mb-4">
-    <div class="card-header"><strong>Dados Pessoais</strong></div>
-    <div class="card-body">
-        <div class="form-grid-2">
-            <div class="form-group">
-                <label class="form-label">Nome *</label>
-                <input type="text" name="nome" class="form-control"
-                       value="{{ usuario.nome if usuario else '' }}" required>
+.us-cols { display:grid; grid-template-columns:minmax(0,1fr) 340px; gap:16px; align-items:start; }
+.us-cols > div { min-width:0; }
+.us-lado { position:sticky; top:16px; }
+.us-bloco { margin-bottom:14px; }
+.us-bloco .cli-f-row { display:block; }
+.us-bloco .cli-seg-rot { display:block; margin-bottom:10px; }
+.us-campos { display:grid; grid-template-columns:repeat(2, minmax(0,1fr)); gap:12px 14px; }
+.us-campo { display:block; min-width:0; }
+.us-campo > span { display:block; font-size:11px; font-weight:800; letter-spacing:.5px; text-transform:uppercase; color:#64748b; margin-bottom:5px; }
+.us-campo > span em { font-style:normal; color:#dc2626; }
+.us-campo input, .us-campo select { width:100%; border:1px solid #d7e3dc; border-radius:9px; padding:8px 11px; font:inherit;
+                                    font-size:13.5px; color:#0f172a; background:#fff; box-sizing:border-box; }
+.us-campo input:focus, .us-campo select:focus { outline:none; border-color:#16a34a; box-shadow:0 0 0 3px rgba(22,163,74,.15); }
+.us-campo input::placeholder { color:#94a3b8; font-weight:400; }
+.us-campo small { display:block; margin-top:4px; font-size:11.5px; color:#64748b; }
+.us-campo small a { color:#15803d; font-weight:700; }
+.us-senha { position:relative; }
+.us-senha input { padding-right:40px; }
+.us-senha button { position:absolute; right:4px; top:50%; transform:translateY(-50%); border:0; background:transparent; color:#64748b;
+                   width:32px; height:30px; border-radius:7px; cursor:pointer; }
+.us-senha button:hover { background:#f1f5f9; }
+
+.us-opcs { display:flex; gap:6px; flex-wrap:wrap; }
+.us-opc { position:relative; display:inline-flex; align-items:center; gap:6px; font-size:12.5px; font-weight:700; padding:7px 13px;
+          border-radius:99px; border:1.5px solid #d7e3dc; color:#4b6358; background:#fff; cursor:pointer; }
+.us-opc input { position:absolute; opacity:0; pointer-events:none; }
+.us-opc:has(input:checked) { background:#0f3d2e; border-color:#0f3d2e; color:#fff; }
+.us-opc.us-opc-adm:has(input:checked) { background:#b45309; border-color:#b45309; }
+.us-opc.us-opc-ina:has(input:checked) { background:#64748b; border-color:#64748b; }
+.us-opc:focus-within { outline:3px solid rgba(34,197,94,.45); outline-offset:2px; }
+.us-dica { margin-top:7px; font-size:12px; color:#64748b; }
+.us-dica b { color:#b45309; }
+
+.us-perfis { display:grid; grid-template-columns:repeat(auto-fill, minmax(230px,1fr)); gap:10px; }
+.us-pf { position:relative; display:flex; flex-direction:column; gap:3px; padding:11px 12px 10px 40px; border:1.5px solid #e2e8f0;
+         border-radius:12px; background:#fff; cursor:pointer; min-width:0; transition:border-color .12s, background .12s; }
+.us-pf:hover { border-color:#bbf7d0; }
+.us-pf input { position:absolute; opacity:0; pointer-events:none; }
+.us-pf i.us-ck { position:absolute; left:12px; top:12px; width:18px; height:18px; border-radius:6px; border:1.5px solid #cbd5e1; background:#fff; }
+.us-pf:has(input:checked) { border-color:#16a34a; background:#f0fdf4; }
+.us-pf:has(input:checked) i.us-ck { background:#16a34a; border-color:#16a34a; }
+.us-pf:has(input:checked) i.us-ck::after { content:""; position:absolute; left:5px; top:1px; width:5px; height:10px; border:solid #fff;
+                                           border-width:0 2px 2px 0; transform:rotate(45deg); }
+.us-pf:focus-within { outline:3px solid rgba(34,197,94,.45); outline-offset:2px; }
+.us-pf b { font-size:13px; color:#0f172a; text-transform:uppercase; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.us-pf small { font-size:11.5px; color:#64748b; }
+.us-pf .us-pf-desc { font-size:11.5px; color:#94a3b8; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.us-pf a { position:absolute; right:9px; top:9px; font-size:11px; color:#94a3b8; text-decoration:none; padding:2px 5px; border-radius:6px; }
+.us-pf a:hover { color:#15803d; background:#dcfce7; }
+.us-pf-adm .us-perfis { opacity:.45; pointer-events:none; }
+
+.us-res { background:#fff; border:1px solid #e2e8f0; border-radius:16px; padding:16px; box-shadow:0 1px 2px rgba(15,23,42,.04); }
+.us-res h3 { margin:0 0 2px; font-size:14px; font-weight:800; color:#0f3d2e; }
+.us-res > p { margin:0 0 12px; font-size:12px; color:#64748b; }
+.us-big { display:flex; align-items:baseline; gap:8px; margin-bottom:12px; }
+.us-big strong { font-size:30px; line-height:1; color:#0f3d2e; }
+.us-big span { font-size:12.5px; color:#64748b; }
+.us-dep { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:3px 10px; align-items:center; padding:6px 0; border-top:1px solid #f1f5f9; }
+.us-dep span { font-size:12.5px; font-weight:700; color:#334155; }
+.us-dep em { font-style:normal; font-size:12px; font-weight:800; color:#64748b; }
+.us-dep .us-barra { grid-column:1 / -1; height:5px; border-radius:99px; background:#eef2f0; overflow:hidden; }
+.us-dep .us-barra i { display:block; height:100%; background:#16a34a; border-radius:99px; transition:width .2s; }
+.us-dep.zero span, .us-dep.zero em { color:#94a3b8; font-weight:600; }
+.us-res .cli-selo { margin-top:12px; }
+.us-res-acoes { display:flex; gap:8px; margin-top:14px; }
+.us-res-acoes .ef-btn { flex:1; justify-content:center; }
+.us-res .us-salvar { background:#16a34a; color:#fff; border:0; }
+.us-res .us-salvar:hover { background:#15803d; }
+.us-res .us-volta { background:#f1f5f9; color:#334155; border:0; }
+.us-exc-lista { margin:6px 0 0; padding:0; list-style:none; display:flex; flex-direction:column; gap:5px; }
+.us-exc-lista a { font-size:12.5px; font-weight:700; color:#0f3d2e; }
+.us-exc-lista small { color:#94a3b8; }
+.us-txt { margin:0; font-size:12.5px; color:#475569; line-height:1.5; }
+
+@media (max-width:1100px) { .us-cols { grid-template-columns:1fr; } .us-lado { position:static; } }
+@media (max-width:700px) { .us-campos { grid-template-columns:1fr; } .us-cab .ef-hero-sub span { display:block; }
+                           .us-cab .ef-hero-sub span + span::before { content:none; } .us-ava { width:46px; height:46px; font-size:16px; } }
+</style>
+
+{% set pn = (usuario.nome if usuario else '').split() %}
+<form method="POST" autocomplete="off" id="usForm">
+<div class="ef-hero">
+    <div class="ef-hero-inner ef-hero-head">
+        <div class="us-cab">
+            <span class="us-ava" id="usAva">{% if pn %}{{ pn[0][:1] }}{{ pn[-1][:1] if pn|length > 1 }}{% else %}<i class="fas fa-user-plus"></i>{% endif %}</span>
+            <div style="min-width:0">
+                <h1 class="ef-hero-title" id="usTitulo">{{ usuario.nome if usuario else 'Novo usuário' }}</h1>
+                <p class="ef-hero-sub">
+                    {% if usuario %}
+                    <span>Login <b>{{ usuario.login }}</b></span>
+                    <span>{{ 'Ativo' if usuario.situacao == 'ATIVO' else 'Inativo' }}</span>
+                    {% if usuario.criado_em %}<span>Cadastrado em {{ usuario.criado_em.strftime('%d/%m/%Y') }}</span>{% endif %}
+                    {% else %}
+                    <span>Preencha os dados, escolha o perfil e salve</span>
+                    {% endif %}
+                </p>
             </div>
-            <div class="form-group">
-                <label class="form-label">Login *</label>
-                <input type="text" name="login" class="form-control"
-                       value="{{ usuario.login if usuario else '' }}" required
-                       placeholder="nome.usuario" autocomplete="off">
-                <small class="form-text text-muted">Usado para entrar no sistema. Sem espaços.</small>
-            </div>
-            <div class="form-group">
-                <label class="form-label">E-mail *</label>
-                <input type="email" name="email" class="form-control"
-                       value="{{ usuario.email if usuario else '' }}" required>
-            </div>
-            <div class="form-group">
-                <label class="form-label">Telefone</label>
-                <input type="text" name="telefone" class="form-control"
-                       value="{{ usuario.telefone if usuario else '' }}">
-            </div>
-            <div class="form-group">
-                <label class="form-label">Cargo</label>
-                <input type="text" name="cargo" class="form-control"
-                       value="{{ usuario.cargo if usuario else '' }}">
-            </div>
-            <div class="form-group">
-                <label class="form-label" for="departamento_id">Departamento</label>
-                <select name="departamento_id" id="departamento_id" class="form-control">
-                    <option value="">Sem departamento</option>
-                    {% for d in departamentos %}
-                    <option value="{{ d.id }}" {{ 'selected' if usuario and usuario.departamento_id == d.id }}>{{ d.nome }}</option>
-                    {% endfor %}
-                </select>
-                <small class="form-text text-muted">Os avisos por e-mail vão para a caixa do departamento, não para o e-mail pessoal.
-                    <a href="{{ url_for('configuracoes.departamentos') }}">Ver departamentos</a></small>
-            </div>
+        </div>
+        <div class="ef-hero-actions">
+            <a href="{{ url_for('configuracoes.usuarios') }}" class="ef-btn"><i class="fas fa-arrow-left"></i> Usuários</a>
+            <button type="submit" class="ef-btn ef-btn-primary"><i class="fas fa-check"></i> {{ 'Salvar' if usuario else 'Criar usuário' }}</button>
         </div>
     </div>
 </div>
 
-<div class="card mb-4">
-    <div class="card-header"><strong>Acesso ao Sistema</strong></div>
-    <div class="card-body">
-        <div class="form-grid-2">
-            <div class="form-group">
-                <label class="form-label">Tipo de Usuário</label>
-                <select name="tipo_usuario" class="form-control">
-                    {% for t in ['ASSISTENTE','ESTAGIARIO','CONTADOR','GERENTE','ADMIN'] %}
-                    <option value="{{ t }}" {{ 'selected' if (usuario and usuario.tipo_usuario == t) or (not usuario and t == 'ASSISTENTE') }}>{{ t }}</option>
-                    {% endfor %}
-                </select>
-                <small class="form-text text-muted">ADMIN tem acesso total e ignora perfis de permissão.</small>
-            </div>
-            {% if usuario %}
-            <div class="form-group">
-                <label class="form-label">Status</label>
-                <select name="situacao" class="form-control">
-                    <option value="ATIVO"   {{ 'selected' if usuario.situacao == 'ATIVO' }}>ATIVO</option>
-                    <option value="INATIVO" {{ 'selected' if usuario.situacao == 'INATIVO' }}>INATIVO</option>
-                </select>
-            </div>
-            {% endif %}
-            <div class="form-group">
-                <label class="form-label">{{ 'Nova Senha (deixe em branco para manter)' if usuario else 'Senha *' }}</label>
-                <input type="password" name="{{ 'nova_senha' if usuario else 'senha' }}"
-                       class="form-control" {{ 'required' if not usuario }}>
+<div class="ef-body">
+<div class="us-cols">
+<div>
+    <div class="cli-filtros us-bloco">
+        <div class="cli-f-row">
+            <span class="cli-seg-rot"><i class="fas fa-id-card"></i> Dados da pessoa</span>
+            <div class="us-campos">
+                <label class="us-campo"><span>Nome <em>*</em></span>
+                    <input type="text" name="nome" id="usNome" value="{{ usuario.nome if usuario else '' }}" required></label>
+                <label class="us-campo"><span>Login <em>*</em></span>
+                    <input type="text" name="login" value="{{ usuario.login if usuario else '' }}" required placeholder="nome.usuario" autocomplete="off">
+                    <small>É o que a pessoa digita para entrar. Sem espaços.</small></label>
+                <label class="us-campo"><span>E-mail <em>*</em></span>
+                    <input type="email" name="email" value="{{ usuario.email if usuario else '' }}" required></label>
+                <label class="us-campo"><span>Telefone</span>
+                    <input type="text" name="telefone" value="{{ usuario.telefone if usuario and usuario.telefone else '' }}"></label>
+                <label class="us-campo"><span>Cargo</span>
+                    <input type="text" name="cargo" value="{{ usuario.cargo if usuario and usuario.cargo else '' }}" placeholder="ex.: Assistente fiscal"></label>
+                <label class="us-campo"><span>Departamento</span>
+                    <select name="departamento_id" id="departamento_id">
+                        <option value="">Sem departamento</option>
+                        {% for d in departamentos %}
+                        <option value="{{ d.id }}" {{ 'selected' if usuario and usuario.departamento_id == d.id }}>{{ d.nome }}</option>
+                        {% endfor %}
+                    </select>
+                    <small>Os avisos por e-mail vão para a caixa do departamento, não para o e-mail pessoal. <a href="{{ url_for('configuracoes.departamentos') }}">Ver departamentos</a></small></label>
             </div>
         </div>
+    </div>
 
-        <div class="form-group mt-3">
-            <label class="form-label">Perfis de Acesso</label>
-            <small class="d-block text-muted mb-2">
-                Selecione um ou mais perfis. As permissões são a união de todos os perfis atribuídos.
-            </small>
-            <div class="checkbox-grid">
-                {% for p in perfis %}
-                <label class="checkbox-item">
-                    <input type="checkbox" name="perfis" value="{{ p.id }}"
-                           {{ 'checked' if p.id in perfis_usuario }}>
-                    <span>{{ p.nome }}</span>
+    <div class="cli-filtros us-bloco">
+        <div class="cli-f-row">
+            <span class="cli-seg-rot"><i class="fas fa-key"></i> Entrada no sistema</span>
+            <div class="us-campos">
+                <div class="us-campo"><span>Tipo de usuário</span>
+                    <div class="us-opcs" role="radiogroup" aria-label="Tipo de usuário">
+                        {% for t, rot in [('ASSISTENTE','Assistente'),('ESTAGIARIO','Estagiário'),('CONTADOR','Contador'),('GERENTE','Gerente'),('ADMIN','Administrador')] %}
+                        <label class="us-opc{{ ' us-opc-adm' if t == 'ADMIN' }}"><input type="radio" name="tipo_usuario" value="{{ t }}"
+                            {{ 'checked' if (usuario and usuario.tipo_usuario == t) or (not usuario and t == 'ASSISTENTE') }}>{{ rot }}</label>
+                        {% endfor %}
+                    </div>
+                    <p class="us-dica" id="usDicaTipo"></p>
+                </div>
+                {% if usuario %}
+                <div class="us-campo"><span>Situação</span>
+                    <div class="us-opcs" role="radiogroup" aria-label="Situação">
+                        <label class="us-opc"><input type="radio" name="situacao" value="ATIVO" {{ 'checked' if usuario.situacao == 'ATIVO' }}>Ativo</label>
+                        <label class="us-opc us-opc-ina"><input type="radio" name="situacao" value="INATIVO" {{ 'checked' if usuario.situacao == 'INATIVO' }}>Inativo</label>
+                    </div>
+                    <p class="us-dica">Inativo não entra mais no sistema. Nada do que fez é apagado.</p>
+                </div>
+                {% endif %}
+                <label class="us-campo"><span>{% if usuario %}Nova senha{% else %}Senha <em>*</em>{% endif %}</span>
+                    <span class="us-senha">
+                        <input type="password" name="{{ 'nova_senha' if usuario else 'senha' }}" id="usSenha" {{ 'required' if not usuario }}
+                               autocomplete="new-password" placeholder="{{ 'Deixe em branco para manter a atual' if usuario else '' }}">
+                        <button type="button" id="usOlho" title="Mostrar a senha" aria-label="Mostrar a senha"><i class="fas fa-eye"></i></button>
+                    </span></label>
+            </div>
+        </div>
+    </div>
+
+    <div class="cli-filtros us-bloco" id="usPfBloco">
+        <div class="cli-f-row">
+            <span class="cli-seg-rot"><i class="fas fa-user-shield"></i> Perfis de acesso · <b id="usPfN">0</b> marcado(s)</span>
+            <p class="us-dica" style="margin:-4px 0 10px">A pessoa pode tudo o que <b style="color:#0f3d2e">qualquer um</b> dos perfis marcados permite. Para mudar o que um perfil libera, abra o perfil.</p>
+            <div class="us-perfis">
+                {% for p in perfis_info %}
+                <label class="us-pf" data-pid="{{ p.id }}">
+                    <input type="checkbox" name="perfis" value="{{ p.id }}" {{ 'checked' if p.id in perfis_usuario }}>
+                    <i class="us-ck"></i>
+                    <b title="{{ p.nome }}">{{ p.nome }}</b>
+                    <small>{{ p.qtd_telas }} tela{{ '' if p.qtd_telas == 1 else 's' }} · {{ p.qtd_usuarios }} usuário{{ '' if p.qtd_usuarios == 1 else 's' }}</small>
+                    {% if p.descricao %}<span class="us-pf-desc" title="{{ p.descricao }}">{{ p.descricao }}</span>{% endif %}
+                    <a href="{{ url_for('configuracoes.perfil_editar', pid=p.id) }}" target="_blank" title="Abrir o perfil {{ p.nome }}"><i class="fas fa-arrow-up-right-from-square"></i></a>
                 </label>
                 {% else %}
-                <span class="text-muted">Nenhum perfil cadastrado. <a href="{{ url_for('configuracoes.perfil_novo') }}">Criar perfil</a>.</span>
+                <p class="us-txt">Nenhum perfil cadastrado. <a href="{{ url_for('configuracoes.perfil_novo') }}">Criar perfil</a>.</p>
                 {% endfor %}
             </div>
         </div>
     </div>
+
+    {# A antiga "Empresas Permitidas" saiu em 02/10/2026; a regra que vale é a
+       EMPRESA RESERVADA, marcada na ficha da empresa e aplicada por utils/acesso.py. #}
+    <div class="cli-filtros us-bloco">
+        <div class="cli-f-row">
+            <span class="cli-seg-rot"><i class="fas fa-building-lock"></i> Empresas reservadas</span>
+            <p class="us-txt">Por padrão a pessoa vê todas as empresas, dentro do que o perfil permite. Uma empresa marcada como
+               <b>reservada</b> (na ficha da empresa) some para quem não é administrador, salvo as exceções escolhidas lá.</p>
+            {% if usuario and usuario.tipo_usuario == 'ADMIN' %}
+            <p class="us-txt" style="margin-top:8px"><i class="fas fa-shield-halved"></i> Administrador: vê todas, inclusive as reservadas.</p>
+            {% elif excecoes_reservadas %}
+            <p class="us-txt" style="margin-top:8px"><b>Esta pessoa é exceção em:</b></p>
+            <ul class="us-exc-lista">
+                {% for c in excecoes_reservadas %}
+                <li><a href="{{ url_for('clientes.detalhes', id=c.id) }}#acesso">{% if c.numero_cliente %}{{ c.numero_cliente }} - {% endif %}{{ c.nome_razao_social }}</a>{% if not c.acesso_reservado %} <small>(não está reservada no momento)</small>{% endif %}</li>
+                {% endfor %}
+            </ul>
+            {% elif usuario %}
+            <p class="us-txt" style="margin-top:8px;color:#94a3b8">Não é exceção em nenhuma empresa reservada.</p>
+            {% endif %}
+        </div>
+    </div>
 </div>
 
-{# A antiga "Empresas Permitidas" (usuario_empresas_permitidas) nunca foi
-   aplicada por rota nenhuma — a tela prometia uma restrição que não existia.
-   Saiu em 02/10/2026. A regra que vale é a EMPRESA RESERVADA, marcada na
-   ficha da empresa (aba Acesso) e aplicada por utils/acesso.py. #}
-<div class="card mb-4">
-    <div class="card-header">
-        <strong>Empresas reservadas</strong>
-    </div>
-    <div class="card-body">
-        <p class="text-muted mb-2">
-            Por padrão a pessoa vê todas as empresas, dentro do que o perfil dela permite.
-            Uma empresa marcada como <strong>reservada</strong> (na ficha da empresa, aba <em>Acesso</em>)
-            some para todos que não são administradores, salvo as exceções escolhidas lá.
-        </p>
-        {% if usuario and usuario.tipo_usuario == 'ADMIN' %}
-        <p class="mb-0"><i class="fas fa-shield-halved"></i> Administrador: vê todas, inclusive as reservadas.</p>
-        {% elif excecoes_reservadas %}
-        <p class="mb-1"><strong>Esta pessoa é exceção em:</strong></p>
-        <ul class="mb-0">
-            {% for c in excecoes_reservadas %}
-            <li><a href="{{ url_for('clientes.detalhes', id=c.id) }}#acesso">{% if c.numero_cliente %}{{ c.numero_cliente }} - {% endif %}{{ c.nome_razao_social }}</a>{% if not c.acesso_reservado %} <small class="text-muted">(empresa não está reservada no momento)</small>{% endif %}</li>
+<aside class="us-lado">
+    <div class="us-res" id="usRes">
+        <h3>O que esta pessoa acessa</h3>
+        <p>Soma dos perfis marcados. Muda na hora em que você marca ou desmarca.</p>
+        <div class="us-big"><strong id="usTelas">0</strong><span id="usTelasT">telas liberadas</span></div>
+        <div id="usDeps">
+            {% for d in deps_resumo %}
+            <div class="us-dep" data-dep="{{ d.cor }}"><span>{{ d.grupo }}</span><em>0/0</em><span class="us-barra"><i style="width:0"></i></span></div>
             {% endfor %}
-        </ul>
-        {% elif usuario %}
-        <p class="mb-0">Não é exceção em nenhuma empresa reservada.</p>
-        {% endif %}
+        </div>
+        <div id="usSelo"></div>
+        <div class="us-res-acoes">
+            <a href="{{ url_for('configuracoes.usuarios') }}" class="ef-btn us-volta">Cancelar</a>
+            <button type="submit" class="ef-btn us-salvar"><i class="fas fa-check"></i> {{ 'Salvar' if usuario else 'Criar usuário' }}</button>
+        </div>
     </div>
+</aside>
 </div>
-
-<div class="form-actions">
-    <button type="submit" class="btn btn-primary">
-        <i class="fas fa-save"></i> Salvar
-    </button>
-    <a href="{{ url_for('configuracoes.usuarios') }}" class="btn btn-secondary">Cancelar</a>
 </div>
 </form>
 
-<style>
-.checkbox-grid { display: flex; flex-wrap: wrap; gap: 8px; }
-.checkbox-grid-empresas { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px,1fr)); gap: 6px; max-height: 320px; overflow-y: auto; border: 1px solid #e5e7eb; border-radius: 8px; padding: 12px; }
-.checkbox-item { display: flex; align-items: center; gap: 6px; padding: 4px 8px; border-radius: 6px; cursor: pointer; background: #f9fafb; border: 1px solid #e5e7eb; font-size: 0.875rem; }
-.checkbox-item:hover { background: #eff6ff; border-color: #bfdbfe; }
-.checkbox-item input { cursor: pointer; }
-.form-actions { display: flex; gap: 12px; margin-top: 24px; }
-.form-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-.gap-2 { gap: 8px; }
-.ms-2 { margin-left: 8px; }
-.d-flex { display: flex; }
-.mb-2 { margin-bottom: 8px; }
-</style>
-
 <script>
-function marcarTodas(v) {
-    document.querySelectorAll('.emp-check').forEach(c => c.checked = v);
-}
+(function () {
+    var PERFIS = {{ perfis_info|map(attribute='id')|list|tojson }};
+    var PERMS = {};
+    {% for p in perfis_info %}PERMS[{{ p.id }}] = {{ p.perms|tojson }};
+    {% endfor %}
+    var TELAS = {{ telas_resumo|tojson }};
+    var form = document.getElementById('usForm');
+
+    function tipo() { var r = form.querySelector('input[name="tipo_usuario"]:checked'); return r ? r.value : ''; }
+    function soma() {
+        var adm = tipo() === 'ADMIN';
+        var marc = Array.prototype.slice.call(form.querySelectorAll('input[name="perfis"]:checked')).map(function (i) { return +i.value; });
+        document.getElementById('usPfN').textContent = marc.length;
+        var tem = {};
+        marc.forEach(function (pid) { (PERMS[pid] || []).forEach(function (c) { tem[c] = 1; }); });
+        var tot = 0, exc = 0, porDep = {};
+        TELAS.forEach(function (t) {
+            var d = porDep[t.dep] || (porDep[t.dep] = {lib: 0, n: 0}); d.n++;
+            var lib = adm || t.cod.some(function (c) { return tem[c]; });
+            if (lib) { d.lib++; tot++; }
+            if (!adm) exc += t.exc.filter(function (c) { return tem[c]; }).length;
+        });
+        document.getElementById('usTelas').textContent = tot;
+        document.getElementById('usTelasT').textContent = 'de ' + TELAS.length + ' telas liberadas';
+        document.querySelectorAll('.us-dep').forEach(function (el) {
+            var d = porDep[el.dataset.dep] || {lib: 0, n: 0};
+            el.querySelector('em').textContent = d.lib + '/' + d.n;
+            el.querySelector('.us-barra i').style.width = (d.n ? Math.round(100 * d.lib / d.n) : 0) + '%';
+            el.classList.toggle('zero', d.lib === 0);
+        });
+        var h;
+        if (adm) h = '<span class="cli-selo cli-selo-warn"><i class="fas fa-crown"></i><span class="cli-selo-t"><b>Administrador: acesso total</b><small>os perfis não valem para ele; vê e exclui tudo</small></span></span>';
+        else if (!marc.length) h = '<span class="cli-selo cli-selo-sem"><i class="fas fa-lock"></i><span class="cli-selo-t"><b>Sem perfil</b><small>entra no sistema mas não abre nenhuma tela</small></span></span>';
+        else if (exc) h = '<span class="cli-selo cli-selo-bad"><i class="fas fa-trash-can"></i><span class="cli-selo-t"><b>Pode excluir em ' + exc + ' lugar' + (exc === 1 ? '' : 'es') + '</b><small>veja no perfil o que está liberado</small></span></span>';
+        else h = '<span class="cli-selo cli-selo-ok"><i class="fas fa-shield-halved"></i><span class="cli-selo-t"><b>Não exclui nada</b><small>excluir fica com o administrador</small></span></span>';
+        document.getElementById('usSelo').innerHTML = h;
+        document.getElementById('usPfBloco').classList.toggle('us-pf-adm', adm);
+        var dica = {
+            ADMIN: '<b>Administrador vê e faz tudo</b>, inclusive excluir, e não depende de perfil. Use só para quem cuida do sistema.',
+            '': ''
+        };
+        document.getElementById('usDicaTipo').innerHTML = dica[tipo()] !== undefined ? dica[tipo()] : 'O que a pessoa pode fazer vem dos perfis marcados abaixo.';
+    }
+    form.addEventListener('change', soma);
+    var nome = document.getElementById('usNome');
+    nome.addEventListener('input', function () {
+        var p = nome.value.trim().split(/\s+/).filter(Boolean);
+        document.getElementById('usTitulo').textContent = nome.value.trim() || 'Novo usuário';
+        if (p.length) document.getElementById('usAva').textContent = (p[0][0] + (p.length > 1 ? p[p.length - 1][0] : '')).toUpperCase();
+    });
+    document.getElementById('usOlho').addEventListener('click', function () {
+        var s = document.getElementById('usSenha'), ver = s.type === 'password';
+        s.type = ver ? 'text' : 'password';
+        this.innerHTML = ver ? '<i class="fas fa-eye-slash"></i>' : '<i class="fas fa-eye"></i>';
+    });
+    soma();
+})();
 </script>
 {% endblock %}
