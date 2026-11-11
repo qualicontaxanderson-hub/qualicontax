@@ -1415,6 +1415,11 @@ textarea.cf-ctrl { height:auto; padding:10px 12px; line-height:1.5; resize:verti
     .av-acoes { flex-direction:column-reverse; }
     .av-acoes button { width:100%; justify-content:center; }
 }
+.cf-dup { display:flex; gap:10px; align-items:flex-start; margin:10px 0 4px; padding:12px 14px; border-radius:12px;
+          background:#fef2f2; border:1.5px solid #fecaca; color:#991b1b; font-size:13.5px; line-height:1.45; }
+.cf-dup[hidden] { display:none; }
+.cf-dup > i { margin-top:3px; }
+.cf-dup a { color:#b91c1c; font-weight:700; }
 </style>
 <script>
 // Variável global para armazenar o último CNPJ consultado
@@ -1829,6 +1834,62 @@ function caVisivel() {
     w.style.display = (tipoPessoa() === 'PJ' && !ehAvulso && !(aberta && aberta.checked)) ? '' : 'none';
     atualizarResumo();
 }
+
+{% if not cliente %}
+// CPF/CNPJ JÁ CADASTRADO (10/11/2026): pergunta assim que o documento fica completo, ANTES de a
+// pessoa preencher o resto. Anderson: "o sistema não pode permitir que façam 2 cadastros da mesma PF
+// ou PJ tem que barrar" — barrar só no Salvar jogava fora tudo o que foi digitado.
+var DOC_DUP = null;
+function conferirDocumento(inp) {
+    var dig = (inp.value || '').replace(/\D/g, '');
+    var box = document.getElementById(inp.id + '_dup');
+    if (!box) {
+        box = document.createElement('div');
+        box.id = inp.id + '_dup'; box.className = 'cf-dup'; box.hidden = true;
+        var ancora = inp.closest('.cf-cnpj-row') || inp.closest('.cf-fg') || inp;
+        (inp.closest('.cf-g12') || ancora).insertAdjacentElement('afterend', box);
+    }
+    var tam = inp.id === 'cpf_cnpj_pf' ? 11 : 14;
+    if (dig.length !== tam) { box.hidden = true; if (DOC_DUP && DOC_DUP.campo === inp.id) DOC_DUP = null; return; }
+    if (box.dataset.doc === dig) return;
+    box.dataset.doc = dig;
+    fetch('{{ url_for("clientes.api_documento_existe") }}?doc=' + dig, {credentials: 'same-origin'})
+        .then(function (r) { return r.json(); })
+        .then(function (d) {
+            if ((inp.value || '').replace(/\D/g, '') !== dig) return;
+            if (!d.existe) { box.hidden = true; if (DOC_DUP && DOC_DUP.campo === inp.id) DOC_DUP = null; return; }
+            var qual = dig.length === 11 ? 'CPF' : 'CNPJ';
+            DOC_DUP = {campo: inp.id, qual: qual};
+            var h = '<i class="fas fa-ban"></i><div><b>Este ' + qual + ' já está cadastrado.</b> ';
+            if (d.reservado) {
+                h += 'O cadastro é reservado: peça ao administrador.';
+            } else {
+                var nome = document.createElement('span'); nome.textContent = d.nome || '';
+                h += (d.avulso ? 'É o avulso ' : 'É o cliente ' + (d.numero ? d.numero + ' · ' : '')) + '<b>' + nome.innerHTML + '</b>'
+                   + (d.situacao && d.situacao !== 'ATIVO' ? ' (' + d.situacao.toLowerCase() + ')' : '') + '. '
+                   + 'Não dá para cadastrar de novo: complete o que já existe.'
+                   + '<br><a href="' + d.url + '">Abrir o cadastro que já existe <i class="fas fa-arrow-right"></i></a>';
+            }
+            box.innerHTML = h + '</div>';
+            box.hidden = false;
+        }).catch(function (e) { box.dataset.doc = ''; });
+}
+['cpf_cnpj_pf', 'cpf_cnpj_pj'].forEach(function (id) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    el.addEventListener('input', function () { conferirDocumento(el); });
+    el.addEventListener('change', function () { conferirDocumento(el); });
+    if (el.value) conferirDocumento(el);
+});
+document.querySelector('form').addEventListener('submit', function (e) {
+    if (!DOC_DUP) return;
+    var el = document.getElementById(DOC_DUP.campo);
+    if (!el || el.offsetParent === null) return;      // campo da outra pessoa (PF x PJ), escondido
+    e.preventDefault(); e.stopImmediatePropagation();
+    alert('Este ' + DOC_DUP.qual + ' já está cadastrado. Abra o cadastro que já existe (link em vermelho) e complete por lá.');
+    el.focus();
+});
+{% endif %}
 
 // NÚMERO OU AVULSO (05/10/2026): cliente sem número não existe mais. Ou tem
 // número, ou é avulso — o servidor confere de novo (routes/clientes.py).

@@ -1,4 +1,5 @@
 """Modelo de Cliente"""
+import re
 from utils.db_helper import execute_query
 from utils.acesso import filtrar_lista, sql_sem_ocultas
 
@@ -601,8 +602,12 @@ class Cliente:
         Returns:
             bool: True se já existe, False caso contrário
         """
-        query = "SELECT id FROM clientes WHERE cpf_cnpj = %s"
-        params = [cpf_cnpj]
+        # 10/11/2026: compara só os NÚMEROS — "23194730843" e "231.947.308-43" são o mesmo CPF.
+        digitos = re.sub(r'\D', '', cpf_cnpj or '')
+        if not digitos:
+            return False
+        query = "SELECT id FROM clientes WHERE REGEXP_REPLACE(cpf_cnpj, '[^0-9]', '') = %s"
+        params = [digitos]
         
         if cliente_id:
             query += " AND id != %s"

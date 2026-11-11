@@ -144,6 +144,19 @@ def _gravar_contatos_do_formulario(cliente_id, form=None):
     return n
 
 
+def _empresas_do_socio(pf_id):
+    """Pessoa física não tem sócio: a ficha mostra as EMPRESAS em que ela é sócia (atual e ex).
+    Anderson (10/11/2026): "PF não tem sócio, seria útil se aparecesse as empresas que a pessoa é sócia"."""
+    return execute_query(
+        """SELECT s.cliente_id, s.qualificacao, s.percentual_participacao, s.responsavel, s.data_entrada,
+                  s.data_saida, s.ativo, s.capital_valor, s.pro_labore,
+                  c.nome_razao_social, c.numero_cliente, c.cpf_cnpj, c.situacao
+             FROM socios_clientes s JOIN clientes c ON c.id = s.cliente_id
+            WHERE s.pf_cliente_id = %s
+            ORDER BY s.ativo DESC, (s.data_saida IS NULL) DESC, c.nome_razao_social""",
+        (pf_id,), fetch=True) or []
+
+
 def _contato_da_pessoa_pf(cliente_id, nome):
     """O contato que é a PRÓPRIA pessoa física (mesmo nome do cadastro), se existir."""
     from models.contato_cliente import _nome_chave
@@ -1552,6 +1565,7 @@ def detalhes(id):
                          cadastros_anp=cadastros_anp,
                          socios=socios,
                          ex_socios=ex_socios,
+                         socio_em=(_empresas_do_socio(id) if cliente.get('tipo_pessoa') == 'PF' else []),
                          # "Copiar qualificação" (20/10/2026): o parágrafo do contrato
                          qualif=qualificacao(id),
                          qualif_socios=qualif_socios,
@@ -3076,6 +3090,28 @@ def api_complemento_tipos():
     """Botões do complemento do endereço: + QUADRA, + LOTE, + SALA... (10/11/2026)."""
     from models.endereco_cliente import complemento_tipos
     return jsonify([{'id': t['id'], 'nome': t['nome']} for t in complemento_tipos()])
+
+
+@clientes.route('/api/clientes/documento-existe')
+@login_required
+def api_documento_existe():
+    """O CPF/CNPJ digitado no "Novo cadastro" já existe? Anderson (10/11/2026): "o sistema não pode
+    permitir que façam 2 cadastros da mesma PF ou PJ tem que barrar" — e barrar só no Salvar jogava
+    fora tudo o que foi digitado. Agora o formulário pergunta assim que o documento fica completo."""
+    from utils.acesso import pode_ver_empresa
+    dig = re.sub(r'\D', '', request.args.get('doc') or '')
+    if len(dig) not in (11, 14):
+        return jsonify(existe=False)
+    r = execute_query("""SELECT id, nome_razao_social, numero_cliente, avulso, situacao, tipo_pessoa
+                           FROM clientes WHERE REGEXP_REPLACE(cpf_cnpj, '[^0-9]', '') = %s LIMIT 1""",
+                      (dig,), fetch=True, fetch_one=True)
+    if not r:
+        return jsonify(existe=False)
+    if not pode_ver_empresa(r['id']):
+        return jsonify(existe=True, reservado=True)
+    return jsonify(existe=True, id=r['id'], nome=r['nome_razao_social'], numero=r.get('numero_cliente'),
+                   avulso=bool(r.get('avulso')), situacao=r.get('situacao'),
+                   url=url_for('clientes.detalhes', id=r['id']))
 
 
 @clientes.route('/api/enderecos/complemento-tipos/novo', methods=['POST'])

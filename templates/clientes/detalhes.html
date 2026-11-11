@@ -899,7 +899,7 @@
             <a href="#contato-empresa"><i class="qb-pt qb-pt-{{ bol(['celular'] + (['email'] if falta.avulso else [])) }}"></i>Contato</a>
             <a href="#grupo-ramo"><i class="qb-pt qb-pt-{{ bol(['grupo', 'ramo', 'contador']) }}"></i>Grupo e ramo</a>
             {% if not pj %}<a href="#dados-pessoais"><i class="qb-pt qb-pt-{{ bol(['documento']) }}"></i>Dados pessoais</a>{% endif %}
-            <a href="#socios"><i class="qb-pt qb-pt-{{ bol(['socios']) }}"></i>Sócios</a>
+            {% if pj %}<a href="#socios"><i class="qb-pt qb-pt-{{ bol(['socios']) }}"></i>Sócios</a>{% else %}<a href="#socio-em"><i class="qb-pt qb-pt-cinza"></i>Sócio em</a>{% endif %}
             <a href="#responsaveis"><i class="qb-pt qb-pt-{{ 'amb' if rs_faltam else 'ok' }}"></i>Responsáveis</a>
             <a href="#enderecos"><i class="qb-pt qb-pt-{{ 'ok' if enderecos else 'amb' }}"></i>Endereços</a>
             <a href="#contatos"><i class="qb-pt qb-pt-{{ bol(['contato_celular', 'contato'] + ([] if falta.avulso else ['email'])) }}"></i>Contatos</a>
@@ -1105,6 +1105,41 @@
                     <a class="qb-link" href="#contadores">{{ 'trocar' if contadores else 'vincular' }} <i class="fas fa-arrow-down"></i></a></b></div>
             </section>
 
+            {% if not pj %}
+            <!-- SÓCIO EM: pessoa física não tem sócio; mostra as empresas em que ela é sócia (10/11/2026) -->
+            {% set se_atual = socio_em | selectattr('ativo') | rejectattr('data_saida') | list %}
+            {% set se_ex = socio_em | reject('in', se_atual) | list %}
+            <section class="qb-b s7" id="socio-em">
+                <div class="qb-bh"><span class="qb-ico i-roxo"><i class="fas fa-building"></i></span><h3>Sócio em</h3>
+                    {% if se_atual %}<span class="qb-selo qb-selo-ok">{{ se_atual|length }} empresa{{ 's' if se_atual|length != 1 }}</span>{% endif %}</div>
+                {% if se_atual %}
+                <div class="qb-socios">
+                    {% for e in se_atual %}
+                    <div class="qb-socio">
+                        <span class="qb-av" style="background:{{ rs_cores[loop.index0 % 8] }}"><i class="fas fa-building"></i></span>
+                        <div class="qb-socio-t">
+                            <b><a href="{{ url_for('clientes.detalhes', id=e.cliente_id) }}">{% if e.numero_cliente %}{{ e.numero_cliente }} · {% endif %}{{ e.nome_razao_social }}</a></b>
+                            {% if e.responsavel %}<span class="qb-tag-resp">responsável</span>{% endif %}
+                            <small>{{ e.cpf_cnpj }}{% if e.qualificacao %} · {{ e.qualificacao }}{% endif %}{% if e.data_entrada %} · desde {{ e.data_entrada.strftime('%d/%m/%Y') }}{% endif %}{% if e.situacao != 'ATIVO' %} · <b style="color:#b45309">empresa {{ e.situacao|lower }}</b>{% endif %}</small>
+                            {% if e.capital_valor is not none or e.pro_labore is not none %}<small>{% if e.capital_valor is not none %}capital {{ e.capital_valor|format_currency }}{% endif %}{% if e.capital_valor is not none and e.pro_labore is not none %} · {% endif %}{% if e.pro_labore is not none %}pró-labore {{ e.pro_labore|format_currency }}/mês{% endif %}</small>{% endif %}
+                        </div>
+                        <strong class="qb-pct" style="color:{{ rs_cores[loop.index0 % 8] }}">{{ '%g' % ((e.percentual_participacao or 0)|float) }}%</strong>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <div class="qb-vazio"><i class="fas fa-building"></i> Não é sócio(a) de nenhuma empresa cadastrada. Para incluir, abra a empresa e use "+ Sócio" no quadro de sócios dela.</div>
+                {% endif %}
+                {% if se_ex %}
+                <details class="qb-ex"><summary><i class="fas fa-clock-rotate-left"></i> Já foi sócio(a) ({{ se_ex|length }})</summary>
+                    {% for e in se_ex %}
+                    <div class="qb-ex-l"><b><a href="{{ url_for('clientes.detalhes', id=e.cliente_id) }}">{% if e.numero_cliente %}{{ e.numero_cliente }} · {% endif %}{{ e.nome_razao_social }}</a></b>
+                        <small>{{ e.cpf_cnpj }}{% if e.qualificacao %} · {{ e.qualificacao }}{% endif %} · {{ e.data_entrada.strftime('%d/%m/%Y') if e.data_entrada else '—' }} até <b>{{ e.data_saida.strftime('%d/%m/%Y') if e.data_saida else '—' }}</b> · tinha {{ '%g' % ((e.percentual_participacao or 0)|float) }}%</small></div>
+                    {% endfor %}
+                </details>
+                {% endif %}
+            </section>
+            {% else %}
             <!-- SÓCIOS -->
             {% set total_s = socios_total_percentual or 0 %}
             <section class="qb-b s7" id="socios" data-copiar-secao>
@@ -1162,6 +1197,7 @@
                 </details>
                 {% endif %}
             </section>
+            {% endif %}
 
             <!-- CERTIFICADO DA EMPRESA (cartão verde compacto; o texto de instrução fica recolhido) -->
             {% set contador_cert = (contadores | selectattr('tem_certificado') | first) %}

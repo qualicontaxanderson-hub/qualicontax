@@ -78,6 +78,7 @@ MAPA = {
 
     # --- Cadastros: clientes ------------------------------------------------
     'clientes.novo':                   'clientes.create',
+    'clientes.api_documento_existe':   'clientes.create',  # CPF/CNPJ já cadastrado? (10/11/2026)
     'clientes.detalhes':               'clientes.index',
     'clientes.historico':              'clientes.index',
     'clientes.relatorio':              'clientes.index',   # PDF/Excel dos cartões da tela
