@@ -99,6 +99,23 @@
 .ct-reuso-p { margin:8px 0 4px; font-size:12.5px; color:#78350f; }
 .ct-reuso-em { display:flex; align-items:baseline; gap:8px; flex-wrap:wrap; padding:5px 8px; border-radius:8px; cursor:pointer; font-size:13px; color:#0f172a; }
 .ct-reuso-em:hover { background:#fff; }
+/* 11/11/2026: nome do contato sugere quem já é contato em outra empresa (static/js/contato_sugere.js) */
+.ct-sug { position:absolute; left:0; right:0; top:100%; margin-top:4px; z-index:60; background:#fff; border:1px solid #d1e7dc; border-radius:12px;
+    box-shadow:0 12px 28px rgba(15,23,42,.14); max-height:300px; overflow-y:auto; padding:4px; }
+.ct-sug[hidden] { display:none; }
+.ct-sug-t { font-size:11.5px; font-weight:600; color:#64748b; padding:6px 10px 4px; }
+.ct-sug-i { display:flex; flex-wrap:wrap; align-items:baseline; gap:2px 10px; padding:8px 10px; border-radius:9px; cursor:pointer; font-size:13px; color:#0f172a; }
+.ct-sug-i:hover, .ct-sug-i.on { background:#f0fdf4; }
+.ct-sug-i b { font-weight:700; }
+.ct-sug-cel { color:#15803d; font-weight:600; font-size:12.5px; }
+.ct-sug-i small { width:100%; color:#64748b; font-size:11.5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.ct-reuso-auto { font-size:12.5px; color:#166534; background:#f0fdf4; border:1px solid #bbf7d0; border-radius:8px; padding:6px 10px; margin:0 0 8px; }
+/* IE: copiar o CNPJ e abrir o Sintegra do estado escolhido (11/11/2026) */
+.ie-sintb { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin:2px 0 12px; }
+.ie-sintb button { display:inline-flex; align-items:center; gap:7px; border:1px solid #bbf7d0; background:#f0fdf4; color:#166534; border-radius:10px;
+    padding:8px 12px; font:inherit; font-size:13px; font-weight:600; cursor:pointer; }
+.ie-sintb button:hover { border-color:#16a34a; }
+.ie-sintb small { color:#15803d; font-size:12px; font-weight:600; }
 .ct-reuso-em small { color:#92400e; font-size:11.5px; }
 .ct-wa { margin-left:4px; color:#16a34a; }
 .ct-reuso { background:#fff7e6; border:1px solid #f5d58a; border-radius:9px; padding:8px 10px; margin:-4px 0 12px; }
@@ -352,6 +369,11 @@
 .ie-tag { font-size:11.5px; font-weight:700; border-radius:99px; padding:2px 9px; }
 .ie-t-pri { background:#dcfce7; color:#166534; } .ie-t-normal { background:#e2e8f0; color:#334155; }
 .ie-t-st { background:#dbeafe; color:#1d4ed8; } .ie-t-rural { background:#ecfccb; color:#4d7c0f; }
+/* situação da IE (11/11/2026): só aparece quando NÃO é Ativa, para o cartão da IE ativa ficar limpo */
+.ie-sitb { font-size:11.5px; font-weight:700; border-radius:99px; padding:2px 9px; }
+.ie-s-suspensa { background:#fef3c7; color:#92400e; } .ie-s-baixada { background:#fee2e2; color:#991b1b; }
+.ie-s-inapta { background:#fee2e2; color:#b91c1c; } .ie-s-nao_localizada { background:#e2e8f0; color:#475569; }
+.ie-card.ie-baixada b[data-copiar] { text-decoration:line-through; text-decoration-color:#fca5a5; }
 .ie-l2 { margin-top:5px; font-size:12.5px; color:#475569; line-height:1.4; }
 .ie-l2 i { margin-right:5px; } .ie-dica { color:#92400e; } .ie-alerta { color:#9f1239; font-weight:600; }
 .ie-isenta { font-size:14.5px; font-weight:600; color:#0f172a; } .ie-isenta i { color:#94a3b8; margin-right:6px; }
@@ -369,6 +391,7 @@
 .ie-form .ie-tipo b { color:#0f172a; font-size:14px; } .ie-form .ie-tipo small { flex-basis:100%; padding-left:24px; color:#64748b; }
 .ie-form .ie-tipo:has(input:checked) { border-color:#16a34a; background:#f0fdf4; }
 .ie-form .ie-pri { flex-direction:row; align-items:center; gap:8px; color:#334155; font-size:13.5px; }
+.ie-form .ie-sit { margin-bottom:14px; } .ie-form .ie-sit small { color:#64748b; }
 .ie-aviso { margin:10px 0 0; padding:9px 12px; border-radius:10px; background:#fffbeb; color:#92400e; font-size:13px; }
 .ie-erro { margin:10px 0 0; padding:9px 12px; border-radius:10px; background:#fff1f2; color:#9f1239; font-size:13px; font-weight:600; }
 @media (max-width:520px) { .ie-grade, #ieRural.ie-grade { grid-template-columns:1fr; } }
@@ -872,12 +895,13 @@
                     <small>{{ 'Inscrições estaduais de produtor rural' if rural else 'Inscrições estaduais' }}</small>
                     {% if ie_isenta and not rural %}<div class="ie-isenta"><i class="fas fa-ban"></i> Empresa isenta de inscrição estadual</div>{% endif %}
                     {% for x in ies if (x.tipo == 'RURAL') == rural or not rural %}
-                    <div class="ie-card{{ ' ie-conf' if x.conferir }}{{ ' ie-ed' if pode_ie }}" data-ie='{{ x | tojson }}'{% if pode_ie %} role="button" tabindex="0" title="Clique para alterar"{% endif %}>
+                    <div class="ie-card{{ ' ie-conf' if x.conferir }}{{ ' ie-baixada' if x.situacao == 'BAIXADA' }}{{ ' ie-ed' if pode_ie }}" data-ie='{{ x | tojson }}'{% if pode_ie %} role="button" tabindex="0" title="Clique para alterar"{% endif %}>
                         <div class="ie-l1">
                             <span class="ie-uf">{{ x.uf or '--' }}</span>
                             <b class="mono" data-copiar="{{ x.ie }}" data-copiar-rotulo="IE {{ x.uf or '' }}">{{ x.ie }}</b>
                             {% if x.principal %}<span class="ie-tag ie-t-pri">principal</span>{% endif %}
                             <span class="ie-tag ie-t-{{ x.tipo | lower }}">{{ x.tipo_rotulo }}</span>
+                            {% if x.situacao and x.situacao != 'ATIVA' %}<span class="ie-sitb ie-s-{{ x.situacao | lower }}">{{ x.situacao_rotulo }}</span>{% endif %}
                             <a class="ie-sint" href="{{ x.sintegra }}" target="_blank" rel="noopener" data-ie-num="{{ x.ie }}"
                                title="Copia o número da IE e abre o Sintegra de {{ x.uf or 'cada estado' }} — é só colar na consulta"><i class="fas fa-up-right-from-square"></i> Copiar e abrir o Sintegra{{ ' ' ~ x.uf if x.uf }}</a>
                         </div>
@@ -1018,7 +1042,7 @@
                 <div class="qb-bh"><span class="qb-ico i-ambar"><i class="fas fa-landmark"></i></span><h3>Registros</h3>{{ selo(['nire', 'im', 'ie', 'ie_conferir']) }}</div>
                 {{ bloco_ie(false) }}
                 {{ campo('inscricao_municipal', 'Inscrição municipal', cliente.inscricao_municipal, ancora='campo-im', chave='im', ph='inscrição municipal (CCM)', mono=True) }}
-                {{ campo('nire', 'NIRE', cliente.nire, ancora='campo-nire', chave='nire', ph='35.2.1234567-8', ajuda='Está no contrato social registrado ou na ficha cadastral da Junta.', mono=True) }}
+                {{ campo('nire', 'NIRE', cliente.nire, exibe=(nire_fmt(cliente.nire) if cliente.nire else ''), ancora='campo-nire', chave='nire', ph='52.207.386.814', ajuda='Está no contrato social registrado ou na ficha cadastral da Junta.', mono=True) }}
                 {{ campo('nire_data_registro', 'Data do registro na Junta', cliente.nire_data_registro.strftime('%Y-%m-%d') if cliente.nire_data_registro else '', exibe=(cliente.nire_data_registro|format_date if cliente.nire_data_registro else ''), tipo='date') }}
             </section>
             {% endif %}
@@ -1936,6 +1960,14 @@
                     <small>{{ {'NORMAL': 'no estado onde a empresa está (o do endereço)', 'ST': 'em outro estado, para recolher o ICMS-ST das vendas para lá', 'RURAL': 'pessoa física, uma por propriedade'}[v] }}</small></label>
                 {% endfor %}
             </div>
+            <label class="ie-sit">Situação da inscrição
+                <select id="ie_situacao">{% for v, r in IE_SITUACOES %}<option value="{{ v }}">{{ r }}</option>{% endfor %}</select>
+                <small>Baixada = empresa deu baixa na IE (ex.: mudou de atividade); Inapta = irregular no fisco; Não localizada = não achou no Sintegra.</small></label>
+            <div class="ie-sintb">
+                <button type="button" onclick="ieSintegra()" title="Copia o {{ 'CNPJ' if cliente.tipo_pessoa == 'PJ' else 'CPF' }} e abre a consulta do Sintegra do estado escolhido. É só colar (Ctrl+V)">
+                    <i class="fas fa-up-right-from-square"></i> <span id="ieSintTxt">Copiar o {{ 'CNPJ' if cliente.tipo_pessoa == 'PJ' else 'CPF' }} e abrir o Sintegra</span></button>
+                <small id="ieSintOk" hidden><i class="fas fa-check"></i> {{ 'CNPJ' if cliente.tipo_pessoa == 'PJ' else 'CPF' }} copiado: cole na consulta (Ctrl+V)</small>
+            </div>
             <div id="ieRural" class="ie-grade" hidden>
                 <label class="ie-num">Nome da propriedade<input type="text" id="ie_prop" maxlength="120" placeholder="ex.: FAZENDA SANTA RITA"></label>
                 <label class="ie-num">Município<input type="text" id="ie_mun" maxlength="80" placeholder="ex.: RIO VERDE"></label>
@@ -2067,8 +2099,8 @@
                     <div class="form-group">
                         <label for="ct_celular">Celular *</label>
                         <input type="text" id="ct_celular" name="celular" class="form-control" data-mask="celular" placeholder="(00) 00000-0000" required
-                               onblur="contatoPorCelular()" autocomplete="off">
-                        <small class="ct-hint">Obrigatório. Se este celular já é de alguém em outra empresa, o sistema oferece os dados dele.</small>
+                               onblur="contatoPorCelular()" oninput="contatoCelDigitado(this)" autocomplete="off">
+                        <small class="ct-hint">Obrigatório. Se este celular já é contato em outra empresa, o nome vem sozinho.</small>
                         <div id="ctCelExtras" class="ct-extras"></div>
                         <button type="button" class="ct-mais" onclick="contatoExtra('celular')"><i class="fas fa-plus"></i> outro celular</button>
                     </div>
@@ -2080,7 +2112,8 @@
                 <div id="ctReuso" class="ct-reuso" style="display:none;"></div>
                 <div class="form-group">
                     <label for="ct_nome">Nome *</label>
-                    <input type="text" id="ct_nome" name="nome" class="form-control" required onblur="contatoBuscarPessoa()">
+                    <input type="text" id="ct_nome" name="nome" class="form-control" required onblur="contatoBuscarPessoa()" autocomplete="off"
+                           placeholder="digite o nome: quem já é contato em outra empresa aparece para escolher">
                 </div>
                 <div class="form-row">
                     <div class="form-group">
@@ -2295,6 +2328,8 @@
 {% endblock %}
 
 {% block extra_js %}
+<script src="{{ url_for('static', filename='js/contato_sugere.js') }}"></script>
+<script src="{{ url_for('static', filename='js/mascaras_registro.js') }}"></script>
 <script>
 // ══ FICHA — MODELO B (08/11/2026): clique no valor edita, um só Salvar, pílulas que acompanham a rolagem ══
 (function () {
@@ -2705,7 +2740,6 @@ function closeAddAddressModal() {
 
 const CT_URL_NOVO = "{{ url_for('clientes.novo_contato', cliente_id=cliente.id) }}";
 const CT_URL_EDITAR = "{{ url_for('clientes.editar_contato', id=987654321) }}";   // o id real entra no lugar de 987654321
-const CT_URL_CELULAR = "{{ url_for('clientes.api_contato_por_celular', digitos='0000000000') }}";
 const CT_URL_PESSOA = "{{ url_for('clientes.api_contato_da_pessoa') }}";
 // PF (10/11/2026, Anderson): "quando vier de PF, já trazer o nome do cadastro, se precisar alterar colocamos"
 const CT_PF = {{ ({"nome": cliente.nome_razao_social or "", "email": cliente.email or "", "celular": cliente.celular or ""} if cliente.tipo_pessoa == 'PF' else None)|tojson }};
@@ -2736,7 +2770,25 @@ function contatoLimpar() {
     document.getElementById('principal_contato').checked = false;
     document.querySelectorAll('.ct-dep-chk').forEach(function (c) { c.checked = false; });
     const r = document.getElementById('ctReuso'); r.style.display = 'none'; r.innerHTML = '';
+    const n = document.getElementById('ct_nome'); if (n._qcSugLimpar) n._qcSugLimpar();
+    window._ctCelBuscado = '';
 }
+// 11/11/2026: completou o celular (11 dígitos) → já procura, sem esperar sair do campo
+function contatoCelDigitado(el) {
+    var d = (el.value || '').replace(/\D/g, '');
+    if (d.length === 11 && window._ctCelBuscado !== d) { window._ctCelBuscado = d; contatoBuscarPessoa(); }
+}
+document.addEventListener('DOMContentLoaded', function () {
+    QCContatoSugere.ligar(document.getElementById('ct_nome'), {
+        url: {{ url_for('clientes.api_contato_sugerir') | tojson }}, clienteId: {{ cliente.id }},
+        aoEscolher: function (p) {
+            var cel = document.getElementById('ct_celular'), cargo = document.getElementById('ct_cargo');
+            if (!cel.value && p.celular) { cel.value = p.celular; window._ctCelBuscado = p.celular.replace(/\D/g, ''); }
+            if (!cargo.value && p.cargo) cargo.value = p.cargo;
+            contatoBuscarPessoa();
+        }
+    });
+});
 function showAddContactModal() {
     contatoLimpar();
     document.getElementById('ctModalTitulo').textContent = 'Adicionar contato';
@@ -2826,8 +2878,12 @@ function contatoBuscarPessoa() {
                 });
             });
             var p = lista[0];
-            var h = '<div class="ct-reuso-cab"><i class="fas fa-user-check"></i> <b>' + _ctEsc(p.nome) + '</b> já é contato em ' + lista.length +
-                    ' empresa' + (lista.length > 1 ? 's' : '') + '. <button type="button" class="ct-reuso-usar" onclick="contatoUsar(0)">Trazer nome, cargo e celulares</button></div>';
+            // 11/11/2026 (Anderson): "ao digitar o telefone se já estiver cadastrado puxar o nome da pessoa"
+            var auto = !nome && !!p.nome;
+            if (auto) contatoUsar(0);
+            var h = (auto ? '<div class="ct-reuso-auto"><i class="fas fa-wand-magic-sparkles"></i> Nome e cargo vieram do contato que já existe. Se estiver errado, é só corrigir.</div>' : '') +
+                    '<div class="ct-reuso-cab"><i class="fas fa-user-check"></i> <b>' + _ctEsc(p.nome) + '</b> já é contato em ' + lista.length +
+                    ' empresa' + (lista.length > 1 ? 's' : '') + '.' + (auto ? '' : ' <button type="button" class="ct-reuso-usar" onclick="contatoUsar(0)">Trazer nome, cargo e celulares</button>') + '</div>';
             var ks = Object.keys(emails);
             if (ks.length) {
                 h += '<div class="ct-reuso-p">Qual e-mail ele usa <b>nesta empresa</b>?</div>';
@@ -3319,7 +3375,25 @@ function dfeSeed(clienteId) {
     if (!modal) return;
     var $ = function (id) { return document.getElementById(id); };
     function tipo() { var r = modal.querySelector('input[name=ie_tipo]:checked'); return r ? r.value : ''; }
+    var SINT = {{ (IE_SINTEGRA or {}) | tojson }}, SINT_GERAL = {{ (IE_SINTEGRA_GERAL or 'http://www.sintegra.gov.br/') | tojson }};
+    var DOC = {{ ((cliente.cpf_cnpj or '') | replace('.', '') | replace('/', '') | replace('-', '')) | tojson }};
+    var DOC_ROT = {{ ('CNPJ' if cliente.tipo_pessoa == 'PJ' else 'CPF') | tojson }};
+    // 11/11/2026 (Anderson): "queremos o Sintegra com o CNPJ copiado", como o botão Sintegra do cadastro fazia
+    window.ieSintegra = function () {
+        var uf = $('ie_uf').value;
+        window.open(SINT[uf] || SINT_GERAL, '_blank', 'noopener');
+        try {
+            var velho = function () { var t = document.createElement('textarea'); t.value = DOC; document.body.appendChild(t); t.select(); document.execCommand('copy'); t.remove(); };
+            if (navigator.clipboard && window.isSecureContext) navigator.clipboard.writeText(DOC).catch(velho); else velho();
+        } catch (err) {}
+        var ok = $('ieSintOk'); ok.hidden = false; setTimeout(function () { ok.hidden = true; }, 4000);
+    };
+    var IE_FMT = {{ (IE_FORMATOS or {}) | tojson }};
+    QCMascara.ligar($('ie_num'), function (v) { return QCMascara.ie($('ie_uf').value, v, IE_FMT); });
     function rever() {
+        var uf0 = $('ie_uf').value;
+        $('ie_num').value = QCMascara.ie(uf0, $('ie_num').value, IE_FMT);
+        $('ieSintTxt').textContent = 'Copiar o ' + DOC_ROT + ' e abrir o Sintegra' + (uf0 ? ' ' + uf0 : '');
         var t = tipo();
         $('ieRural').hidden = t !== 'RURAL';
         $('iePriBox').style.display = t === 'NORMAL' ? '' : 'none';
@@ -3340,6 +3414,7 @@ function dfeSeed(clienteId) {
         $('ie_mun').value = x.municipio || '';
         var t = x.tipo || (rural ? 'RURAL' : 'NORMAL');
         modal.querySelectorAll('input[name=ie_tipo]').forEach(function (r) { r.checked = r.value === t; });
+        $('ie_situacao').value = x.situacao || 'ATIVA';
         $('ie_pri').checked = x.id ? !!x.principal : !rural;
         $('ieErro').hidden = true;
         var ex = $('ieExcluir'); if (ex) ex.style.display = x.id ? '' : 'none';
@@ -3356,7 +3431,8 @@ function dfeSeed(clienteId) {
     window.ieSalvar = function () {
         var b = $('ieSalvarBtn'); b.disabled = true;
         enviar(URL_IE, { ie_id: $('ie_id').value, uf: $('ie_uf').value, ie: $('ie_num').value, tipo: tipo(),
-                         propriedade: $('ie_prop').value, municipio: $('ie_mun').value, principal: $('ie_pri').checked })
+                         propriedade: $('ie_prop').value, municipio: $('ie_mun').value, principal: $('ie_pri').checked,
+                         situacao: $('ie_situacao').value })
             .then(function (d) { if (d.ok) location.reload(); else { erro(d.erro || 'Não consegui salvar.'); b.disabled = false; } })
             .catch(function () { erro('Não consegui falar com o servidor. Tente de novo.'); b.disabled = false; });
     };

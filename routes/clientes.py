@@ -947,6 +947,8 @@ def _ctx_form(cliente=None):
         ctx['ies_rurais'] = []
     ctx['contabilidades_json'] = _contab_combo(cliente.get('contabilidade_anterior_id') if cliente else None)
     ctx['IE_UFS'] = IE.UFS
+    ctx['IE_FORMATOS'] = IE.FORMATOS
+    ctx['IE_SINTEGRA'] = IE.SINTEGRA
     ctx.update(ESTADOS_CIVIS=ESTADOS_CIVIS, REGIMES_BENS=REGIMES_BENS, NIVEIS_GOVBR=NIVEIS_GOVBR,
                COM_REGIME=COM_REGIME, UFS=UFS, OPCOES=Opcoes.todas(),
                TIPOS_DOC=TIPOS_DOC, ORGAO_SUGERIDO=ORGAO_SUGERIDO,
@@ -1331,7 +1333,7 @@ def novo():
             'nome_razao_social': nome_razao_social,
             'nome_fantasia': request.form.get('nome_fantasia'),
             'cpf_cnpj': cpf_cnpj,
-            'inscricao_estadual': request.form.get('inscricao_estadual'),
+            'inscricao_estadual': IE.formatar(request.form.get('estado'), request.form.get('inscricao_estadual')),
             'inscricao_municipal': request.form.get('inscricao_municipal'),
             'email': request.form.get('email'),
             'telefone': request.form.get('telefone'),
@@ -1344,7 +1346,7 @@ def novo():
             'data_inicio_atividade': request.form.get('data_inicio_atividade'),
             'data_inicio_contrato': request.form.get('data_inicio_contrato'),
             'observacoes': request.form.get('observacoes'),
-            'nire': request.form.get('nire'),
+            'nire': IE.formatar_nire(request.form.get('nire')),
             'nire_data_registro': request.form.get('nire_data_registro'),
             # cobrança dos honorários: só admin + financeiro.honorarios (09/11/2026); os demais deixam Pendente
             'cobranca': request.form.get('cobranca') if _pode_fin() else None,
@@ -1568,7 +1570,7 @@ def detalhes(id):
     return render_template('clientes/detalhes.html',
                          ies=ies, ie_isenta=IE.eh_isento(cliente.get('inscricao_estadual')),
                          produtor_rural=produtor_rural, uf_endereco=IE.uf_do_endereco(id),
-                         IE_TIPOS=IE.TIPOS, IE_UFS=IE.UFS,
+                         IE_TIPOS=IE.TIPOS, IE_SITUACOES=IE.SITUACOES, IE_UFS=IE.UFS, IE_SINTEGRA=IE.SINTEGRA, IE_SINTEGRA_GERAL=IE.SINTEGRA_GERAL, IE_FORMATOS=IE.FORMATOS, nire_fmt=IE.formatar_nire,
                          reserva=reserva, bloq_reserva=bloq_reserva, pode_fin=pode_fin,
                          reserva_csrf=reserva_csrf,
                          dfe_cursor=dfe_cursor,
@@ -1666,6 +1668,10 @@ def salvar_campos(id):
             novo = v[:_CAMPOS_TEXTO[k]] or None
             if k in ('nire', 'inscricao_estadual', 'inscricao_municipal') and novo:
                 novo = novo.upper()
+            if k == 'nire' and novo:
+                novo = IE.formatar_nire(novo)
+            if k == 'inscricao_estadual' and novo:
+                novo = IE.formatar(IE.uf_do_endereco(id), novo)
             if k == 'email' and novo:
                 novo = novo.lower()
                 if not re.fullmatch(r'[^@\s]+@[^@\s]+\.[^@\s]+', novo):
@@ -2333,7 +2339,7 @@ def editar(id):
                 'tipo_pessoa': request.form.get('tipo_pessoa'),
                 'nome_razao_social': nome_razao_social,
                 'cpf_cnpj': cpf_cnpj,
-                'inscricao_estadual': request.form.get('inscricao_estadual'),
+                'inscricao_estadual': IE.formatar(request.form.get('estado'), request.form.get('inscricao_estadual')),
                 'inscricao_municipal': request.form.get('inscricao_municipal'),
                 'email': request.form.get('email'),
                 'telefone': request.form.get('telefone'),
@@ -2346,7 +2352,7 @@ def editar(id):
                 'data_inicio_atividade': request.form.get('data_inicio_atividade'),
                 'data_inicio_contrato': request.form.get('data_inicio_contrato'),
                 'observacoes': request.form.get('observacoes'),
-                'nire': request.form.get('nire'),
+                'nire': IE.formatar_nire(request.form.get('nire')),
                 'nire_data_registro': request.form.get('nire_data_registro'),
                 'cobranca': request.form.get('cobranca') if _pode_fin() else cliente.get('cobranca'),
                 'aberta_pela_casa': 1 if request.form.get('aberta_pela_casa') else 0,
@@ -2729,7 +2735,11 @@ def delete(id):
 # ---------------------------------------------------------------------------
 def _ie_resumo(x):
     t = IE.TIPO_ROTULO.get(x.get('tipo'), x.get('tipo'))
-    r = f"{x.get('uf') or '--'} {x.get('ie')} ({t}{', principal' if x.get('principal') else ''})"
+    sit = (x.get('situacao') or 'ATIVA').upper()
+    extra = ', principal' if x.get('principal') else ''
+    if sit != 'ATIVA':
+        extra += ', ' + IE.SITUACAO_ROTULO.get(sit, sit.capitalize()).lower()
+    r = f"{x.get('uf') or '--'} {x.get('ie')} ({t}{extra})"
     if x.get('propriedade'):
         r += f" · {x['propriedade']} / {x.get('municipio') or ''}"
     return r
@@ -3098,6 +3108,14 @@ def api_contato_por_celular(digitos):
     """Contatos de OUTRAS empresas com este celular — para reaproveitar nome/e-mail (05/11/2026)."""
     cid = request.args.get('cliente_id', type=int)
     return jsonify(ContatoCliente.por_celular(digitos, exceto_cliente_id=cid))
+
+
+@clientes.route('/api/contatos/sugerir')
+@login_required
+def api_contato_sugerir():
+    """Nome do contato sendo digitado → pessoas que já são contato em outras empresas (11/11/2026)."""
+    cid = request.args.get('cliente_id', type=int)
+    return jsonify(ContatoCliente.sugerir(request.args.get('q'), exceto_cliente_id=cid))
 
 
 @clientes.route('/api/enderecos/complemento-tipos')

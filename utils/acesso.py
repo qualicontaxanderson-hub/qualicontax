@@ -105,7 +105,8 @@ MAPA = {
     'clientes.responsaveis_convite_salvar':  'LOGIN',
     'clientes.excluir_contato':        'clientes.excluir_itens',
     'clientes.api_contato_por_celular': 'clientes.edit',   # reaproveitar contato pelo celular (05/11/2026)
-    'clientes.api_contato_da_pessoa':  'clientes.edit',     # mesma pessoa em outras empresas (10/11/2026)
+    'clientes.api_contato_da_pessoa':  ('clientes.create', 'clientes.edit'),     # mesma pessoa em outras empresas (10/11/2026)
+    'clientes.api_contato_sugerir':    ('clientes.create', 'clientes.edit'),     # nome do contato sugere quem já existe (11/11/2026)
     'clientes.api_complemento_tipos':      'clientes.index',  # botões do complemento do endereço (10/11/2026)
     'clientes.api_complemento_tipo_novo':  'clientes.edit',   # tipo novo de complemento, com quem criou
     'clientes.novo_socio':             'clientes.edit',
@@ -504,7 +505,7 @@ RESERVA_VISIVEL_NO_CADASTRO = frozenset({
     'clientes.novo_endereco', 'clientes.excluir_endereco', 'clientes.salvar_responsaveis',
     'clientes.ie_salvar', 'clientes.ie_isenta', 'clientes.ie_excluir',
     'clientes.responsaveis_convite_novo', 'clientes.novo_contato', 'clientes.editar_contato',
-    'clientes.excluir_contato', 'clientes.api_contato_por_celular', 'clientes.api_contato_da_pessoa',
+    'clientes.excluir_contato', 'clientes.api_contato_por_celular', 'clientes.api_contato_da_pessoa', 'clientes.api_contato_sugerir',
     'clientes.novo_cadastro_adicional', 'clientes.excluir_cadastro_adicional',
     'clientes.socios_buscar_pf', 'clientes.novo_socio', 'clientes.saida_socio', 'clientes.excluir_socio',
     'clientes.vincular_contador', 'clientes.desvincular_contador', 'clientes.cadastros_buscar',

@@ -23,6 +23,15 @@ from utils.db_helper import execute_query
 
 TIPOS = [('NORMAL', 'Normal (da própria empresa)'), ('ST', 'Substituto Tributário'), ('RURAL', 'Produtor rural')]
 TIPO_ROTULO = {'NORMAL': 'Normal', 'ST': 'Substituto Tributário', 'RURAL': 'Produtor rural'}
+
+# Situação da IE no fisco (11/11/2026, Anderson: "quando a empresa altera a atividade e baixa a IE, temos
+# que ter a opção de colocar como Baixada... se vier ter outra, ai ficaria como Ativa a outra"). Toda IE
+# nova nasce ATIVA; as demais vêm do que o Sintegra costuma devolver. Não mexe em quem é principal: uma
+# IE baixada pode continuar guardada (histórico) sem deixar de ser a que o sistema espelha.
+SITUACOES = [('ATIVA', 'Ativa'), ('SUSPENSA', 'Suspensa'), ('BAIXADA', 'Baixada'),
+             ('INAPTA', 'Inapta'), ('NAO_LOCALIZADA', 'Não localizada')]
+SITUACAO_ROTULO = {k: r for k, r in SITUACOES}
+SITUACAO_PADRAO = 'ATIVA'
 UFS = ['AC', 'AL', 'AP', 'AM', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA', 'MT', 'MS', 'MG', 'PA', 'PB', 'PR', 'PE', 'PI',
        'RJ', 'RN', 'RS', 'RO', 'RR', 'SC', 'SP', 'SE', 'TO']
 ISENTO = 'ISENTO'
@@ -59,6 +68,49 @@ SINTEGRA = {
 }
 SINTEGRA_GERAL = 'http://www.sintegra.gov.br/'
 
+# Máscara da IE de cada estado (11/11/2026, Anderson: "São Paulo o formato é XXX.XXX.XXX.XXX, já em GO é
+# XX.XXX.XXX-X ... só quero tudo bem organizado"). Uma ou mais por UF, pela QUANTIDADE de dígitos; número
+# que não bate com nenhuma fica como foi digitado (não inventa pontuação).
+FORMATOS = {
+    'AC': ['##.###.###/###-##'], 'AL': ['#########'], 'AP': ['#########'], 'AM': ['##.###.###-#'],
+    'BA': ['######-##', '#######-##'], 'CE': ['########-#'], 'DF': ['##.######.###-##'], 'ES': ['###.###.##-#'],
+    'GO': ['##.###.###-#'], 'MA': ['##.###.###-#'], 'MT': ['##.###.###-#', '##########-#'], 'MS': ['##.###.###-#'],
+    'MG': ['###.###.###/####'], 'PA': ['##-######-#'], 'PB': ['##.###.###-#'], 'PR': ['########-##'],
+    'PE': ['#######-##', '##.#.###.#######-#'], 'PI': ['#########'], 'RJ': ['##.###.##-#'],
+    'RN': ['##.###.###-#', '##.#.###.###-#'], 'RS': ['###/#######'], 'RO': ['#############-#'],
+    'RR': ['########-#'], 'SC': ['###.###.###'], 'SP': ['###.###.###.###'], 'SE': ['########-#'],
+    'TO': ['#########', '##.##.######-#'],
+}
+
+
+def _aplicar(mascara, d):
+    out, i = [], 0
+    for ch in mascara:
+        if ch == '#':
+            out.append(d[i]); i += 1
+        else:
+            out.append(ch)
+    return ''.join(out)
+
+
+def formatar(uf, ie):
+    """IE com a máscara do estado quando a quantidade de dígitos bate; senão devolve como veio."""
+    v = str(ie or '').strip()
+    if not v or eh_isento(v) or re.search(r'[A-Za-z]', v):
+        return v
+    d = dig(v)
+    for m in FORMATOS.get((uf or '').upper(), []):
+        if m.count('#') == len(d):
+            return _aplicar(m, d)
+    return v
+
+
+def formatar_nire(v):
+    """NIRE (11 dígitos) como XX.XXX.XXX.XXX; outro tamanho fica como veio (11/11/2026)."""
+    s = str(v or '').strip()
+    d = dig(s)
+    return _aplicar('##.###.###.###', d) if len(d) == 11 and not re.search(r'[A-Za-z]', s) else s
+
 
 def dig(v):
     return re.sub(r'\D', '', str(v or ''))
@@ -77,13 +129,16 @@ def uf_do_endereco(cliente_id):
 def listar(cliente_id):
     """IEs do cadastro: principal primeiro, depois Normal, ST e Rural, por UF."""
     linhas = execute_query(
-        """SELECT id, uf, ie, tipo, propriedade, municipio, principal, conferir, conferir_motivo, origem
+        """SELECT id, uf, ie, tipo, propriedade, municipio, principal, situacao, conferir, conferir_motivo, origem
              FROM clientes_inscricoes_estaduais WHERE cliente_id = %s
             ORDER BY principal DESC, FIELD(tipo, 'NORMAL', 'ST', 'RURAL'), uf, ie""",
         (cliente_id,), fetch=True) or []
     for x in linhas:
         x['tipo_rotulo'] = TIPO_ROTULO.get(x['tipo'], x['tipo'])
         x['sintegra'] = SINTEGRA.get(x['uf'] or '', SINTEGRA_GERAL)
+        x['ie'] = formatar(x['uf'], x['ie'])
+        x['situacao'] = (x.get('situacao') or SITUACAO_PADRAO).upper()
+        x['situacao_rotulo'] = SITUACAO_ROTULO.get(x['situacao'], x['situacao'].capitalize())
     return linhas
 
 
@@ -123,8 +178,12 @@ def salvar(cliente_id, dados, ie_id=None):
     prop = ' '.join(str(dados.get('propriedade') or '').split()).upper()[:120] or None
     mun = ' '.join(str(dados.get('municipio') or '').split()).upper()[:80] or None
     principal = bool(dados.get('principal')) and tipo == 'NORMAL'
+    situacao = (dados.get('situacao') or SITUACAO_PADRAO).upper()
+    if situacao not in SITUACAO_ROTULO:
+        situacao = SITUACAO_PADRAO
     if uf not in UFS:
         return False, 'Escolha a UF.'
+    ie = formatar(uf, ie)
     if not dig(ie) or eh_isento(ie):
         return False, 'Digite o número da inscrição (para empresa isenta use "Empresa isenta de IE").'
     if tipo not in TIPO_ROTULO:
@@ -143,14 +202,14 @@ def salvar(cliente_id, dados, ie_id=None):
             execute_query("UPDATE clientes SET inscricao_estadual = NULL WHERE id = %s", (cliente_id,))
     if ie_id:
         execute_query("""UPDATE clientes_inscricoes_estaduais SET uf = %s, ie = %s, tipo = %s, propriedade = %s, municipio = %s,
-                                principal = %s, conferir = 0, conferir_motivo = NULL, isenta = 0
+                                principal = %s, situacao = %s, conferir = 0, conferir_motivo = NULL, isenta = 0
                           WHERE id = %s AND cliente_id = %s""",
-                      (uf, ie, tipo, prop, mun, 1 if principal else 0, ie_id, cliente_id))
+                      (uf, ie, tipo, prop, mun, 1 if principal else 0, situacao, ie_id, cliente_id))
         novo = ie_id
     else:
-        execute_query("""INSERT INTO clientes_inscricoes_estaduais (cliente_id, uf, ie, tipo, propriedade, municipio, principal, origem)
-                         VALUES (%s, %s, %s, %s, %s, %s, %s, 'app')""",
-                      (cliente_id, uf, ie, tipo, prop, mun, 1 if principal else 0))
+        execute_query("""INSERT INTO clientes_inscricoes_estaduais (cliente_id, uf, ie, tipo, propriedade, municipio, principal, situacao, origem)
+                         VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 'app')""",
+                      (cliente_id, uf, ie, tipo, prop, mun, 1 if principal else 0, situacao))
         r = execute_query("SELECT id FROM clientes_inscricoes_estaduais WHERE cliente_id = %s AND uf = %s AND ie = %s",
                           (cliente_id, uf, ie), fetch=True, fetch_one=True)
         novo = r['id'] if r else None
@@ -199,7 +258,7 @@ def espelhar_do_cadastro(cliente_id):
         execute_query("UPDATE clientes_inscricoes_estaduais SET principal = 1, tipo = 'NORMAL' WHERE id = %s", (mesma['id'],))
     else:
         execute_query("""INSERT INTO clientes_inscricoes_estaduais (cliente_id, uf, ie, tipo, principal, origem)
-                         VALUES (%s, %s, %s, 'NORMAL', 1, 'app')""", (cliente_id, uf_do_endereco(cliente_id), v[:20]))
+                         VALUES (%s, %s, %s, 'NORMAL', 1, 'app')""", (cliente_id, uf_do_endereco(cliente_id), formatar(uf_do_endereco(cliente_id), v)[:20]))
 
 
 def ler_rurais_json(bruto):
@@ -227,7 +286,7 @@ def _limpar_rurais(linhas):
         if not any(str(d.get(k) or '').strip() for k in ('uf', 'ie', 'propriedade', 'municipio')):
             continue
         uf = (d.get('uf') or '').strip().upper()
-        ie = ' '.join(str(d.get('ie') or '').split()).upper()[:20]
+        ie = formatar(uf, ' '.join(str(d.get('ie') or '').split()).upper()[:20])
         prop = ' '.join(str(d.get('propriedade') or '').split()).upper()[:120]
         mun = ' '.join(str(d.get('municipio') or '').split()).upper()[:80]
         sem = [r for r, ok in (('UF', uf in UFS), ('número', dig(ie)), ('propriedade', prop), ('município', mun)) if not ok]

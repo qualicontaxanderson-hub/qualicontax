@@ -109,7 +109,41 @@ class ContatoCliente:
                                                (exceto_cliente_id, exceto_cliente_id, pref), fetch=True) or [])
                      if r['id'] not in vistos and _nome_chave(r['nome']) == chave]
         rows.sort(key=lambda r: (int(r['numero_cliente']) if str(r.get('numero_cliente') or '').isdigit() else 99999, r['id']))
-        return [_abrir_meios(r) for r in rows]
+        from utils.acesso import filtrar_lista
+        return [_abrir_meios(r) for r in filtrar_lista(rows, 'cliente_id')]
+
+    @staticmethod
+    def sugerir(texto, exceto_cliente_id=None, limite=8):
+        """Enquanto digita o NOME do contato, as pessoas que já são contato em alguma empresa (11/11/2026,
+        Anderson: "se eu tentar digitar o nome já aparecer os outros cadastros de contatos"). Uma linha por
+        pessoa (nome sem acento + celular), com as empresas onde ela já está. Empresa reservada não aparece."""
+        from utils.acesso import sql_sem_ocultas
+        chave = _nome_chave(texto)
+        if len(chave) < 3:
+            return []
+        params = ['%' + '%'.join(chave.split(' ')) + '%', exceto_cliente_id, exceto_cliente_id]
+        extra = sql_sem_ocultas('c.cliente_id', params)
+        rows = execute_query(f"""
+            SELECT c.id, c.cliente_id, c.nome, c.cargo, c.email, c.celular, k.nome_razao_social AS empresa, k.numero_cliente
+              FROM contatos_clientes c JOIN clientes k ON k.id = c.cliente_id
+             WHERE c.ativo = 1 AND c.nome LIKE %s AND (%s IS NULL OR c.cliente_id <> %s)
+                   {('AND ' + extra) if extra else ''}
+             ORDER BY c.id DESC LIMIT 200""", tuple(params), fetch=True) or []
+        pessoas = {}
+        for r in rows:
+            k = (_nome_chave(r['nome']), _so_digitos(r['celular']))
+            p = pessoas.get(k)
+            if not p:
+                p = pessoas[k] = {'nome': r['nome'], 'celular': r['celular'] or '', 'email': r['email'] or '',
+                                  'cargo': r['cargo'] or '', 'empresas': []}
+            emp = (str(r['numero_cliente']) + ' - ' if r.get('numero_cliente') else '') + (r['empresa'] or '')
+            if emp not in p['empresas']:
+                p['empresas'].append(emp)
+            if not p['email'] and r['email']:
+                p['email'] = r['email']
+        # quem começa com o que foi digitado vem antes; depois quem está em mais empresas
+        lst = sorted(pessoas.values(), key=lambda p: (not _nome_chave(p['nome']).startswith(chave), -len(p['empresas']), p['nome']))
+        return lst[:limite]
 
     @staticmethod
     def por_celular(celular, exceto_cliente_id=None):

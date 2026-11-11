@@ -230,7 +230,7 @@
                 {# NIRE e Cobrança (06/11/2026): as colunas vieram da migração, mas não tinham campo — e A CADASTRAR cobrava #}
                 <div class="cf-fg cf-s4 pj-only">
                     <label class="cf-lbl" for="nire">NIRE <span class="cf-opt">(registro na Junta Comercial)</span></label>
-                    <input type="text" id="nire" name="nire" class="cf-ctrl" maxlength="20" placeholder="35.2.1234567-8"
+                    <input type="text" id="nire" name="nire" class="cf-ctrl" maxlength="20" placeholder="52.207.386.814" inputmode="numeric"
                            value="{{ cliente.nire if cliente and cliente.nire else '' }}">
                     <p class="cf-hint">Está no contrato social registrado ou na ficha cadastral da Junta.</p>
                 </div>
@@ -239,15 +239,6 @@
                     <input type="date" id="nire_data_registro" name="nire_data_registro" class="cf-ctrl"
                            value="{{ cliente.nire_data_registro.strftime('%Y-%m-%d') if cliente and cliente.nire_data_registro else '' }}">
                 </div>
-                {% if pode_fin %}
-                <div class="cf-fg cf-s5">
-                    <label class="cf-lbl" for="cobranca">Cobrança dos honorários <span class="cf-rf" style="background:#fee2e2;color:#b91c1c;">Financeiro</span></label>
-                    <select id="cobranca" name="cobranca" class="cf-ctrl">
-                        {% for v, rot in COBRANCAS %}<option value="{{ v }}" {% if (cliente.cobranca if cliente else 'PENDENTE') == v %}selected{% endif %}>{{ rot }}</option>{% endfor %}
-                    </select>
-                    <p class="cf-hint">Pendente mantém a empresa em A CADASTRAR (pendência "Financeiro (cobrança)").</p>
-                </div>
-                {% endif %}
 
                 <div class="cf-fg cf-s4">
                     <label class="cf-lbl" for="regime_tributario">Regime tributário</label>
@@ -420,6 +411,24 @@
                 </div>
             </div>
         </div>
+
+        {# Cobrança (11/11/2026, Anderson: "o Campo Financeiro está diferente do Pessoa Física ... deixar iguais"):
+           os mesmos 3 cartões da ficha, para PF e PJ. Antes era uma lista só dentro de "Dados da empresa" (PF nem via). #}
+        {% if pode_fin %}
+        {% set cob_at = (cliente.cobranca if cliente and cliente.cobranca else 'PENDENTE') %}
+        <div class="cf-card cf-after-tipo" id="cardCobranca">
+            <p class="cf-seclabel nf-bh"><span class="qb-ico i-rosa"><i class="fas fa-coins"></i></span><span>Como <span class="pj-only">a empresa</span><span class="pf-only">o cliente</span> paga os honorários?</span>
+                <span class="cf-seclabel-note">Financeiro · Pendente mantém o cadastro no A CADASTRAR</span></p>
+            <input type="hidden" id="cobranca" name="cobranca" value="{{ cob_at }}">
+            <div class="cf-cobr" role="radiogroup" aria-label="Cobrança dos honorários">
+                {% for v, ic, tit in [('PROPRIA', 'fa-building', 'Própria'), ('VIA_GRUPO', 'fa-people-group', 'Via grupo'), ('PENDENTE', 'fa-hourglass-half', 'Pendente')] %}
+                <button type="button" class="cf-op{{ ' on' if cob_at == v }}{{ ' cf-op-pend' if v == 'PENDENTE' }}" data-v="{{ v }}" role="radio" aria-checked="{{ 'true' if cob_at == v else 'false' }}">
+                    <i class="fas {{ ic }}"></i><b>{{ tit }}</b>
+                    <small>{% if v == 'PROPRIA' %}<span class="pj-only">A própria empresa paga os honorários</span><span class="pf-only">O próprio cliente paga os honorários</span>{% elif v == 'VIA_GRUPO' %}Outra empresa do grupo paga por ela{% else %}Ainda não definido: segura o cadastro no A CADASTRAR{% endif %}</small></button>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
 
         <!-- ── CARD 3b: Sócios (PJ) ──────────────────────────────────────── -->
         <div class="cf-card cf-after-tipo pj-only" id="cardSocios">
@@ -740,8 +749,8 @@
             <div class="cf-g12">
                 <div class="cf-fg cf-s6">
                     <label class="cf-lbl" for="ct_celular">Celular <span class="cf-req">*</span></label>
-                    <input type="text" id="ct_celular" class="cf-ctrl phone-mask" placeholder="(00) 00000-0000" onblur="ctPorCelular()" autocomplete="off">
-                    <small class="cf-hint">Obrigatório. Se este celular já é de alguém em outra empresa, o sistema oferece os dados dele.</small>
+                    <input type="text" id="ct_celular" class="cf-ctrl phone-mask" placeholder="(00) 00000-0000" onblur="ctPorCelular()" oninput="ctCelDigitado(this)" autocomplete="off">
+                    <small class="cf-hint">Obrigatório. Se este celular já é contato em outra empresa, o nome vem sozinho.</small>
                     <div id="ctCelExtrasF" class="pf-extras"></div>
                     <button type="button" class="pf-mais" onclick="ctExtraF('celular')"><i class="fas fa-plus"></i> outro celular</button>
                 </div>
@@ -754,7 +763,8 @@
             <div class="cf-g12">
                 <div class="cf-fg cf-s12">
                     <label class="cf-lbl" for="ct_nome">Nome <span class="cf-req">*</span></label>
-                    <input type="text" id="ct_nome" class="cf-ctrl">
+                    <input type="text" id="ct_nome" class="cf-ctrl" onblur="ctPorCelular()" autocomplete="off"
+                           placeholder="digite o nome: quem já é contato em outra empresa aparece para escolher">
                 </div>
                 <div class="cf-fg cf-s6">
                     <label class="cf-lbl" for="ct_email">E-mail</label>
@@ -842,6 +852,20 @@
 {% endblock %}
 
 {% block extra_js %}
+<script src="{{ url_for('static', filename='js/contato_sugere.js') }}"></script>
+<script src="{{ url_for('static', filename='js/mascaras_registro.js') }}"></script>
+<script>
+// NIRE e IE organizados enquanto digita (11/11/2026); a IE segue o estado do endereço
+var IE_FORMATOS = {{ (IE_FORMATOS or {}) | tojson }}, IE_SINTEGRA_UF = {{ (IE_SINTEGRA or {}) | tojson }};
+document.addEventListener('DOMContentLoaded', function () {
+    QCMascara.ligar(document.getElementById('nire'), QCMascara.nire);
+    var uf = document.getElementById('estado');
+    var ufAtual = function () { return (uf && uf.value) || (uf && uf.dataset.selectedUf) || ''; };
+    var ie = document.getElementById('inscricao_estadual');
+    QCMascara.ligar(ie, function (v) { return QCMascara.ie(ufAtual(), v, IE_FORMATOS); });
+    if (uf && ie) uf.addEventListener('change', function () { ie.value = QCMascara.ie(ufAtual(), ie.value, IE_FORMATOS); });
+});
+</script>
 {% from 'clientes/_contab_anterior.html' import contab_js %}{# import não cruza bloco #}
 <style>
 /* Listas fechadas da pessoa: select + "+" do admin; órgão e UF lado a lado. */
@@ -936,6 +960,37 @@ textarea.cf-ctrl { height:auto; padding:10px 12px; line-height:1.5; resize:verti
 .ct-chip input { display:none; }
 .ct-chip span { border:1px solid #1f6f43; color:#1f6f43; border-radius:999px; padding:5px 12px; font-size:13px; font-weight:600; }
 .ct-chip input:checked + span { background:#1f6f43; color:#fff; }
+/* cobrança em cartões, iguais aos da ficha (11/11/2026) */
+.nf .i-rosa { background:#fce7f3; color:#be185d; }
+.cf-cobr { display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:10px; }
+.cf-op { position:relative; display:flex; flex-direction:column; align-items:flex-start; gap:2px; text-align:left; font:inherit; background:#fff;
+    border:1.5px solid #e2e8f0; border-radius:14px; padding:14px 16px; cursor:pointer; }
+.cf-op:hover { border-color:#86efac; }
+.cf-op i { font-size:18px; color:#64748b; margin-bottom:6px; }
+.cf-op b { font-size:14px; font-weight:700; color:#0f172a; } .cf-op small { color:#64748b; font-size:12px; line-height:1.35; }
+.cf-op.on { border-color:#16a34a; background:#f0fdf4; box-shadow:0 0 0 4px rgba(22,163,74,.1); } .cf-op.on i { color:#16a34a; }
+.cf-op.on::after { content:'\f00c'; font-family:'Font Awesome 6 Free'; font-weight:900; position:absolute; right:12px; top:12px; width:22px; height:22px; border-radius:50%;
+    background:#16a34a; color:#fff; font-size:11px; display:flex; align-items:center; justify-content:center; }
+.cf-op.on.cf-op-pend { border-color:#ef4444; background:#fff1f2; box-shadow:none; } .cf-op.on.cf-op-pend i { color:#ef4444; }
+.cf-op.on.cf-op-pend::after { content:'!'; font-family:inherit; background:#ef4444; font-weight:800; }
+@media (max-width:640px) { .cf-cobr { grid-template-columns:minmax(0, 1fr); } }
+/* 11/11/2026: nome do contato sugere quem já é contato em outra empresa (static/js/contato_sugere.js) */
+.ct-sug { position:absolute; left:0; right:0; top:100%; margin-top:4px; z-index:60; background:#fff; border:1px solid #d1e7dc; border-radius:12px;
+    box-shadow:0 12px 28px rgba(15,23,42,.14); max-height:300px; overflow-y:auto; padding:4px; }
+.ct-sug[hidden] { display:none; }
+.ct-sug-t { font-size:11.5px; font-weight:600; color:#64748b; padding:6px 10px 4px; }
+.ct-sug-i { display:flex; flex-wrap:wrap; align-items:baseline; gap:2px 10px; padding:8px 10px; border-radius:9px; cursor:pointer; font-size:13px; color:#0f172a; }
+.ct-sug-i:hover, .ct-sug-i.on { background:#f0fdf4; }
+.ct-sug-i b { font-weight:700; }
+.ct-sug-cel { color:#15803d; font-weight:600; font-size:12.5px; }
+.ct-sug-i small { width:100%; color:#64748b; font-size:11.5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.ct-reuso-auto { font-size:12.5px; color:#166534; background:#f0fdf4; border:1px solid #bbf7d0; border-radius:8px; padding:6px 10px; margin:0 0 8px; }
+.ct-reuso-cab { font-size:13px; color:#78350f; display:flex; flex-wrap:wrap; gap:6px; align-items:center; }
+.ct-reuso-usar { border:1px solid #f5d58a; background:#fff; border-radius:99px; padding:3px 10px; font-size:12px; font-weight:600; color:#78350f; cursor:pointer; margin-left:auto; }
+.ct-reuso-p { margin:8px 0 4px; font-size:12.5px; color:#78350f; }
+.ct-reuso-em { display:flex; align-items:baseline; gap:8px; flex-wrap:wrap; padding:5px 8px; border-radius:8px; cursor:pointer; font-size:13px; color:#0f172a; }
+.ct-reuso-em:hover { background:#fff; }
+.ct-reuso-em small { color:#92400e; font-size:11.5px; }
 .ct-reuso { background:#fff7e6; border:1px solid #f5d58a; border-radius:9px; padding:8px 10px; margin:0 0 12px; }
 .ct-reuso-item { display:flex; align-items:center; justify-content:space-between; gap:10px; padding:4px 0; font-size:13px; }
 .ct-reuso-item + .ct-reuso-item { border-top:1px dashed #f0d9a0; }
@@ -2389,7 +2444,7 @@ document.addEventListener('DOMContentLoaded', vigiaCarrega);
 const CONTATOS = [];
 const CT_EXISTENTES = {{ contatos_existentes|default(0) }};
 const CT_SEM_CEL = {{ contatos_sem_celular|default(0) }};   // contatos já gravados sem celular (Editar)
-const CT_URL_CELULAR = "{{ url_for('clientes.api_contato_por_celular', digitos='0000000000') }}";
+const CT_URL_PESSOA = {{ url_for('clientes.api_contato_da_pessoa') | tojson }};
 let ctEditando = -1;
 function ctAbrir(pre) {
     pre = pre || {};
@@ -2404,6 +2459,8 @@ function ctAbrir(pre) {
     const deps = c.departamentos || [];
     document.querySelectorAll('.ct-dep-chk').forEach(function (k) { k.checked = deps.indexOf(parseInt(k.value, 10)) >= 0; });
     const r = document.getElementById('ctReuso'); r.style.display = 'none'; r.innerHTML = '';
+    const nm = document.getElementById('ct_nome'); if (nm._qcSugLimpar) nm._qcSugLimpar();
+    window._ctCelBuscado = '';
     document.getElementById('ctCelExtrasF').innerHTML = ''; document.getElementById('ctEmailExtrasF').innerHTML = '';
     (c.celulares_extra || []).forEach(function (v) { ctExtraF('celular', v); });
     (c.emails_extra || []).forEach(function (v) { ctExtraF('email', v); });
@@ -2463,33 +2520,94 @@ function ctFechar() {
     if (alvo) alvo.scrollIntoView({ behavior: 'smooth', block: 'center' });
 }
 function ctMarcarTodos() { document.querySelectorAll('.ct-dep-chk').forEach(function (k) { k.checked = true; }); }
+// 11/11/2026 (Anderson): "ao digitar o telefone se já estiver cadastrado puxar o nome da pessoa, se eu tentar
+// digitar o nome já aparecer os outros cadastros de contatos". Igual à janela da ficha: acha a mesma pessoa
+// pelo celular ou pelo nome, traz nome/cargo/celulares e pergunta qual e-mail vale nesta empresa.
+function _ctEsc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (ch) { return {'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[ch]; }); }
+function ctCelDigitado(el) {
+    var d = (el.value || '').replace(/\D/g, '');
+    if (d.length === 11 && window._ctCelBuscado !== d) { window._ctCelBuscado = d; ctPorCelular(); }
+}
 function ctPorCelular() {
-    const dig = (document.getElementById('ct_celular').value || '').replace(/\D/g, '');
-    const box = document.getElementById('ctReuso'); box.style.display = 'none'; box.innerHTML = '';
-    if (dig.length < 10) return;
-    const cid = {{ cliente.id if cliente else 'null' }};
-    fetch(CT_URL_CELULAR.replace('0000000000', dig) + (cid ? '?cliente_id=' + cid : ''))
+    const box = document.getElementById('ctReuso');
+    const nome = (document.getElementById('ct_nome').value || '').trim();
+    const cels = [document.getElementById('ct_celular').value].concat(ctValoresF('ctCelExtrasF'))
+        .map(function (v) { return (v || '').replace(/\D/g, ''); }).filter(function (d) { return d.length >= 10; });
+    if (!cels.length && nome.length < 5) { box.style.display = 'none'; box.innerHTML = ''; return; }
+    const q = new URLSearchParams({ nome: nome });
+    {% if cliente %}q.append('cliente_id', '{{ cliente.id }}');{% endif %}
+    cels.forEach(function (c) { q.append('cel', c); });
+    fetch(CT_URL_PESSOA + '?' + q.toString())
         .then(function (r) { return r.json(); })
         .then(function (lista) {
+            box.style.display = 'none'; box.innerHTML = '';
             if (!lista || !lista.length) return;
             window._ctReuso = lista;
-            box.innerHTML = lista.map(function (c, i) {
-                return '<div class="ct-reuso-item"><div><b>' + c.nome + '</b>' + (c.email ? ' &middot; ' + c.email : '') +
-                    '<br><small>contato de ' + (c.numero_cliente ? c.numero_cliente + ' - ' : '') + c.empresa +
-                    (c.departamentos.length ? ' (recebe ' + c.departamentos.join(', ') + ')' : '') + '</small></div>' +
-                    '<button type="button" class="cf-btn-pri" onclick="ctUsar(' + i + ')">Usar os dados dele</button></div>';
-            }).join('');
+            var emails = {};
+            lista.forEach(function (c) {
+                [c.email].concat(c.emails_extra || []).filter(Boolean).forEach(function (e) {
+                    e = e.toLowerCase(); (emails[e] = emails[e] || []).push((c.numero_cliente ? c.numero_cliente + ' - ' : '') + c.empresa);
+                });
+            });
+            var p = lista[0];
+            var auto = !nome && !!p.nome;
+            if (auto) ctUsar(0);
+            var h = (auto ? '<div class="ct-reuso-auto"><i class="fas fa-wand-magic-sparkles"></i> Nome e cargo vieram do contato que já existe. Se estiver errado, é só corrigir.</div>' : '') +
+                    '<div class="ct-reuso-cab"><i class="fas fa-user-check"></i> <b>' + _ctEsc(p.nome) + '</b> já é contato em ' + lista.length +
+                    ' empresa' + (lista.length > 1 ? 's' : '') + '.' + (auto ? '' : ' <button type="button" class="ct-reuso-usar" onclick="ctUsar(0)">Trazer nome, cargo e celulares</button>') + '</div>';
+            var ks = Object.keys(emails);
+            if (ks.length) {
+                h += '<div class="ct-reuso-p">Qual e-mail ele usa <b>nesta empresa</b>?</div>';
+                h += ks.map(function (e) {
+                    return '<label class="ct-reuso-em"><input type="radio" name="ct_email_escolha" value="' + _ctEsc(e) + '" onchange="ctEscolherEmail(this.value)"> <b>' + _ctEsc(e) +
+                           '</b><small>usa em ' + _ctEsc(emails[e].join(' · ')) + '</small></label>';
+                }).join('');
+                h += '<label class="ct-reuso-em"><input type="radio" name="ct_email_escolha" value="" onchange="ctEscolherEmail(\'\')"> <b>Outro e-mail</b><small>digite no campo E-mail abaixo</small></label>';
+            }
+            box.innerHTML = h;
             box.style.display = 'block';
+            var atual = (document.getElementById('ct_email').value || '').trim().toLowerCase();
+            box.querySelectorAll('input[name=ct_email_escolha]').forEach(function (r) { if (atual && r.value === atual) r.checked = true; });
         }).catch(function () {});
+}
+function ctEscolherEmail(v) {
+    var em = document.getElementById('ct_email');
+    em.value = v;
+    if (!v) em.focus();
 }
 function ctUsar(i) {
     const c = window._ctReuso[i];
-    const nome = document.getElementById('ct_nome'), email = document.getElementById('ct_email'), cargo = document.getElementById('ct_cargo');
+    const nome = document.getElementById('ct_nome'), cargo = document.getElementById('ct_cargo'), cel = document.getElementById('ct_celular');
     if (!nome.value) nome.value = c.nome || '';
-    if (!email.value) email.value = c.email || '';
     if (!cargo.value) cargo.value = c.cargo || '';
-    document.getElementById('ctReuso').style.display = 'none';
+    if (!cel.value) cel.value = c.celular || '';
+    var ja = [cel.value].concat(ctValoresF('ctCelExtrasF')).map(function (v) { return (v || '').replace(/\D/g, ''); });
+    [c.celular].concat(c.celulares_extra || []).filter(Boolean).forEach(function (v) {
+        if (ja.indexOf(v.replace(/\D/g, '')) < 0) { ctExtraF('celular', v); ja.push(v.replace(/\D/g, '')); }
+    });
 }
+document.addEventListener('DOMContentLoaded', function () {
+    QCContatoSugere.ligar(document.getElementById('ct_nome'), {
+        url: {{ url_for('clientes.api_contato_sugerir') | tojson }}, clienteId: {{ cliente.id if cliente else 'null' }},
+        aoEscolher: function (p) {
+            var cel = document.getElementById('ct_celular'), cargo = document.getElementById('ct_cargo');
+            if (!cel.value && p.celular) { cel.value = p.celular; window._ctCelBuscado = p.celular.replace(/\D/g, ''); }
+            if (!cargo.value && p.cargo) cargo.value = p.cargo;
+            ctPorCelular();
+        }
+    });
+    // cobrança em cartões: o clique escolhe e avisa o resumo (A CADASTRAR) pelo change
+    var cob = document.getElementById('cobranca');
+    if (cob) document.querySelectorAll('.cf-cobr .cf-op').forEach(function (b) {
+        b.addEventListener('click', function () {
+            cob.value = b.dataset.v;
+            document.querySelectorAll('.cf-cobr .cf-op').forEach(function (x) {
+                var on = x === b; x.classList.toggle('on', on); x.setAttribute('aria-checked', on ? 'true' : 'false');
+            });
+            cob.dispatchEvent(new Event('change', { bubbles: true }));
+        });
+    });
+});
 function ctSalvar() {
     const nome = (document.getElementById('ct_nome').value || '').trim().toUpperCase();
     const celular = (document.getElementById('ct_celular').value || '').trim();
@@ -2651,7 +2769,8 @@ function consultarSintegra() {
         ? '✅ CNPJ COPIADO!\n\n' + cnpjLimpo + '\n\n(Método: ' + metodoUsado + ')\n\nO site do Sintegra será aberto.\nCole o CNPJ com Ctrl+V'
         : '📋 COPIE ESTE CNPJ:\n\n' + cnpjLimpo + '\n\n⚠️ Cópia automática falhou.\nCopie o número acima (selecione + Ctrl+C)';
     alert(mensagem);
-    const sintegraWindow = window.open('https://www.sintegra.gov.br/', '_blank');
+    const ufEnd = (document.getElementById('estado') || {}).value || '';
+    const sintegraWindow = window.open((typeof IE_SINTEGRA_UF !== 'undefined' && IE_SINTEGRA_UF[ufEnd]) || 'https://www.sintegra.gov.br/', '_blank');
     if (!sintegraWindow) { alert('⚠️ O site foi bloqueado pelo navegador.\n\nPor favor, permita pop-ups para este site.'); }
 }
 </script>
