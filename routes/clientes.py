@@ -2908,9 +2908,10 @@ def _contato_resumo(dados):
 @login_required
 def salvar_responsaveis(id):
     """Responsáveis do escritório por departamento (05/11/2026, migração Acessórias): um funcionário
-    por departamento. Só salva com TODOS os departamentos escolhidos — Anderson (05/11/2026): "não poderá
-    salvar sem eleger os responsáveis... Mas só nessa etapa"; no futuro o cadastro gera um link e cada
-    departamento elege o seu. O que a migração deixou vazio continua vazio até alguém escolher."""
+    por departamento. Desde 11/11/2026 salva com QUALQUER parte escolhida — Anderson: "pode deixar salvar
+    somente um ou outro departamento ... depois criaremos relatórios de empresas sem cadastro de
+    departamento"; no avulso nem há responsabilidade, é só controle de quem faz o serviço. Antes (05/11)
+    só salvava com todos. Departamento esvaziado na tela perde o responsável."""
     cliente = Cliente.get_by_id(id)
     if not cliente:
         flash('Cliente não encontrado!', 'danger')
@@ -2920,7 +2921,7 @@ def salvar_responsaveis(id):
     atuais = ClienteResponsavel.por_cliente(id)
     antes = {r['departamento']: (r['usuario_nome'] or ACEITAM_NINGUEM.get(r['departamento']) if r['definido'] else None)
              for r in atuais}
-    depois, escolhas, faltando = {}, {}, []
+    depois, escolhas = {}, {}
     for r in atuais:
         bruto = (request.form.get('resp_%d' % r['departamento_id']) or '').strip()
         if bruto == SEM and r['departamento'] in ACEITAM_NINGUEM:      # "Sem visita"
@@ -2928,17 +2929,11 @@ def salvar_responsaveis(id):
             escolhas[r['departamento_id']] = SEM
             continue
         uid = int(bruto) if bruto.isdigit() else None
-        if not uid:
-            faltando.append(r['departamento'])
-        elif uid not in validos:
+        if uid and uid not in validos:
             flash('Funcionário inválido para %s.' % r['departamento'], 'danger')
             return redirect(url_for('clientes.detalhes', id=id))
         depois[r['departamento']] = validos.get(uid) if uid else None
         escolhas[r['departamento_id']] = uid
-    if faltando:
-        flash('Falta escolher o responsável de %s. Todos os departamentos precisam de um para salvar.'
-              % ', '.join(faltando), 'danger')
-        return redirect(url_for('clientes.detalhes', id=id))
     for r in atuais:
         atual = r['usuario_id'] or (SEM if r['definido'] else None)
         if escolhas[r['departamento_id']] != atual:

@@ -111,13 +111,15 @@
         });
         nota.classList.toggle('rs-mnote-erro', faltam > 0);
         nota.innerHTML = faltam
-            ? '<i class="fas fa-circle-exclamation"></i> ' + (TODOS ? (faltam === 1 ? 'Falta escolher 1 departamento' : 'Faltam escolher ' + faltam + ' departamentos') : 'Escolha o responsável do seu departamento')
+            ? '<i class="fas fa-circle-exclamation"></i> ' + (TODOS ? faltam + (faltam === 1 ? ' departamento sem responsável' : ' departamentos sem responsável') + ' · dá para salvar e completar depois' : 'Escolha o responsável do seu departamento')
             : '<i class="fas fa-circle-check"></i> ' + (TODOS ? 'Todos os departamentos têm responsável' : 'Pronto para salvar');
         return faltam;
     }
     modal.addEventListener('change', function (e) { if (e.target.tagName === 'SELECT') revisar(); });
     document.getElementById('rs-form').addEventListener('submit', function (e) {
-        if (!revisar()) return;
+        // 11/11/2026: salva com qualquer parte escolhida; só trava se nada foi escolhido.
+        revisar();
+        if ([].some.call(modal.querySelectorAll('.rs-row select:not([disabled])'), function (s) { return !!s.value; })) return;
         e.preventDefault();
         var p = modal.querySelector('.rs-row-falta select'); if (p) p.focus();
     });
