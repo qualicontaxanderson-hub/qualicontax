@@ -29,7 +29,27 @@ UFS = ('AC', 'AL', 'AM', 'AP', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA', 'MG', 'MS', '
 # rg/rg_orgao/rg_uf continuam na tabela (histórico), mas o documento agora
 # mora em clientes_pf_documentos — ver Documentos abaixo.
 CAMPOS = ('data_nascimento', 'estado_civil', 'regime_bens',
-          'nacionalidade', 'profissao', 'nome_mae', 'nivel_govbr')
+          'nacionalidade', 'profissao', 'nome_mae', 'nivel_govbr',
+          'conjuge_cpf', 'conjuge_nome')      # cônjuge: 11/11/2026, opcional
+
+
+def cpf_valido(cpf):
+    """Confere os dois dígitos verificadores do CPF."""
+    import re
+    d = re.sub(r'\D', '', cpf or '')
+    if len(d) != 11 or d == d[0] * 11:
+        return False
+    for n in (9, 10):
+        soma = sum(int(d[i]) * (n + 1 - i) for i in range(n))
+        if (soma * 10 % 11) % 10 != int(d[n]):
+            return False
+    return True
+
+
+def cpf_formatado(cpf):
+    import re
+    d = re.sub(r'\D', '', cpf or '')
+    return f'{d[:3]}.{d[3:6]}.{d[6:9]}-{d[9:]}' if len(d) == 11 else None
 
 # ---------------------------------------------------------------------------
 # Listas fechadas (19/10/2026): nacionalidade, profissão e órgão emissor saem
@@ -124,7 +144,7 @@ class PessoaDados:
 # ---------------------------------------------------------------------------
 # Documentos de identificação (19/10/2026): "RG é vago" — a pessoa tem RG, CNH,
 # CIN, registro no conselho (CRC, OAB...) e cada um com órgão e UF. Vários por
-# pessoa, um marcado como o que vai no CONTRATO. Tipo é lista fixa; órgão vem
+# pessoa; os marcados "Contrato" vão no contrato (vários desde 11/11/2026). Tipo é lista fixa; órgão vem
 # da lista fechada rg_orgao (cadastro_opcoes).
 # ---------------------------------------------------------------------------
 TIPOS_DOC = [

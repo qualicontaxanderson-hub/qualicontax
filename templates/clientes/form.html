@@ -338,6 +338,23 @@
                            placeholder="Nome completo da mãe" value="{{ ps.nome_mae or '' }}">
                 </div>
 
+                {# Cônjuge (11/11/2026): opcional, só CPF + nome; aparece para casado(a)/união estável. #}
+                {% set tem_cj = ps.conjuge_cpf or ps.conjuge_nome %}
+                <div class="cf-fg cf-s12 pf-cj-wrap" id="conjugeWrap">
+                    <button type="button" class="pf-docs-link" id="cjAbrir" onclick="abrirConjuge()" {% if tem_cj %}hidden{% endif %}><i class="fas fa-plus"></i> Cônjuge <span class="pf-cj-opc">(opcional)</span></button>
+                    <div class="pf-cj" id="cjCampos" {% if not tem_cj %}hidden{% endif %}>
+                        <div class="cf-fg">
+                            <label class="cf-lbl" for="pf_conjuge_cpf">CPF do cônjuge</label>
+                            <input type="text" id="pf_conjuge_cpf" name="pf_conjuge_cpf" class="cf-ctrl cpf-mask" placeholder="000.000.000-00" value="{{ ps.conjuge_cpf or '' }}">
+                        </div>
+                        <div class="cf-fg">
+                            <label class="cf-lbl" for="pf_conjuge_nome">Nome do cônjuge</label>
+                            <input type="text" id="pf_conjuge_nome" name="pf_conjuge_nome" class="cf-ctrl" maxlength="255" placeholder="Nome completo" value="{{ ps.conjuge_nome or '' }}">
+                        </div>
+                        <button type="button" class="pf-doc-del" title="Tirar o cônjuge" onclick="tirarConjuge()"><i class="fas fa-trash-alt"></i></button>
+                    </div>
+                    <p class="cf-hint" id="cjMsg" hidden></p>
+                </div>
                 {# Documentos de identificação (19/10/2026): "RG é vago" — vários por
                    pessoa (RG, CIN, CNH, conselho...), um marcado para o contrato.
                    Montado pelo JS (pfDocsRender) e enviado em pf_documentos_json. #}
@@ -354,7 +371,7 @@
                     <input type="hidden" name="pf_documentos_json" id="pf_documentos_json" value="">
                 </div>
             </div>
-            <p class="cf-hint">Cada documento precisa de tipo, número, órgão e UF. Em <b>Contrato</b>, marque o que vai no contrato social. O regime de bens só aparece para casado(a) e união estável. O nível da conta gov.br diz o que a pessoa consegue assinar ou liberar sozinha (procuração no e-CAC, por exemplo, pede Prata ou Ouro).</p>
+            <p class="cf-hint">Cada documento precisa de tipo, número, órgão e UF. Em <b>Contrato</b>, marque os que vão no contrato social (pode ser mais de um). O regime de bens só aparece para casado(a) e união estável. O nível da conta gov.br diz o que a pessoa consegue assinar ou liberar sozinha (procuração no e-CAC, por exemplo, pede Prata ou Ouro).</p>
         </div>
 
         <!-- ── CARD 3: Grupo e contador (PJ e PF) ─────────────────────────── -->
@@ -1418,6 +1435,13 @@ textarea.cf-ctrl { height:auto; padding:10px 12px; line-height:1.5; resize:verti
 .cf-dup { display:flex; gap:10px; align-items:flex-start; margin:10px 0 4px; padding:12px 14px; border-radius:12px;
           background:#fef2f2; border:1.5px solid #fecaca; color:#991b1b; font-size:13.5px; line-height:1.45; }
 .cf-dup[hidden] { display:none; }
+.cf-dup-ok { background:#eff6ff; border-color:#bfdbfe; color:#1e3a8a; }
+.pf-cj { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,2fr) auto; gap:12px; align-items:end; }
+.pf-cj[hidden], #cjAbrir[hidden] { display:none; }
+.pf-cj .cf-fg { margin:0; min-width:0; }
+.pf-cj-opc { font-weight:500; color:#94a3b8; }
+.pf-cj-ok { color:#1d4ed8; } .pf-cj-erro { color:#b91c1c; }
+@media (max-width:640px) { .pf-cj { grid-template-columns:minmax(0,1fr) auto; } .pf-cj .cf-fg:nth-child(2) { grid-column:1 / -1; grid-row:2; } }
 .cf-dup > i { margin-top:3px; }
 .cf-dup a { color:#b91c1c; font-weight:700; }
 </style>
@@ -1565,8 +1589,10 @@ function pfDocsRender() {
         const uf = pfSel(PF_UFS.map(u => [u, u]), d.uf, 'UF', 'UF do documento');
         uf.onchange = () => { d.uf = uf.value; pfDocsSync(); };
         const ctr = document.createElement('label'); ctr.className = 'pf-doc-ctr';
-        const rb = document.createElement('input'); rb.type = 'radio'; rb.name = 'pf_doc_contrato'; rb.checked = !!d.contrato;
-        rb.onchange = () => { PF_DOCS.forEach((x, j) => x.contrato = (j === i)); pfDocsSync(); };
+        // Vários documentos no contrato (11/11/2026): caixa de marcar, não mais um só.
+        const rb = document.createElement('input'); rb.type = 'checkbox'; rb.checked = !!d.contrato;
+        rb.title = 'Vai no contrato social (pode marcar mais de um)';
+        rb.onchange = () => { d.contrato = rb.checked; pfDocsSync(); };
         ctr.append(rb, document.createTextNode('Contrato'));
         const del = document.createElement('button');
         del.type = 'button'; del.className = 'pf-doc-del'; del.title = 'Tirar este documento';
@@ -1597,7 +1623,57 @@ function toggleRegimeBens() {
     var mostra = COM_REGIME.indexOf(civil.value) >= 0;
     wrap.style.display = mostra ? '' : 'none';
     if (!mostra) document.getElementById('pf_regime_bens').value = '';
+    var cj = document.getElementById('conjugeWrap');
+    if (cj) cj.style.display = mostra ? '' : 'none';     // casado(a)/união estável; fora disso o servidor limpa
 }
+function abrirConjuge() {
+    document.getElementById('cjAbrir').hidden = true;
+    document.getElementById('cjCampos').hidden = false;
+    document.getElementById('pf_conjuge_cpf').focus();
+}
+function tirarConjuge() {
+    document.getElementById('pf_conjuge_cpf').value = '';
+    document.getElementById('pf_conjuge_nome').value = '';
+    document.getElementById('cjCampos').hidden = true;
+    document.getElementById('cjAbrir').hidden = false;
+    document.getElementById('cjMsg').hidden = true;
+}
+function cpfOk(v) {
+    var d = (v || '').replace(/\D/g, '');
+    if (d.length !== 11 || /^(\d)\1+$/.test(d)) return false;
+    for (var n = 9; n <= 10; n++) {
+        var s = 0;
+        for (var i = 0; i < n; i++) s += +d[i] * (n + 1 - i);
+        if ((s * 10 % 11) % 10 !== +d[n]) return false;
+    }
+    return true;
+}
+// CPF do cônjuge: se ele já é cadastro (ou cônjuge de outro cadastro), o nome vem sozinho.
+(function () {
+    var cpf = document.getElementById('pf_conjuge_cpf');
+    if (!cpf) return;
+    var ultimo = '';
+    function conferir() {
+        var dig = cpf.value.replace(/\D/g, ''), msg = document.getElementById('cjMsg');
+        if (dig.length !== 11) { msg.hidden = true; ultimo = ''; return; }
+        if (dig === ultimo) return;
+        ultimo = dig;
+        if (!cpfOk(dig)) { msg.textContent = 'CPF inválido: confira os números. CPF errado não é gravado.'; msg.className = 'cf-hint pf-cj-erro'; msg.hidden = false; return; }
+        fetch('{{ url_for("clientes.api_documento_existe") }}?doc=' + dig, {credentials: 'same-origin'})
+            .then(function (r) { return r.json(); })
+            .then(function (d) {
+                if (cpf.value.replace(/\D/g, '') !== dig) return;
+                var nome = document.getElementById('pf_conjuge_nome'), achou = d.existe && d.nome ? d.nome : (d.conjuge ? d.conjuge.nome : '');
+                if (achou && !nome.value.trim()) nome.value = achou;
+                msg.className = 'cf-hint pf-cj-ok';
+                msg.textContent = d.existe && d.nome ? 'Já é cadastro: o nome veio de lá.'
+                    : d.conjuge ? 'Nome veio do cadastro de ' + (d.conjuge.de || 'outro cliente') + ' (cônjuge). Confira.' : '';
+                msg.hidden = !msg.textContent;
+            }).catch(function () { ultimo = ''; });
+    }
+    cpf.addEventListener('input', conferir);
+    cpf.addEventListener('change', conferir);
+})();
 
 // Ramo é de PF ou de PJ e, na PJ, fica dentro de um segmento (10/10/2026).
 // PF: só o grupo de PF. PJ: a barra de segmentos e o grupo de cada segmento
@@ -1857,7 +1933,22 @@ function conferirDocumento(inp) {
         .then(function (r) { return r.json(); })
         .then(function (d) {
             if ((inp.value || '').replace(/\D/g, '') !== dig) return;
-            if (!d.existe) { box.hidden = true; if (DOC_DUP && DOC_DUP.campo === inp.id) DOC_DUP = null; return; }
+            if (!d.existe) {
+                box.hidden = true; if (DOC_DUP && DOC_DUP.campo === inp.id) DOC_DUP = null;
+                // 11/11/2026: CPF que é cônjuge de outro cadastro já começa com o nome (dá para corrigir).
+                var nm = document.getElementById('nome_razao_social_pf');
+                if (d.conjuge && inp.id === 'cpf_cnpj_pf' && nm && !nm.value.trim()) {
+                    nm.value = d.conjuge.nome;
+                    nm.dispatchEvent(new Event('input', {bubbles: true}));
+                    box.className = 'cf-dup cf-dup-ok';
+                    box.innerHTML = '<i class="fas fa-circle-info"></i><div></div>';
+                    box.lastChild.textContent = 'Nome veio do cadastro de ' + (d.conjuge.de || 'outro cliente')
+                        + ' (cônjuge). Se estiver errado, é só corrigir.';
+                    box.hidden = false;
+                }
+                return;
+            }
+            box.className = 'cf-dup';
             var qual = dig.length === 11 ? 'CPF' : 'CNPJ';
             DOC_DUP = {campo: inp.id, qual: qual};
             var h = '<i class="fas fa-ban"></i><div><b>Este ' + qual + ' já está cadastrado.</b> ';

@@ -1011,6 +1011,15 @@ def _apply_migrations():
         "AND COLUMN_NAME = 'rg_uf'", fetch=True, fetch_one=True) or {}
     if _c.get('cnt', 0) == 0:
         _migrate("ALTER TABLE clientes_pf_dados ADD COLUMN rg_uf CHAR(2) NULL AFTER rg_orgao")
+    # Cônjuge (11/11/2026): só CPF e nome, opcionais — "se alguém for cadastrar digitando o CPF já
+    # inicia o cadastro com o nome" (Anderson).
+    _c = execute_query(
+        "SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.COLUMNS "
+        "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'clientes_pf_dados' "
+        "AND COLUMN_NAME = 'conjuge_cpf'", fetch=True, fetch_one=True) or {}
+    if _c.get('cnt', 0) == 0:
+        _migrate("ALTER TABLE clientes_pf_dados ADD COLUMN conjuge_cpf VARCHAR(14) NULL, "
+                 "ADD COLUMN conjuge_nome VARCHAR(255) NULL, ADD KEY idx_pf_conjuge_cpf (conjuge_cpf)")
     # Documentos de identificação da pessoa (19/10/2026): vários por pessoa
     # (RG, CIN, CNH, conselho...), um marcado para o contrato.
     _migrate("""

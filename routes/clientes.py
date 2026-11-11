@@ -26,6 +26,7 @@ from models.socio_cliente import SocioCliente, pode_ser_responsavel, qual_recusa
 from utils.qualificacao import qualificacao
 from models.contabilidade import Contabilidade
 from utils.natureza import classificar as natureza_classificar, codigo_formatado, FAMILIAS as NAT_FAMILIAS
+from models.pessoa_dados import cpf_valido, cpf_formatado
 from models.pessoa_dados import (PessoaDados, CAMPOS as PESSOA_CAMPOS, COM_REGIME, ESTADOS_CIVIS,
                                  REGIMES_BENS, NIVEIS_GOVBR, UFS, Opcoes, TIPOS_OPCAO,
                                  Documentos, TIPOS_DOC, ORGAO_SUGERIDO)
@@ -142,6 +143,16 @@ def _gravar_contatos_do_formulario(cliente_id, form=None):
                 log['outros_emails'] = email_x
             registrar('escrita.criou_contato', 'cadastros', tabela='contatos_clientes', registro_id=cid, depois=log)
     return n
+
+
+def _conjuge_cadastrado(pf_id):
+    """O cônjuge também é cadastro? Devolve {id, nome} para a ficha virar link."""
+    d = PessoaDados.get(pf_id)
+    dig = re.sub(r'\D', '', d.get('conjuge_cpf') or '')
+    if len(dig) != 11:
+        return None
+    return execute_query("SELECT id, nome_razao_social FROM clientes "
+                         "WHERE REGEXP_REPLACE(cpf_cnpj, '[^0-9]', '') = %s LIMIT 1", (dig,), fetch=True, fetch_one=True)
 
 
 def _empresas_do_socio(pf_id):
@@ -529,7 +540,18 @@ def _ler_pessoa(form, antes=None):
     regime = form.get('pf_regime_bens') or ''
     regime = regime if civil in COM_REGIME and regime in dict(REGIMES_BENS) else None
     nivel = form.get('pf_nivel_govbr') or ''
+    # Cônjuge (11/11/2026): opcional, só CPF + nome, só para casado(a)/união estável. Tela que não
+    # manda os campos (formulário antigo aberto) mantém o que estava gravado.
+    if 'pf_conjuge_cpf' in form or 'pf_conjuge_nome' in form:
+        c_cpf = cpf_formatado(form.get('pf_conjuge_cpf')) if cpf_valido(form.get('pf_conjuge_cpf')) else None
+        c_nome = txt('pf_conjuge_nome', 255, True)
+    else:
+        c_cpf, c_nome = antes.get('conjuge_cpf'), antes.get('conjuge_nome')
+    if civil not in COM_REGIME:
+        c_cpf = c_nome = None
     return {
+        'conjuge_cpf': c_cpf,
+        'conjuge_nome': c_nome,
         'data_nascimento': _data_iso(form.get('pf_nascimento')),
         'estado_civil': civil,
         'regime_bens': regime,
@@ -543,7 +565,7 @@ def _ler_pessoa(form, antes=None):
 def _ler_documentos(form, antes):
     """pf_documentos_json da tela -> lista limpa: tipo da lista fixa, número
     obrigatório (em maiúsculas), órgão da lista fechada (ou o que já estava
-    gravado), UF válida; um só marcado para o contrato (sem marca, o 1º)."""
+    gravado), UF válida; marcados para o contrato — VÁRIOS desde 11/11/2026 (sem marca, o 1º)."""
     import json
     cru = (form.get('pf_documentos_json') or '').strip()
     if not cru:
@@ -567,11 +589,9 @@ def _ler_documentos(form, antes):
         uf = str(d.get('uf') or '')
         out.append({'tipo': tipo, 'numero': numero, 'orgao': orgao if orgao in orgaos else None,
                     'uf': uf if uf in UFS else None, 'contrato': bool(d.get('contrato'))})
-    marcados = [d for d in out if d['contrato']]
-    for d in out:
-        d['contrato'] = False
-    if out:
-        (marcados[0] if marcados else out[0])['contrato'] = True
+    # Anderson (11/11/2026): "ter a opção do Contrato utilizarmos mais de um documento de identificação".
+    if out and not any(d['contrato'] for d in out):
+        out[0]['contrato'] = True
     return out
 
 
@@ -1574,6 +1594,7 @@ def detalhes(id):
                          qualificacoes_socio=QUALIFICACOES_SOCIO,
                          hoje_iso=date.today().isoformat(),
                          pessoa=PessoaDados.get(id) if cliente.get('tipo_pessoa') == 'PF' else {},
+                         conjuge_cad=_conjuge_cadastrado(id) if cliente.get('tipo_pessoa') == 'PF' else None,
                          documentos=Documentos.listar(id) if cliente.get('tipo_pessoa') == 'PF' else [],
                          natureza=(natureza_classificar(cliente.get('natureza_codigo'), cliente.get('natureza_juridica'))
                                    + (codigo_formatado(cliente.get('natureza_codigo')),)),
@@ -3106,6 +3127,14 @@ def api_documento_existe():
                            FROM clientes WHERE REGEXP_REPLACE(cpf_cnpj, '[^0-9]', '') = %s LIMIT 1""",
                       (dig,), fetch=True, fetch_one=True)
     if not r:
+        # Cônjuge de alguém (11/11/2026): "digitando o CPF já inicia o cadastro com o nome".
+        cj = execute_query("""SELECT d.conjuge_nome, d.cliente_id FROM clientes_pf_dados d
+                               WHERE REGEXP_REPLACE(d.conjuge_cpf, '[^0-9]', '') = %s AND d.conjuge_nome <> ''
+                               ORDER BY d.alterado_em DESC LIMIT 1""", (dig,), fetch=True, fetch_one=True)
+        if cj and pode_ver_empresa(cj['cliente_id']):
+            de = execute_query("SELECT nome_razao_social FROM clientes WHERE id = %s", (cj['cliente_id'],),
+                               fetch=True, fetch_one=True) or {}
+            return jsonify(existe=False, conjuge={'nome': cj['conjuge_nome'], 'de': de.get('nome_razao_social')})
         return jsonify(existe=False)
     if not pode_ver_empresa(r['id']):
         return jsonify(existe=True, reservado=True)

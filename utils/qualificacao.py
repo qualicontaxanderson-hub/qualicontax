@@ -76,9 +76,16 @@ def qualificacao(cliente_id):
     else:
         faltam.append('nascimento')
     if docs:
-        d = docs[0]                       # o marcado "contrato" vem primeiro
-        orgao = '/'.join(x for x in (d.get('orgao'), d.get('uf')) if x)
-        partes.append('portador(a) do ' + d['tipo'] + ' nº ' + d['numero'] + (' ' + orgao if orgao else ''))
+        # Vários documentos no contrato (11/11/2026, Anderson): todos os marcados, na ordem;
+        # nenhum marcado (cadastro antigo) = o primeiro.
+        no_contrato = [d for d in docs if d.get('contrato')] or docs[:1]
+
+        def _doc(d):
+            orgao = '/'.join(x for x in (d.get('orgao'), d.get('uf')) if x)
+            art = 'da' if d['tipo'] in ('CNH', 'CIN') else 'do'      # "da CNH", "do RG"
+            return art + ' ' + d['tipo'] + ' nº ' + d['numero'] + (' ' + orgao if orgao else '')
+        txt = [_doc(d) for d in no_contrato]
+        partes.append('portador(a) ' + (txt[0] if len(txt) == 1 else ', '.join(txt[:-1]) + ' e ' + txt[-1]))
     else:
         faltam.append('documento de identidade')
     partes.append('inscrito(a) no CPF sob o nº ' + doc) if doc else faltam.append('CPF')

@@ -1051,6 +1051,7 @@
                 <div class="qb-kv"><small>Nascimento</small><b>{{ ps.data_nascimento|format_date if ps.data_nascimento else '—' }}</b></div>
                 <div class="qb-kv"><small>Documentos</small><b>{% for d in documentos or [] %}{{ d.tipo }} {{ d.numero }}{% if d.orgao %} · {{ d.orgao }}{% if d.uf %}/{{ d.uf }}{% endif %}{% endif %}{% if not loop.last %}<br>{% endif %}{% else %}—{% endfor %}</b></div>
                 <div class="qb-kv"><small>Estado civil</small><b>{{ pessoa_rotulo('estado_civil', ps.estado_civil) or '—' }}{% if ps.regime_bens %} <small class="qb-muted">· {{ pessoa_rotulo('regime_bens', ps.regime_bens) }}</small>{% endif %}</b></div>
+                {% if ps.conjuge_nome or ps.conjuge_cpf %}<div class="qb-kv"><small>Cônjuge</small><b>{% if conjuge_cad %}<a href="{{ url_for('clientes.detalhes', id=conjuge_cad.id) }}">{{ ps.conjuge_nome or conjuge_cad.nome_razao_social }}</a>{% else %}{{ ps.conjuge_nome or '—' }}{% endif %}{% if ps.conjuge_cpf %} <small class="qb-muted">· {{ ps.conjuge_cpf }}</small>{% endif %}</b></div>{% endif %}
                 <div class="qb-kv"><small>Nacionalidade · profissão</small><b>{{ ps.nacionalidade or '—' }} · {{ ps.profissao or '—' }}</b></div>
                 <div class="qb-kv"><small>Nome da mãe</small><b>{{ ps.nome_mae or '—' }}</b></div>
                 <div class="qb-kv"><small>Conta gov.br</small><b>{{ pessoa_rotulo('nivel_govbr', ps.nivel_govbr) or '—' }}</b></div>
