@@ -1,0 +1,16 @@
+{# Antes → depois de um ato (it). Usado na Auditoria (ato a ato) e no dia da pessoa. #}
+{% if it.campos %}
+<div class="au-cps">
+    {% for c in it.campos %}
+    <div class="au-cp">
+        {% if c.tipo == 'sensivel' %}<span class="au-lbl">{{ c.label }} alterada</span>
+        {% elif c.tipo == 'lista' %}<span class="au-lbl">{{ c.label }}:</span>
+            {% if c.entrou %}<span class="au-mais">+ {{ c.entrou|join(', ') }}</span>{% endif %}
+            {% if c.saiu %}<span class="au-menos">− {{ c.saiu|join(', ') }}</span>{% endif %}
+        {% elif c.tipo == 'novo' %}<span class="au-lbl">{{ c.label }}:</span> <span>{{ c.depois }}</span>
+        {% elif c.tipo == 'removido' %}<span class="au-lbl">{{ c.label }}:</span> <span class="au-old">{{ c.antes }}</span>
+        {% else %}<span class="au-lbl">{{ c.label }}:</span> <span class="au-old">{{ c.antes }}</span> → <span class="au-new">{{ c.depois }}</span>{% endif %}
+    </div>
+    {% endfor %}
+</div>
+{% endif %}

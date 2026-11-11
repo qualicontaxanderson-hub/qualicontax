@@ -1,0 +1,120 @@
+{% extends "base.html" %}
+{% block title %}Atividades de {{ nome_curto }} - Qualicontax{% endblock %}
+{% block content %}
+{% include 'clientes/_cartao_css.html' %}
+{% include 'configuracoes/_auditoria_css.html' %}
+<style>
+.ap-hero-pes { display:flex; align-items:center; gap:14px; }
+.ap-hero-ava { width:52px; height:52px; border-radius:14px; background:rgba(255,255,255,.16); color:#fff;
+               display:flex; align-items:center; justify-content:center; font-weight:800; font-size:18px; }
+.ap-nav { display:flex; gap:6px; }
+.ap-dia { background:#fff; border:1px solid #e3ece7; border-radius:15px; padding:16px 18px; margin-bottom:16px; }
+.ap-dia-cab { display:flex; justify-content:space-between; align-items:flex-start; gap:12px; flex-wrap:wrap;
+              border-bottom:1px solid #eef2f0; padding-bottom:10px; margin-bottom:12px; }
+.ap-dia-tit { font-size:15px; font-weight:800; color:#0f3d2e; }
+.ap-dia-sub { font-size:12px; color:#64748b; margin-top:2px; }
+.ap-linha { position:relative; padding-left:22px; }
+.ap-linha::before { content:''; position:absolute; left:6px; top:4px; bottom:4px; width:2px; background:#e3ece7; border-radius:2px; }
+.ap-bloco { position:relative; margin-bottom:12px; }
+.ap-bloco::before { content:''; position:absolute; left:-21px; top:3px; width:12px; height:12px; border-radius:99px;
+                    background:#fff; border:3px solid #16a34a; }
+.ap-bloco.ap-acesso::before { border-color:#0369a1; }
+.ap-bloco-cab { font-size:12.5px; color:#64748b; margin-bottom:5px; }
+.ap-bloco-cab b { color:#0f3d2e; font-size:13px; }
+.ap-bloco-cab .ap-h { font-variant-numeric:tabular-nums; font-weight:700; color:#0f3d2e; margin-right:6px; }
+.ap-ato { display:flex; gap:10px; padding:5px 10px; border-radius:8px; font-size:13px; color:#334155; }
+.ap-ato:nth-child(odd) { background:#f7fbf8; }
+.ap-ato-h { color:#94a3b8; font-variant-numeric:tabular-nums; font-size:12px; padding-top:1px; flex-shrink:0; }
+.ap-ato-c { min-width:0; flex:1; }
+.ap-ato-c > b { color:#0f172a; }
+.ap-esc > b { color:#15803d; }
+.ap-vezes { background:#0f3d2e; color:#fff; border-radius:99px; padding:0 7px; font-size:11px; font-weight:800; }
+@media print {
+    .sidebar, .top-bar, .topbar, .ef-hero-actions, .au-voltar, .ap-nav, .au-kpis { display:none !important; }
+    .ef-hero { background:#fff !important; padding:0 0 10px !important; }
+    .ef-hero-title, .ef-hero-sub { color:#0f3d2e !important; }
+    .ef-body { margin-top:0 !important; padding:0 !important; }
+    .ap-dia { break-inside:avoid-page; border-color:#ccc; }
+}
+</style>
+
+<div class="ef-hero au-hero">
+    <div class="ef-hero-inner ef-hero-head">
+        <div>
+            <a href="{{ url_voltar }}" class="au-voltar">← Auditoria</a>
+            <div class="ap-hero-pes">
+                <span class="ap-hero-ava">{{ iniciais }}</span>
+                <div>
+                    <h1 class="ef-hero-title">{{ nome_curto }}</h1>
+                    <p class="ef-hero-sub">{% if d1 == d2 %}{{ dias[0].rotulo if dias else periodo }}{% else %}{{ periodo }}{% endif %}{% if nome != nome_curto %} · {{ nome[nome_curto|length:]|trim(' ()') }}{% endif %}</p>
+                </div>
+            </div>
+        </div>
+        <div class="ef-hero-actions">
+            {% if d1 == d2 %}
+            <div class="ap-nav">
+                {% if ant %}<a class="ef-btn" href="{{ url_for('configuracoes.auditoria_pessoa', nome=nome, data=ant.isoformat()) }}" title="Dia anterior com movimento"><i class="fas fa-chevron-left"></i> {{ ant.strftime('%d/%m') }}</a>{% endif %}
+                {% if prox %}<a class="ef-btn" href="{{ url_for('configuracoes.auditoria_pessoa', nome=nome, data=prox.isoformat()) }}" title="Próximo dia com movimento">{{ prox.strftime('%d/%m') }} <i class="fas fa-chevron-right"></i></a>{% endif %}
+            </div>
+            {% endif %}
+            <button type="button" class="ef-btn" onclick="window.print()"><i class="fas fa-print"></i> Imprimir</button>
+            <a class="ef-btn ef-btn-primary" href="{{ url_pdf }}"><i class="fas fa-file-pdf"></i> Baixar PDF</a>
+        </div>
+    </div>
+</div>
+
+<div class="ef-body">
+    <div class="cli-kpis au-kpis">
+        <div class="cli-kpi au-kpi-fixo"><span class="cli-kpi-ico" style="background:#dcfce7;color:#15803d;"><i class="fas fa-list-check"></i></span>
+            <div class="cli-kpi-body"><strong class="cli-kpi-val">{{ kpi.n }}</strong><span class="cli-kpi-lbl">Ações</span></div></div>
+        <div class="cli-kpi au-kpi-fixo"><span class="cli-kpi-ico" style="background:#fef3c7;color:#b45309;"><i class="fas fa-pen"></i></span>
+            <div class="cli-kpi-body"><strong class="cli-kpi-val">{{ kpi.escritas }}</strong><span class="cli-kpi-lbl">Alterações</span></div></div>
+        <div class="cli-kpi au-kpi-fixo"><span class="cli-kpi-ico" style="background:#f1f5f9;color:#475569;"><i class="fas fa-eye"></i></span>
+            <div class="cli-kpi-body"><strong class="cli-kpi-val">{{ kpi.leituras }}</strong><span class="cli-kpi-lbl">Consultas</span></div></div>
+        <div class="cli-kpi au-kpi-fixo"><span class="cli-kpi-ico" style="background:#ede9fe;color:#6d28d9;"><i class="fas fa-building"></i></span>
+            <div class="cli-kpi-body"><strong class="cli-kpi-val">{{ kpi.empresas }}</strong><span class="cli-kpi-lbl">Empresas</span></div></div>
+        <div class="cli-kpi au-kpi-fixo"><span class="cli-kpi-ico" style="background:#e0f2fe;color:#0369a1;"><i class="fas fa-calendar-day"></i></span>
+            <div class="cli-kpi-body"><strong class="cli-kpi-val">{{ kpi.dias }}</strong><span class="cli-kpi-lbl">Dia(s) com movimento</span></div></div>
+        <div class="cli-kpi au-kpi-fixo"><span class="cli-kpi-ico" style="background:#fee2e2;color:#b91c1c;"><i class="fas fa-triangle-exclamation"></i></span>
+            <div class="cli-kpi-body"><strong class="cli-kpi-val{{ ' cli-bad' if kpi.sinais }}">{{ kpi.sinais }}</strong><span class="cli-kpi-lbl">Sinais de atenção</span></div></div>
+    </div>
+
+    {% if not dias %}
+    <div class="gc-nada"><i class="fas fa-calendar-xmark"></i><p>{{ nome_curto }} não fez nada registrado em {{ periodo }}.</p></div>
+    {% endif %}
+
+    {% for d in dias %}
+    {% set c = d.cartao %}
+    <section class="ap-dia">
+        <div class="ap-dia-cab">
+            <div>
+                <div class="ap-dia-tit">{{ d.rotulo }}</div>
+                <div class="ap-dia-sub">das <b>{{ c.ini }}</b> às <b>{{ c.fim }}</b> · {{ c.n }} ações · {{ c.escritas }} alterações · {{ c.leituras }} consultas · {{ c.empresas }} empresas
+                    {% if c.ips %} · IP {{ c.ips|join(', ') }}{% endif %}</div>
+            </div>
+            {% if c.sinais %}<div class="au-sinais">{% for s in c.sinais %}<span class="au-sinal au-sinal-{{ s.nivel }}">{{ s.texto }}{% if s.hora %} · {{ s.hora }}{% endif %}</span>{% endfor %}</div>{% endif %}
+        </div>
+        <div class="ap-linha">
+            {% for b in d.blocos %}
+            <div class="ap-bloco{{ ' ap-acesso' if b.acesso }}">
+                <div class="ap-bloco-cab"><span class="ap-h">{{ b.ini }}{% if b.fim != b.ini %}–{{ b.fim }}{% endif %}</span>
+                    {% if b.empresa %}<b>{{ b.empresa }}</b>{% elif b.acesso %}<b>Entrada no sistema</b>{% else %}<b>Geral</b>{% endif %}
+                    {% if b.n > 1 %} · {{ b.n }} ações{% endif %}</div>
+                {% for it in b.atos %}
+                <div class="ap-ato">
+                    <span class="ap-ato-h">{{ it.hora }}{% if it.vezes > 1 and it.hora_fim != it.hora %}<br>{{ it.hora_fim }}{% endif %}</span>
+                    <div class="ap-ato-c{{ ' ap-esc' if it.escrita }}">
+                        <b>{{ it.verbo }}</b>{% if it.vezes > 1 %} <span class="ap-vezes">×{{ it.vezes }}</span>{% endif %}{% if it.modulo_rot and not b.acesso %} <span class="au-mod">{{ it.modulo_rot }}</span>{% endif %}
+                        {% if it.busca %}<div class="au-ato-det">buscou: <b>{{ it.busca }}</b></div>{% endif %}
+                        {% if it.detalhe %}<div class="au-ato-det">{{ it.detalhe }}</div>{% endif %}
+                        {% include 'configuracoes/_auditoria_campos.html' %}
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% endfor %}
+        </div>
+    </section>
+    {% endfor %}
+</div>
+{% endblock %}

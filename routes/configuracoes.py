@@ -12,6 +12,7 @@ from utils.auth_helper import login_required, admin_required, permission_require
 from utils.atividade import registrar
 from utils.auditoria_fmt import (hist_preparar, coletar_cliente_ids,
                                  MODULO_LABEL, AUDITORIA_INICIO)
+from utils import auditoria_painel as AP
 from utils.db_helper import execute_query, transacao
 from utils.permissions import PERMISSION_CATALOG, DEPARTAMENTOS_PERMISSOES, normalizar_selecao, codigos_da_tela
 from utils import cadastro_token
@@ -342,50 +343,190 @@ def _aud_qs(f):
     return urlencode({k: v for k, v in f.items() if v})
 
 
+def _aud_data(txt, padrao):
+    try:
+        return date.fromisoformat((txt or '').strip()[:10])
+    except ValueError:
+        return padrao
+
+
+def _aud_contexto():
+    """Busca inteligente (q) + filtros antigos da URL -> (q, f, chips, legado, cond, params).
+    O período do texto ("ontem", "10/11") manda; senão o da URL; senão 7 dias."""
+    q = request.args.get('q', '').strip()[:200]
+    f, chips = AP.interpretar(q)
+    legado = _aud_filtros()
+    if not f['data_ini']:
+        hoje = date.today()
+        f['data_ini'] = _aud_data(request.args.get('data_ini'), hoje - timedelta(days=6))
+        f['data_fim'] = _aud_data(request.args.get('data_fim'), hoje)
+    if f['data_fim'] < f['data_ini']:
+        f['data_ini'], f['data_fim'] = f['data_fim'], f['data_ini']
+    cond, params = AP.montar_where(f, legado)
+    return q, f, chips, legado, cond, params
+
+
+def _aud_url(**mudar):
+    """URL da auditoria com os parâmetros atuais trocados por `mudar` (None tira)."""
+    args = {k: v for k, v in request.args.items() if k not in ('page', 'export')}
+    for k, v in mudar.items():
+        if v in (None, ''):
+            args.pop(k, None)
+        else:
+            args[k] = v
+    return url_for('configuracoes.auditoria', **args)
+
+
 @configuracoes.route('/auditoria')
 @admin_required
 def auditoria():
-    """Tela geral de auditoria — todas as movimentações de logs_sistema."""
-    f = _aud_filtros()
-    cond, params = _aud_where(f)
+    """Auditoria (11/11/2026): o registro é ato a ato; a tela mostra o DIA de cada
+    pessoa num cartão (clicar abre o dia inteiro, com PDF), ou por empresa, ou
+    ato a ato. Busca em português: "anderson ontem #92 e-mail"."""
+    q, f, chips, legado, cond, params = _aud_contexto()
+    vista = request.args.get('vista', 'dia')
+    if vista not in ('dia', 'empresa', 'atos'):
+        vista = 'dia'
 
     if request.args.get('export') == 'xlsx':
-        return _aud_export(f, cond, params)
-
-    try:
-        page = max(1, int(request.args.get('page', 1) or 1))
-    except (TypeError, ValueError):
-        page = 1
-    off = (page - 1) * _AUD_PER
+        fx = {'data_ini': f['data_ini'].isoformat(), 'data_fim': f['data_fim'].isoformat(), 'q': q}
+        fx.update({k: v for k, v in legado.items() if k not in ('data_ini', 'data_fim') and v})
+        return _aud_export(fx, cond, params)
 
     total = (execute_query(f"SELECT COUNT(*) AS c FROM logs_sistema l WHERE {cond}",
                            tuple(params), fetch=True, fetch_one=True) or {}).get('c', 0)
-    rows = execute_query(_AUD_SELECT + cond + " ORDER BY l.data_hora DESC, l.id DESC LIMIT %s OFFSET %s",
-                         tuple(params + [_AUD_PER, off]), fetch=True) or []
-    nomes, emp_map = _aud_resolver(rows)
-    itens = [hist_preparar(r, nomes, emp_map) for r in rows]
+    rows = execute_query(AP.SELECT_ATOS + cond + " ORDER BY l.data_hora DESC, l.id DESC LIMIT %s",
+                         tuple(params + [AP.TETO_LINHAS]), fetch=True) or []
+    atos = AP.preparar(rows)
+    ips_antes = AP.ips_conhecidos(f['data_ini'])
+    dias = AP.por_dia(atos, ips_antes)
+    cartoes = [c for d in dias for c in d['cartoes']]
+    if f['atencao']:
+        for d in dias:
+            d['cartoes'] = [c for c in d['cartoes'] if c['sinais']]
+        dias = [d for d in dias if d['cartoes']]
+    alertas = [{'cartao': c, 'sinal': s} for c in cartoes for s in c['sinais'] if s['nivel'] != 'info']
 
-    # Resumo (participação por pessoa no filtro) — o mesmo número do card.
-    rr = execute_query(f"SELECT COALESCE(l.usuario_nome,'—') AS nome, COUNT(*) AS n "
-                       f"FROM logs_sistema l WHERE {cond} GROUP BY l.usuario_nome ORDER BY n DESC",
-                       tuple(params), fetch=True) or []
-    rtot = sum(int(r['n']) for r in rr)
-    resumo = [{'nome': r['nome'], 'n': int(r['n']),
-               'pct': round(100 * int(r['n']) / rtot) if rtot else 0} for r in rr]
+    kpi = {'total': total,
+           'pessoas': len({a['autor'] for a in atos if not a['lote']}),
+           'escritas': sum(1 for a in atos if a['escrita'] and a['modulo'] != 'acesso' and not a['lote']),
+           'leituras': sum(1 for a in atos if not a['escrita']),
+           'empresas': len({a['empresa'] for a in atos if a.get('empresa') and not a['lote']}),
+           'atencao': sum(1 for c in cartoes if any(s['nivel'] != 'info' for s in c['sinais'])),
+           'lote': sum(1 for a in atos if a['lote'])}
 
-    # Mostra TODOS os usuários com registro (inclusive teste) — a auditoria não
-    # esconde ninguém; ocultar teste é opção da própria pessoa.
-    pessoas = [r['usuario_nome'] for r in execute_query(
-        "SELECT DISTINCT usuario_nome FROM logs_sistema WHERE usuario_nome IS NOT NULL "
-        "ORDER BY usuario_nome", fetch=True) or []]
+    empresas, empresas_mais = ([], 0)
+    itens, page, total_paginas = [], 1, 1
+    if vista == 'empresa':
+        empresas, empresas_mais = AP.por_empresa(atos)
+    elif vista == 'atos':
+        try:
+            page = max(1, int(request.args.get('page', 1) or 1))
+        except (TypeError, ValueError):
+            page = 1
+        pr = execute_query(AP.SELECT_ATOS + cond + " ORDER BY l.data_hora DESC, l.id DESC LIMIT %s OFFSET %s",
+                           tuple(params + [_AUD_PER, (page - 1) * _AUD_PER]), fetch=True) or []
+        itens = AP.preparar(pr)
+        total_paginas = max(1, (total + _AUD_PER - 1) // _AUD_PER)
 
-    total_paginas = max(1, (total + _AUD_PER - 1) // _AUD_PER)
+    chips_ui = [dict(c, url=_aud_url(q=AP.tirar_do_texto(q, c['tira']))) for c in chips]
+    hoje = date.today()
+    atalhos = [('Hoje', hoje, hoje), ('Ontem', hoje - timedelta(days=1), hoje - timedelta(days=1)),
+               ('7 dias', hoje - timedelta(days=6), hoje), ('30 dias', hoje - timedelta(days=29), hoje),
+               ('Este mês', hoje.replace(day=1), hoje)]
+    periodos = [{'rotulo': r, 'url': _aud_url(data_ini=a.isoformat(), data_fim=b.isoformat()),
+                 'on': (a, b) == (f['data_ini'], f['data_fim'])} for r, a, b in atalhos]
     return render_template('configuracoes/auditoria.html',
-                           itens=itens, resumo=resumo, resumo_total=rtot, total=total,
-                           page=page, total_paginas=total_paginas, f=f, pessoas=pessoas,
-                           modulos=_AUD_MODULOS, modulo_label=MODULO_LABEL,
-                           auditoria_inicio=AUDITORIA_INICIO, qs=_aud_qs(f),
-                           export_cap=_AUD_EXPORT_CAP)
+                           q=q, f=f, chips=chips_ui, vista=vista, dias=dias, alertas=alertas[:8],
+                           alertas_total=len(alertas), kpi=kpi, empresas=empresas,
+                           empresas_mais=empresas_mais, itens=itens, page=page,
+                           total_paginas=total_paginas, total=total, teto=AP.TETO_LINHAS,
+                           resumo=AP.resumo_pessoas(atos), periodos=periodos,
+                           url_vista={v: _aud_url(vista=v) for v in ('dia', 'empresa', 'atos')},
+                           url_pag=lambda p: _aud_url(page=p),
+                           url_mais=lambda txt, v=None: _aud_url(q=(q + ' ' + txt).strip(), vista=v or vista),
+                           url_export=_aud_url(export='xlsx'),
+                           pessoas=AP.pessoas_conhecidas(),
+                           auditoria_inicio=AUDITORIA_INICIO, export_cap=_AUD_EXPORT_CAP)
+
+
+@configuracoes.route('/auditoria/sugestoes')
+@admin_required
+def auditoria_sugestoes():
+    """Empresas para o menu da busca (número, nome ou CNPJ) — 8 no máximo."""
+    t = request.args.get('t', '').strip()
+    if len(t) < 2:
+        return jsonify([])
+    dig = re.sub(r'\D', '', t)
+    rows = execute_query(
+        "SELECT numero_cliente, nome_razao_social FROM clientes "
+        "WHERE nome_razao_social LIKE %s OR COALESCE(nome_fantasia,'') LIKE %s "
+        "OR CAST(numero_cliente AS CHAR) = %s "
+        "OR (%s <> '' AND REPLACE(REPLACE(REPLACE(cpf_cnpj,'.',''),'-',''),'/','') LIKE %s) "
+        "ORDER BY numero_cliente LIMIT 8",
+        ('%' + t + '%', '%' + t + '%', t.lstrip('#'), dig, dig + '%'), fetch=True) or []
+    return jsonify([{'num': r['numero_cliente'], 'nome': r['nome_razao_social']} for r in rows])
+
+
+@configuracoes.route('/auditoria/pessoa')
+@admin_required
+def auditoria_pessoa():
+    """O dia (ou o período) de UMA pessoa, em linha do tempo — e o PDF dele."""
+    nome = request.args.get('nome', '').strip()
+    if not nome:
+        return redirect(url_for('configuracoes.auditoria'))
+    hoje = date.today()
+    d1 = _aud_data(request.args.get('data_ini') or request.args.get('data'), hoje)
+    d2 = _aud_data(request.args.get('data_fim') or request.args.get('data'), d1)
+    if d2 < d1:
+        d1, d2 = d2, d1
+    rows = execute_query(
+        AP.SELECT_ATOS + "l.usuario_nome = %s AND l.data_hora >= %s AND l.data_hora <= %s "
+        "ORDER BY l.data_hora DESC, l.id DESC LIMIT 5000",
+        (nome, d1.isoformat() + ' 00:00:00', d2.isoformat() + ' 23:59:59'), fetch=True) or []
+    atos = AP.preparar(rows)
+    ips_antes = AP.ips_conhecidos(d1).get(nome)
+    dias = []
+    for dia in sorted({a['dia'] for a in atos}, reverse=True):
+        lst = [a for a in atos if a['dia'] == dia]          # mais novo primeiro
+        c = AP.cartao_pessoa_dia(nome, dia, lst, ips_antes)
+        dias.append({'dia': dia, 'rotulo': AP.dia_rotulo(dia), 'cartao': c,
+                     'blocos': AP.blocos_do_dia(list(reversed(lst)))})
+    kpi = {'n': len(atos), 'escritas': sum(1 for a in atos if a['escrita'] and a['modulo'] != 'acesso'),
+           'leituras': sum(1 for a in atos if not a['escrita']),
+           'empresas': len({a['empresa'] for a in atos if a.get('empresa')}),
+           'dias': len(dias), 'sinais': sum(len(d['cartao']['sinais']) for d in dias)}
+    periodo = d1.strftime('%d/%m/%Y') if d1 == d2 else '%s a %s' % (d1.strftime('%d/%m/%Y'), d2.strftime('%d/%m/%Y'))
+
+    if request.args.get('formato') == 'pdf':
+        from utils.auditoria_pdf import gerar_pdf_pessoa
+        from zoneinfo import ZoneInfo
+        pdf = gerar_pdf_pessoa(nome, periodo, kpi, dias,
+                               gerado_em=datetime.now(ZoneInfo('America/Sao_Paulo')).strftime('%d/%m/%Y %H:%M'),
+                               gerado_por=getattr(current_user, 'nome', '') or '')
+        registrar('leitura.exportou_arquivo', 'configuracoes', tabela='logs_sistema',
+                  depois={'formato': 'pdf', 'escopo': 'auditoria', 'relatorio': 'atividades de %s' % nome,
+                          'data_ini': d1.isoformat(), 'data_fim': d2.isoformat(), 'total': len(atos)})
+        arq = 'atividades_%s_%s.pdf' % (re.sub(r'[^A-Za-z0-9]+', '_', AP.sem_acento(nome.split(' (')[0])).strip('_'),
+                                        d1.strftime('%Y-%m-%d') if d1 == d2 else '%s_a_%s' % (d1, d2))
+        return send_file(BytesIO(pdf), as_attachment=True, download_name=arq, mimetype='application/pdf')
+
+    # Dia anterior/seguinte EM QUE a pessoa fez algo (só quando é um dia só).
+    ant = prox = None
+    if d1 == d2:
+        r = execute_query("SELECT DATE(MAX(data_hora)) AS d FROM logs_sistema WHERE usuario_nome = %s AND data_hora < %s",
+                          (nome, d1.isoformat() + ' 00:00:00'), fetch=True, fetch_one=True) or {}
+        ant = r.get('d')
+        r = execute_query("SELECT DATE(MIN(data_hora)) AS d FROM logs_sistema WHERE usuario_nome = %s AND data_hora > %s",
+                          (nome, d1.isoformat() + ' 23:59:59'), fetch=True, fetch_one=True) or {}
+        prox = r.get('d')
+    return render_template('configuracoes/auditoria_pessoa.html',
+                           nome=nome, nome_curto=nome.split(' (')[0], iniciais=AP._iniciais(nome),
+                           d1=d1, d2=d2, periodo=periodo, dias=dias, kpi=kpi, ant=ant, prox=prox,
+                           url_pdf=url_for('configuracoes.auditoria_pessoa', nome=nome, data_ini=d1.isoformat(),
+                                           data_fim=d2.isoformat(), formato='pdf'),
+                           url_voltar=url_for('configuracoes.auditoria', data_ini=d1.isoformat(),
+                                              data_fim=d2.isoformat()))
 
 
 def _aud_campos_txt(campos):
@@ -393,6 +534,8 @@ def _aud_campos_txt(campos):
     for c in campos:
         if c['tipo'] == 'sensivel':
             parts.append('%s alterada' % c['label'])
+        elif c['tipo'] == 'lista':
+            parts.append('%s: + %s / - %s' % (c['label'], ', '.join(c['entrou']) or '-', ', '.join(c['saiu']) or '-'))
         elif c['tipo'] == 'novo':
             parts.append('%s: %s' % (c['label'], c.get('depois')))
         elif c['tipo'] == 'removido':
@@ -433,7 +576,8 @@ def _aud_export(f, cond, params):
     for it in itens:
         ws.append([it['data_hora'], it['autor'], it['verbo'],
                    MODULO_LABEL.get(it.get('modulo'), it.get('modulo') or ''),
-                   it.get('empresa') or '', _aud_campos_txt(it['campos'])])
+                   it.get('empresa') or '',
+                   _aud_campos_txt(it['campos']) or ' · '.join(x for x in (it.get('busca'), it.get('detalhe')) if x)])
     for i, w in enumerate((17, 22, 28, 13, 34, 70), 1):
         ws.column_dimensions[chr(64 + i)].width = w
     bio = BytesIO(); wb.save(bio); bio.seek(0)

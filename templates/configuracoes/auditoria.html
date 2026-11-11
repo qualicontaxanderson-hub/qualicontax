@@ -1,178 +1,282 @@
 {% extends "base.html" %}
 {% block title %}Auditoria - Qualicontax{% endblock %}
 {% block content %}
-<style>
-.aud-filtros { border:1px solid #e5e7eb; border-radius:12px; background:#fff; margin-bottom:16px; }
-.aud-filtros > summary { cursor:pointer; padding:12px 16px; font-weight:700; color:#0f3d2e;
-    list-style:none; display:flex; align-items:center; gap:8px; }
-.aud-filtros > summary::-webkit-details-marker { display:none; }
-.aud-filtros > summary::before { content:'\f0b0'; font-family:'Font Awesome 6 Free'; font-weight:900; color:#16a34a; }
-.aud-form { padding:0 16px 16px; }
-.aud-fgrid { display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:12px; }
-.aud-fgrid label { display:flex; flex-direction:column; gap:4px; font-size:12px; font-weight:600; color:#475569; }
-.aud-fgrid select, .aud-fgrid input { height:36px; border:1px solid #d1d5db; border-radius:8px;
-    padding:0 10px; font-size:13px; background:#fff; }
-.aud-fbtn { display:flex; gap:10px; margin-top:14px; flex-wrap:wrap; align-items:center; }
-.aud-fbtn button { background:#0f3d2e; color:#fff; border:none; padding:8px 18px; border-radius:8px;
-    font-weight:700; cursor:pointer; }
-.aud-fbtn a { font-size:13px; color:#475569; text-decoration:none; padding:8px 10px; }
-.aud-fbtn a.aud-export { margin-left:auto; border:1px solid #16a34a; color:#15803d; border-radius:8px; font-weight:700; }
-.aud-check { display:flex; align-items:center; gap:8px; margin-top:12px; font-size:13px; color:#475569; cursor:pointer; }
-.aud-check input { width:16px; height:16px; }
-.aud-aviso { background:#fffbeb; border:1px solid #fde68a; color:#92400e; border-radius:10px;
-    padding:11px 15px; margin-bottom:16px; font-size:13px; line-height:1.5; }
-.aud-aviso i { color:#d97706; margin-right:6px; }
-.aud-resumo { border:1px solid #e5e7eb; border-radius:12px; background:#f8fdfa; padding:12px 16px; margin-bottom:16px; }
-.aud-resumo-tot { font-weight:800; color:#0f3d2e; margin-bottom:8px; }
-.aud-resumo-lista { display:flex; flex-wrap:wrap; gap:8px; }
-.aud-chip { background:#fff; border:1px solid #d1fae5; border-radius:999px; padding:4px 12px;
-    font-size:12px; color:#334155; }
-.aud-chip b { color:#0f3d2e; }
-.aud-vazio { color:#64748b; padding:24px 4px; }
-.page-actions { margin-left:auto; }
-.aud-atalho { display:inline-flex; align-items:center; gap:7px; border:1px solid #16a34a; color:#15803d;
-    background:#fff; border-radius:8px; padding:9px 15px; font-weight:700; font-size:13px; text-decoration:none; }
-.aud-atalho:hover { background:#ecfdf5; }
-.aud-lista { display:flex; flex-direction:column; gap:10px; }
-.aud-card { border:1px solid #e5e7eb; border-left:3px solid #16a34a; border-radius:10px;
-    padding:12px 14px; background:#fff; }
-.aud-head { font-size:13px; color:#334155; display:flex; flex-wrap:wrap; gap:6px; align-items:center; }
-.aud-dt { color:#64748b; } .aud-autor { font-weight:800; color:#0f3d2e; text-transform:uppercase; letter-spacing:.2px; }
-.aud-verbo { font-weight:600; }
-.aud-mod { margin-left:auto; background:#ecfdf5; color:#15803d; border:1px solid #d1fae5;
-    border-radius:999px; padding:1px 9px; font-size:11px; font-weight:700; }
-.aud-emp { font-size:12.5px; font-weight:700; color:#0f3d2e; margin-top:4px; }
-.aud-busca { font-size:12.5px; color:#0f172a; margin-top:3px; }
-.aud-detalhe { font-size:11px; color:#94a3b8; margin-top:3px; }
-.aud-campos { display:flex; flex-direction:column; gap:2px; margin-top:5px; }
-.aud-campo { font-size:12.5px; line-height:1.5; color:#0f172a; word-break:break-word; }
-.aud-lbl { color:#475569; font-weight:600; }
-.aud-old { color:#94a3b8; text-decoration:line-through; }
-.aud-pag { display:flex; align-items:center; gap:12px; margin-top:16px; flex-wrap:wrap; font-size:13px; }
-.aud-pag a { color:#15803d; text-decoration:none; border:1px solid #d1d5db; border-radius:8px; padding:6px 12px; }
-.aud-pag .off { color:#cbd5e1; border:1px solid #eef2f0; border-radius:8px; padding:6px 12px; }
-.aud-pag span.info { color:#64748b; }
-</style>
+{% macro mil(n) %}{{ '{:,}'.format(n or 0).replace(',', '.') }}{% endmacro %}
+{% include 'clientes/_cartao_css.html' %}
+{% include 'configuracoes/_auditoria_css.html' %}
 
-<div class="page-header">
-    <div>
-        <a href="{{ url_for('configuracoes.index') }}" class="back-link">← Configurações</a>
-        <h1 class="page-title">Auditoria</h1>
-        <p class="page-subtitle">Todas as movimentações registradas — quem fez o quê, quando e em qual empresa</p>
-    </div>
-    <div class="page-actions">
-        <a href="{{ url_for('configuracoes.colabore_envios') }}" class="aud-atalho">
-            <i class="fas fa-paper-plane"></i> Q-Colabore · Envios</a>
-    </div>
-</div>
-
-{% set tem_filtro = f.pessoa or f.modulo or f.tipo or f.empresa or f.ocultar_teste %}
-<details class="aud-filtros" {% if tem_filtro %}open{% endif %}>
-    <summary>Filtros</summary>
-    <form method="get" class="aud-form">
-        <div class="aud-fgrid">
-            <label>Pessoa
-                <select name="pessoa">
-                    <option value="">Todos</option>
-                    {% for p in pessoas %}<option value="{{ p }}" {{ 'selected' if f.pessoa == p else '' }}>{{ p }}</option>{% endfor %}
-                </select>
-            </label>
-            <label>De <input type="date" name="data_ini" value="{{ f.data_ini }}"></label>
-            <label>Até <input type="date" name="data_fim" value="{{ f.data_fim }}"></label>
-            <label>Módulo
-                <select name="modulo">
-                    <option value="">Todos</option>
-                    {% for m in modulos %}<option value="{{ m }}" {{ 'selected' if f.modulo == m else '' }}>{{ modulo_label.get(m, m) }}</option>{% endfor %}
-                </select>
-            </label>
-            <label>Tipo
-                <select name="tipo">
-                    <option value="">Todas</option>
-                    <option value="escrita" {{ 'selected' if f.tipo == 'escrita' else '' }}>Alterações</option>
-                    <option value="leitura" {{ 'selected' if f.tipo == 'leitura' else '' }}>Consultas</option>
-                </select>
-            </label>
-            <label>Empresa <input type="text" name="empresa" value="{{ f.empresa }}" placeholder="número ou nome"></label>
+<div class="ef-hero au-hero">
+    <div class="ef-hero-inner ef-hero-head">
+        <div>
+            <a href="{{ url_for('configuracoes.index') }}" class="au-voltar">← Configurações</a>
+            <h1 class="ef-hero-title">Auditoria</h1>
+            <p class="ef-hero-sub">Quem fez o quê, quando e em qual empresa · registro ato a ato desde {{ auditoria_inicio }}</p>
         </div>
-        <label class="aud-check">
-            <input type="checkbox" name="ocultar_teste" value="1" {{ 'checked' if f.ocultar_teste else '' }}>
-            Ocultar registros de teste (ZZ TESTE) — por padrão a auditoria mostra tudo
-        </label>
-        <div class="aud-fbtn">
-            <button type="submit">Filtrar</button>
-            <a href="{{ url_for('configuracoes.auditoria') }}">Limpar</a>
-            <a class="aud-export" href="?{{ qs }}{% if qs %}&{% endif %}export=xlsx">
-                <i class="fas fa-file-excel"></i> Exportar XLSX</a>
+        <div class="ef-hero-actions">
+            <a href="{{ url_export }}" class="ef-btn"><i class="fas fa-file-excel"></i> Excel do filtro</a>
+            <a href="{{ url_for('configuracoes.colabore_envios') }}" class="ef-btn"><i class="fas fa-paper-plane"></i> Q-Colabore · Envios</a>
         </div>
-    </form>
-</details>
-
-<div class="aud-resumo">
-    <div class="aud-resumo-tot">{{ total }} ação(ões) no período</div>
-    {% if resumo %}
-    <div class="aud-resumo-lista">
-        {% for r in resumo %}
-        <span class="aud-chip"><b>{{ r.nome }}</b> · {{ r.n }} · {{ r.pct }}%</span>
-        {% endfor %}
     </div>
-    {% endif %}
 </div>
 
-{% if total > export_cap %}
-<div class="aud-aviso">
-    <i class="fas fa-triangle-exclamation"></i>
-    O filtro tem <b>{{ total }}</b> registros; o export XLSX trará os primeiros
-    <b>{{ export_cap }}</b> (os mais recentes) — refine o período para levar tudo.
-</div>
-{% endif %}
+<div class="ef-body">
+    <div class="cli-kpis au-kpis">
+        <div class="cli-kpi au-kpi-fixo">
+            <span class="cli-kpi-ico" style="background:#dcfce7;color:#15803d;"><i class="fas fa-list-check"></i></span>
+            <div class="cli-kpi-body"><strong class="cli-kpi-val">{{ mil(kpi.total) }}</strong><span class="cli-kpi-lbl">Ações no período{% if kpi.lote %} · {{ mil(kpi.lote) }} em lote{% endif %}</span></div>
+        </div>
+        <div class="cli-kpi au-kpi-fixo">
+            <span class="cli-kpi-ico" style="background:#e0f2fe;color:#0369a1;"><i class="fas fa-user-group"></i></span>
+            <div class="cli-kpi-body"><strong class="cli-kpi-val">{{ kpi.pessoas }}</strong><span class="cli-kpi-lbl">Pessoas que trabalharam</span></div>
+        </div>
+        <a class="cli-kpi" href="{{ url_mais('alterou', 'atos') }}" title="Ver só as alterações">
+            <span class="cli-kpi-ico" style="background:#fef3c7;color:#b45309;"><i class="fas fa-pen"></i></span>
+            <div class="cli-kpi-body"><strong class="cli-kpi-val">{{ mil(kpi.escritas) }}</strong><span class="cli-kpi-lbl">Alterações (fora os lotes)</span></div>
+        </a>
+        <a class="cli-kpi" href="{{ url_mais('consultou', 'atos') }}" title="Ver só as consultas">
+            <span class="cli-kpi-ico" style="background:#f1f5f9;color:#475569;"><i class="fas fa-eye"></i></span>
+            <div class="cli-kpi-body"><strong class="cli-kpi-val">{{ mil(kpi.leituras) }}</strong><span class="cli-kpi-lbl">Consultas</span></div>
+        </a>
+        <a class="cli-kpi" href="{{ url_vista.empresa }}" title="Ver por empresa">
+            <span class="cli-kpi-ico" style="background:#ede9fe;color:#6d28d9;"><i class="fas fa-building"></i></span>
+            <div class="cli-kpi-body"><strong class="cli-kpi-val">{{ mil(kpi.empresas) }}</strong><span class="cli-kpi-lbl">Empresas mexidas</span></div>
+        </a>
+        <a class="cli-kpi{{ ' on' if f.atencao }}" href="{{ url_mais('atenção', 'dia') }}" title="Só os dias com sinal de atenção">
+            <span class="cli-kpi-ico" style="background:#fee2e2;color:#b91c1c;"><i class="fas fa-triangle-exclamation"></i></span>
+            <div class="cli-kpi-body"><strong class="cli-kpi-val{{ ' cli-bad' if kpi.atencao }}">{{ kpi.atencao }}</strong><span class="cli-kpi-lbl">Dias com atenção</span></div>
+        </a>
+    </div>
 
-{% if total == 0 %}
-    <div class="aud-vazio">Nenhuma movimentação no filtro. A auditoria começou em {{ auditoria_inicio }}.</div>
-{% else %}
-    <div class="aud-lista">
-        {% for it in itens %}
-        <div class="aud-card">
-            <div class="aud-head">
-                <span class="aud-dt">{{ it.data_hora }}</span>
-                <span>·</span>
-                <span class="aud-autor">{{ it.autor }}</span>
-                <span>·</span>
-                <span class="aud-verbo">{{ it.verbo }}</span>
-                {% if it.modulo %}<span class="aud-mod">{{ modulo_label.get(it.modulo, it.modulo) }}</span>{% endif %}
-            </div>
-            {% if it.empresa %}<div class="aud-emp">{{ it.empresa }}</div>{% endif %}
-            {% if it.busca %}<div class="aud-busca">buscou: <b>{{ it.busca }}</b></div>{% endif %}
-            {% if it.detalhe %}<div class="aud-detalhe">{{ it.detalhe }}</div>{% endif %}
-            {% if it.campos %}
-            <div class="aud-campos">
-                {% for c in it.campos %}
-                <div class="aud-campo">
-                    {% if c.tipo == 'sensivel' %}
-                        <span class="aud-lbl">{{ c.label }} alterada</span>
-                    {% elif c.tipo == 'novo' %}
-                        <span class="aud-lbl">{{ c.label }}:</span> <span>{{ c.depois }}</span>
-                    {% elif c.tipo == 'removido' %}
-                        <span class="aud-lbl">{{ c.label }}:</span> <span class="aud-old">{{ c.antes }}</span>
-                    {% else %}
-                        <span class="aud-lbl">{{ c.label }}:</span>
-                        <span class="aud-old">{{ c.antes }}</span> → <span>{{ c.depois }}</span>
-                    {% endif %}
-                </div>
-                {% endfor %}
-            </div>
+    {# ── Busca inteligente ── #}
+    <form method="get" class="au-busca" id="auBusca" autocomplete="off">
+        <input type="hidden" name="vista" value="{{ vista }}">
+        {% if request.args.get('data_ini') %}<input type="hidden" name="data_ini" value="{{ request.args.get('data_ini') }}">{% endif %}
+        {% if request.args.get('data_fim') %}<input type="hidden" name="data_fim" value="{{ request.args.get('data_fim') }}">{% endif %}
+        <div class="au-q">
+            <i class="fas fa-magnifying-glass"></i>
+            <input type="search" name="q" id="auQ" value="{{ q }}"
+                   placeholder='Escreva como fala: "henrique ontem", "#92 e-mail", "exclusões esta semana", "senha", "fora do horário"…'>
+            <button type="submit">Buscar</button>
+            <div class="au-sug" id="auSug" hidden></div>
+        </div>
+        <div class="au-entendi">
+            {% if chips %}
+                <span class="au-ent-rot">Entendi:</span>
+                {% for c in chips %}<a class="au-chip" href="{{ c.url }}" title="Tirar este filtro">{{ c.rotulo }} <i class="fas fa-xmark"></i></a>{% endfor %}
+            {% else %}
+                <span class="au-ent-rot">Dicas:</span>
+                {% for d in ['ontem', 'esta semana', 'senha', 'exclusões', 'e-mail', 'fora do horário', 'atenção', 'sem lote'] %}
+                <a class="au-dica" href="#" data-dica="{{ d }}">{{ d }}</a>{% endfor %}
             {% endif %}
         </div>
-        {% endfor %}
+    </form>
+
+    <div class="au-barra">
+        <div class="gc-pills" role="group" aria-label="Período">
+            {% for p in periodos %}<a class="gc-pill{{ ' on' if p.on }}" href="{{ p.url }}">{{ p.rotulo }}</a>{% endfor %}
+            <details class="au-per">
+                <summary class="gc-pill{{ ' on' if not (periodos|selectattr('on')|list) }}"><i class="fas fa-calendar"></i>
+                    {{ f.data_ini.strftime('%d/%m') }}{% if f.data_fim != f.data_ini %} a {{ f.data_fim.strftime('%d/%m/%Y') }}{% else %}/{{ f.data_ini.year }}{% endif %}</summary>
+                <form method="get" class="au-per-form">
+                    <input type="hidden" name="vista" value="{{ vista }}"><input type="hidden" name="q" value="{{ q }}">
+                    <label>De <input type="date" name="data_ini" value="{{ f.data_ini.isoformat() }}"></label>
+                    <label>Até <input type="date" name="data_fim" value="{{ f.data_fim.isoformat() }}"></label>
+                    <button type="submit">Aplicar</button>
+                </form>
+            </details>
+        </div>
+        <div class="au-vistas" role="tablist" aria-label="Como ver">
+            <a class="{{ 'on' if vista == 'dia' }}" href="{{ url_vista.dia }}"><i class="fas fa-calendar-day"></i> Por dia</a>
+            <a class="{{ 'on' if vista == 'empresa' }}" href="{{ url_vista.empresa }}"><i class="fas fa-building"></i> Por empresa</a>
+            <a class="{{ 'on' if vista == 'atos' }}" href="{{ url_vista.atos }}"><i class="fas fa-list"></i> Ato a ato</a>
+        </div>
     </div>
 
-    {% if total_paginas > 1 %}
-    <div class="aud-pag">
-        {% if page > 1 %}<a href="?{{ qs }}{% if qs %}&{% endif %}page={{ page - 1 }}">‹ Anterior</a>
-        {% else %}<span class="off">‹ Anterior</span>{% endif %}
-        <span class="info">Página {{ page }} de {{ total_paginas }} · {{ total }} registro(s)</span>
-        {% if page < total_paginas %}<a href="?{{ qs }}{% if qs %}&{% endif %}page={{ page + 1 }}">Próxima ›</a>
-        {% else %}<span class="off">Próxima ›</span>{% endif %}
+    {% if resumo %}
+    <div class="au-pessoas">
+        {% for r in resumo[:14] %}
+        <a href="{{ url_mais(r.nome.split(' ')[0]) }}" class="au-pes" title="{{ r.nome }}: {{ r.n }} ações ({{ r.pct }}%)">
+            <span class="au-pes-ava au-cor-{{ r.cor }}">{{ r.nome[:1] }}</span>
+            {{ r.nome.split(' (')[0].split(' ')[0] }}{% if ' (' in r.nome %} <em>lote</em>{% endif %} <b>{{ r.n }}</b>
+        </a>
+        {% endfor %}
     </div>
     {% endif %}
-{% endif %}
+
+    {% if total > teto and vista != 'atos' %}
+    <div class="au-aviso"><i class="fas fa-circle-info"></i> O filtro tem {{ total }} ações; os cartões mostram as {{ teto }} mais recentes. Encurte o período para ver tudo.</div>
+    {% endif %}
+
+    {# ── Sinais de atenção ── #}
+    {% if alertas and vista == 'dia' and not f.atencao %}
+    <div class="au-atencao">
+        <div class="au-at-cab"><i class="fas fa-triangle-exclamation"></i> <b>Vale olhar</b>
+            <span>— {{ alertas_total }} sinal(is) no período. Clique para abrir o dia da pessoa.</span></div>
+        <div class="au-at-lista">
+            {% for x in alertas %}
+            <a class="au-at au-at-{{ x.sinal.nivel }}" href="{{ url_for('configuracoes.auditoria_pessoa', nome=x.cartao.nome, data=x.cartao.dia_iso) }}">
+                <span class="au-at-dia">{{ x.cartao.dia.strftime('%d/%m') }}{% if x.sinal.hora %} {{ x.sinal.hora }}{% endif %}</span>
+                <span class="au-at-nome">{{ x.cartao.nome_curto }}</span>
+                <span class="au-at-txt">{{ x.sinal.texto }}</span>
+            </a>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
+    {% if total == 0 %}
+        <div class="gc-nada"><i class="fas fa-magnifying-glass"></i><p>Nada encontrado nesse filtro. A auditoria começou em {{ auditoria_inicio }}.</p></div>
+
+    {# ═══════════════ POR DIA (cartões pequenos, como o posto NH) ═══════════════ #}
+    {% elif vista == 'dia' %}
+        {% for d in dias %}
+        <section class="au-dia">
+            <div class="au-dia-cab">
+                <span><i class="fas fa-calendar"></i> {{ d.rotulo }}</span>
+                <span class="au-dia-tot">{{ d.pessoas }} cartão(ões) · {{ mil(d.n) }} ações{% if d.atencao %} · <b class="au-txt-bad">{{ d.atencao }} com atenção</b>{% endif %}</span>
+            </div>
+            <div class="au-grade">
+                {% for c in d.cartoes %}
+                <article class="au-card{{ ' au-card-lote' if c.lote }}{{ ' au-card-alerta' if c.sinais|selectattr('nivel', 'ne', 'info')|list }}">
+                    <div class="au-card-top">
+                        <span class="au-hora">{{ c.ini }}{% if c.fim != c.ini %} <small>→ {{ c.fim }}</small>{% endif %}</span>
+                        {% if c.lote %}<span class="au-selo au-selo-lote">em lote</span>{% elif c.entradas %}<span class="au-selo" title="{{ c.ips|join(', ') }}"><i class="fas fa-right-to-bracket"></i> {{ c.entradas }} entrada{{ 's' if c.entradas > 1 }}</span>{% endif %}
+                    </div>
+                    <div class="au-nome"><span class="au-ava au-cor-{{ c.cor }}">{{ c.iniciais }}</span>
+                        <span><b>{{ c.nome_curto }}</b>{% if c.obs %}<small>{{ c.obs }}</small>{% endif %}</span></div>
+                    <div class="au-nums">
+                        <span title="Alterações"><b>{{ c.escritas }}</b> alter.</span>
+                        <span title="Consultas"><b>{{ c.leituras }}</b> consul.</span>
+                        <span title="Empresas"><b>{{ c.empresas }}</b> empr.</span>
+                    </div>
+                    {% if c.ultimas %}
+                    <ul class="au-ult">
+                        {% for u in c.ultimas %}<li><span class="au-ult-h">{{ u.hora }}</span> {{ u.verbo }}{% if u.empresa %} <em>{{ u.empresa }}</em>{% endif %}</li>{% endfor %}
+                    </ul>
+                    {% endif %}
+                    {% if c.sinais %}
+                    <div class="au-sinais">{% for s in c.sinais %}<span class="au-sinal au-sinal-{{ s.nivel }}">{{ s.texto }}</span>{% endfor %}</div>
+                    {% endif %}
+                    <div class="au-acoes">
+                        <a class="au-btn" href="{{ url_for('configuracoes.auditoria_pessoa', nome=c.nome, data=c.dia_iso) }}"><i class="fas fa-eye"></i> Ver o dia</a>
+                        <a class="au-btn au-btn-pdf" href="{{ url_for('configuracoes.auditoria_pessoa', nome=c.nome, data=c.dia_iso, formato='pdf') }}" title="Baixar o dia em PDF"><i class="fas fa-file-pdf"></i> PDF</a>
+                        {% if c.modulos %}<span class="au-mods">{{ c.modulos|join(' · ') }}</span>{% endif %}
+                    </div>
+                </article>
+                {% endfor %}
+            </div>
+        </section>
+        {% endfor %}
+
+    {# ═══════════════ POR EMPRESA ═══════════════ #}
+    {% elif vista == 'empresa' %}
+        {% if not empresas %}
+        <div class="gc-nada"><i class="fas fa-building"></i><p>Nenhuma ação ligada a uma empresa nesse filtro.</p></div>
+        {% endif %}
+        <div class="au-grade au-grade-emp">
+            {% for e in empresas %}
+            <article class="au-card">
+                <div class="au-emp-nome">{{ e.empresa }}</div>
+                <div class="au-nums">
+                    <span><b>{{ e.n }}</b> ações</span><span><b>{{ e.escritas }}</b> alter.</span><span><b>{{ e.leituras }}</b> consul.</span>
+                </div>
+                <div class="au-emp-pes">
+                    {% for nome, n in e.pessoas %}<span>{{ nome.split(' ')[0] }} <b>{{ n }}</b></span>{% endfor %}
+                </div>
+                <div class="au-emp-ult">Por último: <b>{{ e.ultimo.autor.split(' (')[0].split(' ')[0] }}</b> {{ e.ultimo.verbo }} · {{ e.ultimo.data_hora }}</div>
+                <div class="au-acoes">
+                    {% if e.num %}<a class="au-btn" href="{{ url_mais('#' ~ e.num, 'atos') }}"><i class="fas fa-list"></i> Ver ato a ato</a>{% endif %}
+                </div>
+            </article>
+            {% endfor %}
+        </div>
+        {% if empresas_mais %}<p class="au-mais">… e mais {{ empresas_mais }} empresa(s) com menos ações. Use a busca para achar uma.</p>{% endif %}
+
+    {# ═══════════════ ATO A ATO ═══════════════ #}
+    {% else %}
+        <div class="au-atos">
+            {% for it in itens %}
+            {% if loop.first or it.dia != loop.previtem.dia %}<div class="au-atos-dia">{{ it.dia.strftime('%d/%m/%Y') }}</div>{% endif %}
+            <div class="au-ato{{ ' au-ato-esc' if it.escrita else '' }}">
+                <span class="au-ato-h">{{ it.hora }}</span>
+                <div class="au-ato-corpo">
+                    <div><b class="au-ato-quem">{{ it.autor }}</b> {{ it.verbo }}
+                        {% if it.modulo_rot %}<span class="au-mod">{{ it.modulo_rot }}</span>{% endif %}</div>
+                    {% if it.empresa %}<div class="au-ato-emp">{{ it.empresa }}</div>{% endif %}
+                    {% if it.busca %}<div class="au-ato-det">buscou: <b>{{ it.busca }}</b></div>{% endif %}
+                    {% if it.detalhe %}<div class="au-ato-det">{{ it.detalhe }}</div>{% endif %}
+                    {% include 'configuracoes/_auditoria_campos.html' %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% if total_paginas > 1 %}
+        <div class="au-pag">
+            {% if page > 1 %}<a href="{{ url_pag(page - 1) }}">‹ Anterior</a>{% else %}<span class="off">‹ Anterior</span>{% endif %}
+            <span class="info">Página {{ page }} de {{ total_paginas }} · {{ total }} ação(ões)</span>
+            {% if page < total_paginas %}<a href="{{ url_pag(page + 1) }}">Próxima ›</a>{% else %}<span class="off">Próxima ›</span>{% endif %}
+        </div>
+        {% endif %}
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+    var q = document.getElementById('auQ'), sug = document.getElementById('auSug'), form = document.getElementById('auBusca');
+    if (!q) return;
+    var PESSOAS = {{ pessoas|tojson }};
+    var ATALHOS = ['hoje', 'ontem', 'esta semana', 'este mês', 'mês passado', '30 dias', 'alterou', 'consultou',
+                   'exclusões', 'criou', 'senha', 'entradas', 'exportou', 'e-mail', 'celular', 'endereço', 'sócio',
+                   'certificado', 'fora do horário', 'atenção', 'sem lote', 'lote', 'fiscal', 'cadastros', 'financeiro'];
+    function semAcento(s) { return (s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase(); }
+    function ultimaPalavra() { var p = q.value.split(/\s+/); return p[p.length - 1] || ''; }
+    function trocarUltima(txt) {
+        var p = q.value.split(/\s+/); p[p.length - 1] = txt; q.value = p.join(' ') + ' '; sug.hidden = true; q.focus();
+    }
+    var tm = null;
+    function mostrar(lista) {
+        if (!lista.length) { sug.hidden = true; return; }
+        sug.innerHTML = '';
+        lista.forEach(function (it) {
+            var b = document.createElement('button'); b.type = 'button';
+            b.innerHTML = '<i class="fas ' + it.ico + '"></i> <span>' + it.rot + '</span><small>' + it.tipo + '</small>';
+            b.addEventListener('mousedown', function (ev) { ev.preventDefault(); trocarUltima(it.val); });
+            sug.appendChild(b);
+        });
+        sug.hidden = false;
+    }
+    q.addEventListener('input', function () {
+        var w = semAcento(ultimaPalavra());
+        if (w.length < 2) { sug.hidden = true; return; }
+        var lista = [];
+        var vistos = {};
+        PESSOAS.forEach(function (p) {
+            var primeiro = p.split(' ')[0];
+            if (semAcento(p).indexOf(w) === 0 && !vistos[primeiro]) {
+                vistos[primeiro] = 1;
+                lista.push({ico: 'fa-user', rot: p.split(' (')[0], tipo: 'pessoa', val: semAcento(primeiro)});
+            }
+        });
+        ATALHOS.forEach(function (a) { if (semAcento(a).indexOf(w) === 0) lista.push({ico: 'fa-bolt', rot: a, tipo: 'atalho', val: a}); });
+        mostrar(lista.slice(0, 6));
+        clearTimeout(tm);
+        tm = setTimeout(function () {
+            fetch('{{ url_for("configuracoes.auditoria_sugestoes") }}?t=' + encodeURIComponent(ultimaPalavra()))
+                .then(function (r) { return r.ok ? r.json() : []; })
+                .then(function (emp) {
+                    if (semAcento(ultimaPalavra()) !== w) return;
+                    mostrar(lista.slice(0, 5).concat(emp.map(function (e) {
+                        return {ico: 'fa-building', rot: '#' + e.num + ' ' + e.nome, tipo: 'empresa', val: '#' + e.num};
+                    })));
+                }).catch(function () {});
+        }, 220);
+    });
+    q.addEventListener('blur', function () { setTimeout(function () { sug.hidden = true; }, 150); });
+    document.querySelectorAll('.au-dica').forEach(function (a) {
+        a.addEventListener('click', function (ev) { ev.preventDefault(); q.value = (q.value + ' ' + a.dataset.dica).trim(); form.submit(); });
+    });
+})();
+</script>
 {% endblock %}

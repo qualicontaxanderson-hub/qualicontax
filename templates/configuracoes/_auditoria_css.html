@@ -1,0 +1,176 @@
+{# Auditoria (11/11/2026) — cartões pequenos por pessoa/dia, no espírito do posto NH,
+   sobre a identidade da casa (ef-hero, cli-kpis, gc-pill). Fonte única das duas telas. #}
+<style>
+.au-hero { margin-top:-28px; }
+@media (max-width:600px) { .au-hero { margin-top:-16px; } }
+.au-voltar { display:inline-block; color:#a7d9c0; font-size:12px; text-decoration:none; margin-bottom:6px; }
+.au-voltar:hover { color:#fff; }
+a.cli-kpi { text-decoration:none; color:inherit; }
+.au-kpi-fixo { cursor:default; }
+.au-kpi-fixo:hover { border-color:#e3ece7; }
+
+/* busca */
+.au-busca { margin-bottom:12px; }
+.au-q { position:relative; display:flex; align-items:center; background:#fff; border:1px solid #d7e3dc;
+            border-radius:14px; padding:4px 4px 4px 16px; box-shadow:0 4px 14px rgba(16,120,70,.06); }
+.au-q:focus-within { border-color:#16a34a; box-shadow:0 0 0 3px rgba(22,163,74,.15); }
+.au-q > i { color:#7d968a; }
+.au-q input { flex:1; min-width:0; border:0; outline:0; font:inherit; font-size:14px; padding:10px 12px; background:transparent; }
+.au-q button[type=submit] { border:0; background:#0f3d2e; color:#fff; font-weight:700; border-radius:10px;
+            padding:9px 18px; cursor:pointer; font-family:inherit; }
+.au-sug { position:absolute; left:0; right:0; top:calc(100% + 6px); z-index:30; background:#fff; border:1px solid #e3ece7;
+          border-radius:12px; padding:6px; box-shadow:0 18px 40px rgba(15,61,46,.18); }
+.au-sug[hidden] { display:none; }
+.au-sug button { display:flex; align-items:center; gap:10px; width:100%; border:0; background:none; text-align:left;
+                 font:inherit; font-size:13px; padding:8px 10px; border-radius:8px; cursor:pointer; color:#0f172a; }
+.au-sug button:hover { background:#f0fdf4; }
+.au-sug button i { color:#15803d; width:16px; text-align:center; }
+.au-sug button span { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.au-sug small { color:#94a3b8; font-size:11px; }
+.au-entendi { display:flex; flex-wrap:wrap; gap:6px; align-items:center; margin-top:8px; font-size:12.5px; }
+.au-ent-rot { color:#7d968a; font-weight:700; }
+.au-chip { display:inline-flex; align-items:center; gap:6px; background:#0f3d2e; color:#fff; border-radius:99px;
+           padding:4px 11px; text-decoration:none; font-weight:600; }
+.au-chip i { font-size:10px; opacity:.7; }
+.au-chip:hover i { opacity:1; }
+.au-dica { color:#15803d; background:#ecfdf5; border:1px solid #d1fae5; border-radius:99px; padding:3px 10px; text-decoration:none; }
+.au-dica:hover { border-color:#86efac; }
+
+/* período + vistas */
+.au-barra { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; margin-bottom:12px; }
+.gc-pills { display:flex; gap:6px; flex-wrap:wrap; align-items:center; }
+.gc-pill { border:1px solid #d7e3dc; background:#fff; color:#475569; border-radius:99px; padding:7px 14px;
+           font-size:13px; font-weight:600; cursor:pointer; font-family:inherit; text-decoration:none; list-style:none; }
+.gc-pill::-webkit-details-marker { display:none; }
+.gc-pill.on { background:#0f3d2e; border-color:#0f3d2e; color:#fff; }
+.au-per { position:relative; }
+.au-per-form { position:absolute; z-index:25; top:calc(100% + 6px); left:0; background:#fff; border:1px solid #e3ece7;
+               border-radius:12px; padding:12px; display:flex; gap:10px; align-items:flex-end;
+               box-shadow:0 18px 40px rgba(15,61,46,.18); }
+.au-per-form label { display:flex; flex-direction:column; gap:3px; font-size:11.5px; color:#475569; font-weight:600; }
+.au-per-form input { height:34px; border:1px solid #d1d5db; border-radius:8px; padding:0 8px; font:inherit; font-size:13px; }
+.au-per-form button { height:34px; border:0; background:#0f3d2e; color:#fff; border-radius:8px; padding:0 14px; font-weight:700; cursor:pointer; }
+.au-vistas { display:inline-flex; background:#eef4f0; border-radius:12px; padding:3px; }
+.au-vistas a { padding:7px 14px; border-radius:9px; font-size:13px; font-weight:700; color:#475569; text-decoration:none; }
+.au-vistas a.on { background:#fff; color:#0f3d2e; box-shadow:0 2px 6px rgba(15,61,46,.12); }
+
+/* pessoas do período */
+.au-pessoas { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:14px; }
+.au-pes { display:inline-flex; align-items:center; gap:6px; background:#fff; border:1px solid #e3ece7; border-radius:99px;
+          padding:3px 11px 3px 3px; font-size:12.5px; color:#334155; text-decoration:none; }
+.au-pes:hover { border-color:#86efac; }
+.au-pes b { color:#0f3d2e; }
+.au-pes em { font-style:normal; font-size:10px; color:#94a3b8; text-transform:uppercase; font-weight:700; }
+.au-pes-ava { width:22px; height:22px; border-radius:99px; color:#fff; font-size:11px; font-weight:800;
+              display:inline-flex; align-items:center; justify-content:center; }
+.au-cor-0 { background:#16a34a; } .au-cor-1 { background:#0369a1; } .au-cor-2 { background:#7c3aed; }
+.au-cor-3 { background:#c2410c; } .au-cor-4 { background:#be185d; } .au-cor-5 { background:#0f766e; }
+.au-cor-6 { background:#4338ca; } .au-cor-7 { background:#b45309; }
+
+.au-aviso { background:#eff6ff; border:1px solid #bfdbfe; color:#1e3a8a; border-radius:10px; padding:9px 14px; font-size:12.5px; margin-bottom:12px; }
+
+/* atenção */
+.au-atencao { background:#fffbeb; border:1px solid #fcd34d; border-radius:12px; padding:12px 16px; margin-bottom:16px; }
+.au-at-cab { font-size:13px; color:#78350f; }
+.au-at-cab i { color:#d97706; }
+.au-at-cab span { color:#92400e; }
+.au-at-lista { display:grid; grid-template-columns:repeat(auto-fill, minmax(300px,1fr)); gap:6px; margin-top:8px; }
+.au-at { display:grid; grid-template-columns:auto minmax(0,1fr) auto; gap:10px; align-items:center; background:#fff;
+         border:1px solid #fde68a; border-radius:9px; padding:7px 11px; text-decoration:none; color:inherit; font-size:12.5px; }
+.au-at:hover { border-color:#f59e0b; }
+.au-at-dia { color:#94a3b8; font-variant-numeric:tabular-nums; white-space:nowrap; }
+.au-at-nome { font-weight:700; color:#0f3d2e; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.au-at-txt { color:#92400e; font-weight:600; white-space:nowrap; }
+.au-at-bad { border-color:#fecaca; } .au-at-bad .au-at-txt { color:#b91c1c; }
+
+/* dia */
+.au-dia { margin-bottom:18px; }
+.au-dia-cab { display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap;
+              background:#eef4f0; border-radius:10px; padding:8px 14px; margin-bottom:10px;
+              font-size:13.5px; font-weight:800; color:#0f3d2e; }
+.au-dia-cab i { color:#15803d; margin-right:4px; }
+.au-dia-tot { font-weight:600; color:#475569; font-size:12.5px; }
+.au-txt-bad { color:#b91c1c; }
+.au-grade { display:grid; grid-template-columns:repeat(auto-fill, minmax(270px, 1fr)); gap:12px; }
+.au-grade-emp { grid-template-columns:repeat(auto-fill, minmax(320px, 1fr)); }
+
+/* cartão pequeno */
+.au-card { background:#fff; border:1px solid #e3ece7; border-radius:14px; padding:13px 15px 12px;
+           display:flex; flex-direction:column; gap:8px; min-width:0; transition:border-color .15s, box-shadow .15s; }
+.au-card:hover { border-color:#bfe3cc; box-shadow:0 8px 22px rgba(16,120,70,.08); }
+.au-card-alerta { border-left:3px solid #f59e0b; }
+.au-card-lote { background:#f8faf9; border-style:dashed; }
+.au-card-top { display:flex; justify-content:space-between; align-items:center; gap:8px; }
+.au-hora { font-size:17px; font-weight:800; color:#0f3d2e; font-variant-numeric:tabular-nums; }
+.au-hora small { font-size:12.5px; font-weight:700; color:#7d968a; }
+.au-selo { font-size:10.5px; font-weight:700; color:#15803d; background:#ecfdf5; border:1px solid #d1fae5;
+           border-radius:99px; padding:2px 8px; white-space:nowrap; }
+.au-selo-lote { color:#64748b; background:#f1f5f9; border-color:#e2e8f0; text-transform:uppercase; }
+.au-nome { display:flex; align-items:center; gap:9px; min-width:0; }
+.au-nome > span:last-child { min-width:0; }
+.au-nome b { display:block; font-size:13.5px; font-weight:800; color:#0f172a; text-transform:uppercase; letter-spacing:.2px;
+             white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.au-nome small { display:block; font-size:10.5px; color:#94a3b8; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.au-ava { width:32px; height:32px; border-radius:10px; color:#fff; font-size:12px; font-weight:800; flex-shrink:0;
+          display:flex; align-items:center; justify-content:center; }
+.au-nums { display:flex; gap:6px; flex-wrap:wrap; }
+.au-nums span { font-size:11.5px; color:#64748b; background:#f7fbf8; border:1px solid #e8f1ec; border-radius:7px; padding:2px 8px; }
+.au-nums b { color:#0f3d2e; font-size:12.5px; }
+.au-ult { list-style:none; margin:0; padding:7px 0 0; border-top:1px dashed #eef2f0; display:flex; flex-direction:column; gap:3px; }
+.au-ult li { font-size:12px; color:#334155; line-height:1.35; overflow:hidden; display:-webkit-box;
+             -webkit-line-clamp:2; -webkit-box-orient:vertical; }
+.au-ult-h { color:#94a3b8; font-variant-numeric:tabular-nums; }
+.au-ult em { font-style:normal; font-weight:700; color:#0f3d2e; }
+.au-sinais { display:flex; flex-wrap:wrap; gap:4px; }
+.au-sinal { font-size:10.5px; font-weight:700; border-radius:6px; padding:2px 7px; }
+.au-sinal-bad { background:#fee2e2; color:#b91c1c; }
+.au-sinal-warn { background:#fef3c7; color:#92400e; }
+.au-sinal-info { background:#f1f5f9; color:#475569; }
+.au-acoes { display:flex; align-items:center; gap:6px; margin-top:auto; padding-top:2px; flex-wrap:wrap; }
+.au-btn { display:inline-flex; align-items:center; gap:5px; font-size:12px; font-weight:700; color:#0f3d2e; text-decoration:none;
+          border:1px solid #d7e3dc; background:#fff; border-radius:8px; padding:5px 10px; }
+.au-btn:hover { border-color:#16a34a; background:#f0fdf4; }
+.au-btn-pdf i { color:#dc2626; }
+.au-mods { margin-left:auto; font-size:10.5px; color:#94a3b8; font-weight:600; }
+.au-emp-nome { font-size:13.5px; font-weight:800; color:#0f3d2e; line-height:1.3; }
+.au-emp-pes { display:flex; flex-wrap:wrap; gap:6px; font-size:12px; color:#334155; }
+.au-emp-pes span { background:#f1f5f9; border-radius:99px; padding:2px 9px; }
+.au-emp-ult { font-size:11.5px; color:#64748b; }
+.au-mais { color:#64748b; font-size:12.5px; margin-top:12px; }
+
+/* ato a ato */
+.au-atos { display:flex; flex-direction:column; gap:6px; }
+.au-atos-dia { font-size:12px; font-weight:800; color:#15803d; letter-spacing:.5px; margin:8px 0 2px; }
+.au-ato { display:flex; gap:12px; background:#fff; border:1px solid #e3ece7; border-left:3px solid #cbd5e1;
+          border-radius:10px; padding:9px 13px; }
+.au-ato-esc { border-left-color:#16a34a; }
+.au-ato-h { font-weight:800; color:#0f3d2e; font-variant-numeric:tabular-nums; font-size:13px; padding-top:1px; }
+.au-ato-corpo { flex:1; min-width:0; font-size:13px; color:#334155; }
+.au-ato-quem { color:#0f172a; }
+.au-mod { background:#ecfdf5; color:#15803d; border:1px solid #d1fae5; border-radius:99px; padding:0 8px; font-size:10.5px; font-weight:700; margin-left:4px; }
+.au-ato-emp { font-size:12.5px; font-weight:700; color:#0f3d2e; margin-top:2px; }
+.au-ato-det { font-size:11.5px; color:#64748b; margin-top:2px; }
+.au-cps { display:flex; flex-direction:column; gap:1px; margin-top:4px; }
+.au-cp { font-size:12.5px; line-height:1.5; color:#0f172a; word-break:break-word; }
+.au-lbl { color:#475569; font-weight:600; }
+.au-old { color:#94a3b8; text-decoration:line-through; }
+.au-new { color:#0f172a; font-weight:600; }
+.au-cp .au-mais { color:#15803d; font-weight:600; margin-right:8px; }
+.au-cp .au-menos { color:#b91c1c; font-weight:600; }
+.au-pag { display:flex; align-items:center; gap:12px; margin-top:16px; flex-wrap:wrap; font-size:13px; }
+.au-pag a { color:#15803d; text-decoration:none; border:1px solid #d1d5db; border-radius:8px; padding:6px 12px; background:#fff; }
+.au-pag .off { color:#cbd5e1; border:1px solid #eef2f0; border-radius:8px; padding:6px 12px; }
+.au-pag .info { color:#64748b; }
+
+@media (max-width:1100px) { .au-kpis { grid-template-columns:repeat(3, minmax(0,1fr)); } }
+@media (max-width:640px) {
+    .au-kpis { grid-template-columns:repeat(2, minmax(0,1fr)); gap:8px; }
+    .au-kpis .cli-kpi { padding:10px 12px; gap:8px; }
+    .au-kpis .cli-kpi-ico { width:32px; height:32px; }
+    .au-kpis .cli-kpi-val { font-size:20px; }
+    .au-grade, .au-grade-emp, .au-at-lista { grid-template-columns:minmax(0,1fr); }
+    .au-q button[type=submit] { padding:9px 12px; }
+    .au-vistas { width:100%; } .au-vistas a { flex:1; text-align:center; padding:7px 6px; font-size:12px; }
+    .au-per-form { flex-wrap:wrap; left:auto; right:0; }
+}
+</style>

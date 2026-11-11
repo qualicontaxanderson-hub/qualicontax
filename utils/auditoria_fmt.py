@@ -103,17 +103,88 @@ _HIST_VERBO = {
     'leitura.consultou_sefaz': 'consultou a SEFAZ',
     'leitura.abriu_status_sefaz': 'abriu o Status SEFAZ',
     'leitura.abriu_cadastro_colabore': 'abriu uma candidatura',
+    # 11/11/2026 — os mais frequentes que caíam no genérico
+    'escrita.alterou_responsaveis': 'trocou os responsáveis',
+    'escrita.vinculou_contador': 'marcou o contador',
+    'escrita.alterou_ie': 'alterou a inscrição estadual',
+    'escrita.excluiu_ie': 'excluiu uma inscrição estadual',
+    'escrita.alterou_acesso_reservado': 'mudou quem vê a empresa reservada',
+    'escrita.alterou_endereco': 'alterou um endereço',
+    'escrita.criou_contato': 'adicionou um contato',
+    'escrita.criou_contato_pelo_contrato': 'adicionou um contato (pelo contrato)',
+    'escrita.alterou_contato': 'alterou um contato',
+    'escrita.criou_tipo_complemento': 'criou um tipo de complemento',
+    'escrita.alterou_ramos_cliente': 'alterou os ramos de atividade',
+    'escrita.converteu_avulso': 'converteu o avulso em cliente',
+    'escrita.gerou_link_cadastro': 'gerou link de cadastro',
+    'escrita.revogou_link_cadastro': 'cancelou um link de cadastro',
+    'escrita.gerou_link_senha': 'gerou link de senha nova',
+    'escrita.liberou_sem_codigo': 'liberou entrada sem código',
+    'escrita.criou_usuario': 'criou um usuário',
+    'escrita.alterou_usuario': 'alterou um usuário',
+    'escrita.criou_perfil': 'criou um perfil de acesso',
+    'escrita.alterou_perfil': 'alterou um perfil de acesso',
+    'escrita.excluiu_perfil': 'excluiu um perfil de acesso',
+    'escrita.enviou_arquivo': 'enviou arquivo pelo Q-Colabore',
+    'escrita.emitiu_nfse': 'emitiu NFS-e',
+    'escrita.cancelou_nfse': 'cancelou NFS-e',
+    'escrita.emitiu_boleto': 'emitiu boleto',
+    'escrita.cancelou_boleto': 'cancelou boleto',
+    'escrita.enviou_email_boleto': 'enviou boleto por e-mail',
+    'escrita.baixou_titulo': 'deu baixa num título',
+    'escrita.excluiu_titulo': 'excluiu um título',
+    'escrita.cancelou_titulo': 'cancelou um título',
+    'escrita.importou_extrato': 'importou extrato',
+    'escrita.classificou_extrato': 'classificou lançamento do extrato',
+    'escrita.conciliou_extrato': 'conciliou o extrato',
+    'escrita.apagou_periodo_extrato': 'apagou um período do extrato',
+    'escrita.alterou_config_nfse': 'alterou a configuração de NFS-e',
+    'escrita.alterou_ciencia_automatica': 'mudou a ciência automática',
+    'leitura.buscou_nfse': 'consultou as NFS-e',
+    'leitura.baixou_pdf_nfse': 'baixou o PDF da NFS-e',
+    'leitura.baixou_xml_nfse': 'baixou o XML da NFS-e',
+    'leitura.revelou_chave_colabore': 'revelou a chave do Q-Colabore',
+    # acesso (login seguro, 10/11/2026)
+    'escrita.entrou': 'entrou no sistema',
+    'escrita.saiu': 'saiu do sistema',
+    'escrita.entrada_recusada': 'errou a senha',
+    'escrita.codigo_enviado': 'pediu o código de entrada',
+    'escrita.codigo_recusado': 'errou o código de entrada',
+    'escrita.sessao_expirou': 'foi desconectado (24 h sem usar)',
 }
+
+# Como a pessoa entrou (logs de acesso) — texto para a equipe.
+_VIA_ENTRADA = {
+    'navegador_confirmado': 'navegador já conhecido',
+    'codigo_email': 'com o código do e-mail',
+    'liberado_pelo_admin': 'liberado pelo administrador',
+    'codigo_desligado': 'sem código (código desligado)',
+}
+
+# Siglas do nome técnico da ação -> português (fallback genérico).
+_ACAO_PALAVRA = {'nfse': 'NFS-e', 'fin': 'financeiro', 'ie': 'inscrição estadual',
+                 'colabore': 'Q-Colabore', 'robo': 'Q-Robô', 'cnpj': 'CNPJ', 'email': 'e-mail'}
+
+
+def _verbo_generico(acao):
+    """'escrita.alterou_contrato_prestacao' -> 'alterou contrato prestacao' (siglas
+    traduzidas). Só quando a ação não tem verbo próprio."""
+    nome = (acao or '').split('.', 1)[-1]
+    partes = [_ACAO_PALAVRA.get(p, p) for p in nome.split('_') if p]
+    return ' '.join(partes) if partes else None
 
 # Módulo -> rótulo PT (para a tela de auditoria).
 MODULO_LABEL = {'fiscal': 'Fiscal', 'cadastros': 'Cadastros', 'contabil': 'Contábil',
-                'dp': 'DP', 'colabore': 'Colabore', 'configuracoes': 'Configurações'}
+                'dp': 'DP', 'colabore': 'Colabore', 'configuracoes': 'Configurações',
+                'financeiro': 'Financeiro', 'acesso': 'Acesso', 'escrita_fiscal': 'Fiscal'}
 
 
 def _hist_val(v):
     """Valor legível: nulo/vazio/'None'/'null' viram '(vazio)'."""
     if v is None:
         return '(vazio)'
+    if isinstance(v, (list, tuple)):              # ['QUALICONTAX'] -> QUALICONTAX; [] -> (vazio)
+        return ', '.join(str(x) for x in v) or '(vazio)'
     s = str(v).strip()
     if s == '' or s in ('None', 'null'):
         return '(vazio)'
@@ -153,6 +224,13 @@ def _hist_campo(k, antes, depois, modo=None):
     # lista negra: valor é 'alterado' ou nome de coluna sensível -> só o nome.
     if k in CAMPOS_SENSIVEIS or str(depois) == 'alterado' or str(antes) == 'alterado':
         return {'label': label, 'tipo': 'sensivel'}
+    # Lista dos dois lados (permissões, perfis, grupos...): só o que ENTROU e o
+    # que SAIU — a lista inteira repetida antes/depois ninguém lê (11/11/2026).
+    if isinstance(antes, list) and isinstance(depois, list) and len(antes) + len(depois) > 4:
+        ent = [str(x) for x in depois if x not in antes]
+        sai = [str(x) for x in antes if x not in depois]
+        return {'label': label, 'tipo': 'lista', 'entrou': ent, 'saiu': sai,
+                'antes': ', '.join(sai) or '(nada saiu)', 'depois': ', '.join(ent) or '(nada entrou)'}
     if modo == 'novo':
         return {'label': label, 'tipo': 'novo', 'depois': _hist_val(depois)}
     if modo == 'removido':
@@ -292,6 +370,27 @@ def hist_preparar(row, nomes, emp_map=None):
     empresa = _empresa_do_log(ant, nov, row, emp_map)
     campos = []
 
+    if modulo == 'acesso':
+        # Entrada/saída do sistema: antes saía "adicionou um registro" + Ip/Via/Login.
+        partes = []
+        if nov.get('via'):
+            partes.append(_VIA_ENTRADA.get(nov['via'], str(nov['via']).replace('_', ' ')))
+        if nov.get('motivo'):
+            partes.append(str(nov['motivo']))
+        if nov.get('login_tentado'):
+            partes.append('login digitado: %s' % nov['login_tentado'])
+        if nov.get('para'):
+            partes.append('para %s' % nov['para'])
+        if nov.get('enviado') is False or nov.get('erro'):
+            partes.append('NÃO ENVIADO')
+        ip = nov.get('ip') or row.get('ip_address')
+        if ip:
+            partes.append('IP %s' % ip)
+        return {'data_hora': _hist_dt(row.get('data_hora')), 'autor': autor,
+                'verbo': verbo or _verbo_generico(acao) or 'acesso', 'acao': acao, 'modulo': modulo,
+                'empresa': None, 'busca': None, 'detalhe': ' · '.join(partes) or None,
+                'campos': [], 'ip': ip}
+
     if acao.startswith('leitura.'):
         if not verbo:
             verbo = 'consultou'
@@ -307,9 +406,12 @@ def hist_preparar(row, nomes, emp_map=None):
         if acao.startswith('escrita.excluiu'):
             verbo = 'excluiu ' + _HIST_ENTIDADE.get(tab, 'um registro')
         elif acao.startswith('escrita.alterou'):
-            verbo = 'alterou'
+            verbo = ('alterou ' + _HIST_ENTIDADE[tab]) if tab in _HIST_ENTIDADE \
+                else (_verbo_generico(acao) or 'alterou')
+        elif acao.startswith('escrita.criou') and tab in _HIST_ENTIDADE:
+            verbo = 'adicionou ' + _HIST_ENTIDADE[tab]
         else:
-            verbo = 'adicionou ' + _HIST_ENTIDADE.get(tab, 'um registro')
+            verbo = _verbo_generico(acao) or ('adicionou ' + _HIST_ENTIDADE.get(tab, 'um registro'))
 
     # Qual sócio (14/10/2026): "alterou um sócio" vira "alterou o sócio FULANO"
     socio_nome = nov.get('socio_nome') or ant.get('socio_nome')
