@@ -517,6 +517,18 @@ def processar_lancamentos(dados, empresa_id, arquivo, usuario_id=None, origem='o
     novos = [(h, l) for h, l in unicos if h not in ja
              and not (l.get('fitid') and l['fitid'] in ja_fitid)
              and not (l.get('documento') and (l['documento'] or '').lstrip('0') in ja_doc)]
+    # O extrato automático da Efí (CNAB, sem o nome de quem pagou) entrou
+    # antes: o OFX não duplica a linha, completa o nome nela (12/11/2026).
+    if (origem != 'efi' and ja_doc
+            and re.sub(r'\D', '', str(dados.get('banco_id') or '')).lstrip('0') == '364'):
+        repetidos_doc = [l for h, l in unicos if h not in ja and l.get('documento')
+                         and (l['documento'] or '').lstrip('0') in ja_doc]
+        if repetidos_doc:
+            try:
+                from utils.efi_extrato import completar_pelo_ofx
+                completar_pelo_ofx(empresa_id, dados['conta'], repetidos_doc)
+            except Exception:
+                logger.exception('[extrato] completar pelo OFX o extrato da Efí falhou (segue).')
     # Sem FITID, o que resta é data + valor — e é assim que o PDF e a planilha
     # do mesmo mês não repetem o que o OFX já lançou.
     novos, _repetidos_dv = ja_existe_por_data_valor(empresa_id, dados['conta'], novos)

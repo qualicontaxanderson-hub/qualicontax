@@ -42,7 +42,12 @@ HOSTS = {
                   'homologacao': 'https://cobrancas-h.api.efipay.com.br'},
     'pix': {'producao': 'https://pix.api.efipay.com.br',
             'homologacao': 'https://pix-h.api.efipay.com.br'},
+    # API Extratos (12/11/2026): o CNAB 240 diário da conta. mTLS como a Pix,
+    # token em /v1/oauth/token. Só existe em produção.
+    'extratos': {'producao': 'https://extratos.api.efipay.com.br',
+                 'homologacao': 'https://extratos.api.efipay.com.br'},
 }
+TOKEN_PATH = {'cobrancas': '/v1/authorize', 'pix': '/oauth/token', 'extratos': '/v1/oauth/token'}
 TIMEOUT = (10, 40)
 
 SITUACOES = {
@@ -88,9 +93,9 @@ class Efi:
         t = self.c._tokens.get(api)
         if t and t['vence'] > time.time() + 15:
             return t['token']
-        url = HOSTS[api][self.amb] + ('/v1/authorize' if api == 'cobrancas' else '/oauth/token')
+        url = HOSTS[api][self.amb] + TOKEN_PATH[api]
         kw = {'headers': self._basic(), 'json': {'grant_type': 'client_credentials'}, 'timeout': TIMEOUT}
-        if api == 'pix':
+        if api in ('pix', 'extratos'):
             with self._cert() as cert:
                 r = requests.post(url, cert=cert, **kw)
         else:
@@ -238,6 +243,34 @@ class Efi:
             return dt.replace(microsecond=0, tzinfo=timezone(timedelta(hours=-3))).isoformat()
         j = self._pix('GET', '/v2/pix', params={'inicio': rfc(inicio), 'fim': rfc(fim, True), 'paginacao.itensPorPagina': 1000})
         return j.get('pix') or []
+
+    # ------------------------------------------------------------- extratos
+    def _ext(self, caminho, timeout=(10, 60)):
+        url = HOSTS['extratos'][self.amb] + caminho
+        h = {'Authorization': 'Bearer ' + self._token('extratos')}
+        with self._cert() as cert:
+            r = requests.get(url, headers=h, cert=cert, timeout=timeout)
+        if r.status_code >= 300:
+            raise EfiErro(self._msg(r, 'A API Extratos da Efí recusou'), r.status_code, _json(r))
+        return r
+
+    def extrato_arquivos(self):
+        """Arquivos CNAB 240 que a Efí gerou (agendamento diário, ~30 dias):
+        [{nome, periodo_inicio, periodo_fim, ...}]."""
+        return _json(self._ext('/v1/extrato-cnab/arquivos')) or []
+
+    def extrato_baixar(self, nome):
+        """Conteúdo (texto) do CNAB 240 do arquivo ``nome``. A Efí entrega um
+        .zip (às vezes em base64); devolve o .txt de dentro."""
+        import io
+        import zipfile
+        r = self._ext('/v1/extrato-cnab/download/' + nome)
+        dados = r.content
+        if not dados.startswith(b'PK'):
+            dados = base64.b64decode(r.text.strip().strip('"'))
+        z = zipfile.ZipFile(io.BytesIO(dados))
+        txts = [n for n in z.namelist() if not n.endswith('/')]
+        return z.read(txts[0]).decode('latin-1') if txts else ''
 
 
 # ---------------------------------------------------------------------------

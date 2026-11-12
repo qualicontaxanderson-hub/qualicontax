@@ -1036,6 +1036,17 @@ def main() -> int:
         logger.exception('[roteador] varredura de EXTRATO falhou; os .xml desta '
                          'rodada VALEM.')
 
+    # E o extrato diário da Efí pela API (12/11/2026): uma vez por dia, depois
+    # das 7h, entra sozinho e dá baixa nos boletos recebidos — Anderson: "Ao
+    # receber na conta é pra dar baixa". Desliga com EFI_EXTRATO_ATIVO=0.
+    # Em try próprio: falha aqui não derruba o roteador de XML.
+    try:
+        from utils.efi_extrato import rodar_do_dia
+        rodar_do_dia()
+    except Exception:
+        logger.exception('[roteador] extrato diário da Efí falhou; tenta amanhã '
+                         '(a deduplicação cobre o dia perdido).')
+
     # E os certificados digitais deixados na _ENTRADA com a senha no nome
     # ("175 senha 1234.pfx"): vincula sozinho, pelo mesmo núcleo da tela.
     # Pedido do Anderson em 13/09/2026 — o .p12 do posto 175 estava lá parado.

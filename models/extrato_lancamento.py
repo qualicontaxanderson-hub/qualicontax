@@ -7,9 +7,12 @@ import mora no ``hash_dedup`` (UNIQUE) — quem monta a chave é
 utils.ofx_parser.chave_dedup, a mesma para parser e gravação.
 """
 import json
+import logging
 import re
 
 from utils.db_helper import execute_query
+
+logger = logging.getLogger(__name__)
 
 
 class ExtratoLancamento:
@@ -639,6 +642,14 @@ class ExtratoLancamento:
         if ja:
             return 'pulado'
 
+        # Recebimento de boleto na conta Efí de quem COBRA pela Efí (12/11/2026):
+        # o dinheiro é de um título que já existe (Conexa ou boleto nosso) —
+        # criar outro "já quitado" contaria o honorário duas vezes e deixaria o
+        # do Conexa em aberto. Baixa no título certo ou espera alguém escolher.
+        efi = ExtratoLancamento._recebimento_efi(lanc)
+        if efi is not None:
+            return efi
+
         leitura = ExtratoLancamento.ler_descricao(lanc.get('descricao'))
         for cand in ExtratoLancamento.titulos_candidatos(lanc, limite=3):
             saldo = float(cand['valor']) - float(cand['valor_baixado'] or 0)
@@ -656,6 +667,32 @@ class ExtratoLancamento:
                          'centro_custo_id': lanc.get('centro_custo_id')},
             usuario_id=usuario_id)
         return 'criou' if ok else 'erro'
+
+    @staticmethod
+    def _recebimento_efi(lanc):
+        """None = não é caso Efí (segue o caminho de sempre); senão 'casou'
+        ou 'pulado'. Só vale para a empresa que tem conta de cobrança Efí —
+        o extrato Efí de um CLIENTE continua como sempre foi."""
+        desc = str(lanc.get('descricao') or '')
+        if float(lanc.get('valor') or 0) <= 0 or not desc.startswith('Recebimento de cobrança'):
+            return None
+        tem = execute_query(
+            "SELECT 1 x FROM fin_cobranca_contas WHERE empresa_id = %s AND provedor = 'efi' LIMIT 1",
+            (lanc.get('empresa_id'),), fetch=True, fetch_one=True)
+        if not tem:
+            return None
+        from utils.efi_extrato import baixar, adiando
+        if adiando():
+            return 'pulado'          # a rotina da Efí decide depois de gravar todos os dias
+        m = re.search(r'^Recebimento de cobrança: \d+ de (.+)$', desc)
+        try:
+            s, _ = baixar(lanc, seco=False, nome_pagador=m.group(1) if m else None)
+        except Exception:
+            logger.exception('[extrato] baixa do recebimento Efí falhou (lançamento %s)', lanc.get('id'))
+            return 'erro'
+        if s == 'antes-do-corte':
+            return None              # o Conexa já deu como pago: caminho de sempre
+        return 'casou' if s in ('baixado', 'webhook', 'ja-baixado', 'ja-amarrado') else 'pulado'
 
     @staticmethod
     def desconciliar(lanc_id):
