@@ -302,6 +302,18 @@ def _documentos_faltando(form):
     return out
 
 
+def _fone_fmt(valor):
+    """(62) 99420-7263 / (64) 9420-7263. 12/11/2026: o celular digitado na ficha gravava "62994207263".
+    Fora de 10/11 números fica como veio (quem barra é _telefone_valido)."""
+    s = (valor or '').strip()
+    d = re.sub(r'\D', '', s)
+    if len(d) == 11:
+        return '(%s) %s-%s' % (d[:2], d[2:7], d[7:])
+    if len(d) == 10:
+        return '(%s) %s-%s' % (d[:2], d[2:6], d[6:])
+    return s
+
+
 def _telefone_valido(valor):
     """10 ou 11 dígitos (DDD + número) e não um enchimento: a Receita devolve
     "000000000000" quando a empresa não tem o 2º telefone, e isso passava como
@@ -379,6 +391,8 @@ def _travas(form, avulso=False, cliente_id=None):
                 continue
             f = 'celular (número inválido: DDD + número)'
         out.append(f)
+    if form.get('tipo_pessoa') != 'PF' and AC.nire_errado(form.get('nire')):
+        out.append('NIRE (são 11 números: XX.XXX.XXX.XXX)')
     if form.get('tipo_pessoa') == 'PF':
         out += IE.erros_rurais(IE.ler_rurais_json(form.get('ies_rurais_json')) or [])
         em = (form.get('email') or '').strip()
@@ -1336,8 +1350,8 @@ def novo():
             'inscricao_estadual': IE.formatar(request.form.get('estado'), request.form.get('inscricao_estadual')),
             'inscricao_municipal': request.form.get('inscricao_municipal'),
             'email': request.form.get('email'),
-            'telefone': request.form.get('telefone'),
-            'celular': request.form.get('celular'),
+            'telefone': _fone_fmt(request.form.get('telefone')),
+            'celular': _fone_fmt(request.form.get('celular')),
             'regime_tributario': request.form.get('regime_tributario'),
             'porte_empresa': request.form.get('porte_empresa'),
             'cnae_fiscal': request.form.get('cnae_fiscal'),
@@ -1669,6 +1683,9 @@ def salvar_campos(id):
             if k in ('nire', 'inscricao_estadual', 'inscricao_municipal') and novo:
                 novo = novo.upper()
             if k == 'nire' and novo:
+                if AC.nire_errado(novo):
+                    erros.append('NIRE: são 11 números (XX.XXX.XXX.XXX); confira na ficha da Junta.')
+                    continue
                 novo = IE.formatar_nire(novo)
             if k == 'inscricao_estadual' and novo:
                 novo = IE.formatar(IE.uf_do_endereco(id), novo)
@@ -1683,6 +1700,8 @@ def salvar_campos(id):
             if k == 'telefone' and novo and not _telefone_valido(novo):
                 erros.append('Telefone inválido (DDD + número).')
                 continue
+            if k in ('celular', 'telefone') and novo:
+                novo = _fone_fmt(novo)
             sets[k] = novo
         elif k in _CAMPOS_DATA:
             if v and not _data_iso(v, ate_hoje=False):
@@ -2342,8 +2361,8 @@ def editar(id):
                 'inscricao_estadual': IE.formatar(request.form.get('estado'), request.form.get('inscricao_estadual')),
                 'inscricao_municipal': request.form.get('inscricao_municipal'),
                 'email': request.form.get('email'),
-                'telefone': request.form.get('telefone'),
-                'celular': request.form.get('celular'),
+                'telefone': _fone_fmt(request.form.get('telefone')),
+                'celular': _fone_fmt(request.form.get('celular')),
                 'regime_tributario': request.form.get('regime_tributario'),
                 'porte_empresa': request.form.get('porte_empresa'),
                 'cnae_fiscal': request.form.get('cnae_fiscal'),

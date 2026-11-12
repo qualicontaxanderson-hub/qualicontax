@@ -428,6 +428,7 @@
 .tu-inp textarea.tu-ctl { height:auto; min-height:84px; padding:10px 12px; resize:vertical; }
 .tu-inp-bt { width:32px; height:32px; border-radius:9px; border:0; display:inline-flex; align-items:center; justify-content:center; font-size:13px; cursor:pointer; flex:0 0 32px; }
 .tu-inp-ok { background:#16a34a; color:#fff; } .tu-inp-x { background:#f1f5f9; color:#64748b; }
+.nire-errado { margin:-4px 0 10px; font-size:12.5px; color:#b91c1c; background:#fef2f2; border:1px solid #fecaca; border-radius:8px; padding:6px 10px; line-height:1.45; }
 .tu-ajuda { font-size:12.5px; color:#4b7a5e; line-height:1.45; }
 .tu-ajuda kbd { font:inherit; font-size:11px; font-weight:700; background:#fff; border:1px solid #cbd5e1; border-bottom-width:2px; border-radius:5px; padding:0 5px; color:#334155; }
 /* lista suspensa (regime, porte, origem, grupo) */
@@ -928,7 +929,7 @@
         <!-- índice em pílulas (acompanha a rolagem) -->
         <nav class="qb-pills tu-ind" aria-label="Seções do cadastro">
             <a href="#identificacao"><i class="qb-pt qb-pt-ok"></i>Visão geral</a>
-            {% if pj %}<a href="#registros"><i class="qb-pt qb-pt-{{ bol(['nire', 'im', 'ie', 'ie_conferir']) }}"></i>Registros</a>{% endif %}
+            {% if pj %}<a href="#registros"><i class="qb-pt qb-pt-{{ bol(['nire', 'nire_errado', 'im', 'ie', 'ie_conferir']) }}"></i>Registros</a>{% endif %}
             {% if pode_fin %}<a href="#financeiro"><i class="qb-pt qb-pt-{{ bol(['cobranca']) if contrato else ('verm' if 'cobranca' in fcor else 'amb') }}"></i>Financeiro</a>{% endif %}
             <a href="#regime"><i class="qb-pt qb-pt-{{ bol(['regime', 'origem', 'conferir']) }}"></i>{{ 'Regime' if pj else 'Contrato' }}</a>
             <a href="#contato-empresa"><i class="qb-pt qb-pt-{{ bol(['celular'] + (['email'] if falta.avulso else [])) }}"></i>Contato</a>
@@ -1039,10 +1040,11 @@
             {% if pj %}
             <!-- REGISTROS -->
             <section class="qb-b s4" id="registros" data-copiar-bloco>
-                <div class="qb-bh"><span class="qb-ico i-ambar"><i class="fas fa-landmark"></i></span><h3>Registros</h3>{{ selo(['nire', 'im', 'ie', 'ie_conferir']) }}</div>
+                <div class="qb-bh"><span class="qb-ico i-ambar"><i class="fas fa-landmark"></i></span><h3>Registros</h3>{{ selo(['nire', 'nire_errado', 'im', 'ie', 'ie_conferir']) }}</div>
                 {{ bloco_ie(false) }}
                 {{ campo('inscricao_municipal', 'Inscrição municipal', cliente.inscricao_municipal, ancora='campo-im', chave='im', ph='inscrição municipal (CCM)', mono=True) }}
-                {{ campo('nire', 'NIRE', cliente.nire, exibe=(nire_fmt(cliente.nire) if cliente.nire else ''), ancora='campo-nire', chave='nire', ph='52.207.386.814', ajuda='Está no contrato social registrado ou na ficha cadastral da Junta.', mono=True) }}
+                {{ campo('nire', 'NIRE', cliente.nire, exibe=(nire_fmt(cliente.nire) if cliente.nire else ''), ancora='campo-nire', chave=('nire_errado' if 'nire_errado' in falta_cor else 'nire'), ph='52.207.386.814', ajuda='Está no contrato social registrado ou na ficha cadastral da Junta.', mono=True) }}
+                {% if 'nire_errado' in falta_cor %}<div class="nire-errado"><i class="fas fa-triangle-exclamation"></i> <b>NIRE errado:</b> tem {{ (cliente.nire or '') | select('in', '0123456789') | list | length }} números e o certo são 11 (XX.XXX.XXX.XXX). Confira na ficha da Junta e corrija.</div>{% endif %}
                 {{ campo('nire_data_registro', 'Data do registro na Junta', cliente.nire_data_registro.strftime('%Y-%m-%d') if cliente.nire_data_registro else '', exibe=(cliente.nire_data_registro|format_date if cliente.nire_data_registro else ''), tipo='date') }}
             </section>
             {% endif %}
@@ -2505,6 +2507,9 @@
             if (t !== 'textarea') ctl.type = t === 'date' ? 'date' : 'text';
             if (t === 'textarea') ctl.rows = 3;
             ctl.className = 'tu-ctl'; ctl.value = v;
+            // organizado enquanto digita (12/11/2026): celular/telefone e NIRE
+            var mk = window.QCMascara && { celular: QCMascara.fone, telefone: QCMascara.fone, nire: QCMascara.nire }[el.dataset.campo];
+            if (mk) QCMascara.ligar(ctl, mk);
             if (el.dataset.ph) ctl.placeholder = el.dataset.ph;
             var bx = document.createElement('button'); bx.type = 'button'; bx.className = 'tu-inp-bt tu-inp-x'; bx.title = 'Desfazer (Esc)'; bx.innerHTML = '<i class="fas fa-xmark"></i>';
             var bo = document.createElement('button'); bo.type = 'button'; bo.className = 'tu-inp-bt tu-inp-ok'; bo.title = 'Confirmar (Enter)'; bo.innerHTML = '<i class="fas fa-check"></i>';

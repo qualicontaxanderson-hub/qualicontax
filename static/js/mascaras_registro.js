@@ -36,5 +36,14 @@
         inp.addEventListener('blur', f);
         f();
     }
-    window.QCMascara = { ie: ie, nire: nire, ligar: ligar };
+    // celular/telefone (12/11/2026): (62) 99420-7263 / (64) 9420-7263
+    function fone(v) {
+        v = String(v || '');
+        var d = v.replace(/\D/g, '').slice(0, 11);
+        if (!d) return v;
+        if (d.length <= 2) return '(' + d;
+        var meio = d.length === 11 ? 5 : 4;
+        return '(' + d.slice(0, 2) + ') ' + d.slice(2, 2 + meio) + (d.length > 2 + meio ? '-' + d.slice(2 + meio) : '');
+    }
+    window.QCMascara = { ie: ie, nire: nire, fone: fone, ligar: ligar };
 })();

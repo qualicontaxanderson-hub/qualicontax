@@ -15,6 +15,8 @@ from utils.db_helper import execute_query
 PENDENCIAS_EMPRESA = [
     # (chave, rótulo, cor, texto de ajuda)
     ('nire', 'NIRE', 'amb', 'número de registro na Junta Comercial'),
+    # 12/11/2026 (Anderson): NIRE com tamanho errado entra no A CADASTRAR "com um lembrete que é o NIRE errado".
+    ('nire_errado', 'Corrigir NIRE', 'verm', 'NIRE errado: o certo tem 11 números (XX.XXX.XXX.XXX) e este está com outro tamanho: conferir na ficha da Junta e corrigir'),
     ('im', 'Insc. Municipal', 'amb', 'inscrição municipal (CCM)'),
     ('ie', 'Insc. Estadual', 'amb', 'inscrição estadual, ou marcar isenta'),
     ('socios', 'Sócios', 'verm', 'nenhum sócio cadastrado'),
@@ -115,12 +117,22 @@ def empresas_pendentes(ocultas=frozenset()):
     return out
 
 
+def nire_errado(v):
+    """NIRE preenchido que não tem 11 números (o da Junta é XX.XXX.XXX.XXX). Com letra não se julga."""
+    s = str(v or '').strip()
+    if not s or any(ch.isalpha() for ch in s):
+        return False
+    return len(''.join(ch for ch in s if ch.isdigit())) != 11
+
+
 def _pend_empresa(c):
     """As chaves que faltam numa linha de empresa (mesma regra para a lista e para a ficha)."""
     pj = c['tipo_pessoa'] != 'PF'
     p = []
     if pj and _vazio(c['nire']):
         p.append('nire')
+    elif pj and nire_errado(c['nire']):
+        p.append('nire_errado')
     if pj and _vazio(c['inscricao_municipal']):
         p.append('im')
     if pj and _vazio(c['inscricao_estadual']) and not c['n_ie_isenta']:
@@ -218,7 +230,7 @@ def contadores(lista, catalogo):
 # Onde cada pendência se resolve na ficha: a âncora para onde a página rola e, quando é campo, o campo
 # que abre já editável. O A CADASTRAR usa o mesmo mapa: clicar no NIRE leva ao NIRE.
 ALVO = {
-    'nire': 'campo-nire', 'im': 'campo-im', 'ie': 'campo-ie', 'regime': 'campo-regime',
+    'nire': 'campo-nire', 'nire_errado': 'campo-nire', 'im': 'campo-im', 'ie': 'campo-ie', 'regime': 'campo-regime',
     'cobranca': 'campo-cobranca', 'celular': 'campo-celular', 'ramo': 'campo-ramos',
     'origem': 'campo-origem', 'conferir': 'campo-observacoes',
     'grupo': 'campo-grupo', 'socios': 'socios', 'email': 'contatos', 'contato_celular': 'contatos',
@@ -270,7 +282,7 @@ def pendencias_do_cadastro(cliente_id):
     pj = c['tipo_pessoa'] != 'PF'
 
     def valor(k):
-        if k == 'nire':
+        if k in ('nire', 'nire_errado'):
             return c['nire']
         if k == 'im':
             return c['inscricao_municipal']
@@ -307,17 +319,20 @@ def pendencias_do_cadastro(cliente_id):
         return ''
 
     # O que não se aplica a este cadastro (ex.: NIRE de pessoa física) não entra em nenhuma das listas.
-    so_pj = {'nire', 'im', 'ie', 'socios', 'regime', 'email', 'origem'} if not avulso else {'regime'}
+    so_pj = {'nire', 'nire_errado', 'im', 'ie', 'socios', 'regime', 'email', 'origem'} if not avulso else {'regime'}
     so_pf = {'contato', 'documento', 'ie_rural'} if not avulso else set()
     faltam, ok = [], []
     for k, rotulo, cor, ajuda in catalogo:
         if (k in so_pj and not pj) or (k in so_pf and pj):
             continue
-        if k in ('conferir', 'ie_conferir') and k not in p:
+        if k in ('conferir', 'ie_conferir', 'nire_errado') and k not in p:
             continue
         if k == 'ie_rural' and not c['n_ramo_rural']:
             continue                      # só o produtor rural precisa de IE
         if k in p:
+            if k == 'nire_errado':
+                ajuda = 'NIRE errado: o gravado (%s) tem %d números e o certo são 11 (XX.XXX.XXX.XXX): conferir na ficha da Junta e corrigir' % (
+                    c['nire'], len(''.join(ch for ch in str(c['nire']) if ch.isdigit())))
             faltam.append({'chave': k, 'rotulo': rotulo, 'cor': cor, 'ajuda': ajuda, 'alvo': ALVO.get(k, '')})
         else:
             ok.append({'chave': k, 'rotulo': rotulo, 'valor': valor(k) or ''})
