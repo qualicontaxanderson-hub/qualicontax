@@ -1,0 +1,394 @@
+{% extends "base.html" %}
+{% block title %}Títulos a receber - Qualicontax{% endblock %}
+{% block content %}
+{% include 'financeiro/_nav_financeiro.html' %}
+<style>
+/* Títulos a receber em 3 abas (12/11/2026): as abas são também os números do mês */
+.tx, #txModalIna { --verde:#0f3d2e; --linha:#e6eeea; --mudo:#7d968a; --tinta:#0f172a; }
+.tx-abas { display:grid; grid-template-columns:repeat(3, minmax(0,1fr)); gap:14px; margin-top:-34px; position:relative; z-index:2; margin-bottom:22px; }
+.tx-aba { position:relative; text-align:left; font:inherit; cursor:pointer; background:#fff; border:1px solid var(--linha);
+          border-radius:18px; padding:18px 22px 16px; box-shadow:0 10px 28px rgba(15,61,46,.08); transition:all .18s;
+          display:flex; align-items:center; gap:16px; overflow:hidden; min-width:0; }
+.tx-aba::after { content:''; position:absolute; left:0; right:0; bottom:0; height:3px; background:var(--cor); transform:scaleX(0); transition:transform .2s; }
+.tx-aba:hover { transform:translateY(-1px); box-shadow:0 14px 32px rgba(15,61,46,.12); }
+.tx-aba.on { border-color:transparent; box-shadow:0 0 0 2px var(--cor), 0 14px 32px rgba(15,61,46,.12); }
+.tx-aba.on::after { transform:scaleX(1); }
+.tx-aba-ico { width:46px; height:46px; border-radius:14px; background:var(--fundo); color:var(--cor); display:flex;
+              align-items:center; justify-content:center; font-size:18px; flex-shrink:0; }
+.tx-aba-txt { min-width:0; flex:1; }
+.tx-aba-lbl { font-size:12px; font-weight:700; letter-spacing:.6px; text-transform:uppercase; color:var(--mudo); }
+.tx-aba-val { display:block; font-size:25px; font-weight:800; color:var(--tinta); letter-spacing:-.02em; font-variant-numeric:tabular-nums; line-height:1.15; margin-top:2px; white-space:nowrap; }
+.tx-aba-sub { font-size:12px; color:#94a3b8; }
+.tx-aba-n { align-self:flex-start; font-size:12px; font-weight:800; color:var(--cor); background:var(--fundo); border-radius:99px; padding:3px 10px; }
+.tx-a-rec { --cor:#16a34a; --fundo:#ecfdf3; }
+.tx-a-abe { --cor:#2563eb; --fundo:#eff4ff; }
+.tx-a-ina { --cor:#dc2626; --fundo:#fef1f1; }
+
+.tx-emp { position:relative; }
+.tx-emp-menu { display:none; position:absolute; right:0; top:calc(100% + 6px); z-index:20; background:#fff; border:1px solid var(--linha);
+               border-radius:14px; box-shadow:0 14px 32px rgba(15,61,46,.16); padding:8px; min-width:260px; }
+.tx-emp.on .tx-emp-menu { display:block; }
+.tx-emp-menu a { display:flex; align-items:center; gap:8px; padding:8px 10px; border-radius:9px; font-size:13px; color:#334155; text-decoration:none; }
+.tx-emp-menu a:hover { background:#f3f8f5; }
+.tx-emp-menu a i { width:14px; color:#cbd5e1; } .tx-emp-menu a.on i { color:#16a34a; } .tx-emp-menu a.on { font-weight:700; color:var(--verde); }
+
+.tx-faixa { display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:18px; }
+.tx-filtros { display:flex; gap:6px; flex-wrap:wrap; }
+.tx-f { border:1px solid var(--linha); background:#fff; color:#475569; border-radius:99px; padding:6px 13px; font:inherit; font-size:12.5px; font-weight:600; cursor:pointer; }
+.tx-f b { color:#94a3b8; margin-left:3px; }
+.tx-f.on { background:var(--verde); border-color:var(--verde); color:#fff; } .tx-f.on b { color:#86efac; }
+.tx-busca { position:relative; margin-left:auto; width:300px; max-width:100%; }
+.tx-busca input { width:100%; height:38px; border:1px solid var(--linha); border-radius:11px; padding:0 12px 0 36px; font:inherit; font-size:13px; background:#fff; }
+.tx-busca i { position:absolute; left:13px; top:50%; transform:translateY(-50%); color:#a3b3ab; font-size:13px; }
+.tx-mes { display:inline-flex; align-items:center; background:#fff; border:1px solid var(--linha); border-radius:11px; height:38px; }
+.tx-mes a, .tx-mes span.x { width:34px; height:36px; display:inline-flex; align-items:center; justify-content:center; color:var(--verde); text-decoration:none; }
+.tx-mes span.x { color:#d5e0da; }
+.tx-mes b { font-size:13px; color:var(--verde); padding:0 6px; }
+
+.tx-nota { display:flex; align-items:center; gap:10px; font-size:12.5px; color:#8a5a12; background:#fffaf0; border:1px solid #f6e3bd;
+           border-radius:12px; padding:9px 12px 9px 14px; margin-bottom:18px; }
+.tx-nota i { color:#d97706; }
+.tx-nota a { margin-left:auto; font-weight:800; color:#b45309; text-decoration:none; white-space:nowrap; }
+
+.tx-painel { display:none; } .tx-painel.on { display:block; }
+.tx-dia { display:flex; align-items:baseline; gap:10px; margin:6px 2px 10px; }
+.tx-dia h4 { margin:0; font-size:12px; font-weight:800; letter-spacing:.6px; text-transform:uppercase; color:var(--verde); }
+.tx-dia span { flex:1; height:1px; background:var(--linha); align-self:center; }
+.tx-dia small { font-size:12px; color:var(--mudo); font-variant-numeric:tabular-nums; }
+.tx-dia small b { color:var(--verde); }
+.tx-grade { display:grid; grid-template-columns:repeat(auto-fill, minmax(255px, 1fr)); gap:10px; margin-bottom:22px; }
+.tx-grade.tx-g-ina { grid-template-columns:repeat(auto-fill, minmax(300px, 1fr)); }
+
+.tx-c { position:relative; background:#fff; border:1px solid var(--linha); border-radius:14px; padding:12px 14px 12px 16px;
+        display:flex; flex-direction:column; gap:8px; transition:all .15s; overflow:hidden; min-width:0; }
+.tx-c[data-baixa] , a.tx-c { cursor:pointer; }
+a.tx-c { text-decoration:none; color:inherit; }
+.tx-c::before { content:''; position:absolute; left:0; top:12px; bottom:12px; width:3px; border-radius:0 3px 3px 0; background:var(--cor, #cbd5e1); }
+.tx-c:hover { border-color:#cfe3d7; box-shadow:0 8px 20px rgba(15,61,46,.08); transform:translateY(-1px); }
+.tx-c-top { display:flex; align-items:center; gap:8px; min-width:0; }
+.tx-c-num { font-size:10.5px; font-weight:800; color:#64748b; background:#f1f5f4; border-radius:6px; padding:2px 6px; flex-shrink:0; font-variant-numeric:tabular-nums; }
+.tx-c-nome { font-size:12.5px; font-weight:700; color:var(--tinta); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.tx-c-meio { display:flex; align-items:flex-end; justify-content:space-between; gap:8px; }
+.tx-c-val { font-size:17px; font-weight:800; color:var(--tinta); letter-spacing:-.01em; font-variant-numeric:tabular-nums; line-height:1; }
+.tx-c-desc { font-size:11.5px; color:var(--mudo); margin-top:3px; }
+.tx-c-st { font-size:11px; font-weight:700; color:var(--cor); white-space:nowrap; display:inline-flex; align-items:center; gap:5px; }
+.tx-c-st i { font-size:10px; }
+.tx-ok    { --cor:#16a34a; }
+.tx-hoje  { --cor:#2563eb; }
+.tx-fut   { --cor:#94a3b8; }
+.tx-venc  { --cor:#d97706; }
+.tx-ina   { --cor:#dc2626; }
+.tx-c-acoes { position:absolute; right:10px; top:8px; display:flex; gap:4px; opacity:0; transition:opacity .15s; background:#fff; padding-left:6px; }
+.tx-c:hover .tx-c-acoes, .tx-c:focus-within .tx-c-acoes { opacity:1; }
+.tx-c-acoes button, .tx-c-acoes a { width:27px; height:27px; border-radius:8px; border:1px solid var(--linha); background:#fff; color:var(--verde);
+                                    cursor:pointer; font-size:11px; display:inline-flex; align-items:center; justify-content:center; text-decoration:none; }
+.tx-c-acoes .ok { background:var(--verde); border-color:var(--verde); color:#fff; }
+.tx-c-acoes button:hover, .tx-c-acoes a:hover { border-color:#9fc9b3; }
+
+/* inadimplente: régua dos últimos 12 meses */
+.tx-regua { display:grid; grid-template-columns:repeat(12, 1fr); gap:3px; }
+.tx-regua i { height:6px; border-radius:2px; background:#edf2ef; }
+.tx-regua i.v { background:#ef4444; }
+.tx-regua i.p { background:#86efac; }
+.tx-regua-leg { display:flex; justify-content:space-between; font-size:10px; color:#a3b3ab; margin-top:-4px; }
+.tx-c-cob { display:flex; gap:6px; }
+.tx-c-cob a, .tx-c-cob button { flex:1; height:30px; border-radius:9px; font:inherit; font-size:11.5px; font-weight:700; cursor:pointer;
+                                display:inline-flex; align-items:center; justify-content:center; gap:6px; text-decoration:none; }
+.tx-b1 { background:#0f3d2e; color:#fff; border:0; } .tx-b2 { background:#fff; color:#0f3d2e; border:1px solid var(--linha); }
+.tx-b1.off { background:#e8efeb; color:#7d968a; cursor:default; }
+.tx-mais { display:block; margin:0 auto 10px; border:1px solid var(--linha); background:#fff; border-radius:99px; padding:8px 18px; font:inherit; font-size:12.5px; font-weight:700; color:var(--verde); cursor:pointer; }
+.tx-vazio { text-align:center; color:var(--mudo); font-size:13px; padding:40px 10px; background:#fff; border:1px dashed var(--linha); border-radius:14px; }
+.tx-vazio i { display:block; font-size:22px; color:#bcd3c6; margin-bottom:8px; }
+
+/* janela "Ver e baixar" do inadimplente */
+.tx-lista { display:flex; flex-direction:column; gap:8px; }
+.tx-lin { display:flex; align-items:center; gap:10px; border:1px solid var(--linha); border-radius:11px; padding:9px 10px 9px 12px; }
+.tx-lin-txt { flex:1; min-width:0; } .tx-lin-txt b { display:block; font-size:13px; color:var(--tinta); }
+.tx-lin-txt small { font-size:11.5px; color:#b45309; }
+.tx-lin-val { font-weight:800; font-variant-numeric:tabular-nums; color:var(--tinta); white-space:nowrap; }
+.tx-lin button { border:0; background:var(--verde); color:#fff; border-radius:8px; height:30px; padding:0 12px; font:inherit; font-size:12px; font-weight:700; cursor:pointer; }
+
+@media (hover:none) {
+  .tx-c-acoes { position:static; opacity:1; padding:0; justify-content:flex-end; }
+}
+@media (max-width:900px) {
+  .tx-abas { gap:6px; margin-top:-26px; }
+  .tx-aba { flex-direction:column; align-items:flex-start; gap:6px; padding:10px 10px 12px; border-radius:14px; }
+  .tx-aba-ico, .tx-aba-n, .tx-aba-sub { display:none; }
+  .tx-aba-lbl { font-size:10px; letter-spacing:.3px; }
+  .tx-aba-val { font-size:13.5px; }
+  .tx-busca { margin-left:0; width:100%; order:3; }
+  .tx-grade { grid-template-columns:1fr 1fr; gap:8px; }
+  .tx-grade.tx-g-ina { grid-template-columns:1fr; }
+  .tx-c { padding:10px 10px 10px 13px; } .tx-c-val { font-size:14.5px; }
+  .tx-grade:not(.tx-g-ina) .tx-c-meio { flex-direction:column; align-items:flex-start; gap:6px; }
+  .tx-nota { flex-wrap:wrap; } .tx-nota a { margin-left:0; }
+  .tx-emp-menu { right:auto; left:0; }
+}
+</style>
+
+{% set _q = {'emp': filtros.emp} if filtros.emp else {} %}
+<div class="tx">
+<div class="ef-hero">
+  <div class="ef-hero-inner ef-hero-head">
+    <div>
+      <h1 class="ef-hero-title">Títulos a receber</h1>
+      <p class="ef-hero-sub">Honorários e serviços · {{ m.hoje.strftime('%d/%m/%Y') }}</p>
+    </div>
+    <div class="ef-hero-actions">
+      <div class="tx-emp" id="txEmp">
+        <a class="ef-btn" href="javascript:void(0)" onclick="document.getElementById('txEmp').classList.toggle('on')">
+          <i class="fas fa-building"></i>
+          {% if not sel_empresas %}Todas as empresas{% else %}{% for e in fin_empresas if e.cliente_id in sel_empresas %}{{ e.apelido }}{{ ', ' if not loop.last }}{% endfor %}{% endif %}
+          <i class="fas fa-chevron-down" style="font-size:10px;"></i></a>
+        <div class="tx-emp-menu">
+          <a class="{{ 'on' if not sel_empresas }}" href="{{ url_for('financeiro.titulos', aba=aba) }}"><i class="fas fa-check"></i> Todas as empresas</a>
+          {% for e in fin_empresas %}
+          <a class="{{ 'on' if sel_empresas == [e.cliente_id] }}" title="{{ e.nome_razao_social }}"
+             href="{{ url_for('financeiro.titulos', emp=e.cliente_id, aba=aba) }}"><i class="fas fa-check"></i> {{ e.apelido }}</a>
+          {% endfor %}
+        </div>
+      </div>
+      <a class="ef-btn" href="{{ url_for('financeiro.titulos', tipo='R', lista=1, **_q) }}" title="A tabela com todos os filtros (categoria, centro, liquidados, cancelados)"><i class="fas fa-table-list"></i> Lista completa</a>
+      <a class="ef-btn" href="{{ url_for('financeiro.titulos', tipo='P', **_q) }}"><i class="fas fa-arrow-up"></i> A pagar</a>
+      <a class="ef-btn ef-btn-primary" href="javascript:void(0)" onclick="ftAbrirNovo()"><i class="fas fa-plus"></i> Novo título</a>
+    </div>
+  </div>
+</div>
+
+<div class="ef-body">
+  <div class="tx-abas">
+    <button type="button" class="tx-aba tx-a-rec{{ ' on' if aba == 'rec' }}" data-p="rec"><span class="tx-aba-ico"><i class="fas fa-circle-check"></i></span>
+      <span class="tx-aba-txt"><span class="tx-aba-lbl">Recebido</span><span class="tx-aba-val">{{ m.rec_tot }}</span><span class="tx-aba-sub">em {{ m.mes_rot | lower }}</span></span><span class="tx-aba-n">{{ m.rec_n }}</span></button>
+    <button type="button" class="tx-aba tx-a-abe{{ ' on' if aba == 'abe' }}" data-p="abe"><span class="tx-aba-ico"><i class="fas fa-hourglass-half"></i></span>
+      <span class="tx-aba-txt"><span class="tx-aba-lbl">A receber</span><span class="tx-aba-val">{{ m.abe_tot }}</span><span class="tx-aba-sub">{{ m.abe_cli }} cliente{{ 's' if m.abe_cli != 1 }}</span></span><span class="tx-aba-n">{{ m.abe_n }}</span></button>
+    <button type="button" class="tx-aba tx-a-ina{{ ' on' if aba == 'ina' }}" data-p="ina"><span class="tx-aba-ico"><i class="fas fa-user-clock"></i></span>
+      <span class="tx-aba-txt"><span class="tx-aba-lbl">Inadimplentes</span><span class="tx-aba-val">{{ m.ina_tot }}</span><span class="tx-aba-sub">2 ou mais vencidos</span></span><span class="tx-aba-n">{{ m.ina_cli }}</span></button>
+  </div>
+
+  {% if m.esp_n %}
+  <div class="tx-nota"><i class="fas fa-circle-info"></i>
+    <span><b>{{ m.esp_n }} pagamento{{ 's' if m.esp_n != 1 }}</b> ({{ m.esp_tot }}) entr{{ 'aram' if m.esp_n != 1 else 'ou' }} na Efí com valor igual ao de outros clientes e esper{{ 'am' if m.esp_n != 1 else 'a' }} alguém dizer de quem {{ 'são' if m.esp_n != 1 else 'é' }}.</span>
+    <a href="{{ url_for('financeiro.extrato', classif='todos', tipo='credito', busca='Recebimento de cobran', data_de=m.esp_desde) }}">Escolher de quem é <i class="fas fa-arrow-right"></i></a></div>
+  {% endif %}
+
+  {# ── A RECEBER ── #}
+  <div class="tx-painel{{ ' on' if aba == 'abe' }}" data-p="abe">
+    <div class="tx-faixa">
+      <div class="tx-filtros" data-tipo="g">{% for f in m.abe_f %}<button type="button" class="tx-f{{ ' on' if loop.first }}" data-v="{{ f[0] }}">{{ f[1] }} <b>{{ f[2] }}</b></button>{% endfor %}</div>
+      <div class="tx-busca"><i class="fas fa-magnifying-glass"></i><input type="search" placeholder="Cliente, número ou CNPJ"></div>
+    </div>
+    {% for g in m.abe %}
+    <div class="tx-dia" data-sec><h4>{{ g.rot }}</h4><span></span><small><b>{{ g.tot }}</b> · {{ g.n }} título{{ 's' if g.n != 1 }}</small></div>
+    <div class="tx-grade">
+      {% for t in g.itens %}
+      <div class="tx-c {{ t.cls }}" data-g="{{ t.grupo }}" data-busca="{{ t.num }} {{ t.nome_full }} {{ t.doc }}"
+           data-baixa data-id="{{ t.id }}" data-desc="{{ t.descricao }}" data-contra="{{ t.nome_full }}" data-saldo="{{ t.saldo }}"
+           data-venc="{{ t.venc }}" data-prog="{{ t.prog }}" title="Clique para dar baixa">
+        <div class="tx-c-acoes">
+          <button type="button" class="ok" title="Dar baixa (recebeu)" onclick="event.stopPropagation(); ftAbrirBaixa(this.closest('.tx-c'))"><i class="fas fa-check"></i></button>
+          {% if t.cliente_id %}<a href="{{ url_for('clientes.detalhes', id=t.cliente_id) }}" title="Abrir a ficha do cliente" onclick="event.stopPropagation()"><i class="fas fa-building"></i></a>{% endif %}
+          {% if t.cancelavel %}<button type="button" title="Cancelar este título" onclick="event.stopPropagation(); txAcao('cancelar', {{ t.id }})"><i class="fas fa-ban"></i></button>{% endif %}
+          {% if t.excluivel %}<button type="button" title="Excluir (erro de lançamento)" onclick="event.stopPropagation(); txAcao('excluir', {{ t.id }})"><i class="fas fa-trash"></i></button>{% endif %}
+        </div>
+        <div class="tx-c-top"><span class="tx-c-num">{{ t.num }}</span><span class="tx-c-nome" title="{{ t.nome_full }}">{{ t.nome }}</span></div>
+        <div class="tx-c-meio"><div><div class="tx-c-val">{{ t.valor }}</div><div class="tx-c-desc">{{ t.desc }}</div></div>
+          <span class="tx-c-st">{{ t.tag }}</span></div>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <div class="tx-vazio"><i class="fas fa-mug-hot"></i>Nenhum título em aberto.</div>
+    {% endfor %}
+    <div class="tx-vazio" data-nada style="display:none;"><i class="fas fa-magnifying-glass"></i>Nada encontrado com esse filtro.</div>
+    <button type="button" class="tx-mais" style="display:none;"></button>
+  </div>
+
+  {# ── RECEBIDO ── #}
+  <div class="tx-painel{{ ' on' if aba == 'rec' }}" data-p="rec">
+    <div class="tx-faixa">
+      <div class="tx-filtros" data-tipo="auto"><button type="button" class="tx-f on" data-v="todos">Todos <b>{{ m.rec_n }}</b></button><button type="button" class="tx-f" data-v="1">Efí automático <b>{{ m.rec_auto }}</b></button><button type="button" class="tx-f" data-v="0">Baixa manual <b>{{ m.rec_n - m.rec_auto }}</b></button></div>
+      <div class="tx-mes">
+        <a href="{{ url_for('financeiro.titulos', aba='rec', mes=m.mes_ant, **_q) }}" title="Mês anterior"><i class="fas fa-chevron-left"></i></a>
+        <b>{{ m.mes_rot }}</b>
+        {% if m.mes_prox %}<a href="{{ url_for('financeiro.titulos', aba='rec', mes=m.mes_prox, **_q) }}" title="Mês seguinte"><i class="fas fa-chevron-right"></i></a>{% else %}<span class="x"><i class="fas fa-chevron-right"></i></span>{% endif %}
+      </div>
+      <div class="tx-busca"><i class="fas fa-magnifying-glass"></i><input type="search" placeholder="Cliente, número ou CNPJ"></div>
+    </div>
+    {% for g in m.rec %}
+    <div class="tx-dia" data-sec><h4>{{ g.rot }}</h4><span></span><small><b>{{ g.tot }}</b> · {{ g.n }} pagamento{{ 's' if g.n != 1 }}</small></div>
+    <div class="tx-grade">
+      {% for t in g.itens %}
+      {% if t.cliente_id %}<a class="tx-c tx-ok" href="{{ url_for('clientes.detalhes', id=t.cliente_id) }}" title="Abrir a ficha do cliente"{% else %}<div class="tx-c tx-ok"{% endif %}
+           data-auto="{{ 1 if t.auto else 0 }}" data-busca="{{ t.num }} {{ t.nome }}">
+        <div class="tx-c-top"><span class="tx-c-num">{{ t.num }}</span><span class="tx-c-nome">{{ t.nome }}</span></div>
+        <div class="tx-c-meio"><div><div class="tx-c-val">{{ t.valor }}</div><div class="tx-c-desc">{{ t.desc }}</div></div>
+          <span class="tx-c-st" title="{{ 'Baixado sozinho pelo extrato da Efí' if t.auto else 'Baixa feita por alguém da equipe' }}"><i class="fas {{ 'fa-bolt' if t.auto else 'fa-hand' }}"></i>{{ 'Efí' if t.auto else 'manual' }}</span></div>
+      {% if t.cliente_id %}</a>{% else %}</div>{% endif %}
+      {% endfor %}
+    </div>
+    {% else %}
+    <div class="tx-vazio"><i class="fas fa-calendar"></i>Nenhum recebimento em {{ m.mes_rot | lower }}.</div>
+    {% endfor %}
+    <div class="tx-vazio" data-nada style="display:none;"><i class="fas fa-magnifying-glass"></i>Nada encontrado com esse filtro.</div>
+    <button type="button" class="tx-mais" style="display:none;"></button>
+  </div>
+
+  {# ── INADIMPLENTES ── #}
+  <div class="tx-painel{{ ' on' if aba == 'ina' }}" data-p="ina">
+    <div class="tx-faixa">
+      <div class="tx-filtros" data-tipo="ordem"><button type="button" class="tx-f on" data-v="v">Maior dívida</button><button type="button" class="tx-f" data-v="q">Mais meses</button><button type="button" class="tx-f" data-v="a">Mais antigo</button></div>
+      <div class="tx-busca"><i class="fas fa-magnifying-glass"></i><input type="search" placeholder="Cliente, número ou CNPJ"></div>
+    </div>
+    {% if m.ina %}
+    <div class="tx-grade tx-g-ina">
+      {% for t in m.ina %}
+      <div class="tx-c tx-ina" data-busca="{{ t.num }} {{ t.nome_full }} {{ t.doc }}" data-o-v="{{ '%.2f'|format(t.v) }}" data-o-q="{{ t.qtd }}" data-o-a="{{ t.antigo }}">
+        <div class="tx-c-top"><span class="tx-c-num">{{ t.num }}</span><span class="tx-c-nome" title="{{ t.nome_full }}">{{ t.nome }}</span></div>
+        <div class="tx-c-meio"><div><div class="tx-c-val" style="color:#b91c1c">{{ t.valor }}</div>
+          <div class="tx-c-desc">{{ t.qtd }} vencidos · desde {{ t.desde }}{% if t.futuros %} · +{{ t.futuros }} a vencer{% endif %}</div></div></div>
+        <div class="tx-regua">{% for x in t.regua %}<i class="{{ x[0] }}" title="{{ x[1] }}: {{ 'em aberto' if x[0] == 'v' else ('pago' if x[0] == 'p' else 'sem título') }}"></i>{% endfor %}</div>
+        <div class="tx-regua-leg"><span>{{ m.regua_ini }}</span><span>{{ m.regua_fim }}</span></div>
+        <div class="tx-c-cob">
+          {% if t.cel %}<a class="tx-b1" href="https://wa.me/{{ t.cel }}?text={{ t.msg | urlencode }}" target="_blank" rel="noopener"><i class="fab fa-whatsapp"></i> Cobrar</a>
+          {% elif t.cliente_id %}<a class="tx-b1 off" href="{{ url_for('clientes.detalhes', id=t.cliente_id) }}" title="O cadastro está sem celular: abrir a ficha"><i class="fas fa-phone-slash"></i> Sem celular</a>
+          {% else %}<span class="tx-b1 off" style="flex:1; height:30px; border-radius:9px; display:inline-flex; align-items:center; justify-content:center; gap:6px; font-size:11.5px; font-weight:700;"><i class="fas fa-phone-slash"></i> Sem celular</span>{% endif %}
+          <button type="button" class="tx-b2" onclick="txVer(this)"><i class="fas fa-list-check"></i> Ver e baixar</button>
+        </div>
+        <template class="tx-ina-tit">
+          <div class="tx-lista">
+          {% for i in t.titulos %}
+            <div class="tx-lin"><div class="tx-lin-txt"><b>{{ i.desc }}</b><small>{{ i.tag }}</small></div>
+              <span class="tx-lin-val">{{ i.valor }}</span>
+              <button type="button" data-id="{{ i.id }}" data-desc="{{ i.descricao }}" data-contra="{{ i.nome_full }}" data-saldo="{{ i.saldo }}"
+                      data-venc="{{ i.venc }}" data-prog="{{ i.prog }}" onclick="ftFechar('txModalIna'); ftAbrirBaixa(this)"><i class="fas fa-check"></i> Baixar</button></div>
+          {% endfor %}
+          </div>
+        </template>
+      </div>
+      {% endfor %}
+    </div>
+    <div class="tx-vazio" data-nada style="display:none;"><i class="fas fa-magnifying-glass"></i>Nada encontrado com esse filtro.</div>
+    {% else %}
+    <div class="tx-vazio"><i class="fas fa-face-smile"></i>Nenhum cliente com 2 ou mais títulos vencidos.</div>
+    {% endif %}
+  </div>
+</div>
+</div>
+
+<div id="txModalIna" class="modal" style="display:none;">
+  <div class="modal-content" style="max-width:520px;">
+    <div class="modal-header"><h3 id="txModalInaTit">Em aberto</h3>
+      <button class="modal-close" onclick="ftFechar('txModalIna')">&times;</button></div>
+    <div class="modal-body" id="txModalInaCorpo"></div>
+  </div>
+</div>
+
+<form id="txFormAcao" method="POST" style="display:none;">
+  {% for k, v in filtros.items() %}<input type="hidden" name="{{ k }}" value="{{ v }}">{% endfor %}
+</form>
+
+{% include 'financeiro/_titulos_modais.html' %}
+{% endblock %}
+
+{% block extra_js %}
+{% include 'financeiro/_titulos_modais_js.html' %}
+<script>
+(function () {
+  var LIM = 36;
+  var URL_CANC = "{{ url_for('financeiro.titulo_cancelar', titulo_id=999999999) }}";
+  var URL_EXC = "{{ url_for('financeiro.titulo_excluir', titulo_id=999999999) }}";
+
+  function semAcento(s) { return (s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase(); }
+
+  // Abas: troca o painel e lembra a aba nos formulários (a baixa volta para cá)
+  function abrirAba(p) {
+    document.querySelectorAll('.tx-aba').forEach(function (x) { x.classList.toggle('on', x.dataset.p === p); });
+    document.querySelectorAll('.tx-painel').forEach(function (x) { x.classList.toggle('on', x.dataset.p === p); });
+    document.querySelectorAll('input[type=hidden][name=aba]').forEach(function (i) { i.value = p; });
+    try { var u = new URL(location.href); u.searchParams.set('aba', p); history.replaceState(null, '', u); } catch (e) {}
+  }
+  document.querySelectorAll('.tx-aba').forEach(function (b) { b.addEventListener('click', function () { abrirAba(b.dataset.p); }); });
+
+  // Filtro, busca e "mostrar mais" de cada painel
+  document.querySelectorAll('.tx-painel').forEach(function (pn) {
+    var cards = Array.prototype.slice.call(pn.querySelectorAll('.tx-c'));
+    var input = pn.querySelector('.tx-busca input');
+    var mais = pn.querySelector('.tx-mais');
+    var nada = pn.querySelector('[data-nada]');
+    var filtros = pn.querySelector('.tx-filtros');
+    var tipo = filtros && filtros.dataset.tipo;
+    var valor = 'todos', tudo = false;
+    cards.forEach(function (c) { c._b = semAcento(c.dataset.busca); });
+
+    function aplicar() {
+      var t = semAcento(input && input.value.trim());
+      var td = t.replace(/\D/g, '');
+      var livre = !t && valor === 'todos';
+      var vis = 0, escondidos = 0;
+      cards.forEach(function (c) {
+        var ok = true;
+        if (tipo === 'g' && valor !== 'todos') ok = c.dataset.g === valor;
+        if (tipo === 'auto' && valor !== 'todos') ok = c.dataset.auto === valor;
+        if (ok && t) ok = c._b.indexOf(t) >= 0 || (td.length >= 3 && c._b.replace(/\D/g, ' ').indexOf(td) >= 0);
+        if (ok && livre && !tudo && vis >= LIM) { ok = false; escondidos++; }
+        c.style.display = ok ? '' : 'none';
+        if (ok) vis++;
+      });
+      pn.querySelectorAll('.tx-grade').forEach(function (g) {
+        var tem = Array.prototype.some.call(g.querySelectorAll('.tx-c'), function (c) { return c.style.display !== 'none'; });
+        g.style.display = tem ? '' : 'none';
+        var cab = g.previousElementSibling;
+        if (cab && cab.hasAttribute('data-sec')) cab.style.display = tem ? '' : 'none';
+      });
+      if (nada) nada.style.display = (cards.length && !vis) ? '' : 'none';
+      if (mais) { mais.style.display = escondidos ? '' : 'none'; mais.textContent = 'Mostrar mais ' + escondidos; }
+    }
+    if (filtros) filtros.querySelectorAll('.tx-f').forEach(function (b) {
+      b.addEventListener('click', function () {
+        filtros.querySelectorAll('.tx-f').forEach(function (x) { x.classList.toggle('on', x === b); });
+        if (tipo === 'ordem') {
+          var k = b.dataset.v, grade = pn.querySelector('.tx-grade');
+          cards.sort(function (a, z) {
+            if (k === 'a') return a.dataset.oA < z.dataset.oA ? -1 : 1;
+            return parseFloat(z.dataset['o' + k.toUpperCase()]) - parseFloat(a.dataset['o' + k.toUpperCase()]);
+          }).forEach(function (c) { grade.appendChild(c); });
+        } else { valor = b.dataset.v; }
+        aplicar();
+      });
+    });
+    if (input) input.addEventListener('input', aplicar);
+    if (mais) mais.addEventListener('click', function () { tudo = true; aplicar(); });
+    aplicar();
+  });
+
+  // Clicar no cartão em aberto = dar baixa
+  document.querySelectorAll('.tx-c[data-baixa]').forEach(function (c) {
+    c.addEventListener('click', function () { ftAbrirBaixa(c); });
+  });
+
+  // Inadimplente: lista dos vencidos com o botão de baixa
+  window.txVer = function (btn) {
+    var card = btn.closest('.tx-c');
+    document.getElementById('txModalInaTit').textContent = card.querySelector('.tx-c-nome').title + ' · ' + card.querySelector('.tx-c-val').textContent;
+    var corpo = document.getElementById('txModalInaCorpo');
+    corpo.innerHTML = '';
+    corpo.appendChild(card.querySelector('template.tx-ina-tit').content.cloneNode(true));
+    document.getElementById('txModalIna').style.display = 'block';
+  };
+
+  window.txAcao = function (qual, id) {
+    var msg = qual === 'cancelar' ? 'Cancelar este título? Ele sai do A receber.' : 'Excluir este título? Só use para erro de lançamento.';
+    if (!confirm(msg)) return;
+    var f = document.getElementById('txFormAcao');
+    f.action = (qual === 'cancelar' ? URL_CANC : URL_EXC).replace('999999999', id);
+    f.submit();
+  };
+
+  document.addEventListener('click', function (e) {
+    var emp = document.getElementById('txEmp');
+    if (emp && !emp.contains(e.target)) emp.classList.remove('on');
+  });
+})();
+</script>
+{% endblock %}

@@ -156,7 +156,8 @@ def _dec_form(raw):
 
 
 def _filtros_titulos():
-    keys = ('tipo', 'status', 'venc_de', 'venc_ate', 'categoria_id', 'busca', 'emp')
+    keys = ('tipo', 'status', 'venc_de', 'venc_ate', 'categoria_id', 'busca', 'emp',
+            'lista', 'aba', 'mes')
     return {k: request.form.get(k) or request.args.get(k) or '' for k in keys}
 
 
@@ -191,6 +192,8 @@ def titulos():
     from models.fin_titulo import FinCentroCusto
     centro_id = request.args.get('centro') or None
     emps, sel, mapa = _empresas_ctx()
+    if tipo == 'R' and not request.args.get('lista'):
+        return _titulos_receber(emps, sel)
     lista = FinTitulo.listar(tipo=None if tipo == 'todos' else tipo,
                              status=status, venc_de=venc_de, venc_ate=venc_ate,
                              categoria_id=categoria_id, busca=busca,
@@ -207,6 +210,32 @@ def titulos():
                      venc_ate=venc_ate or '', categoria_id=categoria_id or '',
                      busca=busca or '', emp=','.join(map(str, sel)),
                      centro=centro_id or ''))
+
+
+def _titulos_receber(emps, sel):
+    """A receber em 3 abas: Recebido / A receber / Inadimplentes (12/11/2026).
+
+    A lista antiga (tabela com todos os filtros) segue em ?tipo=R&lista=1 e o
+    A pagar em ?tipo=P.
+    """
+    from models.fin_titulo import FinCentroCusto
+    from utils import titulos_receber as TR
+    mes = None
+    raw = (request.args.get('mes') or '').strip()
+    if re.match(r'^\d{4}-\d{2}$', raw):
+        try:
+            mes = date(int(raw[:4]), int(raw[5:]), 1)
+        except ValueError:
+            mes = None
+    aba = request.args.get('aba') if request.args.get('aba') in ('rec', 'abe', 'ina') else 'abe'
+    m = TR.montar(empresa_ids=sel, mes=mes)
+    emp = ','.join(map(str, sel))
+    return render_template(
+        'financeiro/titulos_receber.html', m=m, aba=aba,
+        categorias=FinCategoria.listar(), centros=FinCentroCusto.listar(),
+        hoje=m['hoje'], fin_empresas=emps, sel_empresas=sel,
+        filtros=dict(tipo='R', emp=emp, aba=aba,
+                     mes=raw if mes else ''))
 
 
 @financeiro.route('/financeiro/titulos/novo', methods=['POST'])

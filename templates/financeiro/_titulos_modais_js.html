@@ -1,0 +1,105 @@
+<script>
+var FT_URL_BAIXA = "{{ url_for('financeiro.titulo_baixar', titulo_id=0) }}";
+
+function ftToggleFiltros() {
+    var corpo = document.getElementById('ftFiltroCorpo');
+    var chev = document.getElementById('ftChevron');
+    var abrindo = corpo.style.display === 'none';
+    corpo.style.display = abrindo ? '' : 'none';
+    chev.style.transform = abrindo ? 'rotate(180deg)' : '';
+}
+
+function ftFechar(id) {
+    document.getElementById(id).style.display = 'none';
+}
+
+function ftAbrirNovo() {
+    document.getElementById('ftModalNovo').style.display = 'block';
+    ftFiltraCategorias();
+}
+
+// A categoria acompanha o tipo: escolheu "a pagar", só aparecem categorias P.
+function ftFiltraCategorias() {
+    var tipo = document.querySelector('#ftModalNovo input[name="tipo"]:checked').value;
+    var sel = document.getElementById('ftCategoria');
+    var primeiro = null;
+    Array.prototype.forEach.call(sel.options, function (o) {
+        var ok = o.getAttribute('data-tipo') === tipo;
+        o.hidden = !ok;
+        o.disabled = !ok;
+        if (ok && primeiro === null) primeiro = o.value;
+    });
+    var atual = sel.options[sel.selectedIndex];
+    if (!atual || atual.disabled) sel.value = primeiro;
+}
+
+var ftBaixaCtx = {saldo: 0, venc: '', prog: ''};
+
+function ftAbrirBaixa(el) {
+    var id = el.getAttribute('data-id');
+    var form = document.getElementById('ftFormBaixa');
+    form.action = FT_URL_BAIXA.replace('/0/', '/' + id + '/');
+    document.getElementById('ftBaixaInfo').textContent =
+        el.getAttribute('data-contra') + ' — ' + el.getAttribute('data-desc') +
+        ' (em aberto: R$ ' + el.getAttribute('data-saldo').replace('.', ',') + ')';
+    ftBaixaCtx = {
+        saldo: parseFloat(el.getAttribute('data-saldo')) || 0,
+        venc: el.getAttribute('data-venc') || '',
+        prog: el.getAttribute('data-prog') || ''
+    };
+    var v = document.getElementById('ftBaixaValor');
+    v.value = el.getAttribute('data-saldo');
+    ftAtualizaPergunta();
+    document.getElementById('ftModalBaixa').style.display = 'block';
+    v.focus();
+}
+
+// A pergunta so vale para programacao FIXA com valor diferente do esperado.
+function ftAtualizaPergunta() {
+    var box = document.getElementById('ftPergunta');
+    var v = parseFloat(document.getElementById('ftBaixaValor').value) || 0;
+    var dif = Math.round((v - ftBaixaCtx.saldo) * 100) / 100;
+    if (ftBaixaCtx.prog !== 'f' || !v || dif === 0) {
+        box.style.display = 'none';
+        var marcado = document.querySelector('#ftPergunta input[name="decisao"]:checked');
+        if (marcado) marcado.checked = false;
+        return;
+    }
+    var brl = function (x) { return x.toFixed(2).replace('.', ','); };
+    var maior = dif > 0;
+    document.getElementById('ftPerguntaTexto').textContent =
+        'Esperado R$ ' + brl(ftBaixaCtx.saldo) + ', informado R$ ' + brl(v) +
+        ' (' + (maior ? '+' : '−') + 'R$ ' + brl(Math.abs(dif)) + '). O que aconteceu?';
+    document.getElementById('ftDecExtraRotulo').textContent = maior
+        ? 'A diferença é juros/multa do atraso'
+        : 'A diferença é desconto que ganhamos';
+    var data = document.querySelector('#ftFormBaixa input[name="data_baixa"]').value;
+    var atrasado = maior && ftBaixaCtx.venc && data > ftBaixaCtx.venc;
+    // atrasou e veio maior -> juros e o palpite; senao, "so deste mes"
+    document.getElementById(atrasado ? 'ftDecExtra' : 'ftDecMes').checked = true;
+    box.style.display = '';
+}
+
+document.addEventListener('DOMContentLoaded', function () {
+    var v = document.getElementById('ftBaixaValor');
+    if (v) v.addEventListener('input', ftAtualizaPergunta);
+    var d = document.querySelector('#ftFormBaixa input[name="data_baixa"]');
+    if (d) d.addEventListener('change', ftAtualizaPergunta);
+    var form = document.getElementById('ftFormBaixa');
+    if (form) form.addEventListener('submit', function () {
+        // 'juros/multa' e 'desconto': o JS reparte os campos antes de enviar —
+        // o valor que abate o titulo e o esperado; a diferenca vai no campo certo.
+        var marcado = document.querySelector('#ftPergunta input[name="decisao"]:checked');
+        if (!marcado || document.getElementById('ftPergunta').style.display === 'none') return;
+        if (marcado.value !== 'extra') return;
+        var v = parseFloat(document.getElementById('ftBaixaValor').value) || 0;
+        var dif = Math.round((v - ftBaixaCtx.saldo) * 100) / 100;
+        if (dif > 0) {
+            form.querySelector('input[name="juros"]').value = dif.toFixed(2);
+            document.getElementById('ftBaixaValor').value = ftBaixaCtx.saldo.toFixed(2);
+        } else if (dif < 0) {
+            form.querySelector('input[name="desconto"]').value = Math.abs(dif).toFixed(2);
+        }
+    });
+});
+</script>
