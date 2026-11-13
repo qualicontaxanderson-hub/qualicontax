@@ -101,9 +101,24 @@ def _ja_amarrado(lanc_id):
                   WHERE b.lancamento_id = %s LIMIT 1""", (lanc_id,), one=True)
 
 
-def _baixa_do_webhook(empresa_id, data, valor):
+def cobranca_da_descricao(desc):
+    """Número da cobrança Efí na descrição do OFX ("Recebimento de cobrança: 1084657476 de X")."""
+    m = re.match(r'^Recebimento de cobran\S*:\s*(\d+)', str(desc or ''))
+    return m.group(1) if m else None
+
+
+def _baixa_do_webhook(empresa_id, data, valor, cobranca=None):
     """Boleto emitido pelo NOSSO sistema: o webhook já deu a baixa no dia.
-    Devolve a baixa (sem lançamento amarrado) que é este dinheiro, se houver."""
+    Devolve a baixa (sem lançamento amarrado) que é este dinheiro, se houver.
+
+    Com o número da cobrança (OFX) só vale a baixa DESSA cobrança: pelo valor, o R$ 1.000 do
+    Posto RLM (boleto do Conexa) ficou amarrado ao boleto de R$ 1.000 da Nextup, baixado pelo
+    webhook no mesmo dia (05/11/2026)."""
+    if cobranca:
+        return _q("""SELECT b.id, b.titulo_id FROM fin_titulo_baixas b
+                       JOIN fin_titulos t ON t.id = b.titulo_id
+                      WHERE t.empresa_id = %s AND b.origem = 'webhook' AND b.lancamento_id IS NULL
+                        AND b.referencia = %s LIMIT 1""", (empresa_id, 'efi:' + cobranca), one=True)
     return _q("""SELECT b.id, b.titulo_id FROM fin_titulo_baixas b
                    JOIN fin_titulos t ON t.id = b.titulo_id
                   WHERE t.empresa_id = %s AND b.origem = 'webhook' AND b.lancamento_id IS NULL
@@ -250,7 +265,7 @@ def baixar(lanc, seco=True, nome_pagador=None, irmaos_seco=0):
             _nome_na_descricao(lanc, prot, ja['nome'])
         return 'ja-baixado', {'titulo_id': ja['titulo_id'], 'nome': ja['nome']}
 
-    wh = _baixa_do_webhook(lanc['empresa_id'], lanc['data'], valor)
+    wh = _baixa_do_webhook(lanc['empresa_id'], lanc['data'], valor, cobranca_da_descricao(lanc.get('descricao')))
     if wh:
         if not seco:
             from utils.db_helper import execute_query
@@ -311,7 +326,7 @@ def completar_pelo_ofx(empresa_id, conta, linhas_ofx):
     if not por_doc:
         return 0
     docs = list(por_doc)
-    feitos = 0
+    pares = []
     for i in range(0, len(docs), 300):
         fatia = docs[i:i + 300]
         rows = _q(f"""SELECT * FROM extrato_lancamentos
@@ -319,22 +334,29 @@ def completar_pelo_ofx(empresa_id, conta, linhas_ofx):
                          AND TRIM(LEADING '0' FROM documento) IN ({','.join(['%s'] * len(fatia))})""",
                   (empresa_id, ORIGEM, *fatia))
         for r in rows:
-            if not mesma_conta(r['conta'], conta):
-                continue
             l = por_doc.get((r['documento'] or '').lstrip('0'))
-            if not l:
-                continue
-            execute_query('UPDATE extrato_lancamentos SET descricao = %s, fitid = COALESCE(fitid, %s) WHERE id = %s',
-                          (l['descricao'][:500], l.get('fitid'), r['id']), fetch=False)
-            feitos += 1
-            nome = nome_do_pagador(l['descricao'])
-            if r['valor'] > 0 and nome and not _ja_amarrado(r['id']):
-                r = dict(r, descricao=l['descricao'])
-                try:
-                    baixar(r, seco=False, nome_pagador=nome)
-                except Exception:
-                    logger.exception('[efi-extrato] baixa pelo nome do OFX falhou (lançamento %s)', r['id'])
-    return feitos
+            if l and mesma_conta(r['conta'], conta):
+                pares.append((r, l))
+    # 1º: grava o nome e SOLTA o que o CNAB amarrou pelo valor a boleto de OUTRA cobrança —
+    # antes de baixar qualquer um, para a baixa solta ficar livre para a linha certa do arquivo.
+    for r, l in pares:
+        execute_query('UPDATE extrato_lancamentos SET descricao = %s, fitid = COALESCE(fitid, %s) WHERE id = %s',
+                      (l['descricao'][:500], l.get('fitid'), r['id']), fetch=False)
+        cob = cobranca_da_descricao(l['descricao'])
+        if cob and r['valor'] > 0:
+            execute_query("""UPDATE fin_titulo_baixas SET lancamento_id = NULL, confirmado_extrato = 0
+                              WHERE lancamento_id = %s AND origem = 'webhook'
+                                AND referencia LIKE 'efi:%%' AND referencia <> %s""",
+                          (r['id'], 'efi:' + cob), fetch=False)
+    for r, l in pares:
+        nome = nome_do_pagador(l['descricao'])
+        if r['valor'] > 0 and nome and not _ja_amarrado(r['id']):
+            r = dict(r, descricao=l['descricao'])
+            try:
+                baixar(r, seco=False, nome_pagador=nome)
+            except Exception:
+                logger.exception('[efi-extrato] baixa pelo nome do OFX falhou (lançamento %s)', r['id'])
+    return len(pares)
 
 
 # ---------------------------------------------------------------------------

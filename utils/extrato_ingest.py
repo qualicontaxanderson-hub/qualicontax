@@ -471,7 +471,7 @@ def ja_existe_por_data_valor(empresa_id, conta, novos):
     return restantes, repetidos
 
 
-def processar_lancamentos(dados, empresa_id, arquivo, usuario_id=None, origem='ofx'):
+def processar_lancamentos(dados, empresa_id, arquivo, usuario_id=None, origem='ofx', classificar=True):
     """Grava os lançamentos novos de um arquivo já lido (OFX ou CSV) e devolve
     o resumo — SEM mover nada. Quem move é quem chamou, depois de gravar.
 
@@ -496,6 +496,14 @@ def processar_lancamentos(dados, empresa_id, arquivo, usuario_id=None, origem='o
         dados['banco'] = reg.get('banco_nome') or dados.get('banco')
 
     lancs = dados['lancamentos']
+    # BRADESCO: o FITID ("N10112") e o CHECKNUM recomeçam em cada arquivo
+    # exportado — o mesmo N10112 é de janeiro num arquivo e de agosto no outro
+    # (109 de 175 FITIDs repetidos nos OFX de 2026). Como chave, descartavam
+    # lançamentos verdadeiros. Para o Bradesco vale data + valor + descrição
+    # (12/11/2026, extratos de jan-nov do Anderson).
+    sem_id_do_banco = re.sub(r'\D', '', str(dados.get('banco_id') or '')).lstrip('0') == '237'
+    if sem_id_do_banco:
+        lancs = [dict(l, fitid=None) for l in lancs]
     repet, candidatos = {}, []
     for l in lancs:
         k = (l['data'], str(l['valor']), l['descricao'], l.get('documento'))
@@ -513,7 +521,8 @@ def processar_lancamentos(dados, empresa_id, arquivo, usuario_id=None, origem='o
 
     ja = ExtratoLancamento.hashes_existentes([h for h, _ in unicos])
     ja_fitid = fitids_existentes(empresa_id, dados['conta'], [l.get('fitid') for _, l in unicos])
-    ja_doc = documentos_existentes(empresa_id, dados['conta'], [l.get('documento') for _, l in unicos])
+    ja_doc = set() if sem_id_do_banco else documentos_existentes(
+        empresa_id, dados['conta'], [l.get('documento') for _, l in unicos])
     novos = [(h, l) for h, l in unicos if h not in ja
              and not (l.get('fitid') and l['fitid'] in ja_fitid)
              and not (l.get('documento') and (l['documento'] or '').lstrip('0') in ja_doc)]
@@ -558,7 +567,9 @@ def processar_lancamentos(dados, empresa_id, arquivo, usuario_id=None, origem='o
             logger.exception('[extrato] detector de pares falhou; os '
                              'lançamentos VALEM e ficam sem trava nesta rodada.')
             par = {}
-        auto = ExtratoMemorizacao.aplicar_em_ids([r['id'] for r in ids])
+        # classificar=False: extrato antigo entra só para conciliar — as regras
+        # criariam títulos retroativos no DRE de meses já fechados.
+        auto = ExtratoMemorizacao.aplicar_em_ids([r['id'] for r in ids]) if classificar else 0
 
     return {
         'banco': banco_curto(dados.get('banco_id'), dados['banco']),
