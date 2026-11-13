@@ -5,7 +5,7 @@
 <style>
 /* Títulos a receber em 3 abas (12/11/2026): as abas são também os números do mês */
 .tx, #txModalIna { --verde:#0f3d2e; --linha:#e6eeea; --mudo:#7d968a; --tinta:#0f172a; }
-.tx-abas { display:grid; grid-template-columns:repeat(4, minmax(0,1fr)); gap:14px; margin-top:-34px; position:relative; z-index:2; margin-bottom:22px; }
+.tx-abas { display:grid; grid-template-columns:repeat(5, minmax(0,1fr)); gap:12px; margin-top:-34px; position:relative; z-index:2; margin-bottom:22px; }
 .tx-aba { position:relative; text-align:left; font:inherit; cursor:pointer; background:#fff; border:1px solid var(--linha);
           border-radius:18px; padding:18px 22px 16px; box-shadow:0 10px 28px rgba(15,61,46,.08); transition:all .18s;
           display:flex; align-items:center; gap:16px; overflow:hidden; min-width:0; }
@@ -17,13 +17,14 @@
               align-items:center; justify-content:center; font-size:18px; flex-shrink:0; }
 .tx-aba-txt { min-width:0; flex:1; }
 .tx-aba-lbl { font-size:12px; font-weight:700; letter-spacing:.6px; text-transform:uppercase; color:var(--mudo); }
-.tx-aba-val { display:block; font-size:23px; font-weight:800; color:var(--tinta); letter-spacing:-.02em; font-variant-numeric:tabular-nums; line-height:1.15; margin-top:2px; white-space:nowrap; }
+.tx-aba-val { display:block; font-size:21px; font-weight:800; color:var(--tinta); letter-spacing:-.02em; font-variant-numeric:tabular-nums; line-height:1.15; margin-top:2px; white-space:nowrap; }
 .tx-aba-sub { font-size:12px; color:#94a3b8; }
 .tx-aba-n { align-self:flex-start; font-size:12px; font-weight:800; color:var(--cor); background:var(--fundo); border-radius:99px; padding:3px 10px; }
 .tx-a-rec { --cor:#16a34a; --fundo:#ecfdf3; }
 .tx-a-abe { --cor:#2563eb; --fundo:#eff4ff; }
 .tx-a-atr { --cor:#d97706; --fundo:#fff7ec; }
 .tx-a-ina { --cor:#dc2626; --fundo:#fef1f1; }
+.tx-a-perd { --cor:#64748b; --fundo:#f1f5f9; }
 
 .tx-emp { position:relative; }
 .tx-emp-menu { display:none; position:absolute; right:0; top:calc(100% + 6px); z-index:20; background:#fff; border:1px solid var(--linha);
@@ -83,6 +84,12 @@ a.tx-c { text-decoration:none; color:inherit; }
 .tx-fut   { --cor:#94a3b8; }
 .tx-venc  { --cor:#d97706; }
 .tx-ina   { --cor:#dc2626; }
+.tx-perd  { --cor:#94a3b8; }
+.tx-perd .tx-c-val { color:#64748b; }
+.tx-motivo { font-size:11.5px; color:#475569; background:#f8fafc; border-radius:8px; padding:6px 8px; line-height:1.35; }
+.tx-motivo i { color:#94a3b8; margin-right:4px; }
+.tx-quem { font-size:10.5px; color:#a3b3ab; }
+.tx-lin .tx-lin-perd { background:#fff; color:#64748b; border:1px solid var(--linha); margin-left:4px; }
 .tx-c-acoes { position:absolute; right:10px; top:8px; display:flex; gap:4px; opacity:0; transition:opacity .15s; background:#fff; padding-left:6px; }
 .tx-c:hover .tx-c-acoes, .tx-c:focus-within .tx-c-acoes { opacity:1; }
 .tx-c-acoes button, .tx-c-acoes a { width:27px; height:27px; border-radius:8px; border:1px solid var(--linha); background:#fff; color:var(--verde);
@@ -119,6 +126,7 @@ a.tx-c { text-decoration:none; color:inherit; }
 }
 @media (max-width:900px) {
   .tx-abas { grid-template-columns:1fr 1fr; gap:6px; margin-top:-26px; }
+  .tx-aba.tx-a-perd { grid-column:span 2; }
   .tx-aba { flex-direction:column; align-items:flex-start; gap:6px; padding:10px 10px 12px; border-radius:14px; }
   .tx-aba-ico, .tx-aba-n, .tx-aba-sub { display:none; }
   .tx-aba-lbl { font-size:10px; letter-spacing:.3px; }
@@ -171,7 +179,8 @@ a.tx-c { text-decoration:none; color:inherit; }
           <button type="button" class="ok" title="Dar baixa (recebeu)" onclick="event.stopPropagation(); ftAbrirBaixa(this.closest('.tx-c'))"><i class="fas fa-check"></i></button>
           {% if atrasado and t.cel %}<a class="wa" href="https://wa.me/{{ t.cel }}?text={{ t.msg | urlencode }}" target="_blank" rel="noopener" title="Cobrar pelo WhatsApp" onclick="event.stopPropagation()"><i class="fab fa-whatsapp"></i></a>{% endif %}
           {% if t.cliente_id %}<a href="{{ url_for('clientes.detalhes', id=t.cliente_id) }}" title="Abrir a ficha do cliente" onclick="event.stopPropagation()"><i class="fas fa-building"></i></a>{% endif %}
-          {% if t.cancelavel %}<button type="button" title="Cancelar este título" onclick="event.stopPropagation(); txAcao('cancelar', {{ t.id }})"><i class="fas fa-ban"></i></button>{% endif %}
+          {% if t.cancelavel and pode_perd %}<button type="button" title="Não vai pagar: marcar como perdido" onclick="event.stopPropagation(); txPerdido({{ t.id }}, this.closest('.tx-c').dataset.contra)"><i class="fas fa-user-slash"></i></button>{% endif %}
+          {% if t.cancelavel %}<button type="button" title="Cancelar este título (lançado errado/duplicado)" onclick="event.stopPropagation(); txAcao('cancelar', {{ t.id }})"><i class="fas fa-ban"></i></button>{% endif %}
           {% if t.excluivel %}<button type="button" title="Excluir (erro de lançamento)" onclick="event.stopPropagation(); txAcao('excluir', {{ t.id }})"><i class="fas fa-trash"></i></button>{% endif %}
         </div>
         <div class="tx-c-top"><span class="tx-c-num">{{ t.num }}</span><span class="tx-c-nome" title="{{ t.nome_full }}">{{ t.nome }}</span></div>
@@ -191,6 +200,8 @@ a.tx-c { text-decoration:none; color:inherit; }
       <span class="tx-aba-txt"><span class="tx-aba-lbl">Atrasados</span><span class="tx-aba-val">{{ m.atr_tot }}</span><span class="tx-aba-sub">1 vencido · cobrar já</span></span><span class="tx-aba-n">{{ m.atr_n }}</span></button>
     <button type="button" class="tx-aba tx-a-ina{{ ' on' if aba == 'ina' }}" data-p="ina"><span class="tx-aba-ico"><i class="fas fa-user-clock"></i></span>
       <span class="tx-aba-txt"><span class="tx-aba-lbl">Inadimplentes</span><span class="tx-aba-val">{{ m.ina_tot }}</span><span class="tx-aba-sub">2 ou mais vencidos</span></span><span class="tx-aba-n">{{ m.ina_cli }}</span></button>
+    <button type="button" class="tx-aba tx-a-perd{{ ' on' if aba == 'perd' }}" data-p="perd"><span class="tx-aba-ico"><i class="fas fa-box-archive"></i></span>
+      <span class="tx-aba-txt"><span class="tx-aba-lbl">Perdidos</span><span class="tx-aba-val">{{ m.perd_tot }}</span><span class="tx-aba-sub">não vão pagar · registro</span></span><span class="tx-aba-n">{{ m.perd_n }}</span></button>
   </div>
 
   {% if m.esp_n %}
@@ -292,7 +303,7 @@ a.tx-c { text-decoration:none; color:inherit; }
             <div class="tx-lin"><div class="tx-lin-txt"><b>{{ i.desc }}</b><small>{{ i.tag }}</small></div>
               <span class="tx-lin-val">{{ i.valor }}</span>
               <button type="button" data-id="{{ i.id }}" data-desc="{{ i.descricao }}" data-contra="{{ i.nome_full }}" data-saldo="{{ i.saldo }}"
-                      data-venc="{{ i.venc }}" data-prog="{{ i.prog }}" onclick="ftFechar('txModalIna'); ftAbrirBaixa(this)"><i class="fas fa-check"></i> Baixar</button></div>
+                      data-venc="{{ i.venc }}" data-prog="{{ i.prog }}" onclick="ftFechar('txModalIna'); ftAbrirBaixa(this)"><i class="fas fa-check"></i> Baixar</button>{% if pode_perd and i.cancelavel %}<button type="button" class="tx-lin-perd" title="Não vai pagar: marcar como perdido" onclick="txPerdido({{ i.id }}, {{ i.nome_full | tojson | forceescape }})"><i class="fas fa-user-slash"></i></button>{% endif %}</div>
           {% endfor %}
           </div>
         </template>
@@ -302,6 +313,30 @@ a.tx-c { text-decoration:none; color:inherit; }
     <div class="tx-vazio" data-nada style="display:none;"><i class="fas fa-magnifying-glass"></i>Nada encontrado com esse filtro.</div>
     {% else %}
     <div class="tx-vazio"><i class="fas fa-face-smile"></i>Nenhum cliente com 2 ou mais títulos vencidos.</div>
+    {% endif %}
+  </div>
+
+  {# ── PERDIDOS: não vão pagar, guardados para o registro ── #}
+  <div class="tx-painel{{ ' on' if aba == 'perd' }}" data-p="perd">
+    <div class="tx-faixa">
+      <div class="tx-filtros"><span style="font-size:12.5px; color:var(--mudo);"><i class="fas fa-circle-info"></i> Saem das cobranças e do a receber, mas ficam guardados com o motivo, quem marcou e quando.</span></div>
+      <div class="tx-busca"><i class="fas fa-magnifying-glass"></i><input type="search" placeholder="Cliente, número ou CNPJ"></div>
+    </div>
+    {% if m.perd %}
+    <div class="tx-grade">
+      {% for t in m.perd %}
+      <div class="tx-c tx-perd" data-busca="{{ t.num }} {{ t.nome_full }} {{ t.doc }}">
+        {% if pode_perd %}<div class="tx-c-acoes"><button type="button" title="Voltar para em aberto" onclick="txVoltar({{ t.id }})"><i class="fas fa-rotate-left"></i></button></div>{% endif %}
+        <div class="tx-c-top"><span class="tx-c-num">{{ t.num }}</span><span class="tx-c-nome" title="{{ t.nome_full }}">{{ t.nome }}</span></div>
+        <div class="tx-c-meio"><div><div class="tx-c-val">{{ t.valor }}</div><div class="tx-c-desc">{{ t.desc }} · venceu {{ t.venc }}</div></div></div>
+        <div class="tx-motivo"><i class="fas fa-quote-left"></i>{{ t.motivo }}</div>
+        <div class="tx-quem">marcado em {{ t.quando }}{% if t.por %} por {{ t.por }}{% endif %}</div>
+      </div>
+      {% endfor %}
+    </div>
+    <div class="tx-vazio" data-nada style="display:none;"><i class="fas fa-magnifying-glass"></i>Nada encontrado com esse filtro.</div>
+    {% else %}
+    <div class="tx-vazio"><i class="fas fa-box-archive"></i>Nenhum título marcado como perdido.</div>
     {% endif %}
   </div>
 </div>
@@ -407,6 +442,28 @@ a.tx-c { text-decoration:none; color:inherit; }
     document.getElementById('txModalIna').style.display = 'block';
   };
 
+  var URL_PERD = "{{ url_for('financeiro.titulo_perdido', titulo_id=999999999) }}";
+  var URL_VOLTA = "{{ url_for('financeiro.titulo_perdido_voltar', titulo_id=999999999) }}";
+  function enviar(url, extra) {
+    var f = document.getElementById('txFormAcao');
+    f.action = url;
+    f.querySelectorAll('input[data-extra]').forEach(function (i) { i.remove(); });
+    Object.keys(extra || {}).forEach(function (k) {
+      var i = document.createElement('input'); i.type = 'hidden'; i.name = k; i.value = extra[k]; i.setAttribute('data-extra', '1'); f.appendChild(i);
+    });
+    f.submit();
+  }
+  window.txPerdido = function (id, nome) {
+    var motivo = prompt('Marcar como PERDIDO (não vai pagar)' + (nome ? ' — ' + nome : '') + '. Qual o motivo? (ex.: cliente fechou, perdoado, não vai pagar)');
+    if (motivo === null) return;
+    motivo = motivo.trim();
+    if (!motivo) { alert('Escreva o motivo.'); return; }
+    enviar(URL_PERD.replace('999999999', id), {motivo: motivo});
+  };
+  window.txVoltar = function (id) {
+    if (!confirm('Voltar este título para em aberto?')) return;
+    enviar(URL_VOLTA.replace('999999999', id), {});
+  };
   window.txAcao = function (qual, id) {
     var msg = qual === 'cancelar' ? 'Cancelar este título? Ele sai do A receber.' : 'Excluir este título? Só use para erro de lançamento.';
     if (!confirm(msg)) return;

@@ -224,6 +224,9 @@ def montar(empresa_ids=None, mes=None):
              ('a90', '31 a 90 dias', sum(1 for i in atr_i if i['faixa'] == 'a90')),
              ('mais', 'Mais de 90 dias', sum(1 for i in atr_i if i['faixa'] == 'mais'))]
 
+    # Perdidos: cancelados com motivo (não vão pagar), guardados para o registro
+    perd = perdidos(ec, ep, hoje)
+
     # Pagamentos da Efí que entraram e não acharam dono (valor igual ao de outros clientes)
     esp = q("""SELECT COUNT(*) n, COALESCE(SUM(l.valor), 0) v FROM extrato_lancamentos l
                 WHERE l.descricao LIKE 'Recebimento de cobran%%' AND l.data >= %s AND l.valor > 0
@@ -240,6 +243,36 @@ def montar(empresa_ids=None, mes=None):
         abe_cli=len({i['cliente_id'] or i['nome_full'] for i in itens}),
         atr=atr_g, atr_f=atr_f, atr_tot=brl(sum(float(i['saldo']) for i in atr_i)), atr_n=len(atr_i),
         ina=ina, ina_tot=brl(sum(x['v'] for x in ina)), ina_cli=len(ina),
+        perd=perd, perd_tot=brl(sum(x['v'] for x in perd)), perd_n=len(perd),
         ina_tit=sum(x['qtd'] for x in ina),
         regua_ini=_comp(date(*comps[0], 1)), regua_fim=_comp(date(*comps[-1], 1)),
         esp_n=esp['n'], esp_tot=brl(esp['v']), esp_desde=CORTE_EFI)
+
+
+def _tem_colunas_perdido():
+    try:
+        return bool(q("SHOW COLUMNS FROM fin_titulos LIKE 'perdido_em'", fetch=True))
+    except Exception:
+        return False
+
+
+def perdidos(ec='', ep=(), hoje=None):
+    """Títulos a receber marcados como perdidos (status cancelado + perdido_em)."""
+    if not _tem_colunas_perdido():
+        return []
+    rows = q(f"""SELECT t.id, t.cliente_id, t.contraparte_nome, t.contraparte_doc, t.descricao, t.competencia,
+                        t.vencimento, t.valor - t.valor_baixado AS v, t.perdido_em, t.perdido_motivo,
+                        c.numero_cliente, u.nome AS por
+                   FROM fin_titulos t LEFT JOIN clientes c ON c.id = t.cliente_id
+                   LEFT JOIN usuarios u ON u.id = t.perdido_por
+                  WHERE t.tipo = 'R' AND t.status = 'cancelado' AND t.perdido_em IS NOT NULL{ec}
+                  ORDER BY t.perdido_em DESC, t.vencimento""", tuple(ep), fetch=True) or []
+    out = []
+    for t in rows:
+        out.append({'id': t['id'], 'num': t['numero_cliente'] or '—', 'nome': _nome(t['contraparte_nome']),
+                    'nome_full': t['contraparte_nome'] or '', 'doc': _digitos(t['contraparte_doc']),
+                    'cliente_id': t['cliente_id'], 'v': float(t['v']), 'valor': brl(t['v']), 'desc': _desc(t),
+                    'venc': t['vencimento'].strftime('%d/%m/%Y'), 'motivo': t['perdido_motivo'] or '',
+                    'quando': t['perdido_em'].strftime('%d/%m/%Y') if t['perdido_em'] else '',
+                    'por': (t['por'] or '').split(' ')[0]})
+    return out

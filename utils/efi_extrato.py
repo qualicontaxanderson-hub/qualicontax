@@ -113,6 +113,19 @@ def _baixa_do_webhook(empresa_id, data, valor):
               (empresa_id, data - timedelta(days=3), data, valor), one=True)
 
 
+def _baixas_a_mao(empresa_id, data, valor):
+    """Baixas dadas À MÃO (ou pelo relatório do Conexa) em título do Conexa, ainda sem a linha do
+    extrato, do mesmo valor e de até 6 dias antes do crédito. O dinheiro que chega depois é delas —
+    sem isto, o crédito iria procurar OUTRO título do mesmo valor e daria baixa em quem não pagou."""
+    return _q("""SELECT b.id, b.titulo_id, t.contraparte_nome AS nome FROM fin_titulo_baixas b
+                   JOIN fin_titulos t ON t.id = b.titulo_id
+                  WHERE t.empresa_id = %s AND t.origem = 'conexa' AND b.origem = 'manual'
+                    AND b.lancamento_id IS NULL AND b.data_baixa BETWEEN %s AND %s
+                    AND ABS(b.valor + b.juros + b.multa - b.desconto - %s) < 0.005
+                  ORDER BY b.id""",
+              (empresa_id, data - timedelta(days=6), data, valor)) or []
+
+
 _CORTE = {}
 
 
@@ -160,11 +173,23 @@ def candidatos(empresa_id, data, valor, cliente_ids=None):
     return _q(sql + ' ORDER BY t.vencimento', tuple(p))
 
 
+def nome_do_pagador(desc):
+    """'Recebimento de cobrança: 1082662876 de DOLTTY CORRETORA ...' -> 'DOLTTY CORRETORA ...'.
+
+    O nome é o que vem DEPOIS do número da cobrança (12/11/2026: a busca antiga pegava o primeiro
+    " de " da frase, "cobrança: 1082... de DOLTTY", e nenhum pagamento achava o cliente). O OFX às
+    vezes repete o nome ("X  de X"): fica o primeiro."""
+    m = re.match(r'^Recebimento de cobran\S*:\s*\S+\s+de\s+(.+)$', desc or '')
+    if not m:
+        return None
+    return re.split(r'\s{2,}de\s+', m.group(1).strip())[0].strip() or None
+
+
 def _clientes_pelo_nome(nome):
     """Cadastro(s) cujo nome é o do pagador que o OFX escreveu."""
     if not nome:
         return []
-    n = re.sub(r'\s+', ' ', nome).strip()
+    n = re.sub(r'\s+', ' ', re.split(r'\s{2,}de\s+', nome.strip())[0]).strip()
     rs = _q('SELECT id FROM clientes WHERE nome_razao_social = %s COLLATE utf8mb4_unicode_ci', (n,))
     if not rs:
         # o OFX escreve o MEI sem pontos ("51878059 LEANDRO ..."); o cadastro, com
@@ -172,6 +197,12 @@ def _clientes_pelo_nome(nome):
         if dig:
             rs = [r for r in _q("SELECT id, nome_razao_social FROM clientes WHERE REPLACE(nome_razao_social, '.', '') = %s COLLATE utf8mb4_unicode_ci",
                                 (f'{dig.group(1)} {dig.group(2)}',))]
+    if not rs and len(n) >= 15:
+        # o OFX corta o nome ("PHOENIX DISTRIBUIDORA DE COMBUSTIVEIS LTD"): começo igual, um só cadastro
+        rs = _q("SELECT id FROM clientes WHERE nome_razao_social LIKE %s COLLATE utf8mb4_unicode_ci",
+                (n.replace('%', '').replace('_', r'\_') + '%',))
+        if len(rs) != 1:
+            rs = []
     return [r['id'] for r in rs]
 
 
@@ -195,7 +226,13 @@ def baixar(lanc, seco=True, nome_pagador=None, irmaos_seco=0):
     if valor <= 0 or not str(lanc.get('descricao') or '').startswith('Recebimento de cobrança'):
         return 'ignorado', None
     if lanc['data'] <= corte_conexa():
-        return 'antes-do-corte', None
+        # Antes do corte o Conexa costumava dar o boleto como pago — mas o que veio EM ABERTO na
+        # migração ainda espera a baixa (Bruna Brito e WL, 04/11): com o nome do pagador e um só
+        # título do Conexa daquele cliente e valor, baixa nele em vez de criar um título novo.
+        cli = _clientes_pelo_nome(nome_pagador) if nome_pagador else None
+        cands = candidatos(lanc['empresa_id'], lanc['data'], valor, cli) if cli else []
+        if len(cands) != 1 or (lanc.get('id') and _ja_amarrado(lanc['id'])):
+            return 'antes-do-corte', None
     amarrado = _ja_amarrado(lanc['id']) if lanc.get('id') else None
     if amarrado:
         return 'ja-amarrado', amarrado
@@ -222,6 +259,21 @@ def baixar(lanc, seco=True, nome_pagador=None, irmaos_seco=0):
         return 'webhook', {'titulo_id': wh['titulo_id']}
 
     cli = _clientes_pelo_nome(nome_pagador) if nome_pagador else None
+    mao = _baixas_a_mao(lanc['empresa_id'], lanc['data'], valor)
+    if mao:
+        if cli:
+            ids = set(cli)
+            mao = [m for m in mao if (_q('SELECT cliente_id FROM fin_titulos WHERE id = %s', (m['titulo_id'],), one=True)
+                                      or {}).get('cliente_id') in ids] or mao
+        if len(mao) == 1:
+            if not seco and lanc.get('id'):
+                from utils.db_helper import execute_query
+                execute_query('UPDATE fin_titulo_baixas SET lancamento_id = %s, confirmado_extrato = 1 '
+                              'WHERE id = %s AND lancamento_id IS NULL', (lanc['id'], mao[0]['id']), fetch=False)
+                if not nome_pagador:
+                    _nome_na_descricao(lanc, prot, mao[0]['nome'])
+            return 'ja-baixado', {'titulo_id': mao[0]['titulo_id'], 'nome': mao[0]['nome']}
+        return 'empate', {'baixas_a_mao': [m['id'] for m in mao]}
     cands = candidatos(lanc['empresa_id'], lanc['data'], valor, cli)
     if cli is None and cands:
         # sem nome, só o valor: outro recebimento igual por perto = empate
@@ -275,11 +327,11 @@ def completar_pelo_ofx(empresa_id, conta, linhas_ofx):
             execute_query('UPDATE extrato_lancamentos SET descricao = %s, fitid = COALESCE(fitid, %s) WHERE id = %s',
                           (l['descricao'][:500], l.get('fitid'), r['id']), fetch=False)
             feitos += 1
-            m = re.search(r' de (.+)$', l['descricao'] or '')
-            if r['valor'] > 0 and m and not _ja_amarrado(r['id']):
+            nome = nome_do_pagador(l['descricao'])
+            if r['valor'] > 0 and nome and not _ja_amarrado(r['id']):
                 r = dict(r, descricao=l['descricao'])
                 try:
-                    baixar(r, seco=False, nome_pagador=m.group(1))
+                    baixar(r, seco=False, nome_pagador=nome)
                 except Exception:
                     logger.exception('[efi-extrato] baixa pelo nome do OFX falhou (lançamento %s)', r['id'])
     return feitos

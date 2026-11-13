@@ -418,6 +418,8 @@ MAPA = {
     'financeiro.titulo_baixar': 'financeiro.titulos.alterar',
     'financeiro.titulo_cancelar': 'financeiro.titulos.excluir',
     'financeiro.titulo_excluir': 'financeiro.titulos.excluir',
+    'financeiro.titulo_perdido': 'financeiro.titulos.excluir',
+    'financeiro.titulo_perdido_voltar': 'financeiro.titulos.excluir',
     'financeiro.titulo_novo': 'financeiro.titulos.incluir',
     # grupos
     'grupos.desativar': 'grupos.excluir',

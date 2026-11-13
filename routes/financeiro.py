@@ -227,11 +227,12 @@ def _titulos_receber(emps, sel):
             mes = date(int(raw[:4]), int(raw[5:]), 1)
         except ValueError:
             mes = None
-    aba = request.args.get('aba') if request.args.get('aba') in ('rec', 'abe', 'atr', 'ina') else 'abe'
+    aba = request.args.get('aba') if request.args.get('aba') in ('rec', 'abe', 'atr', 'ina', 'perd') else 'abe'
     m = TR.montar(empresa_ids=sel, mes=mes)
     emp = ','.join(map(str, sel))
     return render_template(
         'financeiro/titulos_receber.html', m=m, aba=aba,
+        pode_perd=current_user.has_permission('financeiro.titulos.excluir'),
         categorias=FinCategoria.listar(), centros=FinCentroCusto.listar(),
         hoje=m['hoje'], fin_empresas=emps, sel_empresas=sel,
         filtros=dict(tipo='R', emp=emp, aba=aba,
@@ -414,6 +415,47 @@ def titulo_cancelar(titulo_id):
     else:
         flash('Não deu para cancelar: título já tem baixa (ou já está '
               'liquidado/cancelado).', 'warning')
+    return redirect(url_for('financeiro.titulos', **_filtros_titulos()))
+
+
+@financeiro.route('/financeiro/titulos/<int:titulo_id>/perdido', methods=['POST'])
+@permission_required('financeiro.titulos')
+def titulo_perdido(titulo_id):
+    """Marca como PERDIDO (não vai pagar): cancela guardando motivo, quem e quando.
+    Só título a receber sem nenhuma baixa — o que já tem pagamento parcial se resolve na baixa."""
+    motivo = (request.form.get('motivo') or '').strip()[:200]
+    t = FinTitulo.get_by_id(titulo_id)
+    if not t or t['tipo'] != 'R':
+        flash('Título não encontrado.', 'danger')
+    elif not motivo:
+        flash('Escreva o motivo (ex.: cliente fechou, perdoado, não vai pagar).', 'warning')
+    elif not FinTitulo.cancelar(titulo_id):
+        flash('Não deu para marcar como perdido: o título já tem pagamento ou não está em aberto.', 'warning')
+    else:
+        execute_query('UPDATE fin_titulos SET perdido_em = NOW(), perdido_por = %s, perdido_motivo = %s '
+                      'WHERE id = %s', (current_user.id, motivo, titulo_id))
+        registrar('escrita.marcou_titulo_perdido', 'financeiro', tabela='fin_titulos', registro_id=titulo_id,
+                  antes={'status': t['status']},
+                  depois={'status': 'perdido', 'motivo': motivo, 'cliente_id': t.get('cliente_id'),
+                          'valor': str(t['valor']), 'vencimento': str(t['vencimento'])})
+        flash('Título marcado como perdido — fica guardado na aba Perdidos.', 'success')
+    return redirect(url_for('financeiro.titulos', **_filtros_titulos()))
+
+
+@financeiro.route('/financeiro/titulos/<int:titulo_id>/perdido/voltar', methods=['POST'])
+@permission_required('financeiro.titulos')
+def titulo_perdido_voltar(titulo_id):
+    """Desfaz o perdido: o título volta para em aberto."""
+    t = FinTitulo.get_by_id(titulo_id)
+    if not t or t['status'] != 'cancelado' or not t.get('perdido_em'):
+        flash('Este título não está nos perdidos.', 'warning')
+    else:
+        execute_query("UPDATE fin_titulos SET status = 'aberto', perdido_em = NULL, perdido_por = NULL, "
+                      "perdido_motivo = NULL WHERE id = %s AND status = 'cancelado' AND valor_baixado = 0",
+                      (titulo_id,))
+        registrar('escrita.voltou_titulo_perdido', 'financeiro', tabela='fin_titulos', registro_id=titulo_id,
+                  antes={'status': 'perdido', 'motivo': t.get('perdido_motivo')}, depois={'status': 'aberto'})
+        flash('Título voltou para em aberto.', 'success')
     return redirect(url_for('financeiro.titulos', **_filtros_titulos()))
 
 
