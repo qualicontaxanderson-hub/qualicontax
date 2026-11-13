@@ -5,7 +5,7 @@
 <style>
 /* Títulos a receber em 3 abas (12/11/2026): as abas são também os números do mês */
 .tx, #txModalIna { --verde:#0f3d2e; --linha:#e6eeea; --mudo:#7d968a; --tinta:#0f172a; }
-.tx-abas { display:grid; grid-template-columns:repeat(3, minmax(0,1fr)); gap:14px; margin-top:-34px; position:relative; z-index:2; margin-bottom:22px; }
+.tx-abas { display:grid; grid-template-columns:repeat(4, minmax(0,1fr)); gap:14px; margin-top:-34px; position:relative; z-index:2; margin-bottom:22px; }
 .tx-aba { position:relative; text-align:left; font:inherit; cursor:pointer; background:#fff; border:1px solid var(--linha);
           border-radius:18px; padding:18px 22px 16px; box-shadow:0 10px 28px rgba(15,61,46,.08); transition:all .18s;
           display:flex; align-items:center; gap:16px; overflow:hidden; min-width:0; }
@@ -17,11 +17,12 @@
               align-items:center; justify-content:center; font-size:18px; flex-shrink:0; }
 .tx-aba-txt { min-width:0; flex:1; }
 .tx-aba-lbl { font-size:12px; font-weight:700; letter-spacing:.6px; text-transform:uppercase; color:var(--mudo); }
-.tx-aba-val { display:block; font-size:25px; font-weight:800; color:var(--tinta); letter-spacing:-.02em; font-variant-numeric:tabular-nums; line-height:1.15; margin-top:2px; white-space:nowrap; }
+.tx-aba-val { display:block; font-size:23px; font-weight:800; color:var(--tinta); letter-spacing:-.02em; font-variant-numeric:tabular-nums; line-height:1.15; margin-top:2px; white-space:nowrap; }
 .tx-aba-sub { font-size:12px; color:#94a3b8; }
 .tx-aba-n { align-self:flex-start; font-size:12px; font-weight:800; color:var(--cor); background:var(--fundo); border-radius:99px; padding:3px 10px; }
 .tx-a-rec { --cor:#16a34a; --fundo:#ecfdf3; }
 .tx-a-abe { --cor:#2563eb; --fundo:#eff4ff; }
+.tx-a-atr { --cor:#d97706; --fundo:#fff7ec; }
 .tx-a-ina { --cor:#dc2626; --fundo:#fef1f1; }
 
 .tx-emp { position:relative; }
@@ -52,6 +53,10 @@
 
 .tx-painel { display:none; } .tx-painel.on { display:block; }
 .tx-dia { display:flex; align-items:baseline; gap:10px; margin:6px 2px 10px; }
+.tx-data { display:flex; align-items:baseline; gap:8px; }
+.tx-data b { font-size:17px; font-weight:800; color:var(--tinta); letter-spacing:-.01em; font-variant-numeric:tabular-nums; }
+.tx-data em { font-style:normal; font-size:12px; font-weight:600; color:var(--mudo); }
+.tx-dia-hoje .tx-data b, .tx-dia-hoje .tx-data em { color:#2563eb; }
 .tx-dia h4 { margin:0; font-size:12px; font-weight:800; letter-spacing:.6px; text-transform:uppercase; color:var(--verde); }
 .tx-dia span { flex:1; height:1px; background:var(--linha); align-self:center; }
 .tx-dia small { font-size:12px; color:var(--mudo); font-variant-numeric:tabular-nums; }
@@ -82,6 +87,7 @@ a.tx-c { text-decoration:none; color:inherit; }
 .tx-c:hover .tx-c-acoes, .tx-c:focus-within .tx-c-acoes { opacity:1; }
 .tx-c-acoes button, .tx-c-acoes a { width:27px; height:27px; border-radius:8px; border:1px solid var(--linha); background:#fff; color:var(--verde);
                                     cursor:pointer; font-size:11px; display:inline-flex; align-items:center; justify-content:center; text-decoration:none; }
+.tx-c-acoes .wa { color:#16a34a; }
 .tx-c-acoes .ok { background:var(--verde); border-color:var(--verde); color:#fff; }
 .tx-c-acoes button:hover, .tx-c-acoes a:hover { border-color:#9fc9b3; }
 
@@ -112,7 +118,7 @@ a.tx-c { text-decoration:none; color:inherit; }
   .tx-c-acoes { position:static; opacity:1; padding:0; justify-content:flex-end; }
 }
 @media (max-width:900px) {
-  .tx-abas { gap:6px; margin-top:-26px; }
+  .tx-abas { grid-template-columns:1fr 1fr; gap:6px; margin-top:-26px; }
   .tx-aba { flex-direction:column; align-items:flex-start; gap:6px; padding:10px 10px 12px; border-radius:14px; }
   .tx-aba-ico, .tx-aba-n, .tx-aba-sub { display:none; }
   .tx-aba-lbl { font-size:10px; letter-spacing:.3px; }
@@ -157,11 +163,32 @@ a.tx-c { text-decoration:none; color:inherit; }
 </div>
 
 <div class="ef-body">
+{% macro cartao(t, atrasado=False) %}
+      <div class="tx-c {{ 'tx-venc' if atrasado else t.cls }}" data-per="{{ t.per }}" data-faixa="{{ t.faixa }}" data-busca="{{ t.num }} {{ t.nome_full }} {{ t.doc }}"
+           data-baixa data-id="{{ t.id }}" data-desc="{{ t.descricao }}" data-contra="{{ t.nome_full }}" data-saldo="{{ t.saldo }}"
+           data-venc="{{ t.venc }}" data-prog="{{ t.prog }}" title="Clique para dar baixa">
+        <div class="tx-c-acoes">
+          <button type="button" class="ok" title="Dar baixa (recebeu)" onclick="event.stopPropagation(); ftAbrirBaixa(this.closest('.tx-c'))"><i class="fas fa-check"></i></button>
+          {% if atrasado and t.cel %}<a class="wa" href="https://wa.me/{{ t.cel }}?text={{ t.msg | urlencode }}" target="_blank" rel="noopener" title="Cobrar pelo WhatsApp" onclick="event.stopPropagation()"><i class="fab fa-whatsapp"></i></a>{% endif %}
+          {% if t.cliente_id %}<a href="{{ url_for('clientes.detalhes', id=t.cliente_id) }}" title="Abrir a ficha do cliente" onclick="event.stopPropagation()"><i class="fas fa-building"></i></a>{% endif %}
+          {% if t.cancelavel %}<button type="button" title="Cancelar este título" onclick="event.stopPropagation(); txAcao('cancelar', {{ t.id }})"><i class="fas fa-ban"></i></button>{% endif %}
+          {% if t.excluivel %}<button type="button" title="Excluir (erro de lançamento)" onclick="event.stopPropagation(); txAcao('excluir', {{ t.id }})"><i class="fas fa-trash"></i></button>{% endif %}
+        </div>
+        <div class="tx-c-top"><span class="tx-c-num">{{ t.num }}</span><span class="tx-c-nome" title="{{ t.nome_full }}">{{ t.nome }}</span></div>
+        <div class="tx-c-meio"><div><div class="tx-c-val">{{ t.valor }}</div><div class="tx-c-desc">{{ t.desc }}</div></div>
+          {% if atrasado %}<span class="tx-c-st" title="Venceu em {{ t.venc[8:10] }}/{{ t.venc[5:7] }}/{{ t.venc[:4] }}">há {{ t.dias }} dia{{ 's' if t.dias != 1 }}</span>{% endif %}</div>
+      </div>
+{% endmacro %}
+{% macro cab(g, palavra) %}
+    <div class="tx-dia{{ ' tx-dia-hoje' if g.hoje }}" data-sec><div class="tx-data"><b>{{ g.data }}</b><em>{{ g.sub }}</em></div><span></span><small><b>{{ g.tot }}</b> · {{ g.n }} {{ palavra }}{{ 's' if g.n != 1 }}</small></div>
+{% endmacro %}
   <div class="tx-abas">
     <button type="button" class="tx-aba tx-a-rec{{ ' on' if aba == 'rec' }}" data-p="rec"><span class="tx-aba-ico"><i class="fas fa-circle-check"></i></span>
       <span class="tx-aba-txt"><span class="tx-aba-lbl">Recebido</span><span class="tx-aba-val">{{ m.rec_tot }}</span><span class="tx-aba-sub">em {{ m.mes_rot | lower }}</span></span><span class="tx-aba-n">{{ m.rec_n }}</span></button>
     <button type="button" class="tx-aba tx-a-abe{{ ' on' if aba == 'abe' }}" data-p="abe"><span class="tx-aba-ico"><i class="fas fa-hourglass-half"></i></span>
-      <span class="tx-aba-txt"><span class="tx-aba-lbl">A receber</span><span class="tx-aba-val">{{ m.abe_tot }}</span><span class="tx-aba-sub">{{ m.abe_cli }} cliente{{ 's' if m.abe_cli != 1 }}</span></span><span class="tx-aba-n">{{ m.abe_n }}</span></button>
+      <span class="tx-aba-txt"><span class="tx-aba-lbl">A receber</span><span class="tx-aba-val">{{ m.abe_tot }}</span><span class="tx-aba-sub">a vencer · {{ m.abe_cli }} cliente{{ 's' if m.abe_cli != 1 }}</span></span><span class="tx-aba-n">{{ m.abe_n }}</span></button>
+    <button type="button" class="tx-aba tx-a-atr{{ ' on' if aba == 'atr' }}" data-p="atr"><span class="tx-aba-ico"><i class="fas fa-clock"></i></span>
+      <span class="tx-aba-txt"><span class="tx-aba-lbl">Atrasados</span><span class="tx-aba-val">{{ m.atr_tot }}</span><span class="tx-aba-sub">1 vencido · cobrar já</span></span><span class="tx-aba-n">{{ m.atr_n }}</span></button>
     <button type="button" class="tx-aba tx-a-ina{{ ' on' if aba == 'ina' }}" data-p="ina"><span class="tx-aba-ico"><i class="fas fa-user-clock"></i></span>
       <span class="tx-aba-txt"><span class="tx-aba-lbl">Inadimplentes</span><span class="tx-aba-val">{{ m.ina_tot }}</span><span class="tx-aba-sub">2 ou mais vencidos</span></span><span class="tx-aba-n">{{ m.ina_cli }}</span></button>
   </div>
@@ -172,33 +199,37 @@ a.tx-c { text-decoration:none; color:inherit; }
     <a href="{{ url_for('financeiro.extrato', classif='todos', tipo='credito', busca='Recebimento de cobran', data_de=m.esp_desde) }}">Escolher de quem é <i class="fas fa-arrow-right"></i></a></div>
   {% endif %}
 
-  {# ── A RECEBER ── #}
+  {# ── A RECEBER: o que ainda vai vencer, por data ── #}
   <div class="tx-painel{{ ' on' if aba == 'abe' }}" data-p="abe">
     <div class="tx-faixa">
-      <div class="tx-filtros" data-tipo="g">{% for f in m.abe_f %}<button type="button" class="tx-f{{ ' on' if loop.first }}" data-v="{{ f[0] }}">{{ f[1] }} <b>{{ f[2] }}</b></button>{% endfor %}</div>
+      <div class="tx-filtros" data-tipo="per">{% for f in m.abe_f if f[2] or f[0] == "todos" %}<button type="button" class="tx-f{{ ' on' if loop.first }}" data-v="{{ f[0] }}">{{ f[1] }} <b>{{ f[2] }}</b></button>{% endfor %}</div>
       <div class="tx-busca"><i class="fas fa-magnifying-glass"></i><input type="search" placeholder="Cliente, número ou CNPJ"></div>
     </div>
     {% for g in m.abe %}
-    <div class="tx-dia" data-sec><h4>{{ g.rot }}</h4><span></span><small><b>{{ g.tot }}</b> · {{ g.n }} título{{ 's' if g.n != 1 }}</small></div>
+    {{ cab(g, 'título') }}
     <div class="tx-grade">
-      {% for t in g.itens %}
-      <div class="tx-c {{ t.cls }}" data-g="{{ t.grupo }}" data-busca="{{ t.num }} {{ t.nome_full }} {{ t.doc }}"
-           data-baixa data-id="{{ t.id }}" data-desc="{{ t.descricao }}" data-contra="{{ t.nome_full }}" data-saldo="{{ t.saldo }}"
-           data-venc="{{ t.venc }}" data-prog="{{ t.prog }}" title="Clique para dar baixa">
-        <div class="tx-c-acoes">
-          <button type="button" class="ok" title="Dar baixa (recebeu)" onclick="event.stopPropagation(); ftAbrirBaixa(this.closest('.tx-c'))"><i class="fas fa-check"></i></button>
-          {% if t.cliente_id %}<a href="{{ url_for('clientes.detalhes', id=t.cliente_id) }}" title="Abrir a ficha do cliente" onclick="event.stopPropagation()"><i class="fas fa-building"></i></a>{% endif %}
-          {% if t.cancelavel %}<button type="button" title="Cancelar este título" onclick="event.stopPropagation(); txAcao('cancelar', {{ t.id }})"><i class="fas fa-ban"></i></button>{% endif %}
-          {% if t.excluivel %}<button type="button" title="Excluir (erro de lançamento)" onclick="event.stopPropagation(); txAcao('excluir', {{ t.id }})"><i class="fas fa-trash"></i></button>{% endif %}
-        </div>
-        <div class="tx-c-top"><span class="tx-c-num">{{ t.num }}</span><span class="tx-c-nome" title="{{ t.nome_full }}">{{ t.nome }}</span></div>
-        <div class="tx-c-meio"><div><div class="tx-c-val">{{ t.valor }}</div><div class="tx-c-desc">{{ t.desc }}</div></div>
-          <span class="tx-c-st">{{ t.tag }}</span></div>
-      </div>
-      {% endfor %}
+      {% for t in g.itens %}{{ cartao(t) }}{% endfor %}
     </div>
     {% else %}
-    <div class="tx-vazio"><i class="fas fa-mug-hot"></i>Nenhum título em aberto.</div>
+    <div class="tx-vazio"><i class="fas fa-mug-hot"></i>Nada a vencer.</div>
+    {% endfor %}
+    <div class="tx-vazio" data-nada style="display:none;"><i class="fas fa-magnifying-glass"></i>Nada encontrado com esse filtro.</div>
+    <button type="button" class="tx-mais" style="display:none;"></button>
+  </div>
+
+  {# ── ATRASADOS: cliente com 1 só vencido ── #}
+  <div class="tx-painel{{ ' on' if aba == 'atr' }}" data-p="atr">
+    <div class="tx-faixa">
+      <div class="tx-filtros" data-tipo="faixa">{% for f in m.atr_f if f[2] or f[0] == "todos" %}<button type="button" class="tx-f{{ ' on' if loop.first }}" data-v="{{ f[0] }}">{{ f[1] }} <b>{{ f[2] }}</b></button>{% endfor %}</div>
+      <div class="tx-busca"><i class="fas fa-magnifying-glass"></i><input type="search" placeholder="Cliente, número ou CNPJ"></div>
+    </div>
+    {% for g in m.atr %}
+    {{ cab(g, 'título') }}
+    <div class="tx-grade">
+      {% for t in g.itens %}{{ cartao(t, True) }}{% endfor %}
+    </div>
+    {% else %}
+    <div class="tx-vazio"><i class="fas fa-face-smile"></i>Nenhum atrasado.</div>
     {% endfor %}
     <div class="tx-vazio" data-nada style="display:none;"><i class="fas fa-magnifying-glass"></i>Nada encontrado com esse filtro.</div>
     <button type="button" class="tx-mais" style="display:none;"></button>
@@ -216,7 +247,7 @@ a.tx-c { text-decoration:none; color:inherit; }
       <div class="tx-busca"><i class="fas fa-magnifying-glass"></i><input type="search" placeholder="Cliente, número ou CNPJ"></div>
     </div>
     {% for g in m.rec %}
-    <div class="tx-dia" data-sec><h4>{{ g.rot }}</h4><span></span><small><b>{{ g.tot }}</b> · {{ g.n }} pagamento{{ 's' if g.n != 1 }}</small></div>
+    {{ cab(g, 'pagamento') }}
     <div class="tx-grade">
       {% for t in g.itens %}
       {% if t.cliente_id %}<a class="tx-c tx-ok" href="{{ url_for('clientes.detalhes', id=t.cliente_id) }}" title="Abrir a ficha do cliente"{% else %}<div class="tx-c tx-ok"{% endif %}
@@ -328,8 +359,7 @@ a.tx-c { text-decoration:none; color:inherit; }
       var vis = 0, escondidos = 0;
       cards.forEach(function (c) {
         var ok = true;
-        if (tipo === 'g' && valor !== 'todos') ok = c.dataset.g === valor;
-        if (tipo === 'auto' && valor !== 'todos') ok = c.dataset.auto === valor;
+        if (tipo && tipo !== 'ordem' && valor !== 'todos') ok = c.dataset[tipo] === valor;
         if (ok && t) ok = c._b.indexOf(t) >= 0 || (td.length >= 3 && c._b.replace(/\D/g, ' ').indexOf(td) >= 0);
         if (ok && livre && !tudo && vis >= LIM) { ok = false; escondidos++; }
         c.style.display = ok ? '' : 'none';

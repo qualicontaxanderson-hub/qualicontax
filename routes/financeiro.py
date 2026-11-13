@@ -227,7 +227,7 @@ def _titulos_receber(emps, sel):
             mes = date(int(raw[:4]), int(raw[5:]), 1)
         except ValueError:
             mes = None
-    aba = request.args.get('aba') if request.args.get('aba') in ('rec', 'abe', 'ina') else 'abe'
+    aba = request.args.get('aba') if request.args.get('aba') in ('rec', 'abe', 'atr', 'ina') else 'abe'
     m = TR.montar(empresa_ids=sel, mes=mes)
     emp = ','.join(map(str, sel))
     return render_template(

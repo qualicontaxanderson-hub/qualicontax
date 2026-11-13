@@ -70,6 +70,26 @@ def _status(venc, hoje):
     return 'vence ' + venc.strftime('%d/%m'), 'tx-fut'
 
 
+def _cab(d, hoje):
+    """Cabeçalho de data dos grupos: ('15/11', 'sábado · em 3 dias')."""
+    n = (d - hoje).days
+    rel = ('hoje' if n == 0 else 'amanhã' if n == 1 else 'ontem' if n == -1 else
+           ('em %d dias' % n) if n > 0 else ('há %d dias' % -n))
+    return d.strftime('%d/%m'), SEM[d.weekday()] + ' · ' + rel
+
+
+def _msg_cobranca(titulos, total):
+    meses = ', '.join(_comp(t['competencia']) for t in titulos)
+    return ('Olá! Aqui é da Qualicontax. Consta em aberto %s (%s), total de %s. '
+            'Pode nos enviar o comprovante ou, se preferir, mandamos o boleto atualizado.'
+            % ('o honorário de' if len(titulos) == 1 else 'os honorários de', meses, brl(total)))
+
+
+def _cel(c):
+    c = _digitos(c)
+    return ('55' + c) if len(c) in (10, 11) else ''
+
+
 def montar(empresa_ids=None, mes=None):
     hoje = hoje_br()
     if mes is None:
@@ -90,8 +110,8 @@ def montar(empresa_ids=None, mes=None):
         por_dia[b['data_baixa']].append(b)
     rec_g = []
     for d in sorted(por_dia, reverse=True):
-        rot = 'Hoje' if d == hoje else ('Ontem' if (hoje - d).days == 1 else SEM[d.weekday()].capitalize())
-        rec_g.append({'rot': f'{rot} · {d:%d/%m}', 'tot': brl(sum(b['v'] for b in por_dia[d])),
+        dt, sub = _cab(d, hoje)
+        rec_g.append({'data': dt, 'sub': sub, 'tot': brl(sum(b['v'] for b in por_dia[d])),
                       'n': len(por_dia[d]),
                       'itens': [{'num': b['numero_cliente'] or '—', 'nome': _nome(b['contraparte_nome']),
                                  'valor': brl(b['v']), 'desc': _desc(b), 'cliente_id': b['cliente_id'],
@@ -116,7 +136,8 @@ def montar(empresa_ids=None, mes=None):
                 'prog': 'v' if t['prog_variavel'] else ('f' if t['programacao_id'] else ''),
                 'cancelavel': t['status'] == 'aberto' and not t['valor_baixado'],
                 'excluivel': t['status'] == 'aberto' and not t['valor_baixado'] and t['origem'] == 'manual',
-                'grupo': 'venc' if t['vencimento'] < hoje else ('hoje' if t['vencimento'] == hoje else 'fut')}
+                        'cel': _cel(t['celular']), 'msg': _msg_cobranca([t], t['v']),
+                'dias': (hoje - t['vencimento']).days}
 
     por_cli = defaultdict(list)
     for t in abe:
@@ -138,46 +159,70 @@ def montar(empresa_ids=None, mes=None):
         pagos[r['cliente_id'] or _digitos(r['contraparte_doc']) or r['contraparte_nome']].add(
             (r['competencia'].year, r['competencia'].month))
 
-    ina, abertos = [], []
+    ina, atr, futuros = [], [], []
     for k, ts in por_cli.items():
         venc = [t for t in ts if t['vencimento'] < hoje]
+        futuros += [t for t in ts if t['vencimento'] >= hoje]
+        if len(venc) == 1:
+            atr.append(venc[0])
         if len(venc) < 2:
-            abertos += ts
             continue
         venc.sort(key=lambda t: t['competencia'])
         ab = {(t['competencia'].year, t['competencia'].month) for t in venc}
-        cel = _digitos(ts[0]['celular'])
         total = sum(t['v'] for t in venc)
-        meses = ', '.join(_comp(t['competencia']) for t in venc)
-        msg = ('Olá! Aqui é da Qualicontax. Consta em aberto %s (%s), total de %s. '
-               'Pode nos enviar o comprovante ou, se preferir, mandamos o boleto atualizado.'
-               % ('o honorário de ' if len(venc) == 1 else 'os honorários de', meses, brl(total)))
         ina.append({'num': ts[0]['numero_cliente'] or '—', 'nome': _nome(ts[0]['contraparte_nome']),
                     'nome_full': ts[0]['contraparte_nome'] or '', 'doc': _digitos(ts[0]['contraparte_doc']),
                     'cliente_id': ts[0]['cliente_id'], 'v': total, 'valor': brl(total), 'qtd': len(venc),
                     'desde': _comp(venc[0]['competencia']), 'antigo': venc[0]['vencimento'].isoformat(),
-                    'cel': ('55' + cel) if len(cel) in (10, 11) else '', 'msg': msg,
+                    'cel': _cel(ts[0]['celular']), 'msg': _msg_cobranca(venc, total),
                     'regua': [('v' if c in ab else ('p' if c in pagos.get(k, ()) else ''),
                                '%s/%d' % (MES[c[1]], c[0])) for c in comps],
                     'titulos': [item(t) for t in venc],
                     'futuros': len(ts) - len(venc)})
     ina.sort(key=lambda x: -x['v'])
 
-    grupos = [('Vence hoje', 'hoje'), ('Próximos dias', 'fut'), ('Venceu (só 1 em aberto)', 'venc')]
-    itens = [item(t) for t in abertos]
-    abe_g = []
-    for rot, g in grupos:
-        its = [i for i in itens if i['grupo'] == g]
-        if not its:
-            continue
-        if g == 'venc':
-            its.sort(key=lambda i: i['venc'], reverse=True)
-        abe_g.append({'rot': rot, 'g': g, 'n': len(its),
-                      'tot': brl(sum(float(i['saldo']) for i in its)), 'itens': its})
+    # A receber: tudo o que ainda vai vencer, agrupado pela DATA do vencimento
+    itens = [item(t) for t in sorted(futuros, key=lambda t: (t['vencimento'], -t['v']))]
+    fim_sem = hoje.toordinal() + (6 - hoje.weekday())
+    abe_g, por_venc = [], defaultdict(list)
+    for i in itens:
+        por_venc[i['venc']].append(i)
+    for v in sorted(por_venc):
+        d = date.fromisoformat(v)
+        dt, sub = _cab(d, hoje)
+        per = 'sem' if d.toordinal() <= fim_sem else ('mes' if (d.year, d.month) == (hoje.year, hoje.month) else 'dep')
+        for i in por_venc[v]:
+            i['per'] = per
+        abe_g.append({'data': dt, 'sub': sub, 'n': len(por_venc[v]), 'hoje': d == hoje,
+                      'tot': brl(sum(float(i['saldo']) for i in por_venc[v])), 'itens': por_venc[v]})
     abe_f = [('todos', 'Todos', len(itens)),
-             ('venc', 'Vencidos', sum(1 for i in itens if i['grupo'] == 'venc')),
-             ('hoje', 'Vence hoje', sum(1 for i in itens if i['grupo'] == 'hoje')),
-             ('fut', 'Próximos', sum(1 for i in itens if i['grupo'] == 'fut'))]
+             ('sem', 'Esta semana', sum(1 for i in itens if i['per'] == 'sem')),
+             ('mes', 'Resto do mês', sum(1 for i in itens if i['per'] == 'mes')),
+             ('dep', 'Depois', sum(1 for i in itens if i['per'] == 'dep'))]
+
+    # Atrasados: cliente com UM só vencido — cobrar logo, antes de virar inadimplente.
+    # Até 60 dias, um grupo por data; mais antigo que isso, um grupo por mês.
+    atr_i = [item(t) for t in sorted(atr, key=lambda t: (t['vencimento'], -t['v']), reverse=True)]
+    atr_g, chave = [], None
+    for i in atr_i:
+        d = date.fromisoformat(i['venc'])
+        i['faixa'] = 'a30' if i['dias'] <= 30 else ('a90' if i['dias'] <= 90 else 'mais')
+        k = i['venc'] if i['dias'] <= 60 else d.strftime('%Y-%m')
+        if k != chave:
+            chave = k
+            if i['dias'] <= 60:
+                dt, sub = _cab(d, hoje)
+            else:
+                dt, sub = f'{MES[d.month]}/{d.year}', 'venceu no mês'
+            atr_g.append({'data': dt, 'sub': sub, 'n': 0, 'v': 0, 'itens': []})
+        g = atr_g[-1]
+        g['itens'].append(i); g['n'] += 1; g['v'] += float(i['saldo'])
+    for g in atr_g:
+        g['tot'] = brl(g.pop('v'))
+    atr_f = [('todos', 'Todos', len(atr_i)),
+             ('a30', 'Até 30 dias', sum(1 for i in atr_i if i['faixa'] == 'a30')),
+             ('a90', '31 a 90 dias', sum(1 for i in atr_i if i['faixa'] == 'a90')),
+             ('mais', 'Mais de 90 dias', sum(1 for i in atr_i if i['faixa'] == 'mais'))]
 
     # Pagamentos da Efí que entraram e não acharam dono (valor igual ao de outros clientes)
     esp = q("""SELECT COUNT(*) n, COALESCE(SUM(l.valor), 0) v FROM extrato_lancamentos l
@@ -193,6 +238,7 @@ def montar(empresa_ids=None, mes=None):
         rec_auto=sum(1 for b in rec if b['origem'] in ('extrato', 'webhook')),
         abe=abe_g, abe_f=abe_f, abe_tot=brl(sum(float(i['saldo']) for i in itens)), abe_n=len(itens),
         abe_cli=len({i['cliente_id'] or i['nome_full'] for i in itens}),
+        atr=atr_g, atr_f=atr_f, atr_tot=brl(sum(float(i['saldo']) for i in atr_i)), atr_n=len(atr_i),
         ina=ina, ina_tot=brl(sum(x['v'] for x in ina)), ina_cli=len(ina),
         ina_tit=sum(x['qtd'] for x in ina),
         regua_ini=_comp(date(*comps[0], 1)), regua_fim=_comp(date(*comps[-1], 1)),
