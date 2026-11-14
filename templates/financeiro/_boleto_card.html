@@ -38,6 +38,37 @@
             {% endif %}
             <a class="btn btn-outline" href="{{ url_for('financeiro.cobrancas', emp=boleto.empresa_id, ver='boletos') }}"><i class="fas fa-list"></i> Todos os boletos</a>
         </div>
+        {# Mudar vencimento / Marcar como pago na Efí / Reemitir (14/11/2026) — o vencimento do título não muda #}
+        {% if boleto.situacao in ('waiting', 'unpaid') %}
+        <div>
+            <form method="POST" action="{{ url_for('financeiro.boleto_vencimento', boleto_id=boleto.id) }}" class="nd-email-form">
+                <input type="hidden" name="volta" value="{{ volta }}">
+                <label class="nd-rotulo" for="bv_{{ boleto.id }}">Mudar vencimento</label>
+                <div class="nd-email-linha" style="flex-wrap:wrap"><input type="date" style="min-width:150px" id="bv_{{ boleto.id }}" name="vencimento" class="form-control" required min="{{ hoje_iso() }}">
+                <button class="btn btn-outline" type="submit" style="flex:1 1 auto"><i class="fas fa-calendar-day"></i> Mudar na Efí</button></div>
+                <small class="nd-ajuda">O mesmo boleto (mesmo código de barras) passa a vencer na data nova.</small>
+            </form>
+            <form method="POST" action="{{ url_for('financeiro.boleto_marcar_pago', boleto_id=boleto.id) }}" class="nd-email-form"
+                  onsubmit="return confirm('Marcar este boleto como PAGO na Efí? Ele não poderá mais ser pago pelo cliente.');">
+                <input type="hidden" name="volta" value="{{ volta }}">
+                <label class="nd-rotulo" for="bp_{{ boleto.id }}">Pago por fora (Pix, dinheiro)? Data do pagamento</label>
+                <div class="nd-email-linha" style="flex-wrap:wrap"><input type="date" style="min-width:150px" id="bp_{{ boleto.id }}" name="data" class="form-control" value="{{ hoje_iso() }}" max="{{ hoje_iso() }}">
+                <button class="btn btn-outline" type="submit" style="flex:1 1 auto"><i class="fas fa-check-double"></i> Marcar como pago na Efí</button></div>
+                <small class="nd-ajuda">O boleto deixa de valer na Efí. Se o título ainda estiver em aberto, a baixa entra nesta data.</small>
+            </form>
+        </div>
+        {% elif boleto.situacao == 'expired' %}
+        <div>
+            <form method="POST" action="{{ url_for('financeiro.boleto_reemitir', boleto_id=boleto.id) }}" class="nd-email-form"
+                  onsubmit="return confirm('Emitir um boleto NOVO para este título?');">
+                <input type="hidden" name="volta" value="{{ volta }}">
+                <label class="nd-rotulo" for="br_{{ boleto.id }}">Boleto expirado — não pode mais ser pago. Vencimento do boleto novo</label>
+                <div class="nd-email-linha" style="flex-wrap:wrap"><input type="date" style="min-width:150px" id="br_{{ boleto.id }}" name="vencimento" class="form-control" required min="{{ hoje_iso() }}">
+                <button class="btn btn-primary" type="submit" style="flex:1 1 auto"><i class="fas fa-redo"></i> Reemitir boleto</button></div>
+                <small class="nd-ajuda">Sai um boleto novo pela nossa conta Efí, com o que falta pagar deste título. Este expirado fica guardado como está.</small>
+            </form>
+        </div>
+        {% endif %}
         {% if boleto.situacao not in ('canceled', 'erro') %}
         <form method="POST" action="{{ url_for('financeiro.boleto_enviar_email', boleto_id=boleto.id) }}" class="nd-email-form"{% if boleto.email_enviado_em %} onsubmit="return confirm('Este boleto já foi enviado por e-mail em {{ boleto.email_enviado_em.strftime('%d/%m/%Y às %H:%M') }}{{ (' para ' ~ boleto.email_enviado_para) if boleto.email_enviado_para }}. O boleto novo sai sozinho ao ser gerado. Enviar de novo?');"{% endif %}>
             <input type="hidden" name="volta" value="{{ volta }}">

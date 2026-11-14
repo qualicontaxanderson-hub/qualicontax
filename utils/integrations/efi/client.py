@@ -223,6 +223,10 @@ class Efi:
     def cancelar(self, charge_id):
         return self._cob('PUT', f'/v1/charge/{int(charge_id)}/cancel')
 
+    def marcar_pago(self, charge_id):
+        """Marca o boleto como pago na Efí (pago por fora: Pix, dinheiro). Situação vira 'settled'."""
+        return self._cob('PUT', f'/v1/charge/{int(charge_id)}/settle')
+
     def alterar_vencimento(self, charge_id, vencimento):
         return self._cob('PUT', f'/v1/charge/{int(charge_id)}/billet',
                          json={'expire_at': vencimento.strftime('%Y-%m-%d')})

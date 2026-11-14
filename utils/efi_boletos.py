@@ -227,16 +227,25 @@ def sincronizar_conta(conta_id, efi=None):
         hoje = date.today()
         bol = listar_tudo(efi)
         res['boletos'] = len(bol)
+        # os boletos da conta de uma vez (uma consulta por boleto levava minutos com o banco longe)
+        nossos = {str(r['charge_id']): r for r in _q('SELECT * FROM fin_boletos WHERE conta_cobranca_id = %s AND charge_id IS NOT NULL',
+                                                     (conta_id,))}
+        # pago há pouco e ainda pendente aqui: título com saldo, ou baixa da Efí sem o crédito do extrato
+        # amarrado (o extrato chega no dia seguinte). O pago que já foi quitado por outro caminho (relatório
+        # do Conexa, Pix) não é revisto toda hora — 84 boletos passavam pela rotina a cada hora (14/11).
+        abertos = {r['id'] for r in _q("""SELECT DISTINCT t.id FROM fin_titulos t JOIN fin_boletos b ON b.titulo_id = t.id
+                                            WHERE b.conta_cobranca_id = %s AND t.status IN ('aberto', 'parcial')""",
+                                         (conta_id,))}
+        sem_linha = {r['referencia'] for r in _q("""SELECT referencia FROM fin_titulo_baixas WHERE referencia LIKE 'efi:%%'
+                                                      AND lancamento_id IS NULL AND data_baixa >= %s""",
+                                                   (hoje - timedelta(days=12),))}
         for c in bol.values():
-            b = FinBoleto.por_charge(conta['provedor'], conta['ambiente'], c['id'])
-            if not b or b['conta_cobranca_id'] != conta_id:
+            b = nossos.get(str(c['id']))
+            if not b:
                 continue
             atual, valor, pago, credito = do_boleto_efi(c)
-            # pago há pouco e ainda sem o crédito do extrato amarrado: tenta de novo (o extrato
-            # da Efí chega no dia seguinte); pago antigo não é revisto toda hora
-            pendente = atual == 'paid' and b.get('titulo_id') and pago and pago >= hoje - timedelta(days=10) and not _q(
-                'SELECT 1 x FROM fin_titulo_baixas WHERE titulo_id = %s AND referencia = %s AND lancamento_id IS NOT NULL',
-                (b['titulo_id'], f"efi:{c['id']}"), one=True)
+            pendente = (atual == 'paid' and b.get('titulo_id') and pago and pago >= hoje - timedelta(days=10)
+                        and (b['titulo_id'] in abertos or f"efi:{c['id']}" in sem_linha))
             if atual == b['situacao'] and not pendente:
                 continue
             quando = _quando_do_historico(efi, c['id']) if atual in ('settled', 'canceled') else None

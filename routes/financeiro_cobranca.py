@@ -605,6 +605,151 @@ def boleto_sincronizar(boleto_id):
 
 
 # ---------------------------------------------------------------------------
+# Mudar vencimento / Marcar como pago na Efí / Reemitir (14/11/2026)
+# Anderson: "se eu precisar baixar um boleto ou alterar eu ter a opção de fazer tudo aqui"; "Quando os
+# boletos expirar no EFI não é para baixar é para deixar EXPIRADOS, e teremos a opção de reemiti-los".
+# O vencimento do TÍTULO não muda em nenhum dos três: ele guarda desde quando o cliente deve (Atrasados /
+# Inadimplentes contam dali); só o boleto ganha a data nova.
+# ---------------------------------------------------------------------------
+def _hoje():
+    """Hoje em Brasília: o servidor roda em UTC e depois das 21h já seria amanhã."""
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+    return datetime.now(ZoneInfo('America/Sao_Paulo')).date()
+
+
+@financeiro.app_template_global('hoje_iso')
+def _hoje_iso():
+    return _hoje().isoformat()
+
+
+def _boleto_e_volta(boleto_id):
+    b = FinBoleto.get(boleto_id)
+    if not b or b['empresa_id'] not in FinEmpresa.ids_validos():
+        abort(404)
+    volta = request.form.get('volta') or url_for('financeiro.boleto_detalhe', boleto_id=boleto_id)
+    return b, volta
+
+
+def _data_do_form(campo, minimo=None):
+    try:
+        d = date.fromisoformat(request.form.get(campo) or '')
+    except ValueError:
+        return None
+    return d if minimo is None or d >= minimo else None
+
+
+@financeiro.route('/financeiro/boletos/<int:boleto_id>/vencimento', methods=['POST'])
+@permission_required(PERM)
+def boleto_vencimento(boleto_id):
+    b, volta = _boleto_e_volta(boleto_id)
+    if b['situacao'] not in ('waiting', 'unpaid'):
+        flash('Só boleto aguardando pagamento ou vencido pode mudar de vencimento.', 'warning')
+        return redirect(volta)
+    novo = _data_do_form('vencimento', _hoje())
+    if not novo:
+        flash('Informe o novo vencimento (hoje ou depois).', 'danger')
+        return redirect(volta)
+    try:
+        efi, _ = FinCobrancaConta.cliente_efi(b['conta_cobranca_id'])
+        efi.alterar_vencimento(b['charge_id'], novo)
+    except (EfiErro, ValueError) as exc:
+        flash(f'A Efí não mudou o vencimento: {exc}', 'danger')
+        return redirect(volta)
+    execute_query("UPDATE fin_boletos SET vencimento = %s, situacao = 'waiting', atualizado_em = NOW() WHERE id = %s",
+                  (novo, boleto_id))
+    registrar('escrita.mudou_vencimento_boleto', 'financeiro', tabela='fin_boletos', registro_id=boleto_id,
+              antes={'vencimento': str(b['vencimento'])},
+              depois={'vencimento': str(novo), 'charge_id': b['charge_id'], 'titulo_id': b.get('titulo_id')})
+    flash(f"Vencimento do boleto mudado na Efí para {novo.strftime('%d/%m/%Y')}. O mesmo código de barras vale.", 'success')
+    return redirect(volta)
+
+
+@financeiro.route('/financeiro/boletos/<int:boleto_id>/marcar-pago', methods=['POST'])
+@permission_required(PERM)
+def boleto_marcar_pago(boleto_id):
+    """Pago por fora (Pix, dinheiro): marca o boleto como pago na Efí (não pode mais ser pago) e, se o título
+    ainda tem saldo, dá a baixa manual na data informada."""
+    b, volta = _boleto_e_volta(boleto_id)
+    if b['situacao'] not in ('waiting', 'unpaid'):
+        flash('Só boleto aguardando pagamento ou vencido pode ser marcado como pago.', 'warning')
+        return redirect(volta)
+    quando = _data_do_form('data') or _hoje()
+    if quando > _hoje():
+        flash('A data do pagamento não pode ser depois de hoje.', 'danger')
+        return redirect(volta)
+    try:
+        efi, _ = FinCobrancaConta.cliente_efi(b['conta_cobranca_id'])
+        efi.marcar_pago(b['charge_id'])
+    except (EfiErro, ValueError) as exc:
+        flash(f'A Efí não marcou como pago: {exc}', 'danger')
+        return redirect(volta)
+    # 'settled' ANTES do aviso da Efí chegar: o aviso vê que já estava assim e não baixa de novo
+    FinBoleto.atualizar_situacao(boleto_id, 'settled')
+    baixou = None
+    if b.get('titulo_id'):
+        from utils.financeiro_core import registrar_baixa, BaixaInvalida
+        t = execute_query('SELECT status, valor, valor_baixado FROM fin_titulos WHERE id = %s', (b['titulo_id'],),
+                          fetch=True, fetch_one=True) or {}
+        saldo = Decimal(str(t.get('valor') or 0)) - Decimal(str(t.get('valor_baixado') or 0))
+        if t.get('status') in ('aberto', 'parcial') and saldo > 0:
+            try:
+                baixou = registrar_baixa(b['titulo_id'], saldo, quando, 'manual',
+                                         referencia=f"efi-settle:{b['charge_id']}", usuario_id=current_user.id)
+            except BaixaInvalida as exc:
+                flash(f'O boleto foi marcado como pago na Efí, mas a baixa do título não entrou: {exc}', 'warning')
+    registrar('escrita.marcou_boleto_pago_efi', 'financeiro', tabela='fin_boletos', registro_id=boleto_id,
+              depois={'charge_id': b['charge_id'], 'titulo_id': b.get('titulo_id'), 'data': str(quando),
+                      'baixa_titulo': (baixou or {}).get('status')})
+    flash('Boleto marcado como pago na Efí — não pode mais ser pago.'
+          + (f" Título baixado em {quando.strftime('%d/%m/%Y')}." if baixou else ' O título já estava quitado.'), 'success')
+    return redirect(volta)
+
+
+@financeiro.route('/financeiro/boletos/<int:boleto_id>/reemitir', methods=['POST'])
+@permission_required(PERM)
+def boleto_reemitir(boleto_id):
+    """Boleto EXPIRADO (não pode mais ser pago): emite um novo pela nossa conta, para o MESMO título, com o
+    saldo dele. O expirado fica como está, guardado."""
+    import re
+    b, volta = _boleto_e_volta(boleto_id)
+    if b['situacao'] != 'expired':
+        flash('Só boleto expirado é reemitido. Vencido ainda pode ser pago: use Mudar vencimento.', 'warning')
+        return redirect(volta)
+    t = execute_query('SELECT id, empresa_id, cliente_id, descricao, competencia, status, valor, valor_baixado '
+                      'FROM fin_titulos WHERE id = %s', (b.get('titulo_id') or 0,), fetch=True, fetch_one=True)
+    if not t or t['status'] not in ('aberto', 'parcial'):
+        flash('O título deste boleto não está em aberto — nada a cobrar.', 'warning')
+        return redirect(volta)
+    saldo = Decimal(str(t['valor'])) - Decimal(str(t['valor_baixado'] or 0))
+    venc = _data_do_form('vencimento', _hoje())
+    if not venc or saldo <= 0:
+        flash('Informe o vencimento do boleto novo (hoje ou depois).', 'danger')
+        return redirect(volta)
+    conta = FinCobrancaConta.padrao_da_empresa(t['empresa_id'])
+    if not conta:
+        flash('Não há conta de cobrança para emitir o boleto novo.', 'danger')
+        return redirect(volta)
+    tom = tomador_do_cliente(t['cliente_id'], consultar_cep=False) if t.get('cliente_id') else None
+    if not tom or not tom.get('documento'):
+        flash('O cadastro do cliente não tem CPF/CNPJ para o boleto.', 'danger')
+        return redirect(volta)
+    nome = re.sub(r'\s*\(Conexa \d+\)\s*$', '', t['descricao'] or '').strip() or 'Honorários'
+    itens = [{'nome': nome[:255], 'valor': saldo, 'emite_nota': False, 'servico_id': None}]
+    competencia = t.get('competencia') or _hoje()
+    _v, mensagem = sugestao_boleto(conta, competencia)
+    novo_id, ok, msg, aviso = emitir_boleto_avulso(t['empresa_id'], conta, _pagador_do_tomador(tom), itens, saldo,
+                                                   competencia, venc, mensagem, t['id'], current_user.id)
+    registrar('escrita.reemitiu_boleto', 'financeiro', tabela='fin_boletos', registro_id=boleto_id,
+              depois={'expirado': b['charge_id'], 'novo_boleto_id': novo_id, 'ok': ok, 'titulo_id': t['id'],
+                      'valor': str(saldo), 'vencimento': str(venc)})
+    flash(msg, 'success' if ok else 'danger')
+    if aviso:
+        flash(aviso, 'success' if aviso.startswith('E-mail enviado') else 'warning')
+    return redirect(url_for('financeiro.boleto_detalhe', boleto_id=novo_id) if ok and novo_id else volta)
+
+
+# ---------------------------------------------------------------------------
 # Webhook da Efí (público; o segredo da URL identifica a conta)
 # ---------------------------------------------------------------------------
 @cobranca_publica.route('/c/<token>/boleto')
