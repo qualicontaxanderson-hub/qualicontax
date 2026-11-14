@@ -1,60 +1,274 @@
 {% extends "base.html" %}
-{% block title %}{{ 'Editar' if dep and dep.id else 'Novo' }} departamento – Configurações{% endblock %}
+{% block title %}{{ dep.nome if dep and dep.id else 'Novo departamento' }} – Departamentos{% endblock %}
 {% block content %}
-<div class="page-header">
+{# 14/11/2026 (Anderson): "e-mail tem que ser no Config / Departamento e lá coloco uma vez só o e-mail e
+   pronto !! O APP inteiro usaremos só e-mails de lá e vinculando para cada serviço"; "abaixo sempre mostrar
+   onde estamos ligando eles para termos o controle de não ligar errado". Visual de Clientes (ef-hero,
+   cli-kpis). A senha mora por CAIXA (email_caixas), não por departamento. #}
+{% include 'configuracoes/_lista_padrao.html' %}
+{% set editando = dep and dep.id %}
+{% set tem_senha = caixa and caixa.tem_senha %}
+{% set teste_ok = caixa and caixa.teste_resultado and caixa.teste_resultado.startswith('OK') %}
+{% set n_lig = ligacoes|length %}
+{% set icones = {'Financeiro': 'fa-sack-dollar', 'Fiscal': 'fa-file-invoice', 'Contábil': 'fa-calculator',
+                 'Pessoal': 'fa-id-badge', 'Legalização': 'fa-scale-balanced', 'Atendimento': 'fa-headset',
+                 'Comercial': 'fa-handshake', 'Diretoria': 'fa-crown', 'Certificado Digital': 'fa-file-shield',
+                 'Visita': 'fa-car'} %}
+<style>
+.dx{ --verde:#15803d; --verde-esc:#0f3d2e; --vc:#dcfce7; --vb:#bbf7d0; --borda:#e3ebe6; --bf:#d7e3dc; --muted:#7d968a;
+     --amb:#b45309; --amb-f:#fef3c7; --amb-b:#fde68a; --az:#0369a1; --az-f:#e0f2fe; --rx:#6d28d9; --rx-f:#ede9fe;
+     --vm:#b91c1c; --vm-f:#fee2e2; --vm-b:#fecaca;
+     --mono:ui-monospace,"Cascadia Mono",Consolas,monospace; color:#334155; font-size:14px; }
+.dx-hero-id{display:flex;align-items:center;gap:16px}
+.dx-ava{width:58px;height:58px;border-radius:16px;background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.25);display:grid;place-items:center;color:#fff;font-size:24px;flex:0 0 auto}
+.dx-badge{display:inline-flex;align-items:center;gap:6px;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.22);color:#ecfdf5;border-radius:99px;padding:4px 11px;font-size:12px;font-weight:700}
+.dx-badge.ok{background:#22c55e;border-color:#22c55e;color:#052e16}
+.dx-badge.amb{background:#fbbf24;border-color:#fbbf24;color:#451a03}
+.dx-cols{display:grid;grid-template-columns:minmax(0,1.05fr) minmax(0,1fr);gap:16px;margin-top:16px;align-items:start}
+.dx-card{background:#fff;border:1px solid var(--borda);border-radius:16px;overflow:hidden}
+.dx-card+.dx-card{margin-top:16px}
+.dx-ch{display:flex;align-items:center;gap:12px;padding:15px 18px;border-bottom:1px solid var(--borda)}
+.dx-ic{width:38px;height:38px;border-radius:11px;display:grid;place-items:center;font-size:16px;flex:0 0 auto}
+.dx-ch h3{margin:0;font-size:15px;font-weight:800;color:var(--verde-esc)}
+.dx-ch p{margin:2px 0 0;font-size:12.5px;color:var(--muted)}
+.dx-ch .dir{margin-left:auto}
+.dx-cc{padding:16px 18px;display:grid;grid-template-columns:1fr 1fr;gap:14px 16px}
+.dx-f label{display:block;font-size:12px;font-weight:700;color:#475569;margin-bottom:5px;text-transform:uppercase;letter-spacing:.3px}
+.dx-f input,.dx-f select{width:100%;font:inherit;font-size:14px;border:1px solid var(--bf);border-radius:10px;padding:10px 12px;min-height:42px;background:#fff;color:#0f172a;box-sizing:border-box}
+.dx-f input:focus,.dx-f select:focus{outline:0;border-color:#22c55e;box-shadow:0 0 0 3px rgba(34,197,94,.15)}
+.dx-f .d{font-size:12px;color:var(--muted);margin-top:5px;line-height:1.4}
+.dx-l{grid-column:1/-1}
+.dx-pess{display:flex;flex-wrap:wrap;gap:6px}
+.dx-p{display:inline-flex;align-items:center;gap:7px;border:1px solid var(--borda);border-radius:99px;padding:4px 12px 4px 4px;font-size:13px;font-weight:600;color:#0f172a;text-decoration:none}
+.dx-p i{width:24px;height:24px;border-radius:99px;background:var(--vc);color:var(--verde);display:grid;place-items:center;font-style:normal;font-size:11px;font-weight:800}
+.dx-p.vazio{border-style:dashed;color:var(--muted);padding:4px 12px}
+.dx-saude{display:grid;grid-template-columns:repeat(3,1fr);border-top:1px solid var(--borda)}
+.dx-saude div{padding:12px 18px;border-right:1px solid var(--borda);min-width:0} .dx-saude div:last-child{border-right:0}
+.dx-saude span{display:block;font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.4px;color:var(--muted)}
+.dx-saude b{display:block;margin-top:3px;font-size:14px;color:#0f172a;overflow-wrap:anywhere}
+.dx-saude b.ok{color:var(--verde)} .dx-saude b.ruim{color:var(--vm)}
+.dx-srv{display:flex;align-items:center;gap:10px;background:#f6f9f7;border:1px solid var(--borda);border-radius:12px;padding:10px 14px;font-size:13px;color:var(--muted)}
+.dx-srv b{color:#0f172a} .dx-srv button{margin-left:auto;background:none;border:0;padding:0;font:inherit;color:var(--verde);font-weight:700;cursor:pointer}
+.dx-srv-ed{display:none;grid-template-columns:2fr 1fr;gap:14px 16px}
+.dx-srv-ed.on{display:grid}
+.dx-sit{display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border-radius:99px;font-size:11.5px;font-weight:800;white-space:nowrap}
+.dx-sit.ok{background:var(--vc);color:var(--verde);border:1px solid var(--vb)}
+.dx-sit.az{background:var(--az-f);color:var(--az);border:1px solid #bae6fd}
+.dx-sit.amb{background:var(--amb-f);color:var(--amb);border:1px solid var(--amb-b)}
+.dx-sit.vm{background:var(--vm-f);color:var(--vm);border:1px solid var(--vm-b)}
+.dx-sit.cz{background:#eef2f0;color:#64748b;border:1px solid var(--borda)}
+.dx-lig{list-style:none;margin:0;padding:6px 0}
+.dx-lig li{display:grid;grid-template-columns:40px minmax(0,1fr) auto;gap:12px;align-items:center;padding:11px 18px;border-bottom:1px solid #f0f4f2}
+.dx-lig li:last-child{border-bottom:0}
+.dx-lig .dx-ic{width:36px;height:36px}
+.dx-lig b{display:block;color:#0f172a;font-size:14px}
+.dx-lig small{display:block;color:var(--muted);font-size:12.5px;margin-top:1px}
+.dx-lig .tipo{font-size:10.5px;font-weight:800;letter-spacing:.4px;text-transform:uppercase;padding:2px 7px;border-radius:6px;margin-left:6px;vertical-align:1px}
+.dx-lig .tipo.envia{background:var(--vc);color:var(--verde)} .dx-lig .tipo.recebe{background:var(--rx-f);color:var(--rx)}
+.dx-vazio{padding:26px 18px;text-align:center;color:var(--muted);font-size:13.5px}
+.dx-mapa{margin-top:16px}
+.dx-tab{width:100%;border-collapse:collapse;font-size:13.5px;margin:0}
+.dx-tab th{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);text-align:left;padding:10px 18px;background:#f6f9f7;border-bottom:1px solid var(--borda)}
+.dx-tab td{padding:11px 18px;border-bottom:1px solid #f0f4f2;vertical-align:middle}
+.dx-tab tr.aqui td{background:#f0fdf4} .dx-tab tr.aqui td:first-child{box-shadow:inset 3px 0 0 var(--verde)}
+.dx-tab .srv{display:flex;align-items:center;gap:10px;font-weight:700;color:#0f172a}
+.dx-tab .srv i{width:28px;height:28px;border-radius:8px;display:grid;place-items:center;font-size:13px;flex:0 0 auto}
+.dx-tab .srv small{display:block;font-weight:500;color:var(--muted);font-size:12px}
+.dx-tab .mono{font-family:var(--mono);font-size:12.5px;color:#475569;overflow-wrap:anywhere}
+.dx-tab .dep{display:inline-flex;align-items:center;gap:7px;font-weight:700;color:#0f172a;text-decoration:none}
+.dx-tab .dep em{width:22px;height:22px;border-radius:7px;background:var(--verde-esc);color:#fff;font-style:normal;font-size:11px;display:grid;place-items:center}
+.dx-chips{display:flex;flex-wrap:wrap;gap:6px}
+.dx-chip{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--borda);border-radius:99px;padding:3px 10px 3px 3px;font-size:12.5px;font-weight:700;color:#0f172a;text-decoration:none;background:#fff}
+.dx-chip em{width:20px;height:20px;border-radius:99px;background:#eef2f0;color:#475569;font-style:normal;font-size:10.5px;display:grid;place-items:center}
+.dx-chip small{color:var(--muted);font-weight:700}
+.dx-chip.on{border-color:var(--verde);background:#f0fdf4} .dx-chip.on em{background:var(--verde);color:#fff}
+.dx-alerta{display:flex;gap:10px;align-items:flex-start;margin:12px 18px 16px;padding:10px 14px;border-radius:12px;background:#fffdf5;border:1px solid var(--amb-b);color:#78350f;font-size:13px}
+.dx-alerta.info{background:#f6f9f7;border-color:var(--borda);color:#475569}
+.dx-pe{display:flex;gap:8px;margin-top:16px}
+.dx-b{font:inherit;font-size:14px;font-weight:700;border-radius:10px;padding:10px 18px;border:1px solid var(--bf);background:#fff;color:#334155;display:inline-flex;gap:8px;align-items:center;cursor:pointer;text-decoration:none}
+.dx-b.p{background:var(--verde);border-color:var(--verde);color:#fff}
+@media(max-width:900px){.dx-cols{grid-template-columns:1fr}}
+@media(max-width:640px){.dx-cc,.dx-srv-ed.on{grid-template-columns:1fr}.dx-saude{grid-template-columns:1fr}.dx-saude div{border-right:0;border-bottom:1px solid var(--borda)}
+  .dx-tab thead{display:none}.dx-tab tr{display:block;border-bottom:1px solid var(--borda);padding:8px 0}.dx-tab td{display:block;border:0;padding:4px 16px}
+  .dx-ava{width:46px;height:46px;font-size:19px}.dx-ch{flex-wrap:wrap}.dx-pe .dx-b{flex:1;justify-content:center}}
+</style>
+
+<form method="POST" autocomplete="off" id="dxForm">
+<input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+<div class="ef-hero">
+  <div class="ef-hero-inner ef-hero-head">
     <div>
-        <a href="{{ url_for('configuracoes.departamentos') }}" class="back-link">← Departamentos</a>
-        <h1 class="page-title">{{ 'Editar departamento' if dep and dep.id else 'Novo departamento' }}</h1>
+      <a href="{{ url_for('configuracoes.departamentos') }}" class="cfg-voltar"><i class="fas fa-arrow-left"></i> Departamentos</a>
+      <div class="dx-hero-id">
+        <span class="dx-ava"><i class="fas {{ icones.get(dep.nome, 'fa-sitemap') if dep else 'fa-sitemap' }}"></i></span>
+        <div>
+          <h1 class="ef-hero-title">{{ dep.nome if editando else 'Novo departamento' }}</h1>
+          <p class="ef-hero-sub">{% if dep and dep.email %}{{ dep.email }}{% else %}sem e-mail{% endif %}{% if editando %} · responsável {{ (usuarios|selectattr('id', 'equalto', dep.responsavel_id)|map(attribute='nome')|first) or 'ninguém' }}{% endif %}</p>
+          {% if editando %}
+          <div class="ef-hero-badges">
+            {% if dep.email and tem_senha %}<span class="dx-badge ok"><i class="fas fa-circle-check"></i> Envia e recebe</span>
+            {% elif dep.email %}<span class="dx-badge amb"><i class="fas fa-inbox"></i> Só recebe (sem senha)</span>
+            {% else %}<span class="dx-badge amb"><i class="fas fa-triangle-exclamation"></i> Sem e-mail</span>{% endif %}
+            <span class="dx-badge"><i class="fas fa-link"></i> {{ n_lig }} ligaç{{ 'ão' if n_lig == 1 else 'ões' }}</span>
+            <span class="dx-badge"><i class="fas fa-user"></i> {{ pessoas|length }} pessoa{{ '' if pessoas|length == 1 else 's' }}</span>
+          </div>
+          {% endif %}
+        </div>
+      </div>
     </div>
+    <div class="ef-hero-actions">
+      {% if editando and dep.email and tem_senha %}
+      <button type="submit" class="ef-btn" formaction="{{ url_for('configuracoes.departamento_testar_email', did=dep.id) }}" formnovalidate
+              title="Manda um e-mail de prova por esta caixa para o seu e-mail"><i class="fas fa-paper-plane"></i> Enviar e-mail de teste</button>
+      {% endif %}
+      <button type="submit" class="ef-btn ef-btn-primary"><i class="fas fa-check"></i> Salvar</button>
+    </div>
+  </div>
 </div>
 
-<form method="POST" autocomplete="off">
-<div class="card mb-4">
-    <div class="card-body">
-        <div class="form-grid-2">
-            <div class="form-group">
-                <label class="form-label" for="nome">Nome *</label>
-                <input type="text" name="nome" id="nome" class="form-control" required maxlength="100"
-                       value="{{ dep.nome if dep else '' }}">
-            </div>
-            <div class="form-group">
-                <label class="form-label" for="email">E-mail do departamento</label>
-                <input type="email" name="email" id="email" class="form-control" maxlength="255"
-                       value="{{ dep.email if dep and dep.email else '' }}" placeholder="dp@qualicontax.com.br">
-                <small class="form-text text-muted">A caixa que recebe os avisos automáticos. Sem e-mail, o departamento não recebe nada.</small>
-            </div>
-            <div class="form-group">
-                <label class="form-label" for="responsavel_id">Responsável</label>
-                <select name="responsavel_id" id="responsavel_id" class="form-control">
-                    <option value="">Ninguém</option>
-                    {% for u in usuarios %}
-                    <option value="{{ u.id }}" {{ 'selected' if dep and dep.responsavel_id == u.id }}>{{ u.nome }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-            <div class="form-group">
-                <label class="form-label" for="ativo">Situação</label>
-                <select name="ativo" id="ativo" class="form-control">
-                    <option value="1" {{ 'selected' if not dep or dep.ativo }}>Ativo</option>
-                    <option value="0" {{ 'selected' if dep and not dep.ativo }}>Inativo (não recebe avisos)</option>
-                </select>
-            </div>
-            <div class="form-group" style="grid-column:1/-1;">
-                <label class="form-label" for="descricao">Descrição</label>
-                <input type="text" name="descricao" id="descricao" class="form-control"
-                       value="{{ dep.descricao if dep and dep.descricao else '' }}">
-            </div>
+<div class="ef-body dx">
+  {% if editando %}
+  <div class="cli-kpis cfg-k4">
+    <div class="cli-kpi"><span class="cli-kpi-ico" style="background:#dcfce7;color:#15803d"><i class="fas fa-barcode"></i></span>
+      <div class="cli-kpi-body"><strong class="cli-kpi-val">{{ kpi.boletos if kpi.boletos is defined else '—' }}</strong><span class="cli-kpi-lbl">Boletos enviados por aqui</span></div></div>
+    <div class="cli-kpi"><span class="cli-kpi-ico" style="background:#e0f2fe;color:#0369a1"><i class="fas fa-clock-rotate-left"></i></span>
+      <div class="cli-kpi-body"><strong class="cli-kpi-val">{{ kpi.ultimo_envio.strftime('%d/%m') if kpi.ultimo_envio else '—' }}</strong><span class="cli-kpi-lbl">Último envio</span></div></div>
+    <div class="cli-kpi"><span class="cli-kpi-ico" style="background:#ede9fe;color:#6d28d9"><i class="fas fa-bell"></i></span>
+      <div class="cli-kpi-body"><strong class="cli-kpi-val">{{ kpi.avisos or 0 }}</strong><span class="cli-kpi-lbl">Avisos que recebe</span></div></div>
+    <div class="cli-kpi"><span class="cli-kpi-ico" style="background:{{ '#dcfce7' if teste_ok else '#fef3c7' }};color:{{ '#15803d' if teste_ok else '#b45309' }}"><i class="fas fa-shield-halved"></i></span>
+      <div class="cli-kpi-body"><strong class="cli-kpi-val">{{ caixa.testado_em.strftime('%d/%m') if caixa and caixa.testado_em else '—' }}</strong><span class="cli-kpi-lbl">{{ 'Caixa testada' if teste_ok else ('Teste falhou' if caixa and caixa.testado_em else 'Caixa nunca testada') }}</span></div></div>
+  </div>
+  {% endif %}
+
+  <div class="dx-cols">
+    <div>
+      <section class="dx-card">
+        <div class="dx-ch"><span class="dx-ic" style="background:#dcfce7;color:#15803d"><i class="fas fa-envelope"></i></span>
+          <div><h3>Caixa de e-mail</h3><p>cadastrada uma vez aqui; o app inteiro usa daqui</p></div>
+          {% if dep and dep.email %}
+            {% if teste_ok %}<span class="dx-sit ok dir"><i class="fas fa-check"></i> funcionando</span>
+            {% elif tem_senha %}<span class="dx-sit amb dir">teste pendente</span>
+            {% else %}<span class="dx-sit cz dir">só recebe</span>{% endif %}
+          {% endif %}</div>
+        <div class="dx-cc">
+          <div class="dx-f"><label for="email">E-mail</label>
+            <input type="email" name="email" id="email" maxlength="255" value="{{ dep.email if dep and dep.email else '' }}" placeholder="financeiro@qualicontax.com.br"></div>
+          <div class="dx-f"><label for="email_nome">Nome que o cliente vê</label>
+            <input type="text" name="email_nome" id="email_nome" maxlength="60" value="{{ dep.email_nome if dep and dep.email_nome else '' }}" placeholder="Qualicontax - {{ dep.nome if dep else 'Financeiro' }}"></div>
+          <div class="dx-f dx-l"><label for="email_senha">Senha da caixa</label>
+            <input type="password" name="email_senha" id="email_senha" autocomplete="new-password"
+                   placeholder="{{ 'guardada com segurança · deixe em branco para manter' if tem_senha else 'só se o departamento for ENVIAR e-mail' }}"
+                   {{ 'disabled' if not caixas_prontas }}>
+            <div class="d">Sem senha a caixa só <b>recebe</b> avisos. Com senha ela também <b>envia</b> boletos, notas e contratos.
+              {% if mesma_caixa %}<br><b>A mesma caixa é usada por {{ mesma_caixa|join(', ') }}</b>: a senha é uma só, mudou aqui, muda lá.{% endif %}</div></div>
+          <div class="dx-srv dx-l" id="dxSrv"><i class="fas fa-server"></i>
+            <span>Servidor <b>{{ caixa.host if caixa else 'smtp.titan.email' }}</b> · porta <b>{{ caixa.porta if caixa else 465 }}</b> · o mesmo para todas as caixas do escritório</span>
+            <button type="button" onclick="document.getElementById('dxSrvEd').classList.add('on');this.parentNode.style.display='none'">mudar</button></div>
+          <div class="dx-srv-ed dx-l" id="dxSrvEd">
+            <div class="dx-f"><label for="email_host">Servidor de envio</label><input type="text" name="email_host" id="email_host" maxlength="80" value="{{ caixa.host if caixa else 'smtp.titan.email' }}"></div>
+            <div class="dx-f"><label for="email_porta">Porta</label><input type="number" name="email_porta" id="email_porta" min="1" max="65535" value="{{ caixa.porta if caixa else 465 }}"><div class="d">465 é a do Titan; 587 também funciona.</div></div>
+          </div>
         </div>
+        {% if editando and dep.email %}
+        <div class="dx-saude">
+          <div><span>Último teste</span>
+            {% if caixa and caixa.testado_em %}<b class="{{ 'ok' if teste_ok else 'ruim' }}" title="{{ caixa.teste_resultado }}">{{ '✓' if teste_ok else '✗' }} {{ caixa.testado_em.strftime('%d/%m às %H:%M') }}</b>
+            {% else %}<b>nunca</b>{% endif %}</div>
+          <div><span>Último envio</span><b>{{ kpi.ultimo_envio.strftime('%d/%m às %H:%M') if kpi.ultimo_envio else '—' }}</b></div>
+          <div><span>Usada também por</span><b>{{ mesma_caixa|join(', ') if mesma_caixa else 'só o ' ~ dep.nome }}</b></div>
+        </div>
+        {% endif %}
+      </section>
+
+      <section class="dx-card">
+        <div class="dx-ch"><span class="dx-ic" style="background:#e0f2fe;color:#0369a1"><i class="fas fa-users"></i></span>
+          <div><h3>Equipe</h3><p>quem é do departamento</p></div></div>
+        <div class="dx-cc">
+          <div class="dx-f"><label for="nome">Nome do departamento *</label>
+            <input type="text" name="nome" id="nome" required maxlength="100" value="{{ dep.nome if dep else '' }}"></div>
+          <div class="dx-f"><label for="responsavel_id">Responsável</label>
+            <select name="responsavel_id" id="responsavel_id">
+              <option value="">Ninguém</option>
+              {% for u in usuarios %}<option value="{{ u.id }}" {{ 'selected' if dep and dep.responsavel_id == u.id }}>{{ u.nome }}</option>{% endfor %}
+            </select></div>
+          <div class="dx-f"><label for="ativo">Situação</label>
+            <select name="ativo" id="ativo">
+              <option value="1" {{ 'selected' if not dep or dep.ativo }}>Ativo</option>
+              <option value="0" {{ 'selected' if dep and not dep.ativo }}>Inativo (não recebe avisos)</option>
+            </select></div>
+          <div class="dx-f"><label for="descricao">Descrição</label>
+            <input type="text" name="descricao" id="descricao" value="{{ dep.descricao if dep and dep.descricao else '' }}"></div>
+          {% if editando %}
+          <div class="dx-l"><div class="dx-pess">
+            {% for p in pessoas %}<span class="dx-p"><i>{{ (p.nome.split()[0][:1] ~ (p.nome.split()[-1][:1] if p.nome.split()|length > 1 else ''))|upper }}</i>{{ p.nome }}</span>
+            {% else %}<span class="dx-p vazio">ninguém neste departamento</span>{% endfor %}
+            <a class="dx-p vazio" href="{{ url_for('configuracoes.usuarios') }}" title="O departamento de cada pessoa se escolhe no cadastro do usuário">a pessoa entra pelo cadastro do usuário</a>
+          </div></div>
+          {% endif %}
+        </div>
+      </section>
     </div>
-</div>
-<div style="display:flex;gap:8px;">
-    <button type="submit" class="btn btn-primary"><i class="fas fa-check"></i> Salvar</button>
-    <a href="{{ url_for('configuracoes.departamentos') }}" class="btn btn-secondary">Cancelar</a>
+
+    <section class="dx-card">
+      <div class="dx-ch"><span class="dx-ic" style="background:#ede9fe;color:#6d28d9"><i class="fas fa-link"></i></span>
+        <div><h3>Onde este e-mail está ligado</h3><p>para conferir e não ligar no lugar errado</p></div>
+        <span class="dx-sit cz dir">{{ n_lig }} ligaç{{ 'ão' if n_lig == 1 else 'ões' }}</span></div>
+      {% if ligacoes %}
+      <ul class="dx-lig">
+        {% for l in ligacoes %}
+        <li><span class="dx-ic" style="background:{{ l.cor }}1a;color:{{ l.cor }}"><i class="fas {{ l.icone }}"></i></span>
+          <div><b>{{ l.servico }}<span class="tipo {{ l.tipo }}">{{ l.tipo }}</span></b><small>{{ l.detalhe }}</small></div>
+          {% if l.tipo == 'recebe' %}<span class="dx-sit ok">{{ l.qtd }} aviso{{ '' if l.qtd == 1 else 's' }}</span>
+          {% elif not tem_senha %}<span class="dx-sit vm" title="A caixa está sem senha: o e-mail não sai">sem senha</span>
+          {% else %}<span class="dx-sit ok">ligado</span>{% endif %}</li>
+        {% endfor %}
+      </ul>
+      {% else %}
+      <div class="dx-vazio">{{ 'Nenhum serviço usa este departamento ainda.' if editando else 'Salve o departamento para ligar serviços a ele.' }}</div>
+      {% endif %}
+      <div class="dx-alerta info"><i class="fas fa-circle-info" style="margin-top:2px"></i><span>Para trocar, abra o serviço (ex.: a conta de cobrança em Financeiro → Contas) e escolha outro departamento. Aqui fica a lista para conferir.</span></div>
+    </section>
+  </div>
+
+  <section class="dx-card dx-mapa">
+    <div class="dx-ch"><span class="dx-ic" style="background:#0f3d2e;color:#fff"><i class="fas fa-map"></i></span>
+      <div><h3>Mapa dos e-mails do escritório</h3><p>cada serviço que manda ou recebe e-mail e o departamento que ele usa{% if editando %} · em verde, os deste departamento{% endif %}</p></div></div>
+    <table class="dx-tab">
+      <thead><tr><th>Serviço</th><th>Departamento</th><th>Caixa</th><th>Situação</th></tr></thead>
+      <tbody>
+        {% set mapa_avisos = mapa|selectattr('tipo', 'equalto', 'recebe')|list %}
+        {% for l in mapa|rejectattr('tipo', 'equalto', 'recebe') %}
+        <tr class="{{ 'aqui' if editando and l.departamento_id == dep.id }}">
+          <td><span class="srv"><i style="background:{{ l.cor }}1a;color:{{ l.cor }}" class="fas {{ l.icone }}"></i><span>{{ l.servico }}<small>{{ l.detalhe }}</small></span></span></td>
+          <td>{% if l.departamento %}<a class="dep" href="{{ url_for('configuracoes.departamento_editar', did=l.departamento_id) }}"><em>{{ l.departamento[:1] }}</em>{{ l.departamento }}</a>
+              {% elif l.situacao == 'sistema' %}<span class="dx-sit cz">caixa do sistema</span>
+              {% else %}<span class="dx-sit amb" title="Ainda não aponta para um departamento: abra o serviço e escolha">escolher departamento</span>{% endif %}</td>
+          <td class="mono">{{ l.email or '—' }}</td>
+          <td>{% set cls = {'envia': 'ok', 'recebe': 'az', 'sistema': 'cz', 'caixa antiga': 'amb', 'sem e-mail': 'vm', 'o banco avisa': 'cz', 'não avisa': 'cz'} %}
+              <span class="dx-sit {{ cls.get(l.situacao, 'cz') }}">{{ l.situacao }}</span></td>
+        </tr>
+        {% else %}
+        <tr><td colspan="4" class="dx-vazio">Nenhum serviço manda e-mail ainda.</td></tr>
+        {% endfor %}
+        {% set avisos = mapa_avisos %}
+        {% if avisos %}
+        <tr class="{{ 'aqui' if editando and avisos|selectattr('departamento_id', 'equalto', dep.id)|list }}">
+          <td><span class="srv"><i style="background:#6d28d91a;color:#6d28d9" class="fas fa-bell"></i><span>Avisos automáticos<small>quem manda é a caixa do sistema; cada departamento recebe na sua</small></span></span></td>
+          <td colspan="2"><div class="dx-chips">{% for l in avisos %}<a class="dx-chip {{ 'on' if editando and l.departamento_id == dep.id }}" href="{{ url_for('configuracoes.departamento_editar', did=l.departamento_id) }}" title="{{ l.email }} · {{ l.detalhe }}"><em>{{ l.departamento[:1] }}</em>{{ l.departamento }}<small>{{ l.qtd }}</small></a>{% endfor %}</div></td>
+          <td><span class="dx-sit az">recebe</span></td>
+        </tr>
+        {% endif %}
+      </tbody>
+    </table>
+    {% for em, nomes in compartilhadas %}
+    <div class="dx-alerta"><i class="fas fa-triangle-exclamation" style="margin-top:2px"></i><span><b>Mesma caixa:</b> {{ nomes|join(', ') }} usam <b>{{ em }}</b>. A senha é uma só: mudou num, muda em todos.</span></div>
+    {% endfor %}
+  </section>
+
+  <div class="dx-pe">
+    <button type="submit" class="dx-b p"><i class="fas fa-check"></i> Salvar</button>
+    <a href="{{ url_for('configuracoes.departamentos') }}" class="dx-b">Cancelar</a>
+  </div>
 </div>
 </form>
-
-<style>
-.form-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-@media (max-width: 640px) { .form-grid-2 { grid-template-columns: 1fr; } }
-</style>
 {% endblock %}

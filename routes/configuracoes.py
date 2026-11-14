@@ -2426,6 +2426,65 @@ def _dep_do_form():
             'responsavel_id': int(resp) if resp else None, 'ativo': ativo}, erro
 
 
+def _dep_contexto(did, dep):
+    """O que a tela do departamento mostra além do formulário (14/11/2026): a caixa de e-mail, onde ela
+    está ligada e o mapa de todos os e-mails do escritório."""
+    from utils import email_caixas as EC
+    ctx = {'usuarios': _usuarios_ativos(), 'caixa': None, 'ligacoes': [], 'mapa': [], 'mesma_caixa': [],
+           'pessoas': [], 'kpi': {}, 'caixas_prontas': EC.pronta(), 'compartilhadas': [],
+           'csrf_token': _qrobo_csrf_token()}
+    try:
+        mapa = EC.mapa()
+    except Exception:
+        logger.exception('[departamentos] mapa dos e-mails')
+        mapa = []
+    ctx['mapa'] = mapa
+    grupos = {}
+    for d in execute_query("SELECT nome, LOWER(TRIM(email)) AS em FROM departamentos "
+                           " WHERE ativo = 1 AND email IS NOT NULL AND email <> '' ORDER BY nome", fetch=True) or []:
+        grupos.setdefault(d['em'], []).append(d['nome'])
+    ctx['compartilhadas'] = [(em, ns) for em, ns in grupos.items() if len(ns) > 1]
+    if not did:
+        return ctx
+    ctx['ligacoes'] = [l for l in mapa if l.get('departamento_id') == did]
+    if dep and dep.get('email'):
+        ctx['caixa'] = EC.caixa(dep['email'])
+        ctx['mesma_caixa'] = [d['nome'] for d in EC.mesmos_da_caixa(dep['email'], menos_id=did)]
+    ctx['pessoas'] = execute_query("SELECT id, nome FROM usuarios WHERE departamento_id = %s AND situacao = 'ATIVO' "
+                                   " ORDER BY nome", (did,), fetch=True) or []
+    if EC.pronta():
+        k = execute_query(
+            "SELECT COUNT(*) AS n, MAX(b.email_enviado_em) AS ult FROM fin_boletos b "
+            "  JOIN fin_cobranca_contas c ON c.id = b.conta_cobranca_id "
+            " WHERE c.departamento_id = %s AND b.email_enviado_em IS NOT NULL", (did,), fetch=True, fetch_one=True) or {}
+        ctx['kpi'] = {'boletos': k.get('n') or 0, 'ultimo_envio': k.get('ult')}
+    ctx['kpi']['avisos'] = sum(l.get('qtd') or 0 for l in ctx['ligacoes'] if l['tipo'] == 'recebe')
+    return ctx
+
+
+def _dep_salvar_caixa(d):
+    """Grava a caixa do e-mail do departamento (senha vazia = mantém). Só depois da migração emails_02."""
+    from utils import email_caixas as EC
+    if not d.get('email') or not EC.pronta():
+        return
+    senha = request.form.get('email_senha') or None
+    host = request.form.get('email_host') or None
+    porta = request.form.get('email_porta') or None
+    if senha or EC.caixa(d['email']) or host or porta:
+        EC.salvar(d['email'], senha=senha, host=host, porta=porta, usuario_id=current_user.id)
+    if senha:
+        registrar('escrita.alterou_senha_caixa_email', 'configuracoes', tabela='email_caixas',
+                  depois={'email': d['email']})
+
+
+def _dep_set_email_nome(did):
+    from utils import email_caixas as EC
+    if not EC.pronta():
+        return
+    nome = (request.form.get('email_nome') or '').strip()[:60] or None
+    execute_query('UPDATE departamentos SET email_nome = %s WHERE id = %s', (nome, did), fetch=False)
+
+
 @configuracoes.route('/departamentos/novo', methods=['GET', 'POST'])
 @admin_required
 def departamento_novo():
@@ -2436,18 +2495,19 @@ def departamento_novo():
             erro = f'Já existe um departamento chamado "{d["nome"]}".'
         if erro:
             flash(erro, 'danger')
-            return render_template('configuracoes/departamento_form.html', dep=d,
-                                   usuarios=_usuarios_ativos())
+            return render_template('configuracoes/departamento_form.html', dep=d, **_dep_contexto(None, d))
         did = execute_query(
             "INSERT INTO departamentos (nome, email, descricao, responsavel_id, ativo) "
             "VALUES (%s, %s, %s, %s, %s)",
             (d['nome'], d['email'], d['descricao'], d['responsavel_id'], d['ativo']))
         registrar('escrita.criou_departamento', 'configuracoes', tabela='departamentos',
                   registro_id=did, depois=d)
+        if did:
+            _dep_set_email_nome(did)
+            _dep_salvar_caixa(d)
         flash(f'Departamento "{d["nome"]}" criado.', 'success')
         return redirect(url_for('configuracoes.departamentos'))
-    return render_template('configuracoes/departamento_form.html', dep=None,
-                           usuarios=_usuarios_ativos())
+    return render_template('configuracoes/departamento_form.html', dep=None, **_dep_contexto(None, None))
 
 
 @configuracoes.route('/departamentos/<int:did>/editar', methods=['GET', 'POST'])
@@ -2466,7 +2526,7 @@ def departamento_editar(did):
         if erro:
             flash(erro, 'danger')
             return render_template('configuracoes/departamento_form.html',
-                                   dep=dict(d, id=did), usuarios=_usuarios_ativos())
+                                   dep=dict(atual, **d, id=did), **_dep_contexto(did, dict(atual, **d)))
         execute_query(
             "UPDATE departamentos SET nome=%s, email=%s, descricao=%s, responsavel_id=%s, ativo=%s "
             " WHERE id=%s",
@@ -2474,10 +2534,51 @@ def departamento_editar(did):
         registrar('escrita.alterou_departamento', 'configuracoes', tabela='departamentos',
                   registro_id=did,
                   antes={k: atual.get(k) for k in d}, depois=d)
+        _dep_set_email_nome(did)
+        _dep_salvar_caixa(d)
         flash(f'Departamento "{d["nome"]}" atualizado.', 'success')
         return redirect(url_for('configuracoes.departamentos'))
-    return render_template('configuracoes/departamento_form.html', dep=atual,
-                           usuarios=_usuarios_ativos())
+    return render_template('configuracoes/departamento_form.html', dep=atual, **_dep_contexto(did, atual))
+
+
+@configuracoes.route('/departamentos/<int:did>/testar-email', methods=['POST'])
+@admin_required
+def departamento_testar_email(did):
+    """Manda um e-mail de prova PELA caixa do departamento para quem clicou (14/11/2026)."""
+    from utils import email_caixas as EC, email_envio
+    if not _qrobo_csrf_ok():
+        flash('A página expirou. Recarregue e teste de novo.', 'danger')
+        return redirect(url_for('configuracoes.departamento_editar', did=did))
+    d = EC.departamento(did)
+    if not d:
+        flash('Departamento não encontrado.', 'danger')
+        return redirect(url_for('configuracoes.departamentos'))
+    para = (getattr(current_user, 'email', '') or '').strip()
+    if not para:
+        flash('O seu usuário não tem e-mail cadastrado para receber a prova.', 'warning')
+        return redirect(url_for('configuracoes.departamento_editar', did=did))
+    try:
+        rem = EC.remetente_do_departamento(did)
+        hoje = date.today().strftime('%d/%m/%Y')
+        texto = (f'Este é um teste da caixa {rem["user"]} do departamento {d["nome"]}, feito pelo Qualicontax em '
+                 f'{hoje}.\nSe chegou, tudo o que estiver ligado a este departamento sai por ela.')
+        html = (f'<p>Este é um <b>teste da caixa de e-mail</b> do departamento <b>{d["nome"]}</b> '
+                f'({rem["user"]}), feito pelo Qualicontax em {hoje}.</p>'
+                '<p>Se chegou, os boletos, notas e contratos ligados a este departamento sairão por ela, '
+                'e as respostas dos clientes caem nessa caixa.</p>')
+        ok, erro = email_envio.enviar([para], f'Teste do e-mail do departamento {d["nome"]}', html, texto,
+                                      remetente=rem)
+        resultado = f'OK: enviado de {rem["user"]} para {para}' if ok else f'FALHOU: {erro}'
+    except ValueError as exc:
+        resultado = f'FALHOU: {exc}'
+    except Exception as exc:                          # chave mestra, rede
+        logger.exception('[departamentos] teste de e-mail %s', did)
+        resultado = f'FALHOU: {exc}'
+    EC.registrar_teste(d.get('email'), resultado)
+    registrar('escrita.testou_email_departamento', 'configuracoes', tabela='departamentos', registro_id=did,
+              depois={'resultado': resultado[:200]})
+    flash(resultado, 'success' if resultado.startswith('OK') else 'danger')
+    return redirect(url_for('configuracoes.departamento_editar', did=did))
 
 
 # ===========================================================================

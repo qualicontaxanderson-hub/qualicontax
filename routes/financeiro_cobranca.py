@@ -31,6 +31,8 @@ from utils.auth_helper import permission_required
 from utils.db_helper import execute_query
 from utils.integrations.efi.client import SITUACOES, EfiErro
 from utils import efi_boletos
+from utils import bradesco_boletos
+from utils.integrations.bradesco.client import BradescoErro
 
 logger = logging.getLogger(__name__)
 PERM = 'financeiro.cobranca'
@@ -107,10 +109,14 @@ def cobranca_testar(conta_id):
     if not c or c['empresa_id'] not in FinEmpresa.ids_validos():
         abort(404)
     try:
-        efi, _ = FinCobrancaConta.cliente_efi(conta_id)
-        resultado = 'OK: ' + efi.testar()
+        if c['provedor'] == 'bradesco':
+            brad, _ = FinCobrancaConta.cliente_bradesco(conta_id)
+            resultado = 'OK: ' + brad.testar()
+        else:
+            efi, _ = FinCobrancaConta.cliente_efi(conta_id)
+            resultado = 'OK: ' + efi.testar()
         flash(f'{c["apelido"]}: {resultado}', 'success')
-    except (EfiErro, ValueError) as exc:
+    except (EfiErro, BradescoErro, ValueError) as exc:
         resultado = f'FALHOU: {exc}'
         flash(f'{c["apelido"]}: {resultado}', 'danger')
     except Exception as exc:                      # chave mestra, rede
@@ -178,6 +184,8 @@ def cobranca_saldo(conta_id):
     c = FinCobrancaConta.get(conta_id)
     if not c or c['empresa_id'] not in FinEmpresa.ids_validos():
         abort(404)
+    if c['provedor'] != 'efi':
+        return jsonify({'ok': False, 'erro': 'Saldo pela tela só na Efí; o do Bradesco vem pelo extrato.'})
     try:
         efi, _ = FinCobrancaConta.cliente_efi(conta_id)
         s = efi.saldo()
@@ -340,6 +348,8 @@ def _emitir_na_efi(conta, boleto_id, itens, pagador, vencimento, mensagem, titul
     """O passo comum de todo boleto (da nota ou avulso): chama a Efí, grava a resposta, liga o título,
     manda o e-mail (quando a conta avisa pelo app) e registra. Devolve (ok, msg, aviso_email)."""
     custom_id = f'QC-{boleto_id}'
+    if conta['provedor'] == 'bradesco':
+        return _emitir_no_bradesco(conta, boleto_id, pagador, vencimento, titulo_id, nota_id, total, usuario_id)
     try:
         efi, _c = FinCobrancaConta.cliente_efi(conta['id'])
         data = efi.criar_boleto(
@@ -368,6 +378,34 @@ def _emitir_na_efi(conta, boleto_id, itens, pagador, vencimento, mensagem, titul
               depois={'nfse_id': nota_id, 'charge_id': data.get('charge_id'), 'valor': str(total),
                       'vencimento': vencimento.isoformat(), 'ambiente': conta['ambiente'], 'titulo_id': titulo_id})
     msg = (f"Boleto emitido na Efí (nº {data.get('charge_id')}) — R$ {total:.2f}, vence {vencimento.strftime('%d/%m/%Y')}"
+           .replace('.', ',', 1) + (' (ambiente de teste)' if conta['ambiente'] != 'producao' else '') + '.')
+    return True, msg, aviso_email
+
+
+def _emitir_no_bradesco(conta, boleto_id, pagador, vencimento, titulo_id, nota_id, total, usuario_id):
+    """Mesmo passo comum, no Bradesco (14/11/2026): registra, grava, liga o título, manda o e-mail.
+    O PDF é o nosso (utils/boleto_pdf.py), com a lista dos serviços e o QR do Pix."""
+    try:
+        nn, _j = bradesco_boletos.emitir(conta, boleto_id, pagador, total, vencimento)
+    except (BradescoErro, ValueError) as exc:
+        FinBoleto.gravar_erro(boleto_id, str(exc))
+        return False, f'O Bradesco não emitiu o boleto: {exc}', None
+    except Exception as exc:
+        logger.exception('[cobranca] boleto Bradesco %s', boleto_id)
+        FinBoleto.gravar_erro(boleto_id, str(exc))
+        return False, f'Falha ao emitir o boleto: {exc}', None
+    if titulo_id:
+        execute_query('UPDATE fin_titulos SET boleto_id = %s WHERE id = %s', (boleto_id, titulo_id))
+    aviso_email = None
+    if (conta.get('avisa_por') or 'app') == 'app' and conta.get('email_remetente'):
+        from utils import cobranca_email
+        ok_mail, aviso_email = cobranca_email.enviar_boleto(boleto_id, usuario_id=usuario_id)
+        if not ok_mail:
+            aviso_email = 'O boleto saiu, mas o e-mail não: ' + aviso_email
+    registrar('escrita.emitiu_boleto', 'financeiro', tabela='fin_boletos', registro_id=boleto_id,
+              depois={'nfse_id': nota_id, 'charge_id': nn, 'valor': str(total), 'provedor': 'bradesco',
+                      'vencimento': vencimento.isoformat(), 'ambiente': conta['ambiente'], 'titulo_id': titulo_id})
+    msg = (f"Boleto emitido no Bradesco (nosso número {nn}) — R$ {total:.2f}, vence {vencimento.strftime('%d/%m/%Y')}"
            .replace('.', ',', 1) + (' (ambiente de teste)' if conta['ambiente'] != 'producao' else '') + '.')
     return True, msg, aviso_email
 
@@ -563,10 +601,13 @@ def boleto_cancelar(boleto_id):
         flash('Só boleto em aberto pode ser cancelado.', 'warning')
         return redirect(volta)
     try:
-        efi, _ = FinCobrancaConta.cliente_efi(b['conta_cobranca_id'])
-        efi.cancelar(b['charge_id'])
-    except (EfiErro, ValueError) as exc:
-        flash(f'A Efí não cancelou: {exc}', 'danger')
+        if b['provedor'] == 'bradesco':
+            bradesco_boletos.cancelar(b)
+        else:
+            efi, _ = FinCobrancaConta.cliente_efi(b['conta_cobranca_id'])
+            efi.cancelar(b['charge_id'])
+    except (EfiErro, BradescoErro, ValueError) as exc:
+        flash(f"{'O Bradesco' if b['provedor'] == 'bradesco' else 'A Efí'} não cancelou: {exc}", 'danger')
         return redirect(volta)
     FinBoleto.atualizar_situacao(boleto_id, 'canceled')
     titulo_cancelado = False
@@ -575,7 +616,7 @@ def boleto_cancelar(boleto_id):
         titulo_cancelado = bool(FinTitulo.cancelar(b['titulo_id']))
     registrar('escrita.cancelou_boleto', 'financeiro', tabela='fin_boletos', registro_id=boleto_id,
               depois={'charge_id': b['charge_id'], 'titulo_cancelado': titulo_cancelado})
-    flash('Boleto cancelado na Efí.' + (' O título a receber foi cancelado junto.' if titulo_cancelado else ''), 'success')
+    flash(f"Boleto cancelado {'no Bradesco' if b['provedor'] == 'bradesco' else 'na Efí'}." + (' O título a receber foi cancelado junto.' if titulo_cancelado else ''), 'success')
     return redirect(volta)
 
 
@@ -587,6 +628,14 @@ def boleto_sincronizar(boleto_id):
     if not b or b['empresa_id'] not in FinEmpresa.ids_validos():
         abort(404)
     volta = request.form.get('volta') or url_for('financeiro.cobrancas', emp=b['empresa_id'], ver='boletos')
+    if b['provedor'] == 'bradesco':
+        try:
+            sit, feito = bradesco_boletos.consultar_e_aplicar(b)
+        except (BradescoErro, ValueError) as exc:
+            flash(f'O Bradesco não respondeu: {exc}', 'danger')
+            return redirect(volta)
+        flash(f'Boleto {b["charge_id"]}: {SITUACOES.get(sit, sit)}.' + (' Título baixado.' if feito == 'baixa' else ''), 'success')
+        return redirect(volta)
     try:
         efi, _ = FinCobrancaConta.cliente_efi(b['conta_cobranca_id'])
         d = efi.consultar(b['charge_id'])
@@ -646,6 +695,9 @@ def boleto_vencimento(boleto_id):
     if b['situacao'] not in ('waiting', 'unpaid'):
         flash('Só boleto aguardando pagamento ou vencido pode mudar de vencimento.', 'warning')
         return redirect(volta)
+    if b['provedor'] == 'bradesco':
+        flash('No Bradesco, por enquanto: cancele este boleto e emita outro com o vencimento novo.', 'warning')
+        return redirect(volta)
     novo = _data_do_form('vencimento', _hoje())
     if not novo:
         flash('Informe o novo vencimento (hoje ou depois).', 'danger')
@@ -679,10 +731,13 @@ def boleto_marcar_pago(boleto_id):
         flash('A data do pagamento não pode ser depois de hoje.', 'danger')
         return redirect(volta)
     try:
-        efi, _ = FinCobrancaConta.cliente_efi(b['conta_cobranca_id'])
-        efi.marcar_pago(b['charge_id'])
-    except (EfiErro, ValueError) as exc:
-        flash(f'A Efí não marcou como pago: {exc}', 'danger')
+        if b['provedor'] == 'bradesco':           # o Bradesco não tem "marcar como pago": a baixa no banco tira o boleto
+            bradesco_boletos.cancelar(b)
+        else:
+            efi, _ = FinCobrancaConta.cliente_efi(b['conta_cobranca_id'])
+            efi.marcar_pago(b['charge_id'])
+    except (EfiErro, BradescoErro, ValueError) as exc:
+        flash(f"{'O Bradesco' if b['provedor'] == 'bradesco' else 'A Efí'} não marcou como pago: {exc}", 'danger')
         return redirect(volta)
     # 'settled' ANTES do aviso da Efí chegar: o aviso vê que já estava assim e não baixa de novo
     FinBoleto.atualizar_situacao(boleto_id, 'settled')

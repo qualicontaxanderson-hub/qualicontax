@@ -1404,7 +1404,18 @@ def contas():
         pode_cobranca=pode_cob, contas_cob=contas_cob,
         bancarias=FinContaBancaria.listar(empresa_ids=[e['cliente_id'] for e in emps], apenas_ativas=True),
         PROVEDORES=PROVEDORES, AMBIENTES=AMBIENTES, AVISA_POR=AVISA_POR, hoje=hoje,
+        deps_envio=_deps_envio() if pode_cob else [],
         webhook_base=url_for('cobranca_webhook.efi', segredo='X', _external=True, _scheme='https').rsplit('X', 1)[0])
+
+
+def _deps_envio():
+    """Departamentos com e-mail para o "Envia por" da cobrança (14/11/2026: e-mail só no Departamento)."""
+    try:
+        from utils import email_caixas
+        return email_caixas.departamentos_para_enviar()
+    except Exception:
+        logging.getLogger(__name__).exception('[contas] departamentos para enviar')
+        return []
 
 
 @financeiro.route('/financeiro/contas/nova', methods=['POST'])

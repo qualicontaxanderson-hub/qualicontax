@@ -182,10 +182,18 @@ def _nome_arquivo(*partes):
 
 
 def pdf_do_boleto(boleto, timeout=30):
-    """O PDF do boleto na Efí (``pdf_url`` é público). Devolve bytes ou None."""
+    """O PDF do boleto na Efí (``pdf_url`` é público). Devolve bytes ou None.
+    Boleto do Bradesco (14/11/2026): o banco não devolve PDF — montamos o nosso na hora."""
     url = boleto.get('pdf_url')
     if not url:
         return None
+    if boleto.get('provedor') == 'bradesco' or url == 'bradesco:interno':
+        try:
+            from utils.bradesco_boletos import pdf
+            return pdf(boleto)
+        except Exception:                           # noqa: BLE001
+            logger.exception('[cobranca-email] PDF do boleto Bradesco %s', boleto.get('id'))
+            return None
     try:
         import requests
         r = requests.get(url, timeout=timeout)

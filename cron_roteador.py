@@ -1046,6 +1046,16 @@ def main() -> int:
     except Exception:
         logger.exception('[roteador] consulta dos boletos da Efí falhou; tenta na próxima hora.')
 
+    # Boletos do Bradesco (14/11/2026), de hora em hora 7h-22h: o aviso (webhook) do banco exige SSL
+    # EV/OV que o Railway não tem, então a baixa sai da consulta (pago no dia aparece em 20 min) e da
+    # lista de liquidados uma vez por dia. Só age se houver conta Bradesco de produção ativa.
+    # Desliga com BRADESCO_BOLETOS_SYNC=0.
+    try:
+        from utils.bradesco_boletos import rodar_de_hora_em_hora as bradesco_de_hora_em_hora
+        bradesco_de_hora_em_hora()
+    except Exception:
+        logger.exception('[roteador] consulta dos boletos do Bradesco falhou; tenta na próxima hora.')
+
     # E o extrato diário da Efí pela API (12/11/2026): uma vez por dia, depois
     # das 7h, entra sozinho e dá baixa nos boletos recebidos — Anderson: "Ao
     # receber na conta é pra dar baixa". Desliga com EFI_EXTRATO_ATIVO=0.

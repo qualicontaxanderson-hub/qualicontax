@@ -15,7 +15,11 @@ from utils import cobranca_segredos as seg
 
 logger = logging.getLogger(__name__)
 
-PROVEDORES = {'efi': 'Efí', 'bradesco': 'Bradesco (em breve)'}
+PROVEDORES = {'efi': 'Efí', 'bradesco': 'Bradesco'}
+# Prazo de baixa (dias depois do vencimento): a Efí aceita até 120; o Bradesco, até 365 no boleto com QR
+# (Anderson, 14/11/2026: "o Bradesco se tiver mais datas vamos seguir").
+DIAS_BAIXA_MAX = {'efi': 120, 'bradesco': 365}
+CAMPOS_BRADESCO = ('brad_carteira', 'brad_agencia', 'brad_conta', 'brad_telefone')
 AMBIENTES = {'homologacao': 'Teste (homologação)', 'producao': 'Produção — o boleto vale'}
 AVISA_POR = {'app': 'Nosso app, pela caixa de e-mail abaixo', 'efi': 'A Efí, pelo e-mail dela',
              'ninguem': 'Ninguém (só o PDF na tela)'}
@@ -26,7 +30,8 @@ class FinCobrancaConta:
 
     CAMPOS_TEXTO = ('apelido', 'provedor', 'ambiente', 'fin_conta_id', 'chave_pix', 'juros_mes', 'multa_pct',
                     'dias_baixa', 'dia_vencimento', 'mensagem_padrao',
-                    'email_remetente', 'email_nome', 'email_host', 'email_porta', 'avisa_por')
+                    'email_remetente', 'email_nome', 'email_host', 'email_porta', 'avisa_por',
+                    'departamento_id') + CAMPOS_BRADESCO
 
     @staticmethod
     def listar(empresa_ids=None, apenas_ativas=False):
@@ -38,15 +43,21 @@ class FinCobrancaConta:
             # "ativas" = as que servem para EMITIR; a do Conexa é só consulta (14/11/2026)
             cond.append('c.ativo = 1 AND c.so_consulta = 0')
         where = ('WHERE ' + ' AND '.join(cond)) if cond else ''
+        from utils import email_caixas
+        if email_caixas.pronta():
+            dep_cols, dep_join = ', dp.nome AS dep_nome, dp.email AS dep_email',                 'LEFT JOIN departamentos dp ON dp.id = c.departamento_id'
+        else:
+            dep_cols, dep_join = ', NULL AS dep_nome, NULL AS dep_email, NULL AS departamento_id', ''
         linhas = execute_query(
             f"""SELECT c.*, fc.banco_nome, fc.conta AS conta_bancaria, cl.nome_razao_social, cl.numero_cliente,
                        (c.client_id_cif IS NOT NULL) AS tem_client_id,
                        (c.client_secret_cif IS NOT NULL) AS tem_secret,
                        (c.certificado_cif IS NOT NULL) AS tem_certificado,
-                       (c.email_senha_cif IS NOT NULL) AS tem_email_senha
+                       (c.email_senha_cif IS NOT NULL) AS tem_email_senha{dep_cols}
                   FROM fin_cobranca_contas c
                   LEFT JOIN fin_contas fc ON fc.id = c.fin_conta_id
                   JOIN clientes cl ON cl.id = c.empresa_id
+                {dep_join}
                 {where}
                  ORDER BY c.ativo DESC, cl.nome_razao_social, c.apelido""", tuple(params), fetch=True) or []
         for l in linhas:
@@ -58,6 +69,11 @@ class FinCobrancaConta:
                     l['client_id_mascara'] = 'ilegível (chave mudou?)'
             for k in SEGREDOS:
                 l.pop(k, None)
+            if l.get('provedor') == 'bradesco':
+                from utils.bradesco_boletos import config
+                l['brad'] = config(l)
+            else:
+                l['brad'] = {}
         return linhas
 
     @staticmethod
@@ -90,7 +106,35 @@ class FinCobrancaConta:
         dia = dados.get('dia_vencimento')
         dia = int(dia) if str(dia or '').isdigit() and 1 <= int(dia) <= 31 else None
         dias_baixa = dados.get('dias_baixa')
-        dias_baixa = max(0, min(120, int(dias_baixa))) if str(dias_baixa or '').isdigit() else 60
+        teto = DIAS_BAIXA_MAX.get(provedor, 120)
+        dias_baixa = max(0, min(teto, int(dias_baixa))) if str(dias_baixa or '').isdigit() else (teto if provedor == 'bradesco' else 60)
+        cfg = None
+        if provedor == 'bradesco':
+            so_num = lambda k: ''.join(ch for ch in str(dados.get(k) or '') if ch.isdigit())
+            cfg = {'carteira': so_num('brad_carteira')[:3] or '09', 'agencia': so_num('brad_agencia')[:4],
+                   'conta': so_num('brad_conta')[:7], 'telefone': (dados.get('brad_telefone') or '').strip()[:30]}
+            if not cfg['agencia'] or not cfg['conta']:
+                return None, 'Informe a agência e a conta da negociação de cobrança do Bradesco (sem o dígito).'
+            cfg = json.dumps(cfg, ensure_ascii=False)
+        from utils import email_caixas
+        if not email_caixas.pronta():                     # antes da migração emails_02: tudo como era
+            dados = {k: v for k, v in dados.items() if k != 'departamento_id'}
+        dep_id = dados.get('departamento_id')
+        dep_id = int(dep_id) if str(dep_id or '').isdigit() else None
+        dep_sql = None
+        if not dep_id and conta_id:
+            # sem departamento escolhido: a caixa antiga da conta fica como está (a tela não mostra mais os campos)
+            atual = FinCobrancaConta.get(conta_id) or {}
+            dados = dict(dados, **{k: atual.get(k) or '' for k in ('email_remetente', 'email_nome', 'email_host',
+                                                                  'email_porta')})
+        if dep_id:
+            dep = execute_query('SELECT id, email, email_nome FROM departamentos WHERE id = %s', (dep_id,),
+                                fetch=True, fetch_one=True)
+            if not dep or not dep.get('email'):
+                return None, 'O departamento escolhido para enviar não tem e-mail (Configurações → Departamentos).'
+            # o endereço fica copiado na conta só como referência; quem manda é o departamento
+            dados = dict(dados, email_remetente=dep['email'], email_nome=dep.get('email_nome') or '')
+            dep_sql = dep_id
         email_rem = (dados.get('email_remetente') or '').strip().lower()[:120] or None
         if email_rem and ('@' not in email_rem or ' ' in email_rem):
             return None, 'O e-mail de cobrança não parece um endereço (ex.: financeiro@qualicontax.com.br).'
@@ -101,9 +145,11 @@ class FinCobrancaConta:
                 dec('juros_mes', '0.00'), dec('multa_pct', '0.00'), dias_baixa, dia,
                 (dados.get('mensagem_padrao') or '').strip()[:400] or None,
                 email_rem, (dados.get('email_nome') or '').strip()[:60] or None,
-                (dados.get('email_host') or '').strip()[:80] or 'smtp.titan.email', porta, avisa)
+                (dados.get('email_host') or '').strip()[:80] or 'smtp.titan.email', porta, avisa, cfg)
         sets_seg, vals_seg = [], []
-        if email_senha:
+        if 'departamento_id' in dados:
+            sets_seg.append('departamento_id = %s'); vals_seg.append(dep_sql)
+        if email_senha and not dep_sql:
             sets_seg.append('email_senha_cif = %s'); vals_seg.append(seg.cifrar(email_senha))
         if client_id:
             sets_seg.append('client_id_cif = %s'); vals_seg.append(seg.cifrar(client_id.strip()))
@@ -117,15 +163,17 @@ class FinCobrancaConta:
             sql = ('UPDATE fin_cobranca_contas SET apelido = %s, provedor = %s, ambiente = %s, fin_conta_id = %s, '
                    'chave_pix = %s, juros_mes = %s, multa_pct = %s, dias_baixa = %s, dia_vencimento = %s, '
                    'mensagem_padrao = %s, email_remetente = %s, email_nome = %s, email_host = %s, '
-                   'email_porta = %s, avisa_por = %s' + ''.join(', ' + s for s in sets_seg)
+                   'email_porta = %s, avisa_por = %s, config_json = %s' + ''.join(', ' + s for s in sets_seg)
                    + ', atualizado_em = NOW(), alterado_por = %s WHERE id = %s AND empresa_id = %s')
             r = execute_query(sql, base + tuple(vals_seg) + (usuario_id, conta_id, empresa_id))
             return (conta_id, None) if r is not None else (None, 'Não foi possível salvar.')
         if not client_id or not client_secret:
             return None, 'Client ID e Client Secret são obrigatórios na primeira vez.'
+        if provedor == 'bradesco' and not certificado:
+            return None, 'O Bradesco exige o certificado (.pfx) em toda chamada: envie o arquivo e a senha.'
         cols = ['empresa_id', 'apelido', 'provedor', 'ambiente', 'fin_conta_id', 'chave_pix', 'juros_mes',
                 'multa_pct', 'dias_baixa', 'dia_vencimento', 'mensagem_padrao', 'email_remetente', 'email_nome',
-                'email_host', 'email_porta', 'avisa_por', 'webhook_segredo', 'alterado_por']
+                'email_host', 'email_porta', 'avisa_por', 'config_json', 'webhook_segredo', 'alterado_por']
         vals = [empresa_id, *base, seg.novo_segredo_webhook(), usuario_id]
         for s, v in zip(sets_seg, vals_seg):
             cols.append(s.split(' = ')[0]); vals.append(v)
@@ -155,6 +203,10 @@ class FinCobrancaConta:
         c = FinCobrancaConta.get(conta_id, com_segredos=True)
         if not c:
             raise ValueError('Conta de cobrança não encontrada.')
+        if c.get('departamento_id'):
+            # 14/11/2026: a caixa mora no Departamento (utils/email_caixas); a conta só aponta para ele
+            from utils import email_caixas
+            return email_caixas.remetente_do_departamento(c['departamento_id'])
         if not c.get('email_remetente'):
             raise ValueError('A conta de cobrança não tem e-mail de cobrança preenchido.')
         if not c.get('email_senha_cif'):
@@ -177,6 +229,28 @@ class FinCobrancaConta:
                          ambiente=c['ambiente'], p12=seg.decifrar_bytes(c['certificado_cif']),
                          p12_senha=seg.decifrar_texto(c['certificado_senha_cif']))
         return Efi(conta), c
+
+    @staticmethod
+    def cliente_bradesco(conta_id):
+        """Cliente do Bradesco autenticado para esta conta (14/11/2026). Decifra só aqui, só na hora de usar."""
+        from utils.integrations.bradesco.client import Bradesco, ContaBradesco
+        from utils.bradesco_boletos import config
+        c = FinCobrancaConta.get(conta_id, com_segredos=True)
+        if not c:
+            raise ValueError('Conta de cobrança não encontrada.')
+        if c['provedor'] != 'bradesco':
+            raise ValueError('Esta conta não é do Bradesco.')
+        if not c.get('certificado_cif'):
+            raise ValueError('A conta do Bradesco está sem o certificado (.pfx).')
+        cfg = config(c)
+        cnpj = execute_query('SELECT cpf_cnpj FROM clientes WHERE id = %s', (c['empresa_id'],), fetch=True, fetch_one=True) or {}
+        conta = ContaBradesco(client_id=seg.decifrar_texto(c['client_id_cif']),
+                              client_secret=seg.decifrar_texto(c['client_secret_cif']),
+                              cnpj=''.join(ch for ch in str(cnpj.get('cpf_cnpj') or '') if ch.isdigit()),
+                              agencia=cfg['agencia'], conta=cfg['conta'], carteira=cfg['carteira'],
+                              ambiente=c['ambiente'], pfx=seg.decifrar_bytes(c['certificado_cif']),
+                              pfx_senha=seg.decifrar_texto(c['certificado_senha_cif']) if c.get('certificado_senha_cif') else '')
+        return Bradesco(conta), c
 
     @staticmethod
     def por_webhook(segredo):
