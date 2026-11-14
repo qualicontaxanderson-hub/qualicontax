@@ -1036,6 +1036,16 @@ def main() -> int:
         logger.exception('[roteador] varredura de EXTRATO falhou; os .xml desta '
                          'rodada VALEM.')
 
+    # Boletos da Efí de hora em hora, 7h-22h (14/11/2026), nossos e os do Conexa: pago,
+    # marcado como pago no app da Efí ou cancelado no app vira baixa / Perdidos aqui —
+    # Anderson: "Consultar de hora em hora". ANTES do extrato: a baixa já existe quando o
+    # crédito do dia entra e ele se amarra a ela. Desliga com EFI_BOLETOS_SYNC=0.
+    try:
+        from utils.efi_boletos import rodar_de_hora_em_hora
+        rodar_de_hora_em_hora()
+    except Exception:
+        logger.exception('[roteador] consulta dos boletos da Efí falhou; tenta na próxima hora.')
+
     # E o extrato diário da Efí pela API (12/11/2026): uma vez por dia, depois
     # das 7h, entra sozinho e dá baixa nos boletos recebidos — Anderson: "Ao
     # receber na conta é pra dar baixa". Desliga com EFI_EXTRATO_ATIVO=0.

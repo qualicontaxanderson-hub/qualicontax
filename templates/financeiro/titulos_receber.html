@@ -265,7 +265,7 @@ a.tx-c { text-decoration:none; color:inherit; }
            data-auto="{{ 1 if t.auto else 0 }}" data-busca="{{ t.num }} {{ t.nome }}">
         <div class="tx-c-top"><span class="tx-c-num">{{ t.num }}</span><span class="tx-c-nome">{{ t.nome }}</span></div>
         <div class="tx-c-meio"><div><div class="tx-c-val">{{ t.valor }}</div><div class="tx-c-desc">{{ t.desc }}</div></div>
-          <span class="tx-c-st" title="{{ 'Baixado sozinho pelo extrato da Efí' if t.auto else 'Baixa feita por alguém da equipe' }}"><i class="fas {{ 'fa-bolt' if t.auto else 'fa-hand' }}"></i>{{ 'Efí' if t.auto else 'manual' }}</span></div>
+          {% if t.app %}<span class="tx-c-st" title="Boleto marcado como pago no app da Efí (o dinheiro não passou pela conta da Efí)"><i class="fas fa-mobile-screen-button"></i>app Efí</span>{% else %}<span class="tx-c-st" title="{{ 'Baixado sozinho pelo extrato da Efí' if t.auto else 'Baixa feita por alguém da equipe' }}"><i class="fas {{ 'fa-bolt' if t.auto else 'fa-hand' }}"></i>{{ 'Efí' if t.auto else 'manual' }}</span>{% endif %}</div>
       {% if t.cliente_id %}</a>{% else %}</div>{% endif %}
       {% endfor %}
     </div>

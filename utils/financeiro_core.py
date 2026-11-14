@@ -179,6 +179,9 @@ def baixas_sem_confirmacao(dias=3):
 
     É onde mora estorno, chargeback e erro de conciliação: o banco avisou que
     pagou, mas o dinheiro não apareceu na conta.
+
+    'efi-app:' = boleto baixado à mão no app da Efí (14/11/2026): o dinheiro não passou pela
+    conta, nunca haverá linha no extrato para confirmar — não é alerta.
     """
     return execute_query(
         """SELECT b.id AS baixa_id, b.titulo_id, b.data_baixa, b.valor,
@@ -187,6 +190,7 @@ def baixas_sem_confirmacao(dias=3):
              JOIN fin_titulos t ON t.id = b.titulo_id
             WHERE b.origem = 'webhook'
               AND b.confirmado_extrato = 0
+              AND (b.referencia IS NULL OR b.referencia NOT LIKE 'efi-app:%%')
               AND b.data_baixa <= CURDATE() - INTERVAL %s DAY
             ORDER BY b.data_baixa""",
         (int(dias),), fetch=True) or []

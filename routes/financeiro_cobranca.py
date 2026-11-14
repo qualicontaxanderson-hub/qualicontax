@@ -30,6 +30,7 @@ from utils.atividade import registrar
 from utils.auth_helper import permission_required
 from utils.db_helper import execute_query
 from utils.integrations.efi.client import SITUACOES, EfiErro
+from utils import efi_boletos
 
 logger = logging.getLogger(__name__)
 PERM = 'financeiro.cobranca'
@@ -592,33 +593,15 @@ def boleto_sincronizar(boleto_id):
     except (EfiErro, ValueError) as exc:
         flash(f'A Efí não respondeu: {exc}', 'danger')
         return redirect(volta)
-    sit = d.get('status') or b['situacao']
-    pago_em, valor_pago = None, None
-    if sit == 'paid':
-        pag = d.get('payment') or {}
-        valor_pago = Decimal(str(d.get('total') or 0)) / 100
-        pago_em = (pag.get('paid_at') or pag.get('created_at') or '')[:10] or date.today().isoformat()
-        _baixar(b, valor_pago, pago_em)
-    FinBoleto.atualizar_situacao(boleto_id, sit, pago_em=pago_em, valor_pago=valor_pago)
-    flash(f'Boleto {b["charge_id"]}: {SITUACOES.get(sit, sit)}.', 'success')
+    sit, valor_pago, pago_em, credito_em = efi_boletos.do_boleto_efi(d)
+    sit = sit or b['situacao']
+    h = d.get('history') or []
+    quando = date.fromisoformat(h[-1]['created_at'][:10]) if h and h[-1].get('created_at') else date.today()
+    feito = efi_boletos.aplicar(b, sit, valor_pago, pago_em, credito_em, quando)
+    extra = {'baixa': ' Título baixado.', 'baixa-app': ' Título baixado (marcado como pago no app da Efí).',
+             'perdido': ' Título foi para Perdidos (boleto cancelado no app da Efí).'}.get(feito, '')
+    flash(f'Boleto {b["charge_id"]}: {SITUACOES.get(sit, sit)}.{extra}', 'success')
     return redirect(volta)
-
-
-def _baixar(b, valor_pago, pago_em):
-    """A baixa do título pelo pagamento do boleto — pelo ÚNICO escritor (financeiro_core)."""
-    if not b.get('titulo_id'):
-        return None
-    from utils.financeiro_core import registrar_baixa, BaixaInvalida
-    try:
-        valor_titulo = Decimal(str(b['valor']))
-        pago = Decimal(str(valor_pago))
-        abate = min(pago, valor_titulo)
-        juros = pago - abate if pago > abate else Decimal('0')
-        return registrar_baixa(b['titulo_id'], abate, pago_em, 'webhook', referencia=f"efi:{b['charge_id']}",
-                               juros=juros)
-    except BaixaInvalida as exc:
-        logger.warning('[cobranca] baixa do boleto %s recusada: %s', b['id'], exc)
-        return None
 
 
 # ---------------------------------------------------------------------------
@@ -727,12 +710,14 @@ def efi(segredo):
         pago_em, valor_pago = None, None
         if atual == 'paid':
             valor_pago = Decimal(str(ev.get('value') or 0)) / 100
-            pago_em = (ev.get('received_by_bank_at') or ev.get('created_at') or '')[:10] or date.today().isoformat()
-            _baixar(b, valor_pago, pago_em)
-        FinBoleto.atualizar_situacao(b['id'], atual, pago_em=pago_em, valor_pago=valor_pago,
-                                     evento_id=int(ev.get('id') or 0), token=token)
+            pago_em = date.fromisoformat((ev.get('received_by_bank_at') or ev.get('created_at') or '')[:10]
+                                         or date.today().isoformat())
+        # pago, baixado no app da Efí ou cancelado no app da Efí: utils/efi_boletos.aplicar (14/11/2026)
+        quando = date.fromisoformat((ev.get('created_at') or date.today().isoformat())[:10])
+        feito = efi_boletos.aplicar(b, atual, valor_pago, pago_em, None, quando,
+                                    evento_id=int(ev.get('id') or 0), token=token)
         registrar('escrita.webhook_boleto', 'financeiro', tabela='fin_boletos', registro_id=b['id'],
                   depois={'charge_id': charge_id, 'de': (ev.get('status') or {}).get('previous'), 'para': atual,
-                          'valor': str(valor_pago) if valor_pago is not None else None})
+                          'valor': str(valor_pago) if valor_pago is not None else None, 'feito': feito})
         tratados += 1
     return jsonify({'ok': True, 'eventos': tratados}), 200

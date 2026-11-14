@@ -35,7 +35,8 @@ class FinCobrancaConta:
             cond.append(f"c.empresa_id IN ({','.join(['%s'] * len(empresa_ids))})")
             params += list(empresa_ids)
         if apenas_ativas:
-            cond.append('c.ativo = 1')
+            # "ativas" = as que servem para EMITIR; a do Conexa é só consulta (14/11/2026)
+            cond.append('c.ativo = 1 AND c.so_consulta = 0')
         where = ('WHERE ' + ' AND '.join(cond)) if cond else ''
         linhas = execute_query(
             f"""SELECT c.*, fc.banco_nome, fc.conta AS conta_bancaria, cl.nome_razao_social, cl.numero_cliente,
@@ -186,7 +187,7 @@ class FinCobrancaConta:
     def padrao_da_empresa(empresa_id):
         """A conta ativa da empresa (produção antes de homologação)."""
         return execute_query(
-            "SELECT * FROM fin_cobranca_contas WHERE empresa_id = %s AND ativo = 1 "
+            "SELECT * FROM fin_cobranca_contas WHERE empresa_id = %s AND ativo = 1 AND so_consulta = 0 "
             " ORDER BY (ambiente = 'producao') DESC, id LIMIT 1", (empresa_id,), fetch=True, fetch_one=True)
 
 

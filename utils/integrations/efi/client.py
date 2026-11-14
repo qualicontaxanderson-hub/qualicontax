@@ -213,6 +213,13 @@ class Efi:
     def consultar(self, charge_id):
         return self._cob('GET', f'/v1/charge/{int(charge_id)}').get('data') or {}
 
+    def listar_boletos(self, desde, ate, pagina=1, limite=100):
+        """Boletos CRIADOS entre ``desde`` e ``ate`` (datas), uma página. Só enxerga os boletos
+        criados por esta mesma aplicação (14/11/2026: os do Conexa só pela aplicação "Conexa")."""
+        return self._cob('GET', '/v1/charges', params={
+            'charge_type': 'billet', 'begin_date': desde.isoformat(), 'end_date': ate.isoformat(),
+            'limit': int(limite), 'page': int(pagina)}).get('data') or []
+
     def cancelar(self, charge_id):
         return self._cob('PUT', f'/v1/charge/{int(charge_id)}/cancel')
 

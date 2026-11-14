@@ -119,9 +119,11 @@ def _baixa_do_webhook(empresa_id, data, valor, cobranca=None):
                        JOIN fin_titulos t ON t.id = b.titulo_id
                       WHERE t.empresa_id = %s AND b.origem = 'webhook' AND b.lancamento_id IS NULL
                         AND b.referencia = %s LIMIT 1""", (empresa_id, 'efi:' + cobranca), one=True)
+    # só boleto PAGO ('efi:'): o baixado no app da Efí ('efi-app:') não pôs dinheiro na conta
     return _q("""SELECT b.id, b.titulo_id FROM fin_titulo_baixas b
                    JOIN fin_titulos t ON t.id = b.titulo_id
                   WHERE t.empresa_id = %s AND b.origem = 'webhook' AND b.lancamento_id IS NULL
+                    AND b.referencia LIKE 'efi:%%'
                     AND b.data_baixa BETWEEN %s AND %s
                     AND ABS(b.valor + b.juros + b.multa - %s) < 0.005
                   ORDER BY b.id LIMIT 1""",

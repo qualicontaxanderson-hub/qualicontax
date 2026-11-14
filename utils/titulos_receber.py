@@ -29,6 +29,15 @@ def _comp(d):
     return f'{MES[d.month]}/{d.year}' if d else ''
 
 
+def _no_app(b):
+    """Boleto marcado como pago à mão no app da Efí (14/11/2026): não é baixa automática nem da equipe."""
+    return str(b.get('referencia') or '').startswith('efi-app:')
+
+
+def _auto(b):
+    return b['origem'] in ('extrato', 'webhook') and not _no_app(b)
+
+
 def _nome(n):
     n = (n or '').strip()
     if n.isupper() or n.islower():
@@ -98,7 +107,7 @@ def montar(empresa_ids=None, mes=None):
     ec, ep = _emp_cond(empresa_ids)
 
     # ── Recebido no mês ─────────────────────────────────────────────
-    rec = q(f"""SELECT b.id, b.data_baixa, b.valor + b.juros + b.multa - b.desconto AS v, b.origem,
+    rec = q(f"""SELECT b.id, b.data_baixa, b.valor + b.juros + b.multa - b.desconto AS v, b.origem, b.referencia,
                        t.contraparte_nome, t.descricao, t.competencia, t.cliente_id, c.numero_cliente
                   FROM fin_titulo_baixas b JOIN fin_titulos t ON t.id = b.titulo_id
                   LEFT JOIN clientes c ON c.id = t.cliente_id
@@ -115,7 +124,7 @@ def montar(empresa_ids=None, mes=None):
                       'n': len(por_dia[d]),
                       'itens': [{'num': b['numero_cliente'] or '—', 'nome': _nome(b['contraparte_nome']),
                                  'valor': brl(b['v']), 'desc': _desc(b), 'cliente_id': b['cliente_id'],
-                                 'auto': b['origem'] in ('extrato', 'webhook')} for b in por_dia[d]]})
+                                 'auto': _auto(b), 'app': _no_app(b)} for b in por_dia[d]]})
 
     # ── Em aberto ──────────────────────────────────────────────────
     abe = q(f"""SELECT t.id, t.cliente_id, t.contraparte_doc, t.contraparte_nome, t.descricao, t.competencia,
@@ -238,7 +247,7 @@ def montar(empresa_ids=None, mes=None):
         hoje=hoje, mes=mes, mes_rot=f'{MES_LONGO[mes.month]}/{mes.year}',
         mes_ant=ant.strftime('%Y-%m'), mes_prox=prox.strftime('%Y-%m') if prox <= hoje else '',
         rec=rec_g, rec_tot=brl(sum(b['v'] for b in rec)), rec_n=len(rec),
-        rec_auto=sum(1 for b in rec if b['origem'] in ('extrato', 'webhook')),
+        rec_auto=sum(1 for b in rec if _auto(b)),
         abe=abe_g, abe_f=abe_f, abe_tot=brl(sum(float(i['saldo']) for i in itens)), abe_n=len(itens),
         abe_cli=len({i['cliente_id'] or i['nome_full'] for i in itens}),
         atr=atr_g, atr_f=atr_f, atr_tot=brl(sum(float(i['saldo']) for i in atr_i)), atr_n=len(atr_i),
