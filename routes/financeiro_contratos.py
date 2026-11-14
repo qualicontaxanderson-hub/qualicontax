@@ -40,7 +40,7 @@ def _remetente():
 
 
 def _enviar(para, assunto, html, texto, anexos=None):
-    return email_envio.enviar(para, assunto, html, texto, remetente=_remetente(), anexos=anexos)
+    return email_envio.enviar(para, assunto, html, texto, remetente=_remetente(), anexos=anexos, servico='Contrato')
 
 
 # ---------------------------------------------------------------- montagem do formulário

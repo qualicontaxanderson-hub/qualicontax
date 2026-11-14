@@ -378,7 +378,8 @@ def enviar_boleto(boleto_id, para=None, usuario_id=None):
     garantir_token(b)
     assunto, html, texto, anexos, faltas = montar(b, nota, _empresa(b['empresa_id']),
                                                   telefone=_telefone_empresa(b['empresa_id']))
-    ok, erro = email_envio.enviar(destinos, assunto, html, texto, remetente=rem, anexos=anexos)
+    ok, erro = email_envio.enviar(destinos, assunto, html, texto, remetente=rem, anexos=anexos,
+                                   servico='Boleto', usuario_id=usuario_id)
     if not ok:
         return False, f'O e-mail não saiu: {erro}'
     # Os carimbos falam DESTE e-mail: zeram a cada (re)envio.

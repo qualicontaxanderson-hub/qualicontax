@@ -620,7 +620,7 @@ def enviar(rel, hoje=None, teste_para=None, usuario_id=None, momento=None):
 
     assunto = ('[TESTE] ' if teste else '') + d['assunto']
     html, texto = render(d)
-    ok, erro = email_envio.enviar(para, assunto, html, texto)
+    ok, erro = email_envio.enviar(para, assunto, html, texto, servico='Aviso automático')
     _fechar(eid, 'ENVIADO' if ok else 'FALHOU', para, assunto, d['itens'], erro)
     return {'status': 'ENVIADO' if ok else 'FALHOU', 'itens': d['itens'], 'para': para,
             'erro': erro, 'assunto': assunto}

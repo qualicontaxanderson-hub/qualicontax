@@ -45,8 +45,47 @@ def _cfg():
     }
 
 
+def _cfg_sistema():
+    """A caixa do sistema (app@): a senha digitada no departamento "Sistema" (email_caixas) vale antes da do
+    Railway (14/11/2026: "coloque para colocar a senha aqui para ficar padrão"). Sem senha lá, o Railway."""
+    env = _cfg()
+    try:
+        from utils import email_caixas
+        cx = email_caixas.cifrada(env['user'])
+        if cx:
+            return dict(env, host=cx['host'] or env['host'], port=int(cx['porta'] or env['port']),
+                        senha=cx['senha'], nome=cx.get('nome') or env['nome'], _do_banco=True)
+    except Exception:
+        logger.exception('[email] caixa do sistema no banco; sigo com a do Railway')
+    return env
+
+
 def configurado() -> bool:
-    return bool(_cfg()['senha'])
+    return bool(_cfg_sistema()['senha'])
+
+
+def _usuario_da_requisicao():
+    try:
+        from flask import has_request_context
+        from flask_login import current_user
+        if has_request_context() and getattr(current_user, 'is_authenticated', False):
+            return int(current_user.id)
+    except Exception:
+        pass
+    return None
+
+
+def _registrar(c, para, assunto, servico, usuario_id, ok, erro):
+    """Uma linha em email_envios por tentativa. Nunca atrapalha o envio."""
+    try:
+        from utils.db_helper import execute_query
+        execute_query(
+            'INSERT INTO email_envios (remetente, para, assunto, servico, usuario_id, ok, erro) '
+            'VALUES (%s, %s, %s, %s, %s, %s, %s)',
+            ((c.get('user') or '').lower()[:120], ', '.join(para)[:500], (assunto or '')[:255],
+             (servico or 'E-mail')[:60], usuario_id, 1 if ok else 0, (erro or '')[:400] or None), fetch=False)
+    except Exception:
+        logger.warning('[email] não registrei o envio de "%s" (tabela email_envios?)', assunto)
 
 
 def montar(para, assunto, html, texto, remetente=None, anexos=None):
@@ -77,17 +116,33 @@ def montar(para, assunto, html, texto, remetente=None, anexos=None):
     return msg
 
 
-def enviar(para, assunto, html, texto, remetente=None, anexos=None):
-    """Envia. Devolve ``(ok, erro)``. Nunca estoura.
-    ``remetente`` troca a caixa (e-mail de cobrança da conta); sem ele vale a do Railway."""
+def enviar(para, assunto, html, texto, remetente=None, anexos=None, servico=None, usuario_id=None):
+    """Envia e registra em email_envios (quem, para quem, se deu certo). Devolve ``(ok, erro)``. Nunca estoura.
+    ``remetente`` troca a caixa (a do departamento); sem ele vale a do sistema (app@).
+    ``usuario_id``: quem clicou; sem ele, o usuário logado da requisição; fora de requisição = automático."""
     para = [p for p in dict.fromkeys((e or '').strip().lower() for e in para) if p]
     if not para:
         return False, 'nenhum destinatário'
-    c = remetente or _cfg()
+    if usuario_id is None:
+        usuario_id = _usuario_da_requisicao()
+    c = remetente or _cfg_sistema()
+    ok, erro = _enviar(para, assunto, html, texto, c, remetente, anexos)
+    if not ok and not remetente and c.get('_do_banco'):
+        # senha digitada no departamento Sistema recusada: não deixa ninguém sem o código de acesso
+        logger.warning('[email] caixa do sistema (banco) falhou: %s; tento a do Railway', erro)
+        c2 = _cfg()
+        ok2, erro2 = _enviar(para, assunto, html, texto, c2, None, anexos)
+        if ok2:
+            ok, erro, c = True, None, c2
+    _registrar(c, para, assunto, servico, usuario_id, ok, erro)
+    return ok, erro
+
+
+def _enviar(para, assunto, html, texto, c, remetente, anexos):
     if not c.get('user'):
         return False, 'remetente sem endereço de e-mail'
     if not c.get('senha'):
-        return False, ('a senha da caixa de e-mail não foi preenchida na conta de cobrança' if remetente
+        return False, ('a senha da caixa de e-mail não foi preenchida no departamento' if remetente
                        else 'SMTP_PASSWORD não configurada no Railway')
     try:
         msg = montar(para, assunto, html, texto, remetente=c, anexos=anexos)

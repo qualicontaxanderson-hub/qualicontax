@@ -72,8 +72,42 @@ def salvar(email, senha=None, host=None, porta=None, usuario_id=None):
 
 def registrar_teste(email, resultado):
     if pronta():
-        execute_query('UPDATE email_caixas SET testado_em = NOW(), teste_resultado = %s WHERE email = %s',
-                      ((resultado or '')[:255], normal(email)), fetch=False)
+        execute_query('INSERT INTO email_caixas (email, testado_em, teste_resultado) VALUES (%s, NOW(), %s) '
+                      'ON DUPLICATE KEY UPDATE testado_em = NOW(), teste_resultado = VALUES(teste_resultado)',
+                      (normal(email), (resultado or '')[:255]), fetch=False)
+
+
+def email_sistema():
+    """A caixa do próprio app (código de acesso, avisos automáticos): SMTP_USER no Railway."""
+    return normal(os.getenv('SMTP_USER', 'app@qualicontax.com.br')) or 'app@qualicontax.com.br'
+
+
+def cifrada(email):
+    """{host, porta, senha (decifrada), nome} da caixa SE ela tem senha no banco; senão None. Uso interno do envio."""
+    em = normal(email)
+    if not em or not pronta():
+        return None
+    c = execute_query('SELECT * FROM email_caixas WHERE email = %s', (em,), fetch=True, fetch_one=True)
+    if not c or not c.get('senha_cif'):
+        return None
+    d = execute_query('SELECT nome, email_nome FROM departamentos WHERE LOWER(TRIM(email)) = %s AND ativo = 1 '
+                      'ORDER BY id LIMIT 1', (em,), fetch=True, fetch_one=True) or {}
+    return {'host': c['host'], 'porta': c['porta'], 'senha': seg.decifrar_texto(c['senha_cif']),
+            'nome': d.get('email_nome')}
+
+
+def ultimos_envios(email, limite=15):
+    """Os últimos e-mails que saíram por esta caixa, com quem mandou."""
+    em = normal(email)
+    if not em:
+        return []
+    try:
+        return execute_query(
+            """SELECT e.criado_em, e.para, e.assunto, e.servico, e.ok, e.erro, u.nome AS usuario
+                 FROM email_envios e LEFT JOIN usuarios u ON u.id = e.usuario_id
+                WHERE e.remetente = %s ORDER BY e.id DESC LIMIT %s""", (em, int(limite)), fetch=True) or []
+    except Exception:
+        return []
 
 
 def departamento(dep_id):
@@ -90,6 +124,10 @@ def remetente_do_departamento(dep_id):
     if not pronta():
         raise ValueError('As caixas de e-mail ainda não foram criadas no banco.')
     c = execute_query('SELECT * FROM email_caixas WHERE email = %s', (normal(d['email']),), fetch=True, fetch_one=True)
+    if (not c or not c.get('senha_cif')) and normal(d['email']) == email_sistema() and os.getenv('SMTP_PASSWORD'):
+        # departamento Sistema ainda sem senha aqui: vale a do Railway
+        from utils.email_envio import _cfg
+        return dict(_cfg(), nome=d.get('email_nome') or 'Qualicontax')
     if not c or not c.get('senha_cif'):
         raise ValueError(f'A caixa {d["email"]} está sem senha: preencha em Configurações → Departamentos → '
                          f'{d["nome"]}.')
@@ -178,10 +216,14 @@ def mapa():
                        'email': (d or {}).get('email') or p.get('email_remetente'),
                        'situacao': 'envia' if d else ('caixa antiga' if p.get('email_remetente') else 'sistema'),
                        'tipo': 'envia', 'link': 'contratos', 'ordem': 2})
-    sistema = os.getenv('SMTP_USER', 'app@qualicontax.com.br').strip()
-    linhas.append({'servico': 'Código de acesso (login)', 'detalhe': 'manda o código para quem entra no app',
-                   'icone': 'fa-key', 'cor': '#64748b', 'departamento_id': None, 'departamento': None,
-                   'email': sistema, 'situacao': 'sistema', 'tipo': 'envia', 'ordem': 3})
+    sistema = email_sistema()
+    dsis = next((d for d in deps.values() if normal(d.get('email')) == sistema), None)
+    for serv, det, ic in (('Código de acesso (login)', 'manda o código para quem entra no app', 'fa-key'),
+                          ('Avisos automáticos (envio)', 'manda os avisos de certificados e cadastros aos departamentos',
+                           'fa-paper-plane')):
+        linhas.append({'servico': serv, 'detalhe': det, 'icone': ic, 'cor': '#64748b',
+                       'departamento_id': dsis['id'] if dsis else None, 'departamento': dsis['nome'] if dsis else None,
+                       'email': sistema, 'situacao': 'envia' if dsis else 'sistema', 'tipo': 'envia', 'ordem': 3})
     # avisos automáticos: quem MANDA é a caixa do sistema; o departamento RECEBE
     try:
         from utils.relatorios_email import RELATORIOS

@@ -7,7 +7,8 @@
    cli-kpis). A senha mora por CAIXA (email_caixas), não por departamento. #}
 {% include 'configuracoes/_lista_padrao.html' %}
 {% set editando = dep and dep.id %}
-{% set tem_senha = caixa and caixa.tem_senha %}
+{% set tem_senha_aqui = caixa and caixa.tem_senha %}
+{% set tem_senha = tem_senha_aqui or eh_sistema %}
 {% set teste_ok = caixa and caixa.teste_resultado and caixa.teste_resultado.startswith('OK') %}
 {% set n_lig = ligacoes|length %}
 {% set icones = {'Financeiro': 'fa-sack-dollar', 'Fiscal': 'fa-file-invoice', 'Contábil': 'fa-calculator',
@@ -106,7 +107,8 @@
           <p class="ef-hero-sub">{% if dep and dep.email %}{{ dep.email }}{% else %}sem e-mail{% endif %}{% if editando %} · responsável {{ (usuarios|selectattr('id', 'equalto', dep.responsavel_id)|map(attribute='nome')|first) or 'ninguém' }}{% endif %}</p>
           {% if editando %}
           <div class="ef-hero-badges">
-            {% if dep.email and tem_senha %}<span class="dx-badge ok"><i class="fas fa-circle-check"></i> Envia e recebe</span>
+            {% if eh_sistema %}<span class="dx-badge ok"><i class="fas fa-robot"></i> Caixa do próprio app{{ '' if tem_senha_aqui else ' · senha do Railway' }}</span>
+            {% elif dep.email and tem_senha %}<span class="dx-badge ok"><i class="fas fa-circle-check"></i> Envia e recebe</span>
             {% elif dep.email %}<span class="dx-badge amb"><i class="fas fa-inbox"></i> Só recebe (sem senha)</span>
             {% else %}<span class="dx-badge amb"><i class="fas fa-triangle-exclamation"></i> Sem e-mail</span>{% endif %}
             <span class="dx-badge"><i class="fas fa-link"></i> {{ n_lig }} ligaç{{ 'ão' if n_lig == 1 else 'ões' }}</span>
@@ -157,7 +159,7 @@
             <input type="text" name="email_nome" id="email_nome" maxlength="60" value="{{ dep.email_nome if dep and dep.email_nome else '' }}" placeholder="Qualicontax - {{ dep.nome if dep else 'Financeiro' }}"></div>
           <div class="dx-f dx-l"><label for="email_senha">Senha da caixa</label>
             <input type="password" name="email_senha" id="email_senha" autocomplete="new-password"
-                   placeholder="{{ 'guardada com segurança · deixe em branco para manter' if tem_senha else 'só se o departamento for ENVIAR e-mail' }}"
+                   placeholder="{{ 'guardada com segurança · deixe em branco para manter' if tem_senha_aqui else ('hoje vale a senha do Railway · digite aqui para ficar padrão' if eh_sistema else 'só se o departamento for ENVIAR e-mail') }}"
                    {{ 'disabled' if not caixas_prontas }}>
             <div class="d">Sem senha a caixa só <b>recebe</b> avisos. Com senha ela também <b>envia</b> boletos, notas e contratos.
               {% if mesma_caixa %}<br><b>A mesma caixa é usada por {{ mesma_caixa|join(', ') }}</b>: a senha é uma só, mudou aqui, muda lá.{% endif %}</div></div>
@@ -230,6 +232,32 @@
     </section>
   </div>
 
+{% if editando and dep.email %}
+  <section class="dx-card dx-mapa">
+    <div class="dx-ch"><span class="dx-ic" style="background:#e0f2fe;color:#0369a1"><i class="fas fa-clock-rotate-left"></i></span>
+      <div><h3>Últimos envios por esta caixa</h3><p>quando, quem mandou, para quem e se chegou ao servidor{% if mesma_caixa %} · inclui {{ mesma_caixa|join(', ') }} (mesma caixa){% endif %}</p></div>
+      <span class="dx-sit cz dir">{{ envios|length }}</span></div>
+    {% if envios %}
+    <table class="dx-tab">
+      <thead><tr><th>Quando</th><th>Quem mandou</th><th>Para</th><th>Assunto</th><th>Resultado</th></tr></thead>
+      <tbody>
+      {% for e in envios %}
+        <tr>
+          <td style="white-space:nowrap">{{ e.criado_em.strftime('%d/%m %H:%M') if e.criado_em else '—' }}</td>
+          <td>{% if e.usuario %}<b>{{ e.usuario.split()[0] }} {{ e.usuario.split()[-1] if e.usuario.split()|length > 1 else '' }}</b>{% else %}<span class="dx-sit cz">automático</span>{% endif %}
+              <small style="display:block;color:var(--muted);font-size:12px">{{ e.servico or 'E-mail' }}</small></td>
+          <td class="mono">{{ e.para }}</td>
+          <td>{{ e.assunto or '—' }}</td>
+          <td>{% if e.ok %}<span class="dx-sit ok">enviado</span>{% else %}<span class="dx-sit vm" title="{{ e.erro or '' }}">falhou</span>{% endif %}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <div class="dx-vazio">Nenhum envio registrado ainda. A partir de agora, todo e-mail que sair por esta caixa aparece aqui.</div>
+    {% endif %}
+  </section>
+{% endif %}
   <section class="dx-card dx-mapa">
     <div class="dx-ch"><span class="dx-ic" style="background:#0f3d2e;color:#fff"><i class="fas fa-map"></i></span>
       <div><h3>Mapa dos e-mails do escritório</h3><p>cada serviço que manda ou recebe e-mail e o departamento que ele usa{% if editando %} · em verde, os deste departamento{% endif %}</p></div></div>

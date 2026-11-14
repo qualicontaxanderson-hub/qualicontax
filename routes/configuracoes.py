@@ -2432,7 +2432,7 @@ def _dep_contexto(did, dep):
     from utils import email_caixas as EC
     ctx = {'usuarios': _usuarios_ativos(), 'caixa': None, 'ligacoes': [], 'mapa': [], 'mesma_caixa': [],
            'pessoas': [], 'kpi': {}, 'caixas_prontas': EC.pronta(), 'compartilhadas': [],
-           'csrf_token': _qrobo_csrf_token()}
+           'csrf_token': _qrobo_csrf_token(), 'envios': [], 'eh_sistema': False}
     try:
         mapa = EC.mapa()
     except Exception:
@@ -2449,6 +2449,8 @@ def _dep_contexto(did, dep):
     ctx['ligacoes'] = [l for l in mapa if l.get('departamento_id') == did]
     if dep and dep.get('email'):
         ctx['caixa'] = EC.caixa(dep['email'])
+        ctx['envios'] = EC.ultimos_envios(dep['email'])
+        ctx['eh_sistema'] = EC.normal(dep['email']) == EC.email_sistema()
         ctx['mesma_caixa'] = [d['nome'] for d in EC.mesmos_da_caixa(dep['email'], menos_id=did)]
     ctx['pessoas'] = execute_query("SELECT id, nome FROM usuarios WHERE departamento_id = %s AND situacao = 'ATIVO' "
                                    " ORDER BY nome", (did,), fetch=True) or []
@@ -2567,7 +2569,7 @@ def departamento_testar_email(did):
                 '<p>Se chegou, os boletos, notas e contratos ligados a este departamento sairão por ela, '
                 'e as respostas dos clientes caem nessa caixa.</p>')
         ok, erro = email_envio.enviar([para], f'Teste do e-mail do departamento {d["nome"]}', html, texto,
-                                      remetente=rem)
+                                      remetente=rem, servico='Teste de e-mail')
         resultado = f'OK: enviado de {rem["user"]} para {para}' if ok else f'FALHOU: {erro}'
     except ValueError as exc:
         resultado = f'FALHOU: {exc}'

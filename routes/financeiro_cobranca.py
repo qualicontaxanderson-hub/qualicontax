@@ -151,7 +151,7 @@ def cobranca_testar_email(conta_id):
                 f'<b>{c["apelido"]}</b> ({rem["user"]}), feito pelo Qualicontax.</p>'
                 '<p>Se chegou, os boletos e as notas fiscais desta conta sairão por ela, '
                 'e as respostas dos clientes caem nessa caixa.</p>')
-        ok, erro = email_envio.enviar([para], assunto, html, texto, remetente=rem)
+        ok, erro = email_envio.enviar([para], assunto, html, texto, remetente=rem, servico='Teste de e-mail')
         resultado = f'OK: enviado de {rem["user"]} para {para}' if ok else f'FALHOU: {erro}'
     except ValueError as exc:
         resultado = f'FALHOU: {exc}'

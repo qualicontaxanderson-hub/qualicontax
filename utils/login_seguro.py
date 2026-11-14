@@ -162,7 +162,8 @@ def enviar_codigo(user):
      Se não foi você, não passe o código para ninguém e avise o Anderson.</p>
 </div>"""
     try:
-        ok, erro = email_envio.enviar([user.email], assunto, html, texto)
+        ok, erro = email_envio.enviar([user.email], assunto, html, texto, servico='Código de acesso',
+                                       usuario_id=getattr(user, 'id', None))
     except Exception as e:                      # nunca estoura no login
         ok, erro = False, str(e)
     if not ok:
