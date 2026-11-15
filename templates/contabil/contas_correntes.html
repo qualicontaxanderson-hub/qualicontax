@@ -88,7 +88,7 @@
                             {% for conta in contas %}
                             <tr>
                                 <td>{{ conta.cliente_nome }}</td>
-                                <td>{{ conta.banco_nome }} ({{ conta.banco_codigo }})</td>
+                                <td>{% if logo_banco_url(conta.banco_codigo) %}{{ logo_banco(conta.banco_codigo, None, 20) }} {% endif %}{{ conta.banco_nome }} ({{ conta.banco_codigo }})</td>
                                 <td>{{ conta.agencia }}-{{ conta.agencia_digito }}</td>
                                 <td>{{ conta.numero_conta }}-{{ conta.conta_digito }}</td>
                                 <td>

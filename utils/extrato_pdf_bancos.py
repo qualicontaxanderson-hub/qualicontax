@@ -230,6 +230,16 @@ def parse_bradesco(paginas, doc=None):
                   ' '.join(' '.join(t for _x, t in l['w']) for l in _linhas_com_x(doc[0])))
     if m:
         conta = f"{int(m.group(1))}/{m.group(2).lstrip('0')}"
+    # Data-base do extrato ("Os dados acima têm como base 02/11/2026 às 08h00" / "Data da operação:
+    # 02/11/2026"). O quadro "Últimos Lançamentos" traz o que está AGENDADO depois dela (15/11/2026:
+    # 'MORA OPERACAO DE CREDITO' de -4.309,99 em 03/11 virou -4.415,06 em 04/11, com outro documento,
+    # e a linha agendada ficou no Extrato como se fosse real). O que é posterior à base não entra.
+    base = None
+    for pg in doc:
+        mb = re.search(r'(?:como base|Data da opera\S*:?)\s*(\d{2}/\d{2}/\d{4})', pg.get_text())
+        if mb:
+            base = _iso(mb.group(1))
+            break
 
     lancs = []
     cortes = None
@@ -249,8 +259,11 @@ def parse_bradesco(paginas, doc=None):
             # 'SALDO ANTERIOR' e 'Total 682.468,04 -688.216,41' são resumo,
             # não lançamento — e o rótulo cai ora na 1ª, ora na 2ª coluna.
             texto = f"{c.get('data') or ''} {c.get('hist') or ''}".strip().upper()
-            if texto.startswith('SALDO') or texto.startswith('TOTAL'):
-                continue
+            hist = (c.get('hist') or '').strip().upper()
+            # com a data na frente ("28/10/2026 SALDO ANTERIOR") o rótulo não começa a linha: olha a
+            # coluna do histórico também (15/11/2026: "SALDO ANTERIOR" grudava no 1º lançamento)
+            if texto.startswith('SALDO') or texto.startswith('TOTAL') or hist.startswith('SALDO ANTERIOR'):
+                continue                  # a data do saldo NÃO passa para os lançamentos (conferido com o OFX)
             cels.append(c)
         # Um lançamento é a linha que tem documento ou valor; as linhas só de
         # texto ao redor dela são a descrição (no PF vêm antes E depois).
@@ -258,7 +271,9 @@ def parse_bradesco(paginas, doc=None):
                     if c.get('doc') or _dec(c.get('cred')) is not None or _dec(c.get('deb')) is not None]
         if not valor_de:
             continue
-        descricao = {j: [] for j in valor_de}
+        # o histórico na MESMA linha do valor também é descrição (15/11/2026: 'MORA OPERACAO DE CREDITO'
+        # vinha na linha do valor e o lançamento ficava sem descrição)
+        descricao = {j: ([(cels[j]['y'], cels[j]['hist'])] if cels[j].get('hist') else []) for j in valor_de}
         soltas = []
         for j, c in enumerate(cels):
             if not c.get('hist') or j in descricao:
@@ -284,6 +299,8 @@ def parse_bradesco(paginas, doc=None):
                     v = -v                # o débito às vezes vem sem o sinal
             if v is None or v == 0 or not data:
                 continue
+            if base and data > base:
+                continue                  # agendado (quadro "Últimos Lançamentos"), ainda não aconteceu
             texto = ' '.join(t for _y, t in sorted(descricao[j]))
             lancs.append(_lanc(data, v, texto, documento=(c.get('doc') or None)))
     if not lancs:

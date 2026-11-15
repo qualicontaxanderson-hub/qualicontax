@@ -157,7 +157,9 @@
         {% for c in contas_cob %}
         <article class="cb-card {{ 'cb-off' if not c.ativo }}" data-c='{{ {"id": c.id, "empresa_id": c.empresa_id, "apelido": c.apelido, "provedor": c.provedor, "ambiente": c.ambiente, "fin_conta_id": c.fin_conta_id or "", "chave_pix": c.chave_pix or "", "juros_mes": ("%.2f" % c.juros_mes).replace(".", ","), "multa_pct": ("%.2f" % c.multa_pct).replace(".", ","), "dias_baixa": c.dias_baixa, "dia_vencimento": c.dia_vencimento or "", "mensagem_padrao": c.mensagem_padrao or "", "tem_client_id": c.tem_client_id, "tem_secret": c.tem_secret, "tem_certificado": c.tem_certificado, "client_id_mascara": c.client_id_mascara, "avisa_por": c.avisa_por or "app", "departamento_id": c.departamento_id or "", "brad": c.brad} | tojson }}'>
             <div class="cb-card-top">
-                <div class="cb-card-ico"><i class="fas fa-{{ 'flask' if c.ambiente != 'producao' else 'university' }}"></i></div>
+                {% set _bid = {'efi': '364', 'bradesco': '237'}.get(c.provedor) %}
+                {% if _bid and c.ambiente == 'producao' %}<div class="cb-card-ico" style="background:#fff;border:1px solid #e2e8f0;">{{ logo_banco(_bid, None, 30) }}</div>
+                {% else %}<div class="cb-card-ico"><i class="fas fa-{{ 'flask' if c.ambiente != 'producao' else 'university' }}"></i></div>{% endif %}
                 <div class="cb-card-id">
                     <strong>{{ c.apelido }}</strong>
                     <span>{{ c.nome_razao_social }} · nº {{ c.numero_cliente }}</span>
@@ -172,13 +174,13 @@
                 <div><dt>Client ID</dt><dd>{{ c.client_id_mascara or '— não preenchido' }}</dd></div>
                 <div><dt>Client Secret</dt><dd>{{ 'preenchido' if c.tem_secret else '— não preenchido' }}</dd></div>
                 {% if c.provedor == 'bradesco' %}{% set bc = c.brad %}
-                <div><dt>Certificado digital</dt><dd>{{ c.certificado_nome if c.tem_certificado else '— sem certificado (o Bradesco exige)' }}</dd></div>
+                <div><dt>Certificado digital</dt><dd>{{ c.certificado_nome if c.tem_certificado else 'o A1 do cadastro da empresa (troca sozinho quando o cadastro trocar)' }}</dd></div>
                 <div><dt>Negociação</dt><dd>carteira {{ bc.carteira }} · agência {{ bc.agencia or '—' }} · conta {{ bc.conta or '—' }}</dd></div>
                 <div><dt>Telefone no boleto</dt><dd>{{ bc.telefone }}</dd></div>
                 {% else %}
                 <div><dt>Certificado da API</dt><dd>{{ c.certificado_nome if c.tem_certificado else '— sem (boleto sai; saldo e Pix não)' }}</dd></div>
                 {% endif %}
-                <div><dt>Conta bancária</dt><dd>{{ (c.banco_nome ~ ' · ' ~ c.conta_bancaria) if c.banco_nome else '—' }}</dd></div>
+                <div><dt>Conta bancária</dt><dd>{% if c.banco_nome %}{% if logo_banco_url(c.banco_nome) %}{{ logo_banco(c.banco_nome, None, 16) }} {% endif %}{{ c.banco_nome ~ ' · ' ~ c.conta_bancaria }}{% else %}—{% endif %}</dd></div>
                 {% if c.provedor != 'bradesco' %}<div><dt>Chave Pix</dt><dd>{{ c.chave_pix or '—' }}</dd></div>{% endif %}
                 <div><dt>Boleto</dt><dd>juros {{ c.juros_mes }}% a.m. · multa {{ c.multa_pct }}% · baixa em {{ c.dias_baixa }} dias{{ ' · vence dia ' ~ c.dia_vencimento if c.dia_vencimento }}</dd></div>
                 {% if c.provedor == 'bradesco' %}<div class="cb-span"><dt>Baixa automática</dt><dd>De hora em hora, das 7h às 22h, o sistema pergunta ao Bradesco quais boletos foram pagos e dá baixa no título.</dd></div>

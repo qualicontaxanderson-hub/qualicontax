@@ -1358,6 +1358,7 @@ def contas():
     ano = int(request.args.get('ano') or _date.today().year)
     hoje = _date.today()
     from utils.extrato_formatos import catalogo, cores
+    from utils.bancos_logo import logos_banco
     contas = FinContaBancaria.listar(empresa_ids=sel, apenas_ativas=False)
     cobertura = FinContaBancaria.cobertura(ano, sel)
     pendencias = FinExtratoPendencia.listar(empresa_ids=sel, ver_orfas=admin)
@@ -1389,6 +1390,7 @@ def contas():
                   'motivo': p['motivo'], 'criado_em': _d(p['criado_em'])} for p in pendencias],
         'formatos': catalogo(),
         'cores': cores(),
+        'logos': logos_banco(),
         'eh_admin': admin,
     }
     # Aba Cobrança (04/11/2026): as contas de cobrança (Efí) são cadastro, como a conta corrente
@@ -1408,8 +1410,8 @@ def contas():
             l = ligadas.get(c['id'])
             if l:
                 cfg = _cfg_brad(l) if l['provedor'] == 'bradesco' else {}
-                c['cob'] = {'id': l['id'], 'ativo': bool(l['ativo']), 'ambiente': l['ambiente'],
-                            'carteira': cfg.get('carteira'), 'conta': cfg.get('conta'),
+                c['cob'] = {'id': l['id'], 'ativo': bool(l['ativo']), 'ambiente': l['ambiente'], 'provedor': l['provedor'],
+                            'carteira': cfg.get('carteira'), 'conta': cfg.get('conta'), 'agencia': cfg.get('agencia'),
                             'testado_em': _d(l['testado_em']), 'teste': (l['teste_resultado'] or '')[:300]}
         certs = {}
         for e in emps:
@@ -1424,6 +1426,9 @@ def contas():
         dados['url_ligar'] = url_for('financeiro.ligar_cobranca', fin_conta_id=0)
         dados['url_testar_cob'] = url_for('financeiro.testar_cobranca_da_conta', fin_conta_id=0)
         dados['url_puxar_ext'] = url_for('financeiro.puxar_extrato_da_conta', fin_conta_id=0)
+        dados['url_cob_visivel'] = url_for('financeiro.cobranca_visivel_na_conta', fin_conta_id=0)
+        from routes.financeiro_ligar_banco import contas_com_cobranca_visivel
+        dados['cob_on'] = sorted(contas_com_cobranca_visivel())
         from utils.bradesco_extrato import ultimos as _ult_ext
         _ext = _ult_ext()
         for c in dados['contas']:

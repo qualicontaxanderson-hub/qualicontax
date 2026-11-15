@@ -897,3 +897,8 @@ table.fin-tab tbody tr:last-child td { border-bottom:none; }
   .nd-boleto-top > div + div { text-align:left; }
   .nd-acoes .btn { flex:1 1 auto; }
 }
+
+/* Logo do banco (15/11/2026) — utils/bancos_logo.py; banco sem logo fica com o quadradinho na cor da marca */
+.bco-logo { display:inline-block; flex:0 0 auto; object-fit:contain; background:#fff; border:1px solid #e2e8f0;
+            border-radius:6px; padding:2px; box-sizing:border-box; vertical-align:middle; }
+.bco-ponto { display:inline-block; flex:0 0 auto; width:11px; height:11px; border-radius:3px; vertical-align:middle; }

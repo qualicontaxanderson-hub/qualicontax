@@ -201,6 +201,12 @@ app.jinja_env.globals['pode_rota'] = _pode_rota
 # tela de ramos e filtro da lista de clientes.
 from models.ramo_atividade import SEGMENTOS as _SEGMENTOS_RAMO
 app.jinja_env.globals['SEGMENTOS_RAMO'] = _SEGMENTOS_RAMO
+# Logo do banco (15/11/2026): {{ logo_banco(banco_id, cor) }} em toda tela que mostra banco;
+# banco sem arquivo em static/images/bancos fica com o quadradinho na cor da marca.
+from utils.bancos_logo import logo_banco as _logo_banco, logos_banco as _logos_banco, url as _logo_banco_url
+app.jinja_env.globals['logo_banco'] = _logo_banco
+app.jinja_env.globals['logo_banco_url'] = _logo_banco_url
+app.jinja_env.globals['logos_banco'] = _logos_banco
 
 
 # Template filters

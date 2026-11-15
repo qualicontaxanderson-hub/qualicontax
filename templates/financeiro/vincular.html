@@ -57,7 +57,7 @@
         <div class="vp-lista">
         {% for l in candidatos %}
             <div class="vp-cand">
-                <div><b>{{ l.data.strftime('%d/%m/%Y') }}</b> · {{ l.banco or 'banco' }} · {{ l.descricao }}</div>
+                <div><b>{{ l.data.strftime('%d/%m/%Y') }}</b> · {% if logo_banco_url(l.banco) %}{{ logo_banco(l.banco, None, 14) }} {% endif %}{{ l.banco or 'banco' }} · {{ l.descricao }}</div>
                 <div style="display:flex; gap:10px; align-items:center;">
                     <b>{{ brl(l.valor) }}</b>
                     <a class="btn btn-primary" href="{{ url_for('financeiro.vincular_pagamento', lanc_id=l.id, titulo=titulo.id) }}"><i class="fas fa-link"></i> É este</a>
@@ -90,7 +90,7 @@
         <dl class="nd-kv">
             <div><dt>Valor</dt><dd><strong class="nd-valor">{{ brl(lanc.valor) }}</strong></dd></div>
             <div><dt>Data</dt><dd>{{ lanc.data.strftime('%d/%m/%Y') }}</dd></div>
-            <div><dt>Banco</dt><dd>{{ lanc.banco or '—' }} {% if lanc.conta %}<small class="nd-ajuda">· {{ lanc.conta }}</small>{% endif %}</dd></div>
+            <div><dt>Banco</dt><dd>{% if logo_banco_url(lanc.banco) %}{{ logo_banco(lanc.banco, None, 18) }} {% endif %}{{ lanc.banco or '—' }} {% if lanc.conta %}<small class="nd-ajuda">· {{ lanc.conta }}</small>{% endif %}</dd></div>
             <div class="nd-span"><dt>O banco escreveu</dt><dd>{{ lanc.descricao }}</dd></div>
         </dl>
     </div>

@@ -62,26 +62,23 @@ def ligar_cobranca(fin_conta_id):
     f = request.form
     emp_id = fc['empresa_id']
 
-    # agência: vem do cadastro da conta; se o cadastro não tem, é digitada aqui UMA vez e vai para o cadastro
-    agencia = _num(fc.get('agencia'))
-    if not agencia:
-        agencia = _num(f.get('agencia'))[:4]
-        if len(agencia) != 4:
-            flash('Informe a agência (4 números, sem o dígito). Ela fica guardada no cadastro da conta.', 'danger')
-            return redirect(_volta(fc))
-        execute_query('UPDATE fin_contas SET agencia = %s WHERE id = %s', (agencia, fin_conta_id))
-        registrar('escrita.alterou_conta_bancaria', 'financeiro', tabela='fin_contas', registro_id=fin_conta_id,
-                  antes={'agencia': None}, depois={'agencia': agencia})
-    conta_cob = _num(f.get('conta_cobranca'))[:7] or _num(fc.get('conta'))[:7]
-    carteira = _num(f.get('carteira'))[:3] or '09'
-    ambiente = 'producao' if f.get('ambiente') != 'homologacao' else 'homologacao'
-
     atual_id = (FinCobrancaConta.da_conta_bancaria([fin_conta_id]).get(fin_conta_id) or {}).get('id')
     atual = FinCobrancaConta.get(atual_id) if atual_id else None
     if atual and atual['provedor'] != provedor:
         atual = None
     from utils.bradesco_boletos import config
     cfg_atual = config(atual) if atual else {}
+    # agência: do cadastro da conta; se o cadastro não tem, a já guardada na cobrança, ou digitada aqui
+    # UMA vez. Fica SÓ na cobrança: gravá-la no cadastro mudava a grafia da conta ('16865' virava
+    # '2505/16865'), o Extrato abria um cartão novo e as regras da conta paravam de valer (15/11/2026).
+    agencia = _num(fc.get('agencia')) or cfg_atual.get('agencia') or _num(f.get('agencia'))[:4]
+    if len(agencia) != 4:
+        flash('Informe a agência (4 números, sem o dígito).', 'danger')
+        return redirect(_volta(fc))
+    conta_cob = _num(f.get('conta_cobranca'))[:7] or _num(fc.get('conta'))[:7]
+    carteira = _num(f.get('carteira'))[:3] or '09'
+    ambiente = 'producao' if f.get('ambiente') != 'homologacao' else 'homologacao'
+
     emp_nome = (FinEmpresa.mapa().get(emp_id) or 'empresa')
     # o que a tela não pergunta continua como está (ou nasce com o padrão do escritório)
     dados = {
@@ -151,6 +148,42 @@ def puxar_extrato_da_conta(fin_conta_id):
               f"a {res.get('ate', '')[8:10]}/{res.get('ate', '')[5:7]}): {res.get('novos', 0)} novo(s), "
               f"{len(res.get('baixados') or [])} baixa(s), {len(res.get('pendentes') or [])} Pix sem título para escolher.",
               'success')
+    return redirect(_volta(fc))
+
+
+_CHAVE_VISIVEL = 'contas_com_cobranca_visivel'
+
+
+def contas_com_cobranca_visivel():
+    """fin_contas.id em que a chave "Cobrança" foi ligada (app_config, lista JSON)."""
+    import json
+    r = execute_query('SELECT valor FROM app_config WHERE chave = %s', (_CHAVE_VISIVEL,), fetch=True, fetch_one=True)
+    try:
+        return {int(x) for x in json.loads((r or {}).get('valor') or '[]')}
+    except (ValueError, TypeError):
+        return set()
+
+
+@financeiro.route('/financeiro/contas/<int:fin_conta_id>/cobranca-visivel', methods=['POST'])
+@permission_required('financeiro.cobranca')
+def cobranca_visivel_na_conta(fin_conta_id):
+    """Liga/desliga a cobrança no cartão da conta (Anderson, 15/11/2026: "tem que ter um botão de liga e
+    desliga ... se a gente ligar conseguimos usar se não ligar não aparece"). Só mostra ou esconde: a
+    conta com a cobrança já ligada ao banco se desliga na aba Cobrança."""
+    import json
+    fc = execute_query('SELECT * FROM fin_contas WHERE id = %s', (fin_conta_id,), fetch=True, fetch_one=True)
+    if not fc or fc['empresa_id'] not in FinEmpresa.ids_validos():
+        abort(404)
+    ligar = request.form.get('ligar') == '1'
+    ids = contas_com_cobranca_visivel()
+    antes = fin_conta_id in ids
+    (ids.add if ligar else ids.discard)(fin_conta_id)
+    execute_query('INSERT INTO app_config (chave, valor) VALUES (%s, %s) '
+                  'ON DUPLICATE KEY UPDATE valor = VALUES(valor), updated_at = NOW()',
+                  (_CHAVE_VISIVEL, json.dumps(sorted(ids))))
+    registrar('escrita.cobranca_visivel_na_conta', 'financeiro', tabela='fin_contas', registro_id=fin_conta_id,
+              antes={'cobranca': 'ligada' if antes else 'desligada'},
+              depois={'cobranca': 'ligada' if ligar else 'desligada'})
     return redirect(_volta(fc))
 
 

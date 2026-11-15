@@ -230,7 +230,7 @@
         <div class="tf-lado tf-saiu">
           <div class="tf-seta"><i class="fas fa-arrow-up"></i></div>
           <div class="tf-lado-txt">
-            <b>SAIU · {{ p.saiu.banco }} · {{ p.saiu.conta }}{% if mapa.get(p.saiu.empresa_id) %} · {{ mapa[p.saiu.empresa_id] }}{% endif %}</b>
+            <b>SAIU · {% if logo_banco_url(p.saiu.banco) %}{{ logo_banco(p.saiu.banco, None, 16) }} {% endif %}{{ p.saiu.banco }} · {{ p.saiu.conta }}{% if mapa.get(p.saiu.empresa_id) %} · {{ mapa[p.saiu.empresa_id] }}{% endif %}</b>
             <code>{{ p.saiu.descricao }}</code>
           </div>
           <div class="tf-lado-v">−R$ {{ '{:,.2f}'.format(p.valor).replace(',', 'X').replace('.', ',').replace('X', '.') }}</div>
@@ -238,7 +238,7 @@
         <div class="tf-lado tf-entrou">
           <div class="tf-seta"><i class="fas fa-arrow-down"></i></div>
           <div class="tf-lado-txt">
-            <b>ENTROU · {{ p.entrou.banco }} · {{ p.entrou.conta }}{% if mapa.get(p.entrou.empresa_id) %} · {{ mapa[p.entrou.empresa_id] }}{% endif %}</b>
+            <b>ENTROU · {% if logo_banco_url(p.entrou.banco) %}{{ logo_banco(p.entrou.banco, None, 16) }} {% endif %}{{ p.entrou.banco }} · {{ p.entrou.conta }}{% if mapa.get(p.entrou.empresa_id) %} · {{ mapa[p.entrou.empresa_id] }}{% endif %}</b>
             <code>{{ p.entrou.descricao }}</code>
           </div>
           <div class="tf-lado-v">+R$ {{ '{:,.2f}'.format(p.valor).replace(',', 'X').replace('.', ',').replace('X', '.') }}</div>
@@ -285,7 +285,7 @@
       {% for c in cob %}
       <span class="tf-cob-item {% if c.faltam or not c.cadastrada %}amb{% endif %}"
             title="{{ c.total }} lançamento(s){% if c.faltam %} · faltam {{ c.faltam|join(', ') }}{% endif %}{% if not c.cadastrada %} · conta sem cadastro{% endif %}">
-        {{ c.banco }} {{ c.conta }} · {{ c.faixa }}{% if c.faltam %} <b>(falta {{ c.faltam|join(', ') }})</b>{% endif %}{% if not c.cadastrada %} <b>(sem cadastro)</b>{% endif %}
+        {% if logo_banco_url(c.banco) %}{{ logo_banco(c.banco, None, 16) }} {% endif %}{{ c.banco }} {{ c.conta }} · {{ c.faixa }}{% if c.faltam %} <b>(falta {{ c.faltam|join(', ') }})</b>{% endif %}{% if not c.cadastrada %} <b>(sem cadastro)</b>{% endif %}
       </span>
       {% endfor %}
     {% else %}
@@ -307,7 +307,7 @@
         <label>
           <input type="checkbox" name="lanc" value="{{ s.l.id }}">
           <span class="tf-lado-txt">
-            <b>{{ s.l.data.strftime('%d/%m/%Y') }} · {{ s.l.banco }} · {{ s.l.conta }}</b>
+            <b>{{ s.l.data.strftime('%d/%m/%Y') }} · {% if logo_banco_url(s.l.banco) %}{{ logo_banco(s.l.banco, None, 16) }} {% endif %}{{ s.l.banco }} · {{ s.l.conta }}</b>
             <code>{{ s.l.descricao }}</code>
           </span>
         </label>

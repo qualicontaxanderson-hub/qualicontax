@@ -128,6 +128,10 @@
 #ctb .cc-ligar.sec{background:#fff;color:var(--verde)}
 #ctb .cc-cob-acoes{grid-column:1 / -1;display:flex;flex-wrap:wrap;gap:4px 16px;font-size:13px}
 #ctb .cc-cob-acoes form{margin:0;display:inline}
+#ctb .cc-chave{grid-column:1 / -1;display:flex;align-items:center;gap:8px;margin:2px 0 0;font-size:12.5px;color:var(--muted)}
+#ctb .cc-chave .sw{position:relative;width:34px;height:20px;border-radius:99px;border:0;background:#cbd5e1;cursor:pointer;padding:0;flex:0 0 auto}
+#ctb .cc-chave .sw i{position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.2);transition:left .15s}
+#ctb .cc-chave .sw.on{background:var(--verde)} #ctb .cc-chave .sw.on i{left:16px}
 
 /* TABELAS */
 #ctb .tbl-card{background:#fff;border:1px solid var(--borda);border-radius:14px;overflow:hidden}
@@ -365,7 +369,7 @@
 <div id="lgModal" role="dialog" aria-modal="true" aria-labelledby="lgTit">
   <form class="lg-box" method="POST" action="" autocomplete="off">
     <aside class="lg-esq">
-      <div class="lg-banco"><span class="lg-logo"><img src="{{ url_for('static', filename='images/bancos/237.svg') }}" alt=""></span>
+      <div class="lg-banco"><span class="lg-logo"><img id="lgLogo" src="{{ url_for('static', filename='images/bancos/237.svg') }}" alt=""></span>
         <span><b id="lgNome">Bradesco</b><small id="lgNum"></small></span></div>
       <div class="lg-cad"><h5>Já vem do cadastro</h5>
         <div><i class="fas fa-lock"></i><span id="lgEmp"></span></div>
@@ -433,6 +437,13 @@ const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt
 const url = (u, id) => u.replace(/\/0(\/|$)/, '/' + id + '$1');
 const ID_POR_NOME = Object.fromEntries(D.contas.map(c => [c.banco_nome, c.banco_id]));
 const corDe = (id, nome) => D.cores[String(id || ID_POR_NOME[nome] || '').replace(/^0+/, '')] || '#94a3b8';
+/* Logo do banco (15/11/2026, utils/bancos_logo.py): sem logo, o quadradinho na cor da marca */
+const LOGOS = D.logos || {};
+const marca = (id, nome, tam = 20) => {
+  const k = String(id || ID_POR_NOME[nome] || '').replace(/^0+/, '');
+  return LOGOS[k] ? `<img class="bco-logo" src="${LOGOS[k]}" alt="" style="width:${tam}px;height:${tam}px">`
+                  : `<i style="background:${corDe(id, nome)}"></i>`;
+};
 const apel = Object.fromEntries(D.emps.map(e => [e.cliente_id, e]));
 const dm = iso => iso ? new Date(iso.slice(0, 10) + 'T12:00').toLocaleDateString('pt-BR', {day:'2-digit', month:'2-digit'}) : '';
 const COB_POR_CONTA = Object.fromEntries(D.cobertura.filter(c => c.conta_id).map(c => [c.conta_id, c]));
@@ -564,7 +575,7 @@ function cartaoPend(p, t) {
   const opts = '<option value="">Escolha a empresa</option>' + D.emps.map(e =>
     `<option value="${e.cliente_id}" ${p.empresa_id===e.cliente_id?'selected':''}>${esc(e.numero_cliente)} · ${esc(e.apelido)}</option>`).join('');
   const cab = `<div class="pend-top">
-      <span class="banco"><i style="background:${p.banco_id ? corDe(p.banco_id, p.banco_nome) : 'var(--apagado)'}"></i>${esc(p.banco_nome || 'Banco não identificado')}</span>
+      <span class="banco">${p.banco_id ? marca(p.banco_id, p.banco_nome) : '<i style="background:var(--apagado)"></i>'}${esc(p.banco_nome || 'Banco não identificado')}</span>
       <span class="sit ${t.cls}">${t.t}</span></div>
     <div class="pend-arq">${esc(p.arquivo)}</div>
     <div class="pend-meta">
@@ -643,7 +654,7 @@ function cartaoEmp(e, itens, semCad) {
     return `
     <div class="cc ${c.ativo ? '' : 'inativa'}">
       <div style="min-width:0">
-        <span class="banco" title="${esc(c.banco_nome || '')}"><i style="background:${corDe(c.banco_id, c.banco_nome)}"></i>${esc(nome)}</span>
+        <span class="banco" title="${esc(c.banco_nome || '')}">${marca(c.banco_id, c.banco_nome, 24)}${esc(nome)}</span>
         <div class="cc-num">${c.agencia ? 'ag ' + esc(c.agencia) + ' · ' : ''}cc ${esc(c.conta)}</div>
       </div>
       <div class="cc-dir"><span class="sit ${st.cls}">${st.t}</span><span class="cc-ult">${cb?.ultimo ? 'último ' + dm(cb.ultimo) : 'sem extrato'}</span></div>
@@ -670,15 +681,36 @@ function cartaoEmp(e, itens, semCad) {
 const COM_COBRANCA = {'237': 'Bradesco'};            // bancos com cobrança pela API (por enquanto só o Bradesco)
 const temCobranca = c => !!COM_COBRANCA[String(c.banco_id || '').replace(/^0+/, '')];
 const dmy = iso => iso ? new Date(iso.slice(0, 10) + 'T12:00').toLocaleDateString('pt-BR') : '';
+/* Liga/desliga (15/11/2026, Anderson: "se a gente ligar conseguimos usar se não ligar não aparece"):
+   toda conta, PJ ou PF, tem a chave; desligada, o bloco de boletos não aparece. Conta com a cobrança
+   já ligada ao banco fica sempre visível (desliga-se na aba Cobrança). */
+const cobVisivel = c => !!c.cob || (D.cob_on || []).includes(c.id);
+function chaveCobranca(c, on) {
+  return `<form class="cc-chave" method="POST" action="${esc(url(D.url_cob_visivel, c.id))}">
+      <input type="hidden" name="ligar" value="${on ? '0' : '1'}">
+      <button type="submit" class="sw ${on ? 'on' : ''}" role="switch" aria-checked="${on}" title="${on ? 'Esconder a cobrança desta conta' : 'Mostrar a cobrança nesta conta'}"><i></i></button>
+      <span>Cobrança ${on ? 'ligada nesta conta' : 'desligada'}</span></form>`;
+}
 function blocoCobranca(c) {
-  if (!D.pode_ligar || !temCobranca(c) || !c.ativo) return '';
+  if (!D.pode_ligar || !c.ativo) return '';
   const k = c.cob;
-  if (!k) return `
+  if (!k && !cobVisivel(c)) return chaveCobranca(c, false);
+  if (!k && !temCobranca(c)) return `${chaveCobranca(c, true)}
+      <div class="cc-cob"><span class="ic"><i class="fas fa-barcode"></i></span>
+        <span class="tx"><b>Boletos</b><small>a cobrança pela API ainda não existe para ${esc(c.banco_nome || 'este banco')} — hoje: Bradesco (aqui) e Efí (aba Cobrança)</small></span><span class="bol"></span></div>`;
+  if (!k) return `${chaveCobranca(c, true)}
       <div class="cc-cob"><span class="ic"><i class="fas fa-barcode"></i></span>
         <span class="tx"><b>Boletos</b><small>ainda não ligado</small></span><span class="bol"></span></div>
       <button class="cc-ligar" type="button" data-ligar="${c.id}"><i class="fas fa-plug"></i> Ligar cobrança</button>`;
   const ok = (k.teste || '').startsWith('OK');
   const amb = k.ambiente === 'producao' ? 'Produção' : 'Teste (sandbox)';
+  if (k.provedor !== 'bradesco') {           // Efí: configurada e testada na aba Cobrança
+    const estE = !k.ativo ? 'desligado' : `ligado · ${amb}${k.testado_em ? ' · teste ' + (ok ? 'OK' : 'falhou') + ' em ' + dmy(k.testado_em) : ''}`;
+    return `
+      <div class="cc-cob ${k.ativo && ok ? 'on' : (k.teste && !ok ? 'mal' : '')}"><span class="ic"><i class="fas fa-barcode"></i></span>
+        <span class="tx"><b>Boletos</b><small>${esc(estE)}</small></span><span class="bol"></span></div>
+      <div class="cc-cob-acoes"><a class="lnk" href="#cobranca" data-ir-cob="1"><i class="fas fa-gear"></i> Ver e testar na aba Cobrança</a></div>`;
+  }
   const est = !k.ativo ? 'desligado' : !k.teste ? 'ligado · ainda não testado'
             : ok ? `ligado · ${amb} · teste OK em ${dmy(k.testado_em)}` : `ligado · ${amb} · o último teste falhou`;
   return `
@@ -714,13 +746,14 @@ function abrirLigar(id) {
   const m = document.getElementById('lgModal');
   m.querySelector('form').action = url(D.url_ligar, c.id);
   m.querySelector('#lgNome').textContent = COM_COBRANCA[String(c.banco_id).replace(/^0+/, '')] || c.banco_nome;
+  const lg = LOGOS[String(c.banco_id || '').replace(/^0+/, '')]; if (lg) m.querySelector('#lgLogo').src = lg;
   m.querySelector('#lgNum').textContent = (c.agencia ? 'ag ' + c.agencia + ' · ' : '') + 'cc ' + c.conta;
   const doc = String(D.cnpjs?.[c.empresa_id] || '').replace(/\D/g, '');
   const docF = doc.length === 14 ? doc.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, '$1.$2.$3/$4-$5') : doc;
   m.querySelector('#lgEmp').textContent = (e.apelido || '') + (docF ? ' · CNPJ ' + docF : '');
   const contaCob = (k && k.conta) || String(c.conta || '').replace(/\D/g, '').slice(0, 7);
   m.querySelector('#lgAgCc').textContent = (c.agencia ? 'Agência ' + c.agencia + ' · ' : '') + 'Conta ' + contaCob;
-  m.querySelector('#lgAgWrap').hidden = !!c.agencia;
+  m.querySelector('#lgAgWrap').hidden = !!(c.agencia || (c.cob && c.cob.agencia));
   m.querySelector('#lgAg').required = !c.agencia;
   m.querySelector('#lgConta').value = contaCob;
   m.querySelector('#lgContaWrap').hidden = true;
@@ -770,7 +803,7 @@ function extratos() {
    </div>
    <div class="leg"><span>Cada célula é quantos lançamentos entraram naquele mês.</span><span><i style="background:var(--verm-fundo)"></i>mês fechado sem extrato = falta</span></div>
    ${lista.length ? `<div class="tbl-card"><div class="tbl-scroll"><table class="ct-tab grade"><thead><tr><th class="g-conta">Conta</th>${MESES.map(m => `<th>${m}</th>`).join('')}<th>Último</th></tr></thead><tbody>
-   ${lista.map(c => { const p0 = primeiroMes(c.meses); return `<tr><td class="g-conta"><span class="banco"><i style="background:${corDe(null, c.banco)}"></i>${esc(apel[c.empresa_id]?.apelido || c.empresa_id)} · ${esc(c.banco)}</span>${!c.cadastrada ? ' <span class="sit amb">sem cadastro</span>' : ''}<small>${esc(c.conta)}</small></td>
+   ${lista.map(c => { const p0 = primeiroMes(c.meses); return `<tr><td class="g-conta"><span class="banco">${marca(null, c.banco)}${esc(apel[c.empresa_id]?.apelido || c.empresa_id)} · ${esc(c.banco)}</span>${!c.cadastrada ? ' <span class="sit amb">sem cadastro</span>' : ''}<small>${esc(c.conta)}</small></td>
       ${MESES.map((_, i) => { const m = i + 1, n = c.meses[m]; return n ? `<td class="cel-ok">${n}</td>` : (m < MES_ABERTO && m > p0) ? '<td class="cel-falta">—</td>' : '<td class="cel-fut"></td>'; }).join('')}
       <td>${c.ultimo ? dm(c.ultimo) : '—'}</td></tr>`; }).join('')}
    </tbody></table></div></div>` : `<div class="ct-vazio">Nenhum extrato em ${ANO}${f.so || f.q ? ' com esse filtro' : ''}.</div>`}`;
@@ -791,7 +824,7 @@ function formatos() {
      <span class="contador">OFX é o padrão. PDF, CSV e Excel são o mesmo extrato em outro formato; o que já entrou por um não entra de novo por outro.</span>
    </div>
    <div class="tbl-card"><div class="tbl-scroll"><table class="ct-tab fmt"><thead><tr><th>Banco</th><th>OFX</th><th>PDF</th><th>CSV</th><th>Excel</th></tr></thead><tbody>
-   ${lista.map(b => `<tr><td><span class="banco"><i style="background:${corDe(b.banco_id)}"></i>${esc(b.nome)}</span><div class="fnota">${esc(b.banco_id)}</div></td>
+   ${lista.map(b => `<tr><td><span class="banco">${marca(b.banco_id)}${esc(b.nome)}</span><div class="fnota">${esc(b.banco_id)}</div></td>
      ${['ofx', 'pdf', 'csv', 'xls'].map(k => `<td data-label="${k==='xls' ? 'Excel' : k.toUpperCase()}"><span class="sit ${cls[b[k].status]}">${esc(b[k].rotulo)}</span><div class="fnota">${esc(b[k].nota)}</div></td>`).join('')}</tr>`).join('')}
    </tbody></table></div></div>`;
   ligar(p, 'banco', v => { f.banco = v; formatos(); });

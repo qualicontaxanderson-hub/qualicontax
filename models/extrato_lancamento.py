@@ -157,8 +157,9 @@ class ExtratoLancamento:
             except Exception:
                 b = None
             if b:
+                from utils.bancos_logo import codigo as _cod
                 return {'apelido': b['nome'], 'banco_nome': b['nome'],
-                        'banco_id': '', 'agencia': '', 'cor': b.get('cor'),
+                        'banco_id': _cod(banco_bruto) or '', 'agencia': '', 'cor': b.get('cor'),
                         'sem_cadastro': True}
             return {}
         return achar

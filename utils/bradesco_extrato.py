@@ -107,15 +107,23 @@ def ler(j):
 # ---------------------------------------------------------------------------
 def contas(fin_conta_id=None):
     """Contas bancárias Bradesco com a cobrança de produção ligada (credencial + certificado)."""
-    sql = """SELECT c.id AS cob_id, c.empresa_id, f.id AS fin_conta_id, f.agencia, f.conta
+    from utils.bradesco_boletos import config
+    sql = """SELECT c.id AS cob_id, c.empresa_id, f.id AS fin_conta_id, f.agencia, f.conta, c.config_json
                FROM fin_cobranca_contas c JOIN fin_contas f ON f.id = c.fin_conta_id
               WHERE c.provedor = 'bradesco' AND c.ambiente = 'producao' AND c.ativo = 1
-                AND COALESCE(c.so_consulta, 0) = 0 AND f.agencia IS NOT NULL AND f.conta IS NOT NULL"""
+                AND COALESCE(c.so_consulta, 0) = 0 AND f.conta IS NOT NULL"""
     p = ()
     if fin_conta_id:
         sql += ' AND f.id = %s'
         p = (fin_conta_id,)
-    return _q(sql + ' ORDER BY c.id', p)
+    out = []
+    for r in _q(sql + ' ORDER BY c.id', p):
+        # a agência mora na cobrança (o cadastro pode não ter: ver financeiro_ligar_banco)
+        r['agencia'] = _num(r.get('agencia')) or config(r).get('agencia')
+        r.pop('config_json', None)
+        if r['agencia']:
+            out.append(r)
+    return out
 
 
 def ultimos():

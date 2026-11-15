@@ -800,8 +800,9 @@ body.ex-selecionando .ex-barra-lote { display:flex; }
                 <span class="tarja" style="background:{{ cor }}"></span>
                 <div class="corpo">
                     <div class="topo">
-                        <span class="chip" style="background:{{ cor }}1f; color:{{ cor }}">
-                            <i class="fas fa-building-columns"></i></span>
+                        {% if logo_banco_url(cc.banco_id) %}{{ logo_banco(cc.banco_id, cor, 34, cc.banco_nome or '') }}
+                        {% else %}<span class="chip" style="background:{{ cor }}1f; color:{{ cor }}">
+                            <i class="fas fa-building-columns"></i></span>{% endif %}
                         <span class="ident">
                             <b>{{ cc.apelido or cc.banco_nome or c.banco or '—' }}</b>
                             <i class="ex-mono">{{ c.conta or '—' }}</i>
@@ -891,7 +892,8 @@ body.ex-selecionando .ex-barra-lote { display:flex; }
                    Antes a agência não aparecia em cartão nenhum, e o banco
                    podia sair como "0237". #}
                 <div class="ex-cab">
-                    <span class="pt" style="background:{{ cc.cor or COR_BANCO.get((cc.banco_id or '') | string, '#94a3b8') }}"></span>
+                    {% if logo_banco_url(cc.banco_id) %}{{ logo_banco(cc.banco_id, None, 18) }}
+                    {% else %}<span class="pt" style="background:{{ cc.cor or COR_BANCO.get((cc.banco_id or '') | string, '#94a3b8') }}"></span>{% endif %}
                     <span class="bco">{{ cc.apelido or cc.banco_nome or l.banco or '—' }}</span>
                     <span class="emp">· {{ emp_mapa.get(l.empresa_id) or 'sem empresa' }}</span>
                 </div>
