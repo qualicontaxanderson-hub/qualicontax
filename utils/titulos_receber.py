@@ -99,6 +99,76 @@ def _cel(c):
     return ('55' + c) if len(c) in (10, 11) else ''
 
 
+# ── Filtros (15/11/2026) — Anderson: "vamos meter filtros... para consultar empresas, grupo,
+#    valores, serviços". Cada cartão leva o grupo, o serviço, a competência, o boleto e o valor;
+#    a tela filtra sem recarregar. ─────────────────────────────────────────────────────────────
+BOLETO_ROTULO = {'aberto': 'Boleto aguardando', 'vencido': 'Boleto vencido', 'expirado': 'Boleto expirado',
+                 'pago': 'Boleto pago', 'sem': 'Sem boleto'}
+_BOL = {'waiting': 'aberto', 'new': 'aberto', 'unpaid': 'vencido', 'expired': 'expirado', 'paid': 'pago'}
+
+
+def _servico(t):
+    d = (t.get('descricao') or '').strip().lower()
+    if d.startswith('honor') and 'servi' in d[:30]:
+        return 'Honorários e serviços'
+    if d.startswith('servi'):
+        return 'Serviços'
+    return (t.get('categoria_nome') or 'Honorários').strip()
+
+
+def _comp_chave(d):
+    return d.strftime('%Y-%m') if d else ''
+
+
+def _grupos_dos_clientes(ids):
+    """{cliente_id: ['GRUPO A', ...]} — grupos_clientes pela cliente_grupo_relacao."""
+    ids = [i for i in set(ids) if i]
+    if not ids:
+        return {}
+    out = defaultdict(list)
+    for r in q(f"""SELECT r.cliente_id, g.nome FROM cliente_grupo_relacao r JOIN grupos_clientes g ON g.id = r.grupo_id
+                    WHERE r.cliente_id IN ({','.join(['%s'] * len(ids))}) ORDER BY g.nome""", tuple(ids), fetch=True) or []:
+        out[r['cliente_id']].append(r['nome'])
+    return out
+
+
+def _boletos_dos_titulos(ids):
+    """{titulo_id: 'aberto'|'vencido'|'expirado'|'pago'} pelo boleto mais novo do título (sem contar erro/cancelado)."""
+    ids = [i for i in set(ids) if i]
+    if not ids:
+        return {}
+    out = {}
+    for r in q(f"""SELECT titulo_id, situacao FROM fin_boletos
+                    WHERE titulo_id IN ({','.join(['%s'] * len(ids))}) AND situacao NOT IN ('erro', 'canceled', 'rascunho')
+                    ORDER BY id""", tuple(ids), fetch=True) or []:
+        out[r['titulo_id']] = _BOL.get(r['situacao'], 'sem')
+    return out
+
+
+def _marcas(t, grupos, bols):
+    """Os dados do filtro de um título (vão nos data-* do cartão)."""
+    return {'grupos': grupos.get(t.get('cliente_id'), []), 'serv': _servico(t),
+            'comp': _comp_chave(t.get('competencia')), 'bol': bols.get(t.get('id'), 'sem')}
+
+
+class _Catalogo:
+    """Junta as opções de cada filtro para a tela (sem contar: a tela conta pelo painel aberto)."""
+
+    def __init__(self):
+        self.grupos, self.servs, self.comps, self.bols = set(), set(), set(), set()
+
+    def add(self, m):
+        self.grupos.update(m['grupos']); self.servs.add(m['serv'])
+        if m['comp']:
+            self.comps.add(m['comp'])
+        self.bols.add(m['bol'])
+
+    def saida(self):
+        return {'grupos': sorted(self.grupos), 'servs': sorted(self.servs),
+                'comps': [(c, f'{MES[int(c[5:])]}/{c[:4]}') for c in sorted(self.comps, reverse=True)],
+                'bols': [(b, BOLETO_ROTULO[b]) for b in ('aberto', 'vencido', 'expirado', 'pago', 'sem') if b in self.bols]}
+
+
 def montar(empresa_ids=None, mes=None):
     hoje = hoje_br()
     if mes is None:
@@ -108,36 +178,53 @@ def montar(empresa_ids=None, mes=None):
 
     # ── Recebido no mês ─────────────────────────────────────────────
     rec = q(f"""SELECT b.id, b.data_baixa, b.valor + b.juros + b.multa - b.desconto AS v, b.origem, b.referencia,
-                       t.contraparte_nome, t.descricao, t.competencia, t.cliente_id, c.numero_cliente
+                       t.id AS titulo_id, t.contraparte_nome, t.descricao, t.competencia, t.cliente_id, c.numero_cliente,
+                       cat.nome AS categoria_nome
                   FROM fin_titulo_baixas b JOIN fin_titulos t ON t.id = b.titulo_id
                   LEFT JOIN clientes c ON c.id = t.cliente_id
+                  LEFT JOIN fin_categorias cat ON cat.id = t.categoria_id
                  WHERE t.tipo = 'R' AND b.data_baixa >= %s AND b.data_baixa < %s{ec}
                  ORDER BY b.data_baixa DESC, b.id DESC""",
             (mes, prox, *ep), fetch=True) or []
+    cat = _Catalogo()
+    rec_grupos = _grupos_dos_clientes([b['cliente_id'] for b in rec])
+    rec_bols = _boletos_dos_titulos([b['titulo_id'] for b in rec])
     por_dia = defaultdict(list)
     for b in rec:
         por_dia[b['data_baixa']].append(b)
     rec_g = []
     for d in sorted(por_dia, reverse=True):
         dt, sub = _cab(d, hoje)
+        itens_d = []
+        for b in por_dia[d]:
+            mk = _marcas({'cliente_id': b['cliente_id'], 'descricao': b['descricao'], 'categoria_nome': b['categoria_nome'],
+                          'competencia': b['competencia'], 'id': b['titulo_id']}, rec_grupos, rec_bols)
+            cat.add(mk)
+            itens_d.append({'id': b['titulo_id'], 'num': b['numero_cliente'] or '—', 'nome': _nome(b['contraparte_nome']),
+                            'nome_full': b['contraparte_nome'] or '',
+                            'valor': brl(b['v']), 'v': '%.2f' % float(b['v']), 'desc': _desc(b), 'cliente_id': b['cliente_id'],
+                            'auto': _auto(b), 'app': _no_app(b), **mk})
         rec_g.append({'data': dt, 'sub': sub, 'tot': brl(sum(b['v'] for b in por_dia[d])),
-                      'n': len(por_dia[d]),
-                      'itens': [{'num': b['numero_cliente'] or '—', 'nome': _nome(b['contraparte_nome']),
-                                 'valor': brl(b['v']), 'desc': _desc(b), 'cliente_id': b['cliente_id'],
-                                 'auto': _auto(b), 'app': _no_app(b)} for b in por_dia[d]]})
+                      'n': len(por_dia[d]), 'itens': itens_d})
 
     # ── Em aberto ──────────────────────────────────────────────────
     abe = q(f"""SELECT t.id, t.cliente_id, t.contraparte_doc, t.contraparte_nome, t.descricao, t.competencia,
                        t.vencimento, t.valor - t.valor_baixado AS v, t.valor_baixado, t.status, t.origem,
-                       t.programacao_id, p.variavel AS prog_variavel, c.numero_cliente, c.celular
+                       t.programacao_id, p.variavel AS prog_variavel, c.numero_cliente, c.celular,
+                       cat.nome AS categoria_nome
                   FROM fin_titulos t LEFT JOIN clientes c ON c.id = t.cliente_id
                   LEFT JOIN fin_programacoes p ON p.id = t.programacao_id
+                  LEFT JOIN fin_categorias cat ON cat.id = t.categoria_id
                  WHERE t.tipo = 'R' AND t.status IN ('aberto', 'parcial'){ec}
                  ORDER BY t.vencimento, t.id""", tuple(ep), fetch=True) or []
+    abe_grupos = _grupos_dos_clientes([t['cliente_id'] for t in abe])
+    abe_bols = _boletos_dos_titulos([t['id'] for t in abe])
 
     def item(t):
         tag, cls = _status(t['vencimento'], hoje)
-        return {'id': t['id'], 'num': t['numero_cliente'] or '—', 'nome': _nome(t['contraparte_nome']),
+        mk = _marcas(t, abe_grupos, abe_bols)
+        cat.add(mk)
+        return {'id': t['id'], **mk, 'num': t['numero_cliente'] or '—', 'nome': _nome(t['contraparte_nome']),
                 'nome_full': t['contraparte_nome'] or '', 'doc': _digitos(t['contraparte_doc']),
                 'valor': brl(t['v']), 'saldo': '%.2f' % float(t['v']), 'desc': _desc(t),
                 'descricao': t['descricao'] or '', 'tag': tag, 'cls': cls,
@@ -187,6 +274,10 @@ def montar(empresa_ids=None, mes=None):
                     'regua': [('v' if c in ab else ('p' if c in pagos.get(k, ()) else ''),
                                '%s/%d' % (MES[c[1]], c[0])) for c in comps],
                     'titulos': [item(t) for t in venc],
+                    'grupos': abe_grupos.get(ts[0]['cliente_id'], []),
+                    'servs': sorted({_servico(t) for t in venc}),
+                    'comps': sorted({_comp_chave(t['competencia']) for t in venc}),
+                    'bols': sorted({abe_bols.get(t['id'], 'sem') for t in venc}),
                     'futuros': len(ts) - len(venc)})
     ina.sort(key=lambda x: -x['v'])
 
@@ -235,6 +326,8 @@ def montar(empresa_ids=None, mes=None):
 
     # Perdidos: cancelados com motivo (não vão pagar), guardados para o registro
     perd = perdidos(ec, ep, hoje)
+    for x in perd:
+        cat.add(x)
 
     # Pagamentos da Efí que entraram e não acharam dono (valor igual ao de outros clientes)
     esp = q("""SELECT COUNT(*) n, COALESCE(SUM(l.valor), 0) v FROM extrato_lancamentos l
@@ -255,6 +348,7 @@ def montar(empresa_ids=None, mes=None):
         perd=perd, perd_tot=brl(sum(x['v'] for x in perd)), perd_n=len(perd),
         ina_tit=sum(x['qtd'] for x in ina),
         regua_ini=_comp(date(*comps[0], 1)), regua_fim=_comp(date(*comps[-1], 1)),
+        filtros=cat.saida(),
         esp_n=esp['n'], esp_tot=brl(esp['v']), esp_desde=CORTE_EFI)
 
 
@@ -271,14 +365,18 @@ def perdidos(ec='', ep=(), hoje=None):
         return []
     rows = q(f"""SELECT t.id, t.cliente_id, t.contraparte_nome, t.contraparte_doc, t.descricao, t.competencia,
                         t.vencimento, t.valor - t.valor_baixado AS v, t.perdido_em, t.perdido_motivo,
-                        c.numero_cliente, u.nome AS por
+                        c.numero_cliente, u.nome AS por, cat.nome AS categoria_nome
                    FROM fin_titulos t LEFT JOIN clientes c ON c.id = t.cliente_id
                    LEFT JOIN usuarios u ON u.id = t.perdido_por
+                   LEFT JOIN fin_categorias cat ON cat.id = t.categoria_id
                   WHERE t.tipo = 'R' AND t.status = 'cancelado' AND t.perdido_em IS NOT NULL{ec}
                   ORDER BY t.perdido_em DESC, t.vencimento""", tuple(ep), fetch=True) or []
     out = []
+    grupos = _grupos_dos_clientes([t['cliente_id'] for t in rows])
+    bols = _boletos_dos_titulos([t['id'] for t in rows])
     for t in rows:
-        out.append({'id': t['id'], 'num': t['numero_cliente'] or '—', 'nome': _nome(t['contraparte_nome']),
+        out.append({'id': t['id'], **_marcas(t, grupos, bols),
+                    'num': t['numero_cliente'] or '—', 'nome': _nome(t['contraparte_nome']),
                     'nome_full': t['contraparte_nome'] or '', 'doc': _digitos(t['contraparte_doc']),
                     'cliente_id': t['cliente_id'], 'v': float(t['v']), 'valor': brl(t['v']), 'desc': _desc(t),
                     'venc': t['vencimento'].strftime('%d/%m/%Y'), 'motivo': t['perdido_motivo'] or '',

@@ -3295,3 +3295,4 @@ from routes import financeiro_honorarios  # noqa: E402,F401  (contratos de honor
 from routes import financeiro_lancamentos  # noqa: E402,F401  (lançamentos avulsos, aprovação e comissões, 06/11/2026)
 from routes import financeiro_lote  # noqa: E402,F401  (lote mensal de honorários, 06/11/2026)
 from routes import financeiro_contratos  # noqa: E402,F401  (contrato de prestação assinado pelo app, 06/11/2026)
+from routes import financeiro_titulo_cobranca  # noqa: E402,F401  (gaveta da cobrança na tela Títulos, 15/11/2026)
