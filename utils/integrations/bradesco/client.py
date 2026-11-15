@@ -275,12 +275,14 @@ class Bradesco:
         """Boletos pagos entre ``de`` e ``ate`` (data do pagamento; até 60 dias; D-1). Lista de dicts."""
         out, pagina = [], 0
         for _ in range(40):                                  # 50 por página; trava contra laço
-            j = self._post(P_LISTAR, {
-                'cpfCnpj': {'cpfCnpj': self.c.raiz, 'filial': self.c.filial, 'controle': self.c.controle},
-                'produto': int(_num(self.c.carteira) or 9), 'negociacao': self.c.negociacao11,
-                'dataMovimentoDe': 0, 'dataMovimentoAte': 0,
-                'dataPagamentoDe': _ddmmaaaa(de), 'dataPagamentoAte': _ddmmaaaa(ate),
-                'origemPagamento': 0, 'valorTituloDe': 0, 'valorTituloAte': 0, 'paginaAnterior': pagina})
+            try:
+                j = self._listar_pagina(de, ate, pagina)
+            except BradescoErro as exc:
+                # CBTT0021 "NÃO HÁ DADOS PARA ESTA PESQUISA" vem como HTTP 412, mas é lista vazia:
+                # a negociação foi aceita (conta errada dá CBTT0403 "USUARIO NAO AUTORIZADO") — 15/11/2026
+                if 'CBTT0021' in str((exc.corpo or {}).get('causa') if isinstance(exc.corpo, dict) else ''):
+                    break
+                raise
             out += j.get('titulos') or j.get('Titulos') or []
             mais = j.get('indMaisPagina') or j.get('IndicadorMaisPaginas') or j.get('indicadorMaisPaginas') or 'N'
             prox = int(j.get('pagina') or j.get('Pagina') or 0)
@@ -288,6 +290,14 @@ class Bradesco:
                 break
             pagina = prox
         return out
+
+    def _listar_pagina(self, de, ate, pagina):
+        return self._post(P_LISTAR, {
+            'cpfCnpj': {'cpfCnpj': self.c.raiz, 'filial': self.c.filial, 'controle': self.c.controle},
+            'produto': int(_num(self.c.carteira) or 9), 'negociacao': self.c.negociacao11,
+            'dataMovimentoDe': 0, 'dataMovimentoAte': 0,
+            'dataPagamentoDe': _ddmmaaaa(de), 'dataPagamentoAte': _ddmmaaaa(ate),
+            'origemPagamento': 0, 'valorTituloDe': 0, 'valorTituloAte': 0, 'paginaAnterior': pagina})
 
 
 # ---------------------------------------------------------------------------
@@ -335,4 +345,7 @@ def _msg(r, prefixo):
         if erros and isinstance(erros, list):
             e = erros[0]
             det = f"{det} {e.get('mensagem') or e.get('message') or e}".strip() if isinstance(e, dict) else f'{det} {e}'
+        causa = j.get('causa')
+        if causa and str(causa) not in str(det):          # "Falha ao atender a requisição" sozinho não diz nada
+            det = f'{det} {causa}'.strip()
     return f'{prefixo} (HTTP {r.status_code}): {str(det)[:300]}'.strip()
