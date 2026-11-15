@@ -110,6 +110,44 @@ def ultimos_envios(email, limite=15):
         return []
 
 
+def envios_anteriores(email, dep_id):
+    """O que saiu por esta caixa ANTES do registro email_envios existir (14/11/2026), tirado de onde ficou
+    guardado: a data de envio de cada boleto e o último teste da caixa. Só leitura."""
+    em = normal(email)
+    if not em:
+        return []
+    try:
+        ini = (execute_query('SELECT MIN(criado_em) AS m FROM email_envios WHERE remetente = %s', (em,),
+                             fetch=True, fetch_one=True) or {}).get('m')
+        corte = ini or '2999-01-01'
+        out = []
+        for b in execute_query(
+                """SELECT b.email_enviado_em AS criado_em, b.email_enviado_para AS para, b.pagador_nome, b.valor,
+                          b.vencimento, u.nome AS usuario
+                     FROM fin_boletos b JOIN fin_cobranca_contas c ON c.id = b.conta_cobranca_id
+                     LEFT JOIN usuarios u ON u.id = b.criado_por
+                    WHERE c.departamento_id = %s AND b.email_enviado_em IS NOT NULL AND b.email_enviado_em < %s
+                    ORDER BY b.email_enviado_em DESC LIMIT 30""", (dep_id, corte), fetch=True) or []:
+            venc = b['vencimento'].strftime('%d/%m') if b.get('vencimento') else ''
+            out.append({'criado_em': b['criado_em'], 'para': b['para'] or '—', 'servico': 'Boleto',
+                        'assunto': '%s · R$ %s%s' % ((b['pagador_nome'] or '').title(),
+                                                     ('{:,.2f}'.format(float(b['valor'] or 0))).replace(',', 'X').replace('.', ',').replace('X', '.'),
+                                                     (' · vence ' + venc) if venc else ''),
+                        'usuario': b.get('usuario'), 'ok': 1, 'erro': None, 'antigo': True})
+        c = execute_query('SELECT testado_em, teste_resultado FROM email_caixas WHERE email = %s', (em,),
+                          fetch=True, fetch_one=True) if pronta() else None
+        if c and c.get('testado_em') and (not ini or c['testado_em'] < ini):
+            r = (c.get('teste_resultado') or '')
+            para = r.rsplit(' para ', 1)[1].strip() if ' para ' in r else '—'
+            out.append({'criado_em': c['testado_em'], 'para': para, 'servico': 'Teste de e-mail',
+                        'assunto': 'Teste da caixa', 'usuario': None, 'ok': 0 if r.lower().startswith(('falh', 'erro')) else 1,
+                        'erro': r or None, 'antigo': True})
+        out.sort(key=lambda x: x['criado_em'], reverse=True)
+        return out
+    except Exception:
+        return []
+
+
 def departamento(dep_id):
     return execute_query('SELECT * FROM departamentos WHERE id = %s', (dep_id,), fetch=True, fetch_one=True)
 

@@ -2449,7 +2449,7 @@ def _dep_contexto(did, dep):
     ctx['ligacoes'] = [l for l in mapa if l.get('departamento_id') == did]
     if dep and dep.get('email'):
         ctx['caixa'] = EC.caixa(dep['email'])
-        ctx['envios'] = EC.ultimos_envios(dep['email'])
+        ctx['envios'] = (EC.ultimos_envios(dep['email']) + EC.envios_anteriores(dep['email'], did))[:30]
         ctx['eh_sistema'] = EC.normal(dep['email']) == EC.email_sistema()
         ctx['mesma_caixa'] = [d['nome'] for d in EC.mesmos_da_caixa(dep['email'], menos_id=did)]
     ctx['pessoas'] = execute_query("SELECT id, nome FROM usuarios WHERE departamento_id = %s AND situacao = 'ATIVO' "
