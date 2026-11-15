@@ -121,6 +121,57 @@ a.tx-c { text-decoration:none; color:inherit; }
 .tx-lin-val { font-weight:800; font-variant-numeric:tabular-nums; color:var(--tinta); white-space:nowrap; }
 .tx-lin button { border:0; background:var(--verde); color:#fff; border-radius:8px; height:30px; padding:0 12px; font:inherit; font-size:12px; font-weight:700; cursor:pointer; }
 
+/* Mais cor (15/11/2026) — Anderson: "queria que ficasse mais colorido... para ficar mais atraente",
+   no computador e no celular; modelo: o painel do Grupo NH ("cores assim conseguimos?"). Os quadros de
+   cima são cheios na cor com texto branco; cada cartão tem a faixa de cima na cor da situação (número e
+   nome em branco) e o corpo branco com o valor na cor. */
+.tx-a-rec  { --cor:#16a34a; --cor-e:#166534; }
+.tx-a-abe  { --cor:#2563eb; --cor-e:#1e40af; }
+.tx-a-atr  { --cor:#f97316; --cor-e:#c2410c; }
+.tx-a-ina  { --cor:#dc2626; --cor-e:#991b1b; }
+.tx-a-perd { --cor:#475569; --cor-e:#1e293b; }
+.tx-aba { background:linear-gradient(135deg, var(--cor) 0%, var(--cor-e) 100%); border:0; box-shadow:0 10px 24px rgba(15,23,42,.14); }
+.tx-aba::after { display:none; }
+.tx-aba .tx-aba-lbl, .tx-aba .tx-aba-val { color:#fff; }
+.tx-aba .tx-aba-sub { color:rgba(255,255,255,.82); }
+.tx-aba .tx-aba-ico, .tx-aba .tx-aba-n { background:rgba(255,255,255,.2); color:#fff; }
+.tx-aba.on { transform:translateY(-2px); box-shadow:0 0 0 3px #fff, 0 0 0 5px var(--cor), 0 16px 32px rgba(15,23,42,.22); }
+
+.tx-painel[data-p="rec"]  { --sec:#16a34a; --sec-e:#166534; --sec-f:#ecfdf3; --sec-b:#bbf7d0; }
+.tx-painel[data-p="abe"]  { --sec:#2563eb; --sec-e:#1e40af; --sec-f:#eff4ff; --sec-b:#bfdbfe; }
+.tx-painel[data-p="atr"]  { --sec:#f97316; --sec-e:#c2410c; --sec-f:#fff4ec; --sec-b:#fed7b5; }
+.tx-painel[data-p="ina"]  { --sec:#dc2626; --sec-e:#991b1b; --sec-f:#fef1f1; --sec-b:#fecaca; }
+.tx-painel[data-p="perd"] { --sec:#475569; --sec-e:#1e293b; --sec-f:#f1f5f9; --sec-b:#e2e8f0; }
+.tx-painel .tx-f.on { background:var(--sec); border-color:var(--sec); }
+.tx-painel .tx-f.on b { color:#fff; opacity:.85; }
+.tx-painel .tx-busca input:focus { outline:none; border-color:var(--sec); box-shadow:0 0 0 3px var(--sec-f); }
+.tx-painel .tx-data b { background:linear-gradient(135deg, var(--sec), var(--sec-e)); color:#fff; border-radius:99px; padding:3px 12px; font-size:15px; }
+.tx-painel .tx-dia span { background:linear-gradient(90deg, var(--sec-b), transparent); }
+.tx-painel .tx-dia small b { color:var(--sec-e); }
+
+.tx-ok   { --cor:#16a34a; --cor-e:#166534; --cor-f:#ecfdf3; --cor-b:#c9f0d7; }
+.tx-hoje { --cor:#2563eb; --cor-e:#1e40af; --cor-f:#eff4ff; --cor-b:#cfdefd; }
+.tx-fut  { --cor:#7c3aed; --cor-e:#5b21b6; --cor-f:#f5f3ff; --cor-b:#e2dafd; }
+.tx-venc { --cor:#f97316; --cor-e:#c2410c; --cor-f:#fff4ec; --cor-b:#fddcc0; }
+.tx-ina  { --cor:#dc2626; --cor-e:#991b1b; --cor-f:#fef2f2; --cor-b:#fbd5d5; }
+.tx-perd { --cor:#475569; --cor-e:#1e293b; --cor-f:#f5f7fa; --cor-b:#e2e8f0; }
+.tx-c { background:#fff; border-color:var(--cor-b); box-shadow:0 6px 16px rgba(15,23,42,.06); }
+.tx-c::before { display:none; }
+.tx-c:hover { border-color:var(--cor); box-shadow:0 12px 26px rgba(15,23,42,.12); }
+.tx-c-top { margin:-12px -14px 0 -16px; padding:9px 14px 9px 16px; background:linear-gradient(135deg, var(--cor) 0%, var(--cor-e) 100%); }
+.tx-c-nome { color:#fff; }
+.tx-c-num { background:rgba(255,255,255,.22); color:#fff; }
+.tx-c-val { color:var(--cor-e); }
+.tx-ina .tx-c-val { color:#b91c1c !important; }
+.tx-perd .tx-c-val { color:#475569; }
+.tx-c-st { background:var(--cor-f); border:1px solid var(--cor-b); color:var(--cor-e); border-radius:99px; padding:3px 9px; }
+.tx-c-acoes { background:transparent; top:5px; }
+.tx-c-acoes a[title^="Abrir a ficha"] { color:#2563eb; }
+.tx-c-acoes button[title^="Não vai pagar"] { color:#7c3aed; }
+.tx-c-acoes button[title^="Cancelar"], .tx-c-acoes button[title^="Excluir"] { color:#dc2626; }
+.tx-c-acoes button[title^="Voltar"] { color:#2563eb; }
+.tx-c-cob .tx-b1:not(.off) { background:#16a34a; }
+
 @media (hover:none) {
   .tx-c-acoes { position:static; opacity:1; padding:0; justify-content:flex-end; }
 }
@@ -137,8 +188,9 @@ a.tx-c { text-decoration:none; color:inherit; }
      para o rodapé do cartão e o nome aparece inteiro */
   .tx-grade, .tx-grade.tx-g-ina { grid-template-columns:1fr; gap:8px; }
   .tx-c { padding:12px 12px 12px 16px; }
+  .tx-c-top { margin:-12px -12px 0 -16px; padding:10px 12px 10px 16px; }
   .tx-c-nome { font-size:13.5px; }
-  .tx-c-acoes { order:9; border-top:1px solid var(--linha); padding-top:8px; }
+  .tx-c-acoes { order:9; border-top:1px solid var(--cor-b, var(--linha)); padding-top:8px; background:transparent; }
   .tx-nota { flex-wrap:wrap; } .tx-nota a { margin-left:0; }
   .tx-emp-menu { right:auto; left:0; }
 }
