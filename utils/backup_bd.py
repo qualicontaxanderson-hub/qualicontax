@@ -164,7 +164,7 @@ def ler_status() -> dict:
 
 
 def ler_restauracao() -> dict:
-    """Último teste de restauração (scripts/restaurar_copia_local.py, no PC, domingo 04:00). NUNCA levanta.
+    """Último teste de restauração (scripts/restaurar_copia_local.py, no PC, domingo 08:00). NUNCA levanta.
 
     Verde: montou tudo há até 8 dias. Amarelo: passou de 8 dias (o PC estava desligado no domingo e não
     ligou depois). Vermelho: a última tentativa falhou."""

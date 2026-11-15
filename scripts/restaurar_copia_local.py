@@ -2,7 +2,7 @@
 """Teste de restauração do backup: monta o banco inteiro no MySQL do PC (15/11/2026).
 
 Anderson: "não podemos fazer um sistema aqui no meu PC e de vez em quando pegar o backup e subir";
-"Domingo 04:00".
+"Domingo 04:00", depois "Domingo as 08:00 ... certeza que estara ligado".
 
 Conferir o arquivo (CRC + "Dump completed on", que o cron já faz) não prova que ele VOLTA. Este script
 pega o backup mais recente da nuvem (``qualicontax_nuvem_*.sql.gz`` na pasta do Dropbox), monta o banco
