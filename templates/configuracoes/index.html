@@ -241,6 +241,7 @@
     .bkp-aviso.amarelo { background:#fffbeb; border:1px solid #fde68a; color:#92400e; }
     .bkp-aviso.vermelho { background:#fef2f2; border:1px solid #fecaca; color:#991b1b; }
     .bkp-aviso.cinza { background:#f8fafc; border:1px solid #e2e8f0; color:#64748b; }
+    .bkp-rest { margin-top:14px; padding-top:12px; border-top:1px dashed #e2e8f0; }
     </style>
 
     <div class="bkp-card">
@@ -297,6 +298,31 @@
         </div>
         {% endif %}
         {% endif %}
+
+        {% set rs = backup.restauracao %}
+        <div class="bkp-rest">
+            <div class="bkp-head" style="margin-bottom:6px">
+                <div class="bkp-tit"><i class="fas fa-rotate-left" style="color:#0f766e"></i> Teste de restauração
+                    <span style="font-weight:600;color:#94a3b8;font-size:11px;">o backup montado de verdade no PC, todo domingo 04:00</span></div>
+                {% if rs.registrado %}
+                <span class="bkp-selo {{ rs.cor }}">{{ 'FALHOU' if rs.cor == 'vermelho' else ('PROVADO' if rs.cor == 'verde' else 'ATRASADO') }}</span>
+                {% else %}<span class="bkp-selo cinza">AINDA NÃO TESTADO</span>{% endif %}
+            </div>
+            {% if not rs.registrado %}
+            <div class="bkp-aviso cinza"><i class="fas fa-circle-info"></i> O primeiro teste ainda não terminou.</div>
+            {% else %}
+            <div class="bkp-linha">
+                {% if rs.ok %}Restaurado {{ rs.idade_fmt }} — {{ rs.quando }}: {{ rs.tabelas }} tabelas e {{ rs.linhas_fmt }} registros voltaram, em {{ (rs.duracao_s // 60) }} min.
+                {% else %}Última tentativa {{ rs.idade_fmt }} — {{ rs.quando }}.{% endif %}
+            </div>
+            <div class="bkp-foot">{{ rs.arquivo }}{% if rs.maquina %} · no PC {{ rs.maquina }}{% endif %}</div>
+            {% if not rs.ok %}
+            <div class="bkp-aviso vermelho"><i class="fas fa-circle-exclamation"></i> <b>O backup não voltou inteiro.</b> {{ rs.erro }}</div>
+            {% elif rs.cor == 'amarelo' %}
+            <div class="bkp-aviso amarelo"><i class="fas fa-triangle-exclamation"></i> <b>Passou de 8 dias sem teste.</b> O PC estava desligado no domingo; ao ligar, o teste roda sozinho.</div>
+            {% endif %}
+            {% endif %}
+        </div>
     </div>
     {% endif %}
 

@@ -44,8 +44,9 @@ def index():
         espaco = get_space()
         # Último backup do banco: leitura de app_config, sem tocar em Dropbox
         # nem no mysqldump — quem faz o backup é o serviço de Cron.
-        from utils.backup_bd import ler_status
+        from utils.backup_bd import ler_status, ler_restauracao
         backup = ler_status()
+        backup['restauracao'] = ler_restauracao()
     return render_template('configuracoes/index.html',
                            dropbox_espaco=espaco, dropbox_saude=saude,
                            backup=backup)

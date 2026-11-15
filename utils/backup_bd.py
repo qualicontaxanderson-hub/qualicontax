@@ -163,6 +163,28 @@ def ler_status() -> dict:
     return st
 
 
+def ler_restauracao() -> dict:
+    """Último teste de restauração (scripts/restaurar_copia_local.py, no PC, domingo 04:00). NUNCA levanta.
+
+    Verde: montou tudo há até 8 dias. Amarelo: passou de 8 dias (o PC estava desligado no domingo e não
+    ligou depois). Vermelho: a última tentativa falhou."""
+    try:
+        row = execute_query(
+            "SELECT valor, TIMESTAMPDIFF(SECOND, updated_at, NOW()) AS idade FROM app_config WHERE chave = %s",
+            ('backup_restauracao_status',), fetch=True, fetch_one=True)
+        st = json.loads(row['valor']) if row and row.get('valor') else None
+    except Exception:
+        return {'registrado': False}
+    if not st:
+        return {'registrado': False}
+    idade = int(row.get('idade') or 0)
+    st['registrado'] = True
+    st['idade_fmt'] = _idade_fmt(idade)
+    st['linhas_fmt'] = '{:,}'.format(int(st.get('linhas') or 0)).replace(',', '.')
+    st['cor'] = 'vermelho' if not st.get('ok') else ('amarelo' if idade > 8 * 86400 else 'verde')
+    return st
+
+
 # ---------------------------------------------------------------------------
 # As três etapas
 # ---------------------------------------------------------------------------
