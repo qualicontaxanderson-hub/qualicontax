@@ -1,90 +1,147 @@
-{# Gaveta "Cobrança" de um título a receber (15/11/2026) — abre ao clicar no cartão da tela Títulos.
-   Espera: t, saldo, saldo_txt, valor_txt, tag, cls, desc, servico, comp, grupos, doc, nome, boleto, boletos_n,
-   outros, outros_tot, BOLETO_ROTULO, SIT_BOLETO, volta, email_padrao, cel, msg, pode_baixar, pode_perd,
-   cancelavel, prog, hoje. O CSS (tg-*) mora em titulos_receber.html. #}
-<div class="tg {{ cls }}">
-  <header class="tg-cab">
-    <div class="tg-cab-l">
-      <span class="tg-num">{{ t.numero_cliente or '—' }}</span>
-      <div class="tg-quem">
-        <b>{{ nome }}</b>
-        <small>
+{# Janela "Cobrança" de um honorário a receber (15/11/2026) — abre ao clicar no cartão da tela Títulos.
+   Anderson: "uma tela bonita a qual mostre o que está envolvido naquele honorário, quais são as cobranças";
+   "baixar mediante depósito — nada de baixar aleatório — ou então excluir a cobrança"; "tudo numa tela só sem
+   precisar ficar rolando". Tudo cabe na tela: cabeçalho (cliente + régua de 12 meses + valor), faixa de dados,
+   e três colunas: linha do tempo | boleto | ações + outros em aberto. O CSS (tj-*) mora em titulos_receber.html.
+   Variáveis: ver routes/financeiro_titulo_cobranca.py. #}
+<div class="tj {{ cls }}">
+  <header class="tj-cab">
+    <div class="tj-cab-cli">
+      <span class="tj-avatar">{{ iniciais }}</span>
+      <div class="tj-quem">
+        <div class="tj-quem-l1"><span class="tj-num">{{ t.numero_cliente or '—' }}</span><b>{{ nome }}</b></div>
+        <div class="tj-quem-l2">
           {% if doc %}<code data-copiar data-copiar-rotulo="CPF/CNPJ" title="Clique para copiar">{{ doc | format_cnpj if doc|length == 14 else (doc | format_cpf if doc|length == 11 else doc) }}</code>{% endif %}
-          {% for g in grupos %}<span class="tg-grupo"><i class="fas fa-layer-group"></i> {{ g }}</span>{% endfor %}
-        </small>
+          {% for g in grupos %}<span class="tj-chip"><i class="fas fa-layer-group"></i> {{ g }}</span>{% endfor %}
+          {% if t.email %}<span><i class="fas fa-envelope"></i> {{ t.email }}</span>{% endif %}
+          {% if t.celular %}<span><i class="fas fa-mobile-screen"></i> {{ t.celular }}</span>{% endif %}
+          {% if t.cliente_id %}<a href="{{ url_for('clientes.detalhes', id=t.cliente_id) }}"><i class="fas fa-arrow-up-right-from-square"></i> cadastro</a>{% endif %}
+        </div>
+        <div class="tj-regua" title="Os últimos 12 meses deste cliente: verde pago, vermelho em aberto, cinza sem honorário">
+          {% for x in regua %}<i class="{{ x[0] }}" title="{{ x[1] }}: {{ 'em aberto' if x[0] == 'v' else ('pago' if x[0] == 'p' else 'sem honorário') }}"></i>{% endfor %}
+          <small>{{ regua[0][1] }} → {{ regua[-1][1] }}</small>
+        </div>
       </div>
     </div>
-    <span class="tg-tag">{{ tag }}</span>
+    <div class="tj-cab-val">
+      <span class="tj-tag">{{ tag }}</span>
+      <b>{{ saldo_txt if aberto else valor_txt }}</b>
+      <small>{{ 'em aberto' if t.status == 'aberto' else ('falta receber · valor cheio ' ~ valor_txt if t.status == 'parcial' else ('recebido' if t.status == 'liquidado' else ('perdido' if t.perdido_em else 'cancelado'))) }}</small>
+    </div>
   </header>
 
-  <div class="tg-contato">
-    {% if t.celular %}<span><i class="fas fa-mobile-screen"></i> {{ t.celular }}</span>{% endif %}
-    {% if t.email %}<span><i class="fas fa-envelope"></i> {{ t.email }}</span>{% endif %}
-    {% if t.cliente_id %}<a href="{{ url_for('clientes.detalhes', id=t.cliente_id) }}"><i class="fas fa-building"></i> Abrir cadastro</a>{% endif %}
+  <div class="tj-kpis">
+    <div><i class="fas fa-receipt"></i><div><dt>Honorário</dt><dd title="{{ t.descricao }}">{{ desc }}</dd><small>{{ servico }}</small></div></div>
+    <div><i class="fas fa-calendar-day"></i><div><dt>Vencimento</dt><dd>{{ t.vencimento.strftime('%d/%m/%Y') if t.vencimento else '—' }}</dd><small>{{ tag }}</small></div></div>
+    <div><i class="fas fa-calendar"></i><div><dt>Competência</dt><dd>{{ comp or '—' }}</dd><small>{{ {'aberto': 'em aberto', 'parcial': 'recebido em parte', 'liquidado': 'recebido', 'cancelado': ('perdido' if t.perdido_em else 'cancelado')}.get(t.status, t.status) }}</small></div></div>
+    <div><i class="fas fa-barcode"></i><div><dt>Boleto</dt><dd>{% if boleto %}<span class="nf-pill cb-sit-{{ boleto.situacao }}">{{ SIT_BOLETO.get(boleto.situacao, boleto.situacao) | upper }}</span>{% else %}sem boleto{% endif %}</dd><small>{% if boleto %}nº {{ boleto.charge_id or boleto.id }}{% if boletos|length > 1 %} · {{ boletos|length }} emitidos{% endif %}{% elif nota %}só nota fiscal{% else %}paga por Pix ou transferência{% endif %}</small></div></div>
+    <div><i class="fas fa-user-clock"></i><div><dt>Cliente deve</dt><dd>{{ cli_tot if cli_n else 'nada' }}</dd><small>{{ cli_n }} honorário{{ 's' if cli_n != 1 }} em aberto</small></div></div>
   </div>
 
-  <section class="tg-sec">
-    <h4><i class="fas fa-receipt"></i> Título</h4>
-    <div class="tg-tit">
-      <div>
-        <div class="tg-val">{{ saldo_txt if t.status in ('aberto', 'parcial') else valor_txt }}</div>
-        <div class="tg-desc">{{ t.descricao or desc }}</div>
-        {% if t.status == 'parcial' %}<div class="tg-mini">valor {{ valor_txt }} · já recebido {{ (t.valor_baixado | float) | format_currency }}</div>{% endif %}
-      </div>
-      <dl class="tg-kv">
-        <div><dt>Vencimento</dt><dd>{{ t.vencimento.strftime('%d/%m/%Y') if t.vencimento else '—' }}</dd></div>
-        <div><dt>Competência</dt><dd>{{ comp or '—' }}</dd></div>
-        <div><dt>Serviço</dt><dd>{{ servico }}</dd></div>
-        <div><dt>Situação</dt><dd>{{ {'aberto': 'Em aberto', 'parcial': 'Recebido em parte', 'liquidado': 'Recebido', 'cancelado': ('Perdido' if t.perdido_em else 'Cancelado')}.get(t.status, t.status) }}</dd></div>
-      </dl>
-    </div>
-    {% if t.perdido_em %}<div class="tg-aviso"><i class="fas fa-quote-left"></i> {{ t.perdido_motivo }} <small>· marcado em {{ t.perdido_em.strftime('%d/%m/%Y') }}</small></div>{% endif %}
-    <div class="tg-acoes">
-      {% if t.status in ('aberto', 'parcial') and pode_rota('financeiro.titulo_baixar') %}
-      <button type="button" class="tg-b tg-b-ok" data-id="{{ t.id }}" data-desc="{{ t.descricao }}" data-contra="{{ t.contraparte_nome }}"
-              data-saldo="{{ '%.2f' % saldo }}" data-venc="{{ t.vencimento.isoformat() if t.vencimento }}" data-prog="{{ prog }}"
-              onclick="txGavFechar(); ftAbrirBaixa(this)"><i class="fas fa-check"></i> Dar baixa</button>
-      {% endif %}
-      {% if cel and t.status in ('aberto', 'parcial') %}<a class="tg-b tg-b-wa" href="https://wa.me/{{ cel }}?text={{ msg | urlencode }}" target="_blank" rel="noopener"><i class="fab fa-whatsapp"></i> Cobrar no WhatsApp</a>{% endif %}
-      {% if t.status in ('aberto', 'parcial') and pode_rota('financeiro.vincular_achar') %}<a class="tg-b" href="{{ url_for('financeiro.vincular_achar', titulo_id=t.id) }}"><i class="fas fa-link"></i> Achar no extrato</a>{% endif %}
-      {% if cancelavel and pode_rota('financeiro.titulo_perdido') %}<button type="button" class="tg-b tg-b-roxo" onclick="txPerdido({{ t.id }}, {{ t.contraparte_nome | tojson | forceescape }})"><i class="fas fa-user-slash"></i> Perdido</button>{% endif %}
-      {% if cancelavel and pode_rota('financeiro.titulo_cancelar') %}<button type="button" class="tg-b tg-b-verm" onclick="txAcao('cancelar', {{ t.id }})"><i class="fas fa-ban"></i> Cancelar</button>{% endif %}
-      {% if t.perdido_em and pode_rota('financeiro.titulo_perdido_voltar') %}<button type="button" class="tg-b" onclick="txVoltar({{ t.id }})"><i class="fas fa-rotate-left"></i> Voltar para em aberto</button>{% endif %}
-    </div>
-  </section>
+  <div class="tj-corpo">
+    {# ── coluna 1: linha do tempo ── #}
+    <section class="tj-sec">
+      <h4><i class="fas fa-timeline"></i> Linha do tempo da cobrança</h4>
+      <ol class="tj-tl">
+        {% for e in eventos %}
+        <li class="tj-{{ e.cor }}{{ ' fut' if e.fut }}"><i class="fas {{ e.ico }}"></i><div><b>{{ e.txt }}</b>{% if e.sub %}<small>{{ e.sub }}</small>{% endif %}</div><time>{{ e.q }}</time></li>
+        {% endfor %}
+      </ol>
+      {% if t.perdido_em %}<div class="tj-aviso"><i class="fas fa-quote-left"></i> {{ t.perdido_motivo }}</div>{% endif %}
+      {% if nota %}<a class="tj-linha" href="{{ url_for('financeiro.nota_detalhe', nota_id=nota.id) }}"><i class="fas fa-file-lines"></i><span><b>Nota fiscal {{ ('nº ' ~ nota.numero_nfse) if nota.numero_nfse else ('DPS ' ~ nota.numero_dps) }}</b><small>{{ nota.situacao }}{% if nota.dh_emissao %} · {{ nota.dh_emissao.strftime('%d/%m/%Y') }}{% endif %}</small></span><i class="fas fa-chevron-right"></i></a>{% endif %}
+    </section>
 
-  <section class="tg-sec">
-    <h4><i class="fas fa-barcode"></i> Boleto{% if boletos_n > 1 %} <small>· {{ boletos_n }} emitidos, o mais novo aqui</small>{% endif %}</h4>
-    {% if boleto %}
-      <div class="tg-boleto">{% include 'financeiro/_boleto_card.html' %}</div>
-    {% else %}
-      <div class="tg-vazio">
-        <i class="fas fa-barcode"></i>
-        <div><b>Este título não tem boleto.</b>
-          {% if t.status in ('aberto', 'parcial') %}<span>Quando o cliente paga por Pix ou transferência, a baixa entra pelo extrato (ou pelo botão Dar baixa).</span>{% endif %}</div>
-        {% if t.status in ('aberto', 'parcial') and pode_rota('financeiro.nota_nova') %}<a class="tg-b" href="{{ url_for('financeiro.nota_nova', emp=t.empresa_id) }}"><i class="fas fa-plus"></i> Nova cobrança</a>{% endif %}
+    {# ── coluna 2: o boleto ── #}
+    <section class="tj-sec">
+      {% if boleto %}
+      {% set vivo = boleto.situacao in ('waiting', 'unpaid', 'new') %}
+      <h4><i class="fas fa-barcode"></i> Boleto nº {{ boleto.charge_id or boleto.id }} <span class="nf-pill cb-sit-{{ boleto.situacao }}">{{ SIT_BOLETO.get(boleto.situacao, boleto.situacao) | upper }}</span>{% if boleto.ambiente != 'producao' %} <span class="nf-pill nf-pill-teste">TESTE</span>{% endif %}</h4>
+      <div class="tj-bol-top">
+        <div><dt>Valor</dt><dd>{{ boleto.valor | float | format_currency }}</dd></div>
+        <div><dt>Vencimento</dt><dd>{{ boleto.vencimento.strftime('%d/%m/%Y') }}</dd></div>
+        {% if boleto.pago_em %}<div><dt>Pago em</dt><dd>{{ boleto.pago_em.strftime('%d/%m/%Y') }}</dd></div>{% else %}<div><dt>Conta</dt><dd>{{ boleto.conta_apelido | nome_proprio }}</dd></div>{% endif %}
       </div>
-      {% set pagtos = pagamentos_do_titulo(t.id) %}
+      {% if boleto.linha_digitavel %}
+      <div class="tj-copia"><dt>Linha digitável</dt><code>{{ boleto.linha_digitavel }}</code><button type="button" class="tj-cp" data-copiar data-copiar-rotulo="Linha digitável" data-copiar-texto="{{ boleto.linha_digitavel }}" title="Copiar"><i class="fas fa-copy"></i></button></div>
+      {% endif %}
+      {% if boleto.pix_copia_cola %}
+      <div class="tj-copia"><dt>Pix copia e cola</dt><code>{{ boleto.pix_copia_cola }}</code><button type="button" class="tj-cp" data-copiar data-copiar-rotulo="Pix" data-copiar-texto="{{ boleto.pix_copia_cola }}" title="Copiar"><i class="fas fa-copy"></i></button></div>
+      {% endif %}
+      {% if boleto.erro %}<div class="tj-aviso tj-aviso-erro"><i class="fas fa-triangle-exclamation"></i> {{ boleto.erro }}</div>{% endif %}
+      <div class="tj-bol-acoes">
+        {% if boleto.pdf_url %}
+        <a class="tj-ib" href="{{ url_for('financeiro.boleto_pdf', boleto_id=boleto.id) }}" target="_blank" rel="noopener"><i class="fas fa-eye"></i>Ver</a>
+        <a class="tj-ib" href="{{ url_for('financeiro.boleto_pdf', boleto_id=boleto.id, baixar=1) }}"><i class="fas fa-download"></i>PDF</a>
+        {% endif %}
+        {% if boleto.link %}<a class="tj-ib" href="{{ boleto.link }}" target="_blank" rel="noopener"><i class="fas fa-arrow-up-right-from-square"></i>Página</a>{% endif %}
+        {% if vivo and pode_rota('financeiro.boleto_sincronizar') %}<form method="POST" action="{{ url_for('financeiro.boleto_sincronizar', boleto_id=boleto.id) }}"><input type="hidden" name="volta" value="{{ volta }}"><button class="tj-ib"><i class="fas fa-rotate"></i>Conferir</button></form>{% endif %}
+        {% if vivo and pode_rota('financeiro.boleto_cancelar') %}<form method="POST" action="{{ url_for('financeiro.boleto_cancelar', boleto_id=boleto.id) }}" onsubmit="return confirm('Cancelar este boleto na Efí?');"><input type="hidden" name="volta" value="{{ volta }}"><button class="tj-ib tj-ib-verm"><i class="fas fa-ban"></i>Cancelar</button></form>{% endif %}
+      </div>
+      {% if boleto.situacao in ('waiting', 'unpaid') and pode_rota('financeiro.boleto_vencimento') %}
+      <form method="POST" action="{{ url_for('financeiro.boleto_vencimento', boleto_id=boleto.id) }}" class="tj-form">
+        <input type="hidden" name="volta" value="{{ volta }}">
+        <label for="tjv_{{ boleto.id }}">Mudar o vencimento</label>
+        <div><input type="date" id="tjv_{{ boleto.id }}" name="vencimento" required min="{{ hoje_iso }}"><button type="submit"><i class="fas fa-calendar-check"></i> Mudar na Efí</button></div>
+      </form>
+      {% elif boleto.situacao == 'expired' and aberto and pode_rota('financeiro.boleto_reemitir') %}
+      <form method="POST" action="{{ url_for('financeiro.boleto_reemitir', boleto_id=boleto.id) }}" class="tj-form" onsubmit="return confirm('Emitir um boleto NOVO para este honorário?');">
+        <input type="hidden" name="volta" value="{{ volta }}">
+        <label for="tjr_{{ boleto.id }}">Expirado: emitir um boleto novo com vencimento em</label>
+        <div><input type="date" id="tjr_{{ boleto.id }}" name="vencimento" required min="{{ hoje_iso }}"><button type="submit" class="tj-prim"><i class="fas fa-redo"></i> Reemitir</button></div>
+      </form>
+      {% endif %}
+      {% if boleto.situacao not in ('canceled', 'erro') and pode_rota('financeiro.boleto_enviar_email') %}
+      <form method="POST" action="{{ url_for('financeiro.boleto_enviar_email', boleto_id=boleto.id) }}" class="tj-form"{% if boleto.email_enviado_em %} onsubmit="return confirm('Já foi enviado em {{ boleto.email_enviado_em.strftime('%d/%m/%Y %H:%M') }}. Enviar de novo?');"{% endif %}>
+        <input type="hidden" name="volta" value="{{ volta }}">
+        <label for="tje_{{ boleto.id }}">{{ 'Reenviar' if boleto.email_enviado_em else 'Enviar' }} por e-mail {% if boleto.email_enviado_em %}<small>· enviado {{ boleto.email_enviado_em.strftime('%d/%m %H:%M') }}{% if boleto.abriu_boleto_em %} · aberto {{ boleto.abriu_boleto_em.strftime('%d/%m %H:%M') }}{% endif %}</small>{% endif %}</label>
+        <div><input type="text" id="tje_{{ boleto.id }}" name="para" value="{{ boleto.pagador_email or email_padrao }}" placeholder="e-mail do cliente"><button type="submit"><i class="fas fa-paper-plane"></i> Enviar</button></div>
+      </form>
+      {% endif %}
+      {% if boleto.itens_json %}<div class="tj-itens">{% for i in boleto.itens_json %}<span>{{ i.nome }}<b>{{ i.valor | float | format_currency }}</b></span>{% endfor %}</div>{% endif %}
+      {% else %}
+      <h4><i class="fas fa-barcode"></i> Boleto</h4>
+      <div class="tj-vazio"><i class="fas fa-barcode"></i><b>Este honorário não tem boleto.</b><span>{% if aberto %}O cliente paga por Pix ou transferência; a baixa entra quando o depósito aparece no extrato.{% else %}Foi pago sem boleto.{% endif %}</span>
+        {% if aberto and pode_rota('financeiro.nota_nova') %}<a class="tj-b" href="{{ url_for('financeiro.nota_nova', emp=t.empresa_id) }}"><i class="fas fa-plus"></i> Nova cobrança</a>{% endif %}</div>
+      {% endif %}
       {% if pagtos %}
-      <div class="tg-pag"><span class="tg-rot">Como foi pago</span>
-        {% for p in pagtos %}<div><b>{{ p.valor | float | format_currency }}</b> em {{ p.data_baixa.strftime('%d/%m/%Y') }} · {{ p.onde }}{% if p.quem %} · por {{ p.quem }}{% endif %}</div>{% endfor %}
+      <div class="tj-pag"><dt>Como foi pago</dt>
+        {% for p in pagtos %}<div><b>{{ p.valor | float | format_currency }}</b><span>{{ p.data_baixa.strftime('%d/%m/%Y') }} · {{ p.onde }}{% if p.quem %} · {{ p.quem }}{% endif %}</span></div>{% endfor %}
       </div>
       {% endif %}
-    {% endif %}
-  </section>
+    </section>
 
-  {% if outros %}
-  <section class="tg-sec">
-    <h4><i class="fas fa-list"></i> Outros títulos em aberto deste cliente <small>· {{ outros | length }} · {{ outros_tot }}</small></h4>
-    <div class="tg-outros">
-      {% for o in outros %}
-      <button type="button" class="tg-o {{ o.cls }}" onclick="txAbrirCob({{ o.id }})" title="Ver a cobrança deste título">
-        <span class="tg-o-desc"><b>{{ o.desc }}</b><small>{{ o.tag }} · {{ BOLETO_ROTULO[o.bol] | lower }}</small></span>
-        <span class="tg-o-val">{{ o.valor }}</span>
-        <i class="fas fa-chevron-right"></i>
-      </button>
-      {% endfor %}
+    {# ── coluna 3: ações e os outros em aberto ── #}
+    <div class="tj-col3">
+      {% if aberto %}
+      <section class="tj-sec tj-sec-acoes">
+        <h4><i class="fas fa-bolt"></i> O que fazer</h4>
+        {% if pode_rota('financeiro.vincular_achar') %}<a class="tj-b tj-b-prim" href="{{ url_for('financeiro.vincular_achar', titulo_id=t.id) }}"><i class="fas fa-building-columns"></i><span>Baixar com o depósito<small>procura o crédito no extrato do banco</small></span></a>{% endif %}
+        {% if cel %}<a class="tj-b tj-b-wa" href="https://wa.me/{{ cel }}?text={{ msg | urlencode }}" target="_blank" rel="noopener"><i class="fab fa-whatsapp"></i><span>Cobrar no WhatsApp<small>{{ t.celular }}</small></span></a>{% endif %}
+        <div class="tj-b-par">
+          {% if cancelavel and pode_rota('financeiro.titulo_perdido') %}<button type="button" class="tj-b tj-b-roxo" onclick="txPerdido({{ t.id }}, {{ t.contraparte_nome | tojson | forceescape }})"><i class="fas fa-user-slash"></i><span>Perdido</span></button>{% endif %}
+          {% if cancelavel and pode_rota('financeiro.titulo_cancelar') %}<button type="button" class="tj-b tj-b-verm" onclick="txAcao('cancelar', {{ t.id }})"><i class="fas fa-ban"></i><span>Excluir</span></button>{% endif %}
+        </div>
+        <p class="tj-regra"><i class="fas fa-shield-halved"></i> A baixa só sai amarrada a um depósito já lido do extrato do banco, ou ao boleto pago. Não existe baixa solta.</p>
+      </section>
+      {% elif t.perdido_em and pode_rota('financeiro.titulo_perdido_voltar') %}
+      <section class="tj-sec tj-sec-acoes"><h4><i class="fas fa-bolt"></i> O que fazer</h4>
+        <button type="button" class="tj-b" onclick="txVoltar({{ t.id }})"><i class="fas fa-rotate-left"></i><span>Voltar para em aberto</span></button></section>
+      {% endif %}
+
+      <section class="tj-sec tj-sec-outros">
+        <h4><i class="fas fa-list"></i> Outros em aberto <small>{% if outros %}· {{ outros|length }} · {{ outros_tot }}{% endif %}</small></h4>
+        {% if outros %}
+        <div class="tj-outros">
+          {% for o in outros %}
+          <button type="button" class="tj-o {{ o.cls }}" onclick="txAbrirCob({{ o.id }})" title="Ver a cobrança deste honorário">
+            <span><b>{{ o.desc }}</b><small>{{ o.tag }} · {{ BOLETO_ROTULO[o.bol] | lower }}</small></span><em>{{ o.valor }}</em><i class="fas fa-chevron-right"></i>
+          </button>
+          {% endfor %}
+        </div>
+        {% else %}
+        <div class="tj-ok"><i class="fas fa-circle-check"></i> Nada mais em aberto deste cliente.</div>
+        {% endif %}
+      </section>
     </div>
-  </section>
-  {% endif %}
+  </div>
 </div>
