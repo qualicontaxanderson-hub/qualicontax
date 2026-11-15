@@ -846,6 +846,9 @@ body.ex-selecionando .ex-barra-lote { display:flex; }
     {% endif %}
 
     {% if lancamentos %}
+    {# Vincular pagamento (14/11/2026): crédito ainda sem título ganha o botão. Uma consulta para a lista toda. #}
+    {% set pode_vincular = pode_rota('financeiro.vincular_pagamento') %}
+    {% set com_baixa = linhas_com_baixa(lancamentos) if pode_vincular else [] %}
     <div class="ex-lista">
         {# A data aparece UMA vez, no alto do dia. Os dias vem prontos da
            rota — comparar com a linha anterior aqui e o que faz cabecalho
@@ -987,6 +990,12 @@ body.ex-selecionando .ex-barra-lote { display:flex; }
                     <i class="fas fa-tag"></i>
                     {{ 'Trocar' if l.categoria_id else 'Classificar' }}
                 </button>
+                {% endif %}
+                {% if pode_vincular and l.valor > 0 and l.id not in com_baixa and l.par_estado not in ('casado', 'suspeito', 'aprovado') %}
+                <a class="ex-btn-tag" href="{{ url_for('financeiro.vincular_pagamento', lanc_id=l.id) }}"
+                   title="Pagamento de cliente: dar baixa no(s) título(s), tratar a diferença e tirar o boleto do banco">
+                    <i class="fas fa-link"></i> Vincular a título
+                </a>
                 {% endif %}
                 {% if l.conferir and l.memorizacao_id %}
                 <a class="ex-btn-tag" title="O chute da regra estava errado — mude o critério dela"

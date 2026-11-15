@@ -1,0 +1,265 @@
+{% extends "base.html" %}
+
+{% block title %}Vincular pagamento - Financeiro - Qualicontax{% endblock %}
+
+{% block content %}
+{% include 'financeiro/_nav_financeiro.html' %}
+{# Vincular pagamento de outra conta aos títulos do cliente (14/11/2026) — routes/financeiro_vincular.py #}
+<style>
+.vp-lista { display:flex; flex-direction:column; gap:6px; max-height:520px; overflow-y:auto; }
+.vp-cli { font-weight:600; font-size:13px; margin:10px 0 2px; color:#334155; }
+.vp-tit { display:flex; gap:10px; align-items:center; padding:8px 10px; border:1px solid #e2e8f0; border-radius:8px;
+          cursor:pointer; font-size:13px; background:#fff; }
+.vp-tit:hover { border-color:#94a3b8; }
+.vp-tit input { width:18px; height:18px; flex:0 0 auto; }
+.vp-tit .vp-meio { flex:1 1 auto; min-width:0; }
+.vp-tit .vp-meio small { display:block; color:#64748b; }
+.vp-tit .vp-val { font-weight:600; white-space:nowrap; }
+.vp-tit.marcado { border-color:#16a34a; background:#f0fdf4; }
+.vp-selo { display:inline-block; font-size:11px; padding:1px 6px; border-radius:10px; background:#eff6ff; color:#1d4ed8; margin-left:4px; }
+.vp-resumo { display:grid; grid-template-columns:repeat(auto-fit, minmax(140px, 1fr)); gap:10px; }
+.vp-resumo div { background:#f8fafc; border-radius:8px; padding:10px; }
+.vp-resumo span { display:block; font-size:12px; color:#64748b; }
+.vp-resumo b { font-size:18px; }
+.vp-dif-menos { color:#b45309; } .vp-dif-mais { color:#1d4ed8; } .vp-dif-zero { color:#15803d; }
+.vp-opcao { display:block; border:1px solid #e2e8f0; border-radius:8px; padding:10px; margin-top:8px; font-size:13px; }
+.vp-opcao > label { font-weight:600; cursor:pointer; display:flex; gap:8px; align-items:center; }
+.vp-opcao .vp-extra { margin:8px 0 0 26px; display:none; gap:8px; flex-wrap:wrap; align-items:center; }
+.vp-opcao.ativa { border-color:#16a34a; }
+.vp-opcao.ativa .vp-extra { display:flex; }
+.vp-grade { display:grid; grid-template-columns:minmax(300px, 380px) minmax(0, 1fr); gap:16px; align-items:start; }
+.vp-grade > div { display:flex; flex-direction:column; gap:16px; min-width:0; }
+.vp-grade .nf-card { margin:0; }
+.vp-esq { position:sticky; top:12px; }
+@media (max-width: 900px) {
+  .vp-grade { grid-template-columns:minmax(0, 1fr); }
+  /* no celular: pagamento, aviso, lista de títulos e, por último, a conta com o botão (é a ordem de fazer) */
+  .vp-grade > div { display:contents; }
+  #vpContaCard { order:5; }
+}
+.vp-cand { display:flex; gap:10px; align-items:center; justify-content:space-between; flex-wrap:wrap; padding:8px 10px;
+           border:1px solid #e2e8f0; border-radius:8px; font-size:13px; }
+</style>
+
+{% if modo == 'achar' %}
+<div class="page-header">
+    <div>
+        <h1 class="page-title"><i class="fas fa-link" style="color: var(--primary-green);"></i> Achar o pagamento no extrato</h1>
+        <p class="page-subtitle">{{ titulo.contraparte_nome }} · {{ titulo.descricao }} · falta {{ brl(saldo) }}</p>
+    </div>
+    <div class="page-actions"><a class="btn btn-outline" href="javascript:history.back()"><i class="fas fa-arrow-left"></i> Voltar</a></div>
+</div>
+<div class="nf-cards">
+<section class="nf-card">
+    <header><b><i class="fas fa-university"></i></b><span>Créditos ainda sem dono</span><small>com o nome ou o valor parecidos com este título</small></header>
+    <div class="nf-card-body">
+        {% if candidatos %}
+        <div class="vp-lista">
+        {% for l in candidatos %}
+            <div class="vp-cand">
+                <div><b>{{ l.data.strftime('%d/%m/%Y') }}</b> · {{ l.banco or 'banco' }} · {{ l.descricao }}</div>
+                <div style="display:flex; gap:10px; align-items:center;">
+                    <b>{{ brl(l.valor) }}</b>
+                    <a class="btn btn-primary" href="{{ url_for('financeiro.vincular_pagamento', lanc_id=l.id, titulo=titulo.id) }}"><i class="fas fa-link"></i> É este</a>
+                </div>
+            </div>
+        {% endfor %}
+        </div>
+        {% else %}
+        <p class="nd-ajuda">Nenhum crédito sem dono com o nome ou o valor parecidos. Se o pagamento caiu numa conta cujo extrato ainda não foi importado, importe o extrato e volte aqui.</p>
+        {% endif %}
+    </div>
+</section>
+</div>
+
+{% else %}
+<div class="page-header">
+    <div>
+        <h1 class="page-title"><i class="fas fa-link" style="color: var(--primary-green);"></i> Vincular pagamento</h1>
+        <p class="page-subtitle">{{ empresa_nome }} · o crédito do extrato dá a baixa nos títulos e tira o boleto do banco</p>
+    </div>
+    <div class="page-actions"><a class="btn btn-outline" href="{{ url_for('financeiro.extrato', classif='todos', busca=lanc.descricao[:30]) }}"><i class="fas fa-arrow-left"></i> Extrato</a></div>
+</div>
+
+<form method="POST" id="vpForm" onsubmit="return vpConfirma();">
+<div class="vp-grade">
+<div class="vp-esq">
+<section class="nf-card">
+    <header><b><i class="fas fa-university"></i></b><span>O pagamento</span><small>linha do extrato</small></header>
+    <div class="nf-card-body">
+        <dl class="nd-kv">
+            <div><dt>Valor</dt><dd><strong class="nd-valor">{{ brl(lanc.valor) }}</strong></dd></div>
+            <div><dt>Data</dt><dd>{{ lanc.data.strftime('%d/%m/%Y') }}</dd></div>
+            <div><dt>Banco</dt><dd>{{ lanc.banco or '—' }} {% if lanc.conta %}<small class="nd-ajuda">· {{ lanc.conta }}</small>{% endif %}</dd></div>
+            <div class="nd-span"><dt>O banco escreveu</dt><dd>{{ lanc.descricao }}</dd></div>
+        </dl>
+    </div>
+</section>
+
+{% if feitas %}
+</div><div>
+<section class="nf-card">
+    <header><b><i class="fas fa-check"></i></b><span>Já vinculado</span><small>este crédito já deu baixa</small></header>
+    <div class="nf-card-body">
+        <div class="vp-lista">
+        {% for b in feitas %}
+            <div class="vp-tit marcado" style="cursor:default">
+                <div class="vp-meio">{{ b.contraparte_nome }}<small>{{ b.descricao }} · venc. {{ b.titulo_vencimento.strftime('%d/%m/%Y') if b.titulo_vencimento else '—' }}
+                    {% if b.desconto and b.desconto > 0 %} · desconto {{ brl(b.desconto) }}{% endif %}
+                    {% if b.juros and b.juros > 0 %} · juros {{ brl(b.juros) }}{% endif %}</small></div>
+                <div class="vp-val">{{ brl(b.valor) }}</div>
+            </div>
+        {% endfor %}
+        </div>
+        <div class="nd-acoes"><a class="btn btn-outline" href="{{ url_for('financeiro.titulos', tipo='R') }}"><i class="fas fa-receipt"></i> Títulos a receber</a></div>
+    </div>
+</section>
+</div>
+{% else %}
+{% if soltas %}
+<section class="nf-card" style="border:2px solid #f59e0b;">
+    <header><b><i class="fas fa-exclamation-triangle" style="color:#b45309"></i></b><span>Cuidado: pode já ter sido usado</span><small>baixa dada à mão, sem a linha do extrato, para este cliente perto desta data</small></header>
+    <div class="nf-card-body">
+        {% for b in soltas %}
+        <div style="font-size:13px; padding:4px 0;"><b>{{ brl(b.valor) }}</b> em {{ b.data_baixa.strftime('%d/%m/%Y') }} · {{ b.contraparte_nome }} · {{ b.descricao }}{% if b.referencia %} <small class="nd-ajuda">({{ b.referencia }})</small>{% endif %}</div>
+        {% endfor %}
+        <small class="nd-ajuda">Se essa baixa foi feita com ESTE dinheiro, vincular de novo conta o pagamento duas vezes. Vincule só o que sobrou para outro título.</small>
+    </div>
+</section>
+{% endif %}
+<section class="nf-card" id="vpContaCard">
+    <header><b><i class="fas fa-calculator"></i></b><span>A conta</span><small>pago × devido</small></header>
+    <div class="nf-card-body">
+        <div class="vp-resumo">
+            <div><span>Pagou</span><b>{{ brl(lanc.valor) }}</b></div>
+            <div><span>Títulos marcados</span><b id="vpSoma">R$ 0,00</b></div>
+            <div><span id="vpDifRot">Diferença</span><b id="vpDif">—</b></div>
+        </div>
+
+        <div id="vpMenos" style="display:none; margin-top:10px;">
+            <div class="nd-rotulo">Pagou menos. O que fazer com a diferença?</div>
+            <div class="vp-opcao"><label><input type="radio" name="diferenca" value="desconto"> a) Quitar com desconto</label>
+                <div class="vp-extra"><input type="text" name="motivo" class="form-control" maxlength="200" style="flex:1 1 260px"
+                     placeholder="motivo do desconto (obrigatório)"></div></div>
+            <div class="vp-opcao"><label><input type="radio" name="diferenca" value="cobrar"> b) Cobrar a diferença agora</label>
+                <div class="vp-extra"><span>vence em</span>
+                    <input type="date" name="vencimento" class="form-control" style="width:auto; min-width:150px" min="{{ hoje.isoformat() }}">
+                    <label style="font-weight:normal; display:flex; gap:6px; align-items:center;"><input type="checkbox" name="boleto" value="1" checked> emitir o boleto e mandar por e-mail</label></div></div>
+            <div class="vp-opcao"><label><input type="radio" name="diferenca" value="mes"> c) Cobrar junto com outro mês</label>
+                <div class="vp-extra"><span>no mês de</span>
+                    <select name="mes" class="form-control" style="width:auto">
+                        {% for v, n in meses[1:] %}<option value="{{ v }}">{{ n }}</option>{% endfor %}
+                    </select>
+                    <small class="nd-ajuda" style="flex-basis:100%">Vence no mesmo dia do vencimento deste título, no mês escolhido, e vai junto com o honorário daquele mês.</small></div></div>
+            <small class="nd-ajuda">Em b) e c) a diferença vira um título "Diferença de honorários — resíduo de …" e este fica quitado com o que foi pago.</small>
+        </div>
+
+        <div id="vpMais" style="display:none; margin-top:10px;">
+            <div class="nd-rotulo">Pagou mais.</div>
+            <div class="vp-opcao ativa"><label><input type="radio" name="diferenca" value="juros"> Registrar a sobra como juros (pagou atrasado)</label></div>
+            <small class="nd-ajuda">Se a sobra é de outro mês ou serviço, marque também esse título na lista acima.</small>
+        </div>
+
+        <div class="nd-acoes">
+            <button class="btn btn-primary" type="submit" id="vpOk" disabled><i class="fas fa-link"></i> Vincular e dar baixa</button>
+        </div>
+        <small class="nd-ajuda">O boleto que ainda podia ser pago é marcado como pago na Efí, para o cliente não pagar de novo. A tela do boleto passa a mostrar onde foi pago.</small>
+    </div>
+</section>
+</div>
+<div>
+<section class="nf-card">
+    <header><b><i class="fas fa-user"></i></b><span>De quem é</span><small>marque o(s) título(s) que este dinheiro paga — o mais antigo é quitado primeiro</small></header>
+    <div class="nf-card-body">
+        <input type="search" id="vpBusca" class="form-control" value="{{ sugestao }}" placeholder="nome, CNPJ ou descrição"
+               autocomplete="off" style="margin-bottom:8px;">
+        <div class="vp-lista" id="vpLista">
+        {% set ns = namespace(cli=None) %}
+        {% for t in titulos %}
+            {% if t.contraparte_nome != ns.cli %}{% set ns.cli = t.contraparte_nome %}
+            <div class="vp-cli" data-cli="{{ t.contraparte_nome }} {{ t.contraparte_doc or '' }}">{{ t.contraparte_nome }}</div>
+            {% endif %}
+            <label class="vp-tit" data-cli="{{ t.contraparte_nome }} {{ t.contraparte_doc or '' }} {{ t.descricao }}">
+                <input type="checkbox" name="titulo" value="{{ t.id }}" data-saldo="{{ t.saldo }}"
+                       data-venc="{{ t.vencimento.isoformat() if t.vencimento else '9999-12-31' }}-{{ '%09d' % t.id }}"
+                       {{ 'checked' if pre == t.id }}>
+                <div class="vp-meio">{{ t.descricao }}
+                    <small>venc. {{ t.vencimento.strftime('%d/%m/%Y') if t.vencimento else '—' }}
+                    {% if t.competencia and 'compet' not in (t.descricao or '').lower() %} · competência {{ t.competencia.strftime('%m/%Y') }}{% endif %}
+                    {% if t.status == 'parcial' %} · já recebeu parte{% endif %}
+                    {% if t.boletos_valendo %}<span class="vp-selo">boleto valendo</span>{% endif %}</small></div>
+                <div class="vp-val">{{ brl(t.saldo) }}</div>
+            </label>
+        {% endfor %}
+        </div>
+        <small class="nd-ajuda" id="vpNada" style="display:none">Nenhum título em aberto com esse nome. Apague a busca para ver todos.</small>
+    </div>
+</section>
+</div>
+{% endif %}
+</div>
+</form>
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+{% if modo == 'linha' and not feitas %}
+<script>
+(function () {
+  var PAGO = {{ lanc.valor | float }};
+  var busca = document.getElementById('vpBusca'), lista = document.getElementById('vpLista');
+  function norm(s) { return (s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase(); }
+  function brl(v) { return 'R$ ' + v.toFixed(2).replace('.', ',').replace(/\B(?=(\d{3})+(?!\d))/g, '.'); }
+  function filtra() {
+    var ps = norm(busca.value).split(/\s+/).filter(function (p) { return p.length >= 3 && ['ltda', 'eireli', 'servicos', 'pix', 'recebido'].indexOf(p) < 0; });
+    var algum = false;
+    lista.querySelectorAll('[data-cli]').forEach(function (el) {
+      var txt = norm(el.getAttribute('data-cli'));
+      var marcado = el.querySelector && el.querySelector('input:checked');
+      var ok = !ps.length || ps.every(function (p) { return txt.indexOf(p) >= 0; }) || !!marcado;
+      el.style.display = ok ? '' : 'none';
+      if (ok && el.classList.contains('vp-tit')) algum = true;
+    });
+    document.getElementById('vpNada').style.display = algum ? 'none' : '';
+  }
+  function conta() {
+    var marcados = Array.prototype.slice.call(lista.querySelectorAll('input[name=titulo]:checked'));
+    lista.querySelectorAll('.vp-tit').forEach(function (l) { l.classList.toggle('marcado', !!l.querySelector('input:checked')); });
+    var soma = marcados.reduce(function (s, i) { return s + parseFloat(i.getAttribute('data-saldo')); }, 0);
+    var dif = Math.round((soma - PAGO) * 100) / 100;
+    document.getElementById('vpSoma').textContent = brl(soma);
+    var d = document.getElementById('vpDif'), rot = document.getElementById('vpDifRot');
+    d.className = dif > 0 ? 'vp-dif-menos' : (dif < 0 ? 'vp-dif-mais' : 'vp-dif-zero');
+    rot.textContent = !marcados.length ? 'Diferença' : (dif > 0 ? 'Falta' : (dif < 0 ? 'Sobra' : 'Bate certinho'));
+    d.textContent = marcados.length ? brl(Math.abs(dif)) : '—';
+    document.getElementById('vpMenos').style.display = marcados.length && dif > 0 ? '' : 'none';
+    document.getElementById('vpMais').style.display = marcados.length && dif < 0 ? '' : 'none';
+    // no "Sobra", juros vem marcado: é a única saída
+    document.querySelector('input[value=juros]').checked = marcados.length && dif < 0;
+    if (!(dif > 0)) document.querySelectorAll('#vpMenos input[type=radio]').forEach(function (r) { r.checked = false; });
+    opcoes();
+    var ordem = marcados.map(function (i) { return [i.getAttribute('data-venc'), parseFloat(i.getAttribute('data-saldo'))]; }).sort();
+    var antes = ordem.slice(0, -1).reduce(function (s, x) { return s + x[1]; }, 0);
+    var cabe = marcados.length < 2 || PAGO > antes + 0.004;
+    document.getElementById('vpOk').disabled = !marcados.length || !cabe;
+    document.getElementById('vpOk').title = cabe ? '' : 'O valor pago não chega ao último título marcado: desmarque-o.';
+  }
+  function opcoes() {
+    document.querySelectorAll('.vp-opcao').forEach(function (o) {
+      var r = o.querySelector('input[type=radio]');
+      o.classList.toggle('ativa', !!(r && r.checked));
+    });
+  }
+  window.vpConfirma = function () {
+    var esc = document.querySelector('input[name=diferenca]:checked');
+    if (document.getElementById('vpMenos').style.display !== 'none' && !esc) { alert('Escolha o que fazer com a diferença.'); return false; }
+    return confirm('Vincular este pagamento e dar baixa nos títulos marcados?');
+  };
+  busca.addEventListener('input', filtra);
+  lista.addEventListener('change', conta);
+  document.querySelectorAll('input[name=diferenca]').forEach(function (r) { r.addEventListener('change', opcoes); });
+  filtra(); conta();
+})();
+</script>
+{% endif %}
+{% endblock %}

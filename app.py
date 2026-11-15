@@ -140,6 +140,8 @@ from routes.senha import senha_bp
 from routes.programa import programa as programa_bp
 # Manuais de instalação servidos como página (públicos, sem login).
 from routes.manuais import manuais as manuais_bp
+# Vincular pagamento de outra conta aos títulos (14/11/2026) — rotas no blueprint financeiro; antes do register.
+from routes import financeiro_vincular  # noqa: E402,F401
 
 app.register_blueprint(auth)
 app.register_blueprint(dashboard)

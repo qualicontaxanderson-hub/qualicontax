@@ -21,6 +21,22 @@
             {% if boleto.abriu_ip %}<div class="nd-span"><dt>Última abertura veio de</dt><dd><code class="nd-mono" data-copiar data-copiar-rotulo="IP" title="Clique para copiar">{{ boleto.abriu_ip }}</code>{% if boleto.abriu_agente %} <small class="nd-ajuda" title="{{ boleto.abriu_agente }}">{{ boleto.abriu_agente[:90] }}{{ '…' if boleto.abriu_agente|length > 90 }}</small>{% endif %}</dd></div>{% endif %}
             {% endif %}
         </dl>
+        {# Como foi pago (14/11/2026): as baixas do título, com o banco e a data quando vieram do extrato #}
+        {% set pagtos = pagamentos_do_titulo(boleto.titulo_id) %}
+        {% if pagtos %}
+        <div class="nd-span" style="margin-top:10px;">
+            <span class="nd-rotulo">Como foi pago</span>
+            {% for p in pagtos %}
+            <div style="font-size:13px; padding:4px 0; border-bottom:1px dashed #e2e8f0;">
+                <b>{{ p.valor | float | format_currency }}</b> em {{ p.data_baixa.strftime('%d/%m/%Y') }} · {{ p.onde }}
+                {% if p.desconto and p.desconto > 0 %} · desconto {{ p.desconto | float | format_currency }}{% endif %}
+                {% if p.juros and p.juros > 0 %} · juros {{ p.juros | float | format_currency }}{% endif %}
+                {% if p.lancamento_id %}<small class="nd-ajuda"> · {{ p.desc_linha }} ({{ p.valor_linha | float | format_currency }})</small>{% endif %}
+                {% if p.quem %}<small class="nd-ajuda"> · por {{ p.quem }}</small>{% endif %}
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
         {% if boleto.itens_json %}
         <table class="nd-itens nd-itens-mini" style="margin-top:10px;">
             <tbody>{% for i in boleto.itens_json %}<tr><td>{{ i.nome }}{% if not i.emite_nota %}<span class="nd-so-boleto">só boleto</span>{% endif %}</td><td class="v">{{ i.valor | float | format_currency }}</td></tr>{% endfor %}</tbody>
@@ -67,6 +83,13 @@
                 <button class="btn btn-primary" type="submit" style="flex:1 1 auto"><i class="fas fa-redo"></i> Reemitir boleto</button></div>
                 <small class="nd-ajuda">Sai um boleto novo pela nossa conta Efí, com o que falta pagar deste título. Este expirado fica guardado como está.</small>
             </form>
+        </div>
+        {% endif %}
+        {% if boleto.titulo_id and boleto.situacao in ('waiting', 'unpaid', 'expired') and pode_rota('financeiro.vincular_achar') and titulo_em_aberto(boleto.titulo_id) %}
+        <div class="nd-email-form">
+            <span class="nd-rotulo">Pagou por Pix ou em outra conta?</span>
+            <div><a class="btn btn-outline" href="{{ url_for('financeiro.vincular_achar', titulo_id=boleto.titulo_id) }}"><i class="fas fa-link"></i> Achar o pagamento no extrato</a></div>
+            <small class="nd-ajuda">Vincula o crédito do extrato a este título: dá a baixa, trata a diferença (desconto ou cobrar depois) e tira o boleto do banco.</small>
         </div>
         {% endif %}
         {% if boleto.situacao not in ('canceled', 'erro') %}
