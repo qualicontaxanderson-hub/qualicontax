@@ -75,6 +75,15 @@ MAPA = {
     'api.search_clientes':             'LOGIN',   # a lista respeita a empresa reservada
     'clientes.buscar_cep':             'LOGIN',
     'clientes.consultar_cnpj':         'LOGIN',   # dado público da Receita, usado no cadastro
+    # Atendimento (15/11/2026): todo usuário abre chamado e pede acesso. A ROTA confere que o
+    # chamado é da pessoa (ou que é admin); situação, liberar e extras são @admin_required.
+    'atendimento.index':               'LOGIN',
+    'atendimento.chamado':             'LOGIN',
+    'atendimento.novo':                'LOGIN',
+    'atendimento.responder':           'LOGIN',
+    'atendimento.avaliar':             'LOGIN',
+    'atendimento.print':               'LOGIN',
+    'atendimento.telas':               'LOGIN',
 
     # --- Cadastros: clientes ------------------------------------------------
     'clientes.novo':                   'clientes.create',
@@ -842,6 +851,11 @@ def quem_ve_empresa(cliente_id):
         perfis.setdefault(r['usuario_id'], set()).add(r['perfil'])
         if r.get('permissao_codigo'):
             perms.setdefault(r['usuario_id'], set()).add(r['permissao_codigo'])
+    # Extras do Atendimento (15/11/2026): tela liberada só para a pessoa também conta.
+    for r in execute_query("SELECT usuario_id, permissao_codigo FROM usuario_permissoes_extra",
+                           fetch=True) or []:
+        perms.setdefault(r['usuario_id'], set()).add(r['permissao_codigo'])
+        perfis.setdefault(r['usuario_id'], set()).add('Extras')
     out = []
     for u in usuarios:
         admin = u['tipo_usuario'] == 'ADMIN'

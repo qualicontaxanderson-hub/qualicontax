@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% block title %}Atendimento - Qualicontax{% endblock %}
+{% block content %}
+{% include 'atendimento/_at_css.html' %}
+{% set _abertos = chamados|rejectattr('situacao', 'equalto', 'concluido')|list %}
+{% set _vez = chamados|selectattr('situacao', 'equalto', 'usuario')|list %}
+{% set _ok = chamados|selectattr('situacao', 'equalto', 'concluido')|list %}
+<nav class="nav-fiscal" aria-label="Atendimento"><div class="nav-fiscal-track">
+  <a class="nff-tab active" href="{{ url_for('atendimento.index') }}" aria-current="page">MEUS CHAMADOS</a>
+  <a class="nff-tab" href="#" data-at-novo>NOVO CHAMADO</a>
+  <a class="nff-tab" href="#" data-at-acesso>PEDIR ACESSO</a>
+</div></nav>
+<div class="ef-hero"><div class="ef-hero-inner ef-hero-head">
+  <div><h1 class="ef-hero-title">Atendimento</h1>
+  <p class="ef-hero-sub">Seus pedidos ao suporte — só você e o suporte veem os seus chamados</p></div>
+  <div class="ef-hero-actions">
+    <button type="button" class="ef-btn" data-at-acesso><i class="fas fa-key"></i> Pedir acesso</button>
+    <button type="button" class="ef-btn ef-btn-primary" data-at-novo><i class="fas fa-plus"></i> Novo chamado</button>
+  </div>
+</div></div>
+<div class="ef-body">
+  <div class="cli-kpis at-kpis">
+    <button type="button" class="cli-kpi" data-filtro="vez"><span class="cli-kpi-ico" style="background:#fef3c7;color:#b45309"><i class="fas fa-reply"></i></span>
+      <div class="cli-kpi-body"><strong class="cli-kpi-val {{ 'cli-warn' if _vez }}">{{ _vez|length }}</strong><span class="cli-kpi-lbl">Esperando sua resposta</span></div></button>
+    <button type="button" class="cli-kpi" data-filtro="aberto"><span class="cli-kpi-ico" style="background:#ede9fe;color:#6d28d9"><i class="fas fa-headset"></i></span>
+      <div class="cli-kpi-body"><strong class="cli-kpi-val">{{ _abertos|length - _vez|length }}</strong><span class="cli-kpi-lbl">Com o suporte</span></div></button>
+    <button type="button" class="cli-kpi" data-filtro="ok"><span class="cli-kpi-ico" style="background:#dcfce7;color:#15803d"><i class="fas fa-circle-check"></i></span>
+      <div class="cli-kpi-body"><strong class="cli-kpi-val">{{ _ok|length }}</strong><span class="cli-kpi-lbl">Resolvidos</span></div></button>
+    <div class="cli-kpi"><span class="cli-kpi-ico" style="background:#e0f2fe;color:#0369a1"><i class="fas fa-stopwatch"></i></span>
+      <div class="cli-kpi-body"><strong class="cli-kpi-val">{{ media }}</strong><span class="cli-kpi-lbl">Tempo médio até resolver</span></div></div>
+  </div>
+
+  {% if chamados %}
+  <div class="cli-filtros"><div class="cli-f-row">
+    <span class="cli-seg-rot">Mostrar</span>
+    <div class="gc-pills" id="atFiltro">
+      <button type="button" class="gc-pill on" data-f="aberto">Em aberto <b>{{ _abertos|length or '' }}</b></button>
+      <button type="button" class="gc-pill" data-f="vez">Esperando você <b>{{ _vez|length or '' }}</b></button>
+      <button type="button" class="gc-pill" data-f="ok">Resolvidos <b>{{ _ok|length or '' }}</b></button>
+      <button type="button" class="gc-pill" data-f="">Todos <b>{{ chamados|length }}</b></button>
+    </div>
+  </div></div>
+  <div class="gc-grid" id="atLista">
+    {% for c in chamados %}{% set visao = 'usuario' %}{% include 'atendimento/_cartao.html' %}{% endfor %}
+  </div>
+  <div class="at-vazio" id="atVazio" hidden><i class="fas fa-inbox"></i>Nenhum chamado aqui.</div>
+  {% else %}
+  <div class="at-vazio"><i class="fas fa-headset"></i>
+    Você ainda não abriu nenhum chamado. Precisa de algo? Clique em <b>Pedir ajuda</b>, em qualquer tela do sistema —
+    o chamado já vai com a tela onde você estava.</div>
+  {% endif %}
+</div>
+{% endblock %}
+{% block extra_js %}
+<script>
+(function () {
+  var cards = [].slice.call(document.querySelectorAll('#atLista .at-card'));
+  function filtra(f) {
+    var n = 0;
+    cards.forEach(function (c) {
+      var s = c.getAttribute('data-sit');
+      var ok = !f || (f === 'aberto' && s !== 'concluido') || (f === 'vez' && s === 'usuario') || (f === 'ok' && s === 'concluido');
+      c.hidden = !ok; if (ok) n++;
+    });
+    var v = document.getElementById('atVazio'); if (v) v.hidden = n > 0;
+    document.querySelectorAll('#atFiltro .gc-pill').forEach(function (b) { b.classList.toggle('on', b.getAttribute('data-f') === f); });
+  }
+  document.querySelectorAll('#atFiltro .gc-pill').forEach(function (b) { b.addEventListener('click', function () { filtra(b.getAttribute('data-f')); }); });
+  document.querySelectorAll('.cli-kpi[data-filtro]').forEach(function (b) { b.addEventListener('click', function () { filtra(b.getAttribute('data-filtro')); }); });
+  if (cards.length) filtra({{ "'vez'" if _vez else "'aberto'" }});
+})();
+</script>
+{% endblock %}

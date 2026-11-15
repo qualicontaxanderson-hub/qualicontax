@@ -109,13 +109,21 @@ class Usuario(UserMixin):
     # ------------------------------------------------------------------
 
     def get_permissoes(self):
-        """Retorna set de codigos de permissão do usuário (via perfis)."""
+        """Retorna set de codigos de permissão do usuário: perfis + extras.
+
+        Extra (15/11/2026) = tela liberada SÓ para esta pessoa pelo Atendimento,
+        sem mexer no perfil (usuario_permissoes_extra)."""
         if self._permissoes is None:
             rows = execute_query(
                 """SELECT pp.permissao_codigo
                      FROM usuario_perfis up
                      JOIN perfil_permissoes pp ON pp.perfil_id = up.perfil_id
                     WHERE up.usuario_id = %s""",
+                (self.id,), fetch=True,
+            ) or []
+            # Consulta separada de propósito: se a de extras falhar, o perfil continua valendo.
+            rows += execute_query(
+                "SELECT permissao_codigo FROM usuario_permissoes_extra WHERE usuario_id = %s",
                 (self.id,), fetch=True,
             ) or []
             self._permissoes = {r['permissao_codigo'] for r in rows}

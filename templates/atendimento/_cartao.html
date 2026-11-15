@@ -1,0 +1,51 @@
+{# Cartão de chamado — mesmo componente no "Meus chamados" e no painel do admin.
+   Recebe: c (linha do chamado), visao ('usuario' | 'admin'). #}
+{% set _t = TIPOS.get(c.tipo, TIPOS['duvida']) %}
+{% set _s = SITUACOES.get(c.situacao, SITUACOES['novo']) %}
+{% set _cores = ['#0891b2','#db2777','#7c3aed','#ea580c','#0d9488','#2563eb','#ca8a04','#be123c'] %}
+{% set _nao_lido = visao == 'usuario' and c.ultima_msg_de == 'suporte' and (not c.visto_usuario_em or c.visto_usuario_em < c.ultima_msg_em) %}
+<a class="gc-card at-card" href="{{ url_for('atendimento.chamado', cid=c.id) }}"
+   data-sit="{{ c.situacao }}" data-tipo="{{ c.tipo }}" data-dep="{{ c.departamento or '' }}"
+   {% if _nao_lido %}style="border-color:#fbbf24; box-shadow:0 0 0 3px #fef3c7"{% endif %}>
+  <header class="gc-head">
+    {% if visao == 'admin' %}
+      <span class="at-ava" style="background:{{ _cores[c.usuario_id % 8] }}">{{ (c.usuario_nome or '?')[:1]|upper }}</span>
+    {% else %}
+      <span class="gc-ava" style="background:#f1f5f9;color:#475569"><i class="fas {{ _t[1] }}"></i></span>
+    {% endif %}
+    <div class="gc-tit">
+      <h3 title="{{ c.titulo }}">{{ c.titulo }}</h3>
+      <span class="cli-doc"><span class="at-num">#{{ '%04d' % c.id }}</span> ·
+        {% if visao == 'admin' %}{{ nome_curto(c.usuario_nome) }}{% if c.departamento %} · {{ c.departamento }}{% endif %}
+        {% else %}aberto {{ c.criado_em.strftime('%d/%m %H:%M') }}{% endif %}</span>
+    </div>
+  </header>
+  <div class="gc-tags">
+    <span class="at-st at-st-{{ _s[2] }}">{{ _s[1] if visao == 'usuario' else _s[0] }}</span>
+    <span class="at-tipo {{ _t[2] }}"><i class="fas {{ _t[1] }}"></i> {{ _t[0] }}</span>
+  </div>
+  {% if c.tela_nome or c.cliente_nome %}
+  <div class="at-onde"><i class="fas fa-location-dot"></i>
+    <span>{{ c.tela_nome or '' }}{% if c.cliente_nome %} · {{ c.cliente_numero }} - {{ c.cliente_nome }}{% endif %}</span></div>
+  {% endif %}
+  {% if c.urgente and c.situacao != 'concluido' %}
+  <div class="at-urg-sel"><i class="fas fa-triangle-exclamation"></i> Está impedindo de trabalhar</div>
+  {% endif %}
+  {% if c.ultimo_texto %}
+  <p class="at-ult"><b>{{ 'Suporte' if c.ultima_msg_de == 'suporte' and visao == 'usuario' else ('Você' if (visao == 'usuario' and c.ultima_msg_de == 'usuario') or (visao == 'admin' and c.ultima_msg_de == 'suporte') else nome_curto(c.usuario_nome)) }}:</b> {{ c.ultimo_texto }}</p>
+  {% endif %}
+  <footer class="at-pe">
+    {% if c.situacao == 'concluido' %}
+      <span>resolvido {{ c.concluido_em.strftime('%d/%m %H:%M') if c.concluido_em else '' }}</span>
+      <span>{% if c.avaliacao == 1 %}<i class="fas fa-thumbs-up" style="color:#16a34a"></i> resolveu{% elif c.avaliacao == 0 %}<i class="fas fa-thumbs-down" style="color:#b91c1c"></i> não resolveu{% endif %}</span>
+    {% elif c.situacao in ('novo', 'suporte') %}
+      <span class="{{ 'at-espera-alta' if c.espera_min >= 240 else '' }}"><i class="fas fa-clock"></i> esperando há {{ espera(c.espera_min) }}</span>
+      <span>{% if c.prints %}<i class="fas fa-image"></i> {{ c.prints }} print{{ 's' if c.prints > 1 }}{% endif %}</span>
+    {% elif c.situacao == 'usuario' %}
+      <span>{{ 'O suporte espera sua resposta' if visao == 'usuario' else 'esperando ' ~ nome_curto(c.usuario_nome) ~ ' há ' ~ espera(c.espera_min) }}</span>
+      {% if visao == 'usuario' %}<span class="at-bt at-bt-pri" style="padding:5px 12px">Responder</span>{% endif %}
+    {% else %}
+      <span>última mensagem há {{ espera(c.espera_min) }}</span><span></span>
+    {% endif %}
+  </footer>
+</a>

@@ -1,0 +1,120 @@
+{% extends "base.html" %}
+{% block title %}Atendimento - Qualicontax{% endblock %}
+{% block content %}
+{% include 'atendimento/_at_css.html' %}
+<nav class="nav-fiscal" aria-label="Atendimento"><div class="nav-fiscal-track">
+  <a class="nff-tab {{ 'active' if ver == 'painel' }}" href="{{ url_for('atendimento.index') }}">PAINEL</a>
+  <a class="nff-tab {{ 'active' if ver == 'concluidos' }}" href="{{ url_for('atendimento.index', ver='concluidos') }}">CONCLUÍDOS</a>
+  <a class="nff-tab {{ 'active' if ver == 'extras' }}" href="{{ url_for('atendimento.index', ver='extras') }}">ACESSOS EXTRAS</a>
+</div></nav>
+<div class="ef-hero"><div class="ef-hero-inner ef-hero-head">
+  <div><h1 class="ef-hero-title">Atendimento</h1>
+  <p class="ef-hero-sub">
+    {% if ver == 'extras' %}Telas liberadas só para uma pessoa, sem mexer no perfil
+    {% elif ver == 'concluidos' %}Os últimos chamados resolvidos
+    {% else %}{{ kpi.abertos or 0 }} chamado{{ 's' if (kpi.abertos or 0) != 1 }} em aberto{% set _esp = chamados|selectattr('situacao', 'in', ['novo','suporte'])|map(attribute='espera_min')|list %}{% if _esp %} · o mais antigo espera há {{ espera(_esp|max) }}{% endif %}{% endif %}</p></div>
+</div></div>
+<div class="ef-body">
+{% if ver == 'extras' %}
+  {% if extras %}
+  <div class="at-box at-tbl-wrap">
+    <table class="at-tbl"><thead><tr><th>Pessoa</th><th>Tela liberada</th><th>Quando</th><th>Chamado</th><th></th></tr></thead><tbody>
+    {% for e in extras %}
+      <tr><td><b>{{ e.usuario_nome }}</b></td><td>{{ e.rotulo }}</td>
+        <td>{{ e.concedido_em.strftime('%d/%m/%Y %H:%M') if e.concedido_em else '' }}{% if e.por_nome %}<br><small style="color:#64748b">por {{ nome_curto(e.por_nome) }}</small>{% endif %}</td>
+        <td>{% if e.chamado_id %}<a href="{{ url_for('atendimento.chamado', cid=e.chamado_id) }}" class="at-num">#{{ '%04d' % e.chamado_id }}</a>{% endif %}</td>
+        <td style="text-align:right"><button type="button" class="at-bt" data-tirar="{{ e.usuario_id }}" data-cod="{{ e.permissao_codigo }}" data-rot="{{ e.usuario_nome }}: {{ e.rotulo }}"><i class="fas fa-ban"></i> Tirar</button></td></tr>
+    {% endfor %}
+    </tbody></table>
+  </div>
+  {% else %}
+  <div class="at-vazio"><i class="fas fa-key"></i>Nenhuma tela liberada só para uma pessoa até agora.</div>
+  {% endif %}
+{% else %}
+  {% if ver == 'painel' %}
+  <div class="cli-kpis at-kpis">
+    <button type="button" class="cli-kpi" data-sec="novo"><span class="cli-kpi-ico" style="background:#dbeafe;color:#1d4ed8"><i class="fas fa-inbox"></i></span>
+      <div class="cli-kpi-body"><strong class="cli-kpi-val">{{ kpi.novo or 0 }}</strong><span class="cli-kpi-lbl">Novos</span></div></button>
+    <button type="button" class="cli-kpi" data-sec="suporte"><span class="cli-kpi-ico" style="background:#ffedd5;color:#c2410c"><i class="fas fa-hourglass-half"></i></span>
+      <div class="cli-kpi-body"><strong class="cli-kpi-val {{ 'cli-bad' if kpi.suporte }}">{{ kpi.suporte or 0 }}</strong><span class="cli-kpi-lbl">Aguardando suporte</span></div></button>
+    <button type="button" class="cli-kpi" data-sec="andamento"><span class="cli-kpi-ico" style="background:#ede9fe;color:#6d28d9"><i class="fas fa-headset"></i></span>
+      <div class="cli-kpi-body"><strong class="cli-kpi-val">{{ kpi.andamento or 0 }}</strong><span class="cli-kpi-lbl">Em atendimento</span></div></button>
+    <button type="button" class="cli-kpi" data-sec="usuario"><span class="cli-kpi-ico" style="background:#fef3c7;color:#b45309"><i class="fas fa-reply"></i></span>
+      <div class="cli-kpi-body"><strong class="cli-kpi-val {{ 'cli-warn' if kpi.usuario }}">{{ kpi.usuario or 0 }}</strong><span class="cli-kpi-lbl">Aguardando usuário</span></div></button>
+    <a class="cli-kpi" href="{{ url_for('atendimento.index', ver='concluidos') }}" style="text-decoration:none"><span class="cli-kpi-ico" style="background:#dcfce7;color:#15803d"><i class="fas fa-circle-check"></i></span>
+      <div class="cli-kpi-body"><strong class="cli-kpi-val">{{ kpi.hoje or 0 }}</strong><span class="cli-kpi-lbl">Concluídos hoje</span></div></a>
+  </div>
+  {% endif %}
+
+  {% if chamados %}
+  <div class="cli-filtros">
+    <div class="cli-f-row"><span class="cli-seg-rot">Tipo</span>
+      <div class="gc-pills" data-filtro="tipo">
+        <button type="button" class="gc-pill on" data-v="">Todos <b>{{ chamados|length }}</b></button>
+        {% for k, t in TIPOS.items() %}{% set n = chamados|selectattr('tipo', 'equalto', k)|list|length %}{% if n %}
+        <button type="button" class="gc-pill" data-v="{{ k }}">{{ t[0] }} <b>{{ n }}</b></button>{% endif %}{% endfor %}
+      </div></div>
+    {% set _deps = chamados|map(attribute='departamento')|select|unique|sort|list %}
+    {% if _deps|length > 1 %}
+    <div class="cli-f-row"><span class="cli-seg-rot">Departamento</span>
+      <div class="gc-pills" data-filtro="dep">
+        <button type="button" class="gc-pill on" data-v="">Todos</button>
+        {% for d in _deps %}<button type="button" class="gc-pill" data-v="{{ d }}">{{ d }} <b>{{ chamados|selectattr('departamento', 'equalto', d)|list|length }}</b></button>{% endfor %}
+      </div></div>
+    {% endif %}
+  </div>
+  {% endif %}
+
+  {% if ver == 'concluidos' %}
+    {% if chamados %}<div class="gc-grid">{% for c in chamados %}{% set visao = 'admin' %}{% include 'atendimento/_cartao.html' %}{% endfor %}</div>
+    {% else %}<div class="at-vazio"><i class="fas fa-circle-check"></i>Nenhum chamado concluído ainda.</div>{% endif %}
+  {% else %}
+    {% set _secs = [
+      ('suporte', 'Responder primeiro', 'a pessoa já respondeu e está esperando você'),
+      ('novo', 'Ninguém olhou ainda', 'abrir o chamado já muda para Em atendimento'),
+      ('andamento', 'Com você', 'você está cuidando'),
+      ('usuario', 'Esperando a pessoa', 'a bola está com ela — não conclui sozinho'),
+    ] %}
+    {% for k, titulo, dica in _secs %}{% set lista = chamados|selectattr('situacao', 'equalto', k)|list %}{% if lista %}
+    <section class="at-bloco" id="sec-{{ k }}">
+      <div class="at-sec"><span class="at-st at-st-{{ SITUACOES[k][2] }}">{{ SITUACOES[k][0] }}</span><h2>{{ titulo }}</h2>
+        <span class="at-sec-n">{{ lista|length }} · {{ dica }}</span></div>
+      <div class="gc-grid">{% for c in lista %}{% set visao = 'admin' %}{% include 'atendimento/_cartao.html' %}{% endfor %}</div>
+    </section>{% endif %}{% endfor %}
+    {% if not chamados %}<div class="at-vazio"><i class="fas fa-mug-hot"></i>Nenhum chamado em aberto. Tudo respondido.</div>{% endif %}
+  {% endif %}
+{% endif %}
+</div>
+{% endblock %}
+{% block extra_js %}
+<script>
+(function () {
+  var sel = { tipo: '', dep: '' };
+  function aplica() {
+    document.querySelectorAll('.at-card').forEach(function (c) {
+      c.hidden = (sel.tipo && c.getAttribute('data-tipo') !== sel.tipo) || (sel.dep && c.getAttribute('data-dep') !== sel.dep);
+    });
+    document.querySelectorAll('.at-bloco').forEach(function (b) { b.hidden = !b.querySelector('.at-card:not([hidden])'); });
+  }
+  document.querySelectorAll('.gc-pills[data-filtro]').forEach(function (g) {
+    g.addEventListener('click', function (e) {
+      var b = e.target.closest('.gc-pill'); if (!b) return;
+      g.querySelectorAll('.gc-pill').forEach(function (x) { x.classList.remove('on'); }); b.classList.add('on');
+      sel[g.getAttribute('data-filtro')] = b.getAttribute('data-v'); aplica();
+    });
+  });
+  document.querySelectorAll('.cli-kpi[data-sec]').forEach(function (k) {
+    k.addEventListener('click', function () { var s = document.getElementById('sec-' + k.getAttribute('data-sec')); if (s) s.scrollIntoView({ behavior: 'smooth' }); });
+  });
+  document.querySelectorAll('[data-tirar]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      if (b.dataset.conf !== '1') { b.dataset.conf = '1'; b.innerHTML = '<i class="fas fa-ban"></i> Confirmar: tirar'; b.classList.add('at-bt-pri'); return; }
+      var fd = new FormData(); fd.append('usuario_id', b.dataset.tirar); fd.append('codigo', b.dataset.cod);
+      b.disabled = true;
+      fetch("{{ url_for('atendimento.extra_remover') }}", { method: 'POST', body: fd, headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+        .then(function (r) { return r.json(); }).then(function (j) { if (j.ok) b.closest('tr').remove(); else { b.disabled = false; alert(j.erro); } });
+    });
+  });
+})();
+</script>
+{% endblock %}

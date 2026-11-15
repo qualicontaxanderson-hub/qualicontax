@@ -126,6 +126,15 @@
                 </a>
             </li>
             {% endif %}
+            {# Atendimento (15/11/2026): todo usuário pede ajuda e acompanha os seus chamados; o
+               número é o que espera por ele (admin: o que espera o suporte). #}
+            <li>
+                <a href="{{ url_for('atendimento.index') }}" class="rail-link rail-atendimento {% if request.endpoint and request.endpoint.startswith('atendimento.') %}active{% endif %}" title="Atendimento">
+                    <i class="fas fa-headset"></i>
+                    <span>Atendimento</span>
+                    {% if atend_sinal %}<em class="rail-badge">{{ atend_sinal if atend_sinal < 100 else '99+' }}</em>{% endif %}
+                </a>
+            </li>
             {% if current_user.has_permission('configuracoes.index') %}
             <li>
                 <a href="{{ url_for('configuracoes.index') }}" class="rail-link rail-config {% if 'configuracoes' in request.endpoint %}active{% endif %}" title="Configurações">
@@ -209,6 +218,8 @@
     <!-- Copiar dados do cadastro: ícone em [data-copiar], .fv-dl e blocos (20/10/2026) -->
     <script src="{{ url_for('static', filename='js/copiar.js') }}" defer></script>
     <script src="{{ url_for('static', filename='js/endereco.js') }}" defer></script>
+    {# Botão "Pedir ajuda" e as janelas de chamado/pedido de acesso, em toda tela (15/11/2026) #}
+    {% if current_user.is_authenticated %}{% include 'atendimento/_pedir_ajuda.html' %}{% endif %}
     {% block extra_js %}{% endblock %}
 </body>
 </html>

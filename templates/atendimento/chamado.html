@@ -1,0 +1,151 @@
+{% extends "base.html" %}
+{% block title %}Chamado #{{ '%04d' % c.id }} - Qualicontax{% endblock %}
+{% block content %}
+{% include 'atendimento/_at_css.html' %}
+{% set suporte = eh_admin and c.usuario_id != current_user.id %}
+{% set _t = TIPOS.get(c.tipo, TIPOS['duvida']) %}
+{% set _s = SITUACOES.get(c.situacao, SITUACOES['novo']) %}
+{% set _cores = ['#0891b2','#db2777','#7c3aed','#ea580c','#0d9488','#2563eb','#ca8a04','#be123c'] %}
+<nav class="nav-fiscal" aria-label="Atendimento"><div class="nav-fiscal-track">
+  <a class="nff-tab" href="{{ url_for('atendimento.index') }}">‹ {{ 'PAINEL' if eh_admin else 'MEUS CHAMADOS' }}</a>
+  <a class="nff-tab active" href="#" aria-current="page">CHAMADO #{{ '%04d' % c.id }}</a>
+</div></nav>
+<div class="ef-hero"><div class="ef-hero-inner ef-hero-head">
+  <div><h1 class="ef-hero-title">{{ c.titulo }}</h1>
+  <p class="ef-hero-sub"><span class="at-num" style="color:inherit">#{{ '%04d' % c.id }}</span> ·
+    {% if suporte %}{{ c.usuario_nome }}{% if c.departamento %} ({{ c.departamento }}){% endif %} · {% endif %}aberto {{ c.criado_em.strftime('%d/%m/%Y %H:%M') }}</p></div>
+  <div class="ef-hero-actions"><span class="at-st at-st-{{ _s[2] }}" style="font-size:13px;padding:6px 14px">{{ _s[0] if suporte else _s[1] }}</span></div>
+</div></div>
+<div class="ef-body">
+  <div class="at-dois">
+    <div class="at-box">
+      <h3>Conversa</h3>
+      <div class="at-conv">
+        {% for m in msgs %}
+          {% if m.autor == 'sistema' %}
+            <div class="at-evento">{{ m.texto }} · {{ m.criado_em.strftime('%d/%m %H:%M') }}</div>
+          {% else %}
+            {% set eu = (m.autor == 'suporte' and suporte) or (m.autor == 'usuario' and not suporte) %}
+            <div class="at-msg {{ 'eu' if eu }} {{ 'interna' if m.interna }}">
+              <span class="at-ava" style="background:{{ '#15803d' if m.autor == 'suporte' else _cores[c.usuario_id % 8] }}">{{ (m.usuario_nome or '?')[:1]|upper }}</span>
+              <div class="at-bolha"><small>{{ 'Você' if eu else (nome_curto(m.usuario_nome) if m.autor == 'usuario' or suporte else 'Suporte · ' ~ nome_curto(m.usuario_nome)) }} · {{ m.criado_em.strftime('%d/%m %H:%M') }}{% if m.interna %} · <b>nota interna (só o suporte vê)</b>{% endif %}</small>{{ m.texto or '' }}{% if m.tem_print %}<a href="{{ url_for('atendimento.print', mid=m.id) }}" target="_blank" rel="noopener"><img src="{{ url_for('atendimento.print', mid=m.id) }}" alt="print" loading="lazy"></a>{% endif %}</div>
+            </div>
+          {% endif %}
+        {% endfor %}
+      </div>
+
+      {% if not suporte and c.situacao == 'concluido' and c.avaliacao is none %}
+      <div class="at-avaliar" style="margin-top:16px"><span><b>O suporte marcou como resolvido.</b> Resolveu mesmo?</span>
+        <button type="button" class="at-bt at-bt-pri" data-avaliar="1"><i class="fas fa-thumbs-up"></i> Resolveu</button>
+        <button type="button" class="at-bt" data-avaliar="0"><i class="fas fa-thumbs-down"></i> Não resolveu</button></div>
+      {% endif %}
+
+      <div class="at-resp">
+        <textarea id="atResp" maxlength="5000" placeholder="{{ 'Escreva a resposta... (Ctrl+V cola um print)' if suporte else ('Escreva aqui para reabrir o chamado... (Ctrl+V cola um print)' if c.situacao == 'concluido' else 'Escreva sua resposta... (Ctrl+V cola um print)') }}"></textarea>
+        <div class="at-resp-acoes">
+          <span class="at-resp-print" id="atRespPrint"></span>
+          <span class="at-erro" id="atRespErro" style="color:#b91c1c;font-size:13px"></span>
+          {% if suporte %}
+            <button type="button" class="at-bt" data-acao="interna" title="Só o suporte vê"><i class="fas fa-lock"></i> Nota interna</button>
+            <button type="button" class="at-bt" data-acao="aguardar"><i class="fas fa-reply"></i> Responder e aguardar a pessoa</button>
+            <button type="button" class="at-bt" data-acao="responder"><i class="fas fa-paper-plane"></i> Responder</button>
+            <button type="button" class="at-bt at-bt-pri" data-acao="concluir"><i class="fas fa-check"></i> Responder e concluir</button>
+          {% else %}
+            <button type="button" class="at-bt at-bt-pri" data-acao="responder"><i class="fas fa-paper-plane"></i> {{ 'Reabrir e enviar' if c.situacao == 'concluido' else 'Enviar' }}</button>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:14px;min-width:0">
+      {% if liberar %}
+      <div class="at-box at-lib">
+        <h3><i class="fas fa-key"></i> Liberar o acesso</h3>
+        <p style="margin:0 0 10px;font-size:13px;color:#0c4a6e">Pediu: <b>{{ c.acesso_rotulo }}</b></p>
+        {% if not liberar.falta %}<p style="margin:0 0 10px;font-size:12.5px;color:#15803d"><i class="fas fa-circle-check"></i> {{ nome_curto(c.usuario_nome) }} já tem esse acesso hoje.</p>{% endif %}
+        <label class="at-opc"><input type="radio" name="lib" value="extra" checked>
+          <span><b>Só para {{ nome_curto(c.usuario_nome) }}</b> (extra)<small>Ganha só esta tela. O perfil não muda. Fica em Atendimento › Acessos extras, de onde se tira.</small></span></label>
+        {% for p in liberar.perfis %}
+        <label class="at-opc"><input type="radio" name="lib" value="perfil" data-perfil="{{ p.id }}">
+          <span><b>Pelo perfil {{ p.nome }}</b><small>{% if p.traz %}Ganha também: {{ p.traz[:6]|join('; ') }}{% if p.traz|length > 6 %} e mais {{ p.traz|length - 6 }}{% endif %}.{% else %}O perfil dá exatamente isso.{% endif %}</small></span></label>
+        {% endfor %}
+        <button type="button" class="at-bt at-bt-pri" id="atLiberar" style="width:100%;justify-content:center;margin-top:4px"><i class="fas fa-check"></i> Liberar e concluir</button>
+        <p style="margin:8px 0 0;font-size:11.5px;color:#475569">A tela aparece no menu de {{ nome_curto(c.usuario_nome) }} na próxima página que abrir. Fica na Auditoria.</p>
+      </div>
+      {% endif %}
+
+      {% if suporte %}
+      <div class="at-box">
+        <h3>Situação</h3>
+        <div class="at-sits">
+          {% for k in ['andamento', 'suporte', 'usuario', 'concluido'] %}
+          <button type="button" class="at-sit-btn {{ 'on' if c.situacao == k }}" data-sit="{{ k }}"><span class="at-st at-st-{{ SITUACOES[k][2] }}">{{ SITUACOES[k][0] }}</span>
+            {% if k == 'usuario' %}<small>fica parado até a pessoa responder</small>{% elif k == 'suporte' %}<small>a pessoa respondeu</small>{% endif %}</button>
+          {% endfor %}
+        </div>
+      </div>
+      {% endif %}
+
+      <div class="at-box">
+        <h3>Dados</h3>
+        <dl class="at-dl">
+          {% if suporte %}<dt>Quem pediu</dt><dd>{{ c.usuario_nome }}{% if c.departamento %} · {{ c.departamento }}{% endif %}</dd>{% endif %}
+          <dt>Tipo</dt><dd><span class="at-tipo {{ _t[2] }}"><i class="fas {{ _t[1] }}"></i> {{ _t[0] }}</span></dd>
+          {% if c.urgente %}<dt>Urgência</dt><dd style="color:#b91c1c">Está impedindo de trabalhar</dd>{% endif %}
+          {% if c.tela_nome %}<dt>Estava em</dt><dd>{% if c.tela_url %}<a href="{{ c.tela_url }}">{{ c.tela_nome }}</a>{% else %}{{ c.tela_nome }}{% endif %}</dd>{% endif %}
+          {% if c.cliente_nome %}<dt>Empresa</dt><dd><a href="{{ url_for('clientes.detalhes', id=c.cliente_id) }}">{{ c.cliente_numero }} - {{ c.cliente_nome }}</a></dd>{% endif %}
+          <dt>Aberto</dt><dd>{{ c.criado_em.strftime('%d/%m/%Y %H:%M') }}</dd>
+          {% if c.situacao in ('novo', 'suporte') %}<dt>Esperando</dt><dd>{{ espera(c.espera_min) }}</dd>{% endif %}
+          {% if c.concluido_em %}<dt>Resolvido</dt><dd>{{ c.concluido_em.strftime('%d/%m/%Y %H:%M') }}</dd>{% endif %}
+          {% if c.avaliacao is not none %}<dt>Avaliação</dt><dd>{{ 'Resolveu' if c.avaliacao == 1 else 'Não resolveu' }}</dd>{% endif %}
+          {% if suporte and perfis_dela is not none %}<dt>Perfis</dt><dd>{{ perfis_dela|join(', ') or 'nenhum' }}</dd>{% endif %}
+        </dl>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+{% block extra_js %}
+<script>
+(function () {
+  var URL_RESP = "{{ url_for('atendimento.responder', cid=c.id) }}";
+  var printB64 = null, ta = document.getElementById('atResp'), erro = document.getElementById('atRespErro');
+  function post(url, fd, btn) {
+    if (btn) btn.disabled = true; erro.textContent = '';
+    return fetch(url, { method: 'POST', body: fd, headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+      .then(function (r) { return r.json(); })
+      .then(function (j) { if (j.ok) location.reload(); else { erro.textContent = j.erro || 'Não foi possível.'; if (btn) btn.disabled = false; } })
+      .catch(function () { erro.textContent = 'Sem conexão. Tente de novo.'; if (btn) btn.disabled = false; });
+  }
+  ta.addEventListener('paste', function (e) {
+    var it = [].slice.call((e.clipboardData || {}).items || []).filter(function (i) { return i.type.indexOf('image') === 0; })[0];
+    if (!it) return; e.preventDefault();
+    var r = new FileReader();
+    r.onload = function () { printB64 = r.result;
+      document.getElementById('atRespPrint').innerHTML = '<img alt="print" src="' + r.result + '"> print colado · <a href="#" id="atTira">tirar</a>'; };
+    r.readAsDataURL(it.getAsFile());
+  });
+  document.addEventListener('click', function (e) {
+    if (e.target.id === 'atTira') { e.preventDefault(); printB64 = null; document.getElementById('atRespPrint').innerHTML = ''; return; }
+    var b = e.target.closest('[data-acao]');
+    if (b) {
+      var fd = new FormData(); fd.append('texto', ta.value); fd.append('acao', b.getAttribute('data-acao'));
+      if (printB64) fd.append('print_b64', printB64);
+      post(URL_RESP, fd, b); return;
+    }
+    var s = e.target.closest('[data-sit]');
+    if (s) { var f2 = new FormData(); f2.append('situacao', s.getAttribute('data-sit'));
+      post("{{ url_for('atendimento.situacao', cid=c.id) }}", f2, s); return; }
+    var a = e.target.closest('[data-avaliar]');
+    if (a) { var f3 = new FormData(); f3.append('resolveu', a.getAttribute('data-avaliar'));
+      post("{{ url_for('atendimento.avaliar', cid=c.id) }}", f3, a); return; }
+    if (e.target.closest('#atLiberar')) {
+      var r = document.querySelector('input[name=lib]:checked'), f4 = new FormData();
+      f4.append('modo', r.value); if (r.dataset.perfil) f4.append('perfil_id', r.dataset.perfil);
+      f4.append('texto', ta.value);
+      post("{{ url_for('atendimento.liberar', cid=c.id) }}", f4, e.target.closest('#atLiberar'));
+    }
+  });
+})();
+</script>
+{% endblock %}
