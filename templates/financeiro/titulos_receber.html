@@ -132,10 +132,13 @@ a.tx-c { text-decoration:none; color:inherit; }
   .tx-aba-lbl { font-size:10px; letter-spacing:.3px; }
   .tx-aba-val { font-size:13.5px; }
   .tx-busca { margin-left:0; width:100%; order:3; }
-  .tx-grade { grid-template-columns:1fr 1fr; gap:8px; }
-  .tx-grade.tx-g-ina { grid-template-columns:1fr; }
-  .tx-c { padding:10px 10px 10px 13px; } .tx-c-val { font-size:14.5px; }
-  .tx-grade:not(.tx-g-ina) .tx-c-meio { flex-direction:column; align-items:flex-start; gap:6px; }
+  /* celular: um cartão por linha em todas as abas, igual ao Inadimplentes (Anderson, 15/11/2026:
+     "tem que ficar todos igual ao inadimplentes quadrado está difícil de visualizar"); os botões vão
+     para o rodapé do cartão e o nome aparece inteiro */
+  .tx-grade, .tx-grade.tx-g-ina { grid-template-columns:1fr; gap:8px; }
+  .tx-c { padding:12px 12px 12px 16px; }
+  .tx-c-nome { font-size:13.5px; }
+  .tx-c-acoes { order:9; border-top:1px solid var(--linha); padding-top:8px; }
   .tx-nota { flex-wrap:wrap; } .tx-nota a { margin-left:0; }
   .tx-emp-menu { right:auto; left:0; }
 }
