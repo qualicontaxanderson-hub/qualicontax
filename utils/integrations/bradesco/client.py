@@ -339,7 +339,7 @@ def _msg(r, prefixo):
     j = _json(r)
     det = ''
     if isinstance(j, dict):
-        det = (j.get('mensagem') or j.get('message') or j.get('error_description') or j.get('error')
+        det = (j.get('mensagem') or j.get('message') or j.get('errorMessage') or j.get('error_description') or j.get('error')
                or j.get('causa') or j.get('texto') or '')
         erros = j.get('erros') or j.get('errors') or []
         if erros and isinstance(erros, list):
