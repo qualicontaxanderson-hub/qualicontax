@@ -1,0 +1,506 @@
+{% extends "base.html" %}
+{% block title %}Novidades - Qualicontax{% endblock %}
+{% block content %}
+{# Novidades (15/11/2026) no padrão de Financeiro › COBRANÇAS (Anderson: "faça estilo da cobrança
+   no financeiro"): cabeçalho branco, faixa escura de escopo, KPIs coloridos, Filtros recolhidos,
+   faixa de contagem e cartões .gc-card em grade. Estilos .fin-* vêm de identidade.css. #}
+{% include 'clientes/_cartao_css.html' %}
+<style>
+.nvc .gc-ava { font-size:17px; letter-spacing:0; flex-direction:column; line-height:1.05; width:52px; height:48px; }
+.nvc .gc-ava small { font-size:8.5px; font-weight:800; letter-spacing:.5px; opacity:.85; text-transform:uppercase; }
+.nvc .gc-ava.nv-ava-novo { background:linear-gradient(135deg,#16a34a,#0f3d2e); }
+.nvc .gc-ava.nv-ava-melhoria { background:linear-gradient(135deg,#0ea5e9,#0c4a6e); }
+.nvc .gc-ava.nv-ava-correcao { background:linear-gradient(135deg,#d97706,#78350f); }
+.nvc .gc-ava.nv-ava-aviso { background:linear-gradient(135deg,#ef4444,#7f1d1d); }
+.nvc.nova { border-color:#86efac; box-shadow:0 0 0 3px #dcfce7; }
+.nvc-doc { display:block; font-size:12px; color:#64748b; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.nvc-doc b { color:#0f3d2e; }
+.nf-pill-novo { background:#dcfce7; color:#15803d; } .nf-pill-melhoria { background:#e0f2fe; color:#0369a1; }
+.nf-pill-correcao { background:#fef3c7; color:#92400e; } .nf-pill-aviso { background:#fee2e2; color:#b91c1c; }
+.nvc-meta { display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px 12px; padding:10px 12px;
+            background:#f8fbf9; border:1px solid #edf3ef; border-radius:11px; }
+.nvc-meta .cli-val { white-space:normal; }
+.nvc-meta-leit { grid-column:1 / -1; display:flex; align-items:baseline; justify-content:space-between; gap:10px;
+                 padding-bottom:8px; border-bottom:1px dashed #e2e8e4; flex-wrap:wrap; }
+.nvc-num { font-size:22px; font-weight:800; color:#0f3d2e; font-variant-numeric:tabular-nums; line-height:1; }
+.nvc-num small { font-size:12px; font-weight:600; color:#64748b; margin-left:6px; }
+.nvc-bar { width:110px; height:6px; border-radius:99px; background:#e2e8e4; overflow:hidden; align-self:center; }
+.nvc-bar i { display:block; height:100%; background:#16a34a; }
+.nvc-desc { margin:0; font-size:13px; color:#475569; line-height:1.5; display:-webkit-box; -webkit-line-clamp:3;
+            -webkit-box-orient:vertical; overflow:hidden; }
+.nvc-full { display:none; }
+.nvc.aberto .nvc-desc { display:none; } .nvc.aberto .nvc-full { display:block; }
+.nvc-full p { margin:0 0 8px; font-size:13.5px; line-height:1.6; color:#334155; }
+.nvc-full ul, .nvc-full ol { margin:0 0 8px; padding-left:20px; font-size:13.5px; line-height:1.6; color:#334155; }
+.nvc-full li::marker { color:#16a34a; font-weight:700; }
+.nvc-img { margin-top:6px; border:1px solid #e2e8f0; border-radius:10px; overflow:hidden; background:#f8fafc; cursor:zoom-in; }
+.nvc-img img { display:block; width:100%; height:auto; }
+.nvc-img-rot { font-size:11px; color:#94a3b8; text-align:center; margin:4px 0 0; }
+.nvc-mais { font-size:12px; font-weight:700; color:#15803d; }
+.nvc .cli-pe { flex-wrap:wrap; } .nvc .cli-selo { min-width:200px; }
+.cli-selo-info { background:#eff6ff; border-color:#bfdbfe; color:#1d4ed8; }
+.nvc-acoes { display:flex; gap:4px; flex-wrap:wrap; justify-content:flex-end; }
+.nvc-acoes .fin-btn-tag { white-space:nowrap; }
+.nvc-acoes .fin-btn-tag.on { border-color:#0f3d2e; background:#0f3d2e; color:#fff; }
+.nvc-acoes .fin-btn-tag.on.duv { border-color:#b45309; background:#b45309; }
+.nvc-acoes .fin-btn-tag.pri { border-color:#15803d; background:#15803d; color:#fff; }
+.nvc-commit { font-family:Consolas,'Courier New',monospace; font-size:10.5px; color:#94a3b8; align-self:center; }
+/* cartão de TEMA (nível 1) */
+.nvt { text-decoration:none; color:inherit; display:flex; flex-direction:column; gap:12px; min-width:0; }
+.nvt > *, .nvt .nvc-meta > * { min-width:0; }   /* item de grid/flex não estica a página com texto comprido */
+.nvt-lista { min-width:0; }
+.nvt .nvc-meta-leit .fin-fraco { min-width:0; overflow-wrap:anywhere; }
+.nvt .gc-ava { font-size:17px; flex-direction:column; line-height:1.05; width:52px; height:48px; }
+.nvt .gc-ava small { font-size:8.5px; font-weight:800; letter-spacing:.5px; opacity:.85; text-transform:uppercase; }
+.nvt-lista { list-style:none; margin:0; padding:0; grid-column:1 / -1; display:flex; flex-direction:column; gap:5px; }
+.nvt-lista li { display:flex; align-items:center; gap:8px; font-size:12.5px; color:#334155; min-width:0; }
+.nvt-lista li i { width:14px; color:#94a3b8; font-size:11px; text-align:center; flex:none; }
+.nvt-lista li span { flex:1; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.nvt-lista li small { color:#94a3b8; font-variant-numeric:tabular-nums; flex:none; }
+.nvt-lista li.nova span { font-weight:700; color:#0f172a; } .nvt-lista li.nova i { color:#16a34a; }
+.nvt-novo { flex:none; font-style:normal; font-size:9px; font-weight:800; letter-spacing:.06em; color:#fff; background:#16a34a; border-radius:99px; padding:2px 6px; line-height:1; }
+.nvt-lista li.mais { color:#94a3b8; font-size:12px; padding-left:22px; }
+.nvt .nvc-meta { grid-template-columns:1fr; }
+.nvt .nvc-meta-leit { border-bottom:1px dashed #e2e8e4; }
+.nvc-faixa { display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; margin:0 0 12px; font-size:13px; color:#64748b; }
+.nvc-faixa b { color:#0f3d2e; } .nvc-faixa a { font-weight:700; color:#15803d; cursor:pointer; }
+.nvc-ver { display:flex; gap:6px; margin:0 0 12px; flex-wrap:wrap; }
+.nvc-ver a { font-size:13px; font-weight:700; padding:7px 14px; border-radius:99px; border:1.5px solid #d7e3dc; color:#4b6358; text-decoration:none; background:#fff; }
+.nvc-ver a.on { background:#0f3d2e; border-color:#0f3d2e; color:#fff; }
+.fin-kpi.clic { cursor:pointer; border:0; text-align:left; font:inherit; width:100%; }
+.fin-kpi.clic.on { outline:3px solid #fff; outline-offset:-6px; }
+.nv-eq { display:grid; grid-template-columns:repeat(auto-fill, minmax(220px, 1fr)); gap:8px 18px; margin-top:12px; }
+.nv-eq-l { display:grid; grid-template-columns:minmax(0,1fr) 54px; gap:4px 10px; font-size:12.5px; align-items:center; }
+.nv-eq-l span:first-child { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; color:#0f172a; }
+.nv-eq-l small { color:#64748b; font-size:11px; margin-left:4px; }
+.nv-eq-l em { font-style:normal; text-align:right; color:#475569; font-size:12px; font-variant-numeric:tabular-nums; }
+.nv-eq-bar { grid-column:1/-1; height:5px; border-radius:99px; background:#eef2f0; overflow:hidden; }
+.nv-eq-bar i { display:block; height:100%; background:#16a34a; } .nv-eq-bar i.baixa { background:#f59e0b; } .nv-eq-bar i.zero { background:#dc2626; min-width:4px; }
+.nv-luz { position:fixed; inset:0; background:rgba(15,23,42,.88); z-index:1100; display:grid; place-items:center; padding:20px; cursor:zoom-out; }
+.nv-luz[hidden] { display:none !important; } .nv-luz img { max-width:100%; max-height:100%; border-radius:10px; box-shadow:0 20px 60px rgba(0,0,0,.5); }
+/* editor e "quem viu" (janela igual à do Pedir ajuda) */
+.nv-form-lin { display:grid; grid-template-columns:repeat(auto-fit, minmax(170px, 1fr)); gap:12px; }
+.at-modal input[type=text], .at-modal input[type=date], .at-modal select { width:100%; border:1px solid #cbd5e1; border-radius:10px;
+           padding:9px 12px; font:inherit; font-size:13.5px; background:#fff; box-sizing:border-box; }
+.at-modal textarea.nv-texto { min-height:170px; }
+.nv-dica { font-size:12px; color:#64748b; margin-top:4px; line-height:1.5; } .nv-dica code { background:#f1f5f9; border-radius:4px; padding:0 4px; font-size:11.5px; }
+.at-modal.nv-editor { width:min(760px,100%); }
+.nv-quem { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+.nv-quem h5 { margin:0 0 8px; font-size:12px; text-transform:uppercase; letter-spacing:.05em; color:#64748b; }
+.nv-quem ul { list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:5px; font-size:13px; }
+.nv-quem li { display:flex; gap:8px; align-items:center; } .nv-quem li small { color:#94a3b8; white-space:nowrap; } .nv-quem li small.q { margin-left:auto; }
+.nv-quem li .r { font-size:11px; border-radius:6px; padding:1px 6px; font-weight:700; }
+.nv-quem li .r-util { background:#dcfce7; color:#15803d; } .nv-quem li .r-duvida { background:#fef3c7; color:#b45309; }
+.nvt .cli-selo { min-width:200px; }
+@media (max-width:600px) { .gc-grid { grid-template-columns:1fr; } .nvc-meta { grid-template-columns:1fr 1fr; }
+  .nvc .cli-selo, .nvt .cli-selo { min-width:0; flex-basis:100%; } .nvc-acoes { width:100%; justify-content:flex-start; } .nv-quem { grid-template-columns:1fr; } }
+</style>
+
+<div class="page-header">
+    <div>
+        <h1 class="page-title"><i class="fas fa-bullhorn" style="color: var(--primary-green);"></i> Novidades</h1>
+        <p class="page-subtitle">{% if tema_info %}<b>{{ tema_info.nome }}</b>{% if tema_info.area and tema_info.area != tema_info.nome %} · {{ 'Para todos' if tema_info.area == 'Todos' else tema_info.area }}{% endif %} — {{ lista|length }} mudança{{ 's' if lista|length != 1 }}; clique no cartão para ler inteira{% if kpi.novas %} · <b>{{ kpi.novas }}</b> que você ainda não tinha visto{% endif %}
+        {% elif ver == 'rascunhos' %}Rascunhos esperando revisão — cada cartão é uma mudança; Editar ajusta texto, tipo, tela e print
+        {% else %}O que mudou no sistema, explicado para a equipe — cada cartão é um tema; clique para ver as mudanças dele{% if kpi.novas %} · <b>{{ kpi.novas }}</b> que você ainda não tinha visto{% endif %}{% endif %}</p>
+    </div>
+    <div class="page-actions">
+        <button type="button" class="btn btn-outline" data-at-novo="sugestao" data-at-texto="Sugestão de melhoria: "><i class="fas fa-lightbulb"></i> Sugerir melhoria</button>
+        {% if eh_admin %}<button type="button" class="btn btn-primary" data-nv-nova><i class="fas fa-bullhorn"></i> Publicar novidade</button>{% endif %}
+    </div>
+</div>
+
+{% if lista and not tema_info %}
+<div class="fin-escopo">
+    <span class="fin-escopo-lbl"><i class="fas fa-layer-group"></i> Assunto</span>
+    <div class="fin-chips" id="nvAss">
+        <a class="fin-chip ativo" data-a="">TODOS</a>
+        {% for a, c in areas|dictsort %}<a class="fin-chip" data-a="{{ a }}" title="{{ c }} novidade{{ 's' if c > 1 }}">{{ ('PARA TODOS' if a == 'Todos' else a)|upper }}</a>{% endfor %}
+    </div>
+    <span class="fin-selo" id="nvSelo"><i class="fas fa-globe"></i> Todos os assuntos</span>
+</div>
+{% endif %}
+
+{% if eh_admin or tema_info %}
+<div class="nvc-ver">
+    {% if tema_info %}
+    <a href="{{ url_for('novidades.index') }}"><i class="fas fa-arrow-left"></i> Todos os temas</a>
+    <a class="on" href="{{ url_for('novidades.index', tema=tema_info.chave) }}"><i class="fas {{ tema_info.area_v[2] }}"></i> {{ tema_info.nome }}</a>
+    {% else %}
+    <a class="{{ 'on' if ver == 'publicadas' }}" href="{{ url_for('novidades.index') }}"><i class="fas fa-th-large"></i> Temas</a>
+    {% endif %}
+    {% if eh_admin %}<a class="{{ 'on' if ver == 'rascunhos' }}" href="{{ url_for('novidades.index', ver='rascunhos') }}"><i class="fas fa-pen-ruler"></i> Rascunhos{% if kpi.rascunhos %} ({{ kpi.rascunhos }}){% endif %}</a>{% endif %}
+</div>
+{% endif %}
+
+{% if modo == 'temas' %}
+<div class="fin-kpis">
+    <button type="button" class="fin-kpi clic" data-kpi="nova"><div class="fin-kpi-lbl">Novas para você</div><div class="fin-kpi-val">{{ kpi.novas }}</div><div class="fin-kpi-pe">{{ 'em ' ~ kpi.temas_novos ~ ' tema' ~ ('s' if kpi.temas_novos != 1) if kpi.novas else 'você já viu todas' }}</div></button>
+    <button type="button" class="fin-kpi clic" data-kpi="semana"><div class="fin-kpi-lbl">Esta semana</div><div class="fin-kpi-val">{{ kpi.semana }}</div><div class="fin-kpi-pe">mudanças desde segunda</div></button>
+    <button type="button" class="fin-kpi clic" data-kpi="duvida"{% if not kpi.duvidas %} style="background:linear-gradient(135deg,#475569,#94a3b8);"{% endif %}><div class="fin-kpi-lbl">{{ 'Com dúvida da equipe' if eh_admin else 'Você ficou com dúvida' }}</div><div class="fin-kpi-val">{{ kpi.duvidas }}</div><div class="fin-kpi-pe">{{ 'a dúvida vira chamado no Atendimento' if kpi.duvidas else 'nenhuma dúvida aberta' }}</div></button>
+    <button type="button" class="fin-kpi clic" data-kpi=""><div class="fin-kpi-lbl">Temas</div><div class="fin-kpi-val">{{ kpi.temas }}</div><div class="fin-kpi-pe">{{ kpi.total }} mudança{{ 's' if kpi.total != 1 }} no total</div></button>
+    {% if eh_admin %}
+    <a class="fin-kpi" href="{{ url_for('novidades.index', ver='rascunhos') }}" style="text-decoration:none;"><div class="fin-kpi-lbl">Rascunhos a revisar</div><div class="fin-kpi-val">{{ kpi.rascunhos }}</div><div class="fin-kpi-pe">nascidos das publicações do sistema</div></a>
+    {% else %}
+    <button type="button" class="fin-kpi clic" data-kpi="mes"><div class="fin-kpi-lbl">Este mês</div><div class="fin-kpi-val">{{ kpi.mes }}</div><div class="fin-kpi-pe">mudanças em {{ hoje[5:7] }}/{{ hoje[:4] }}</div></button>
+    {% endif %}
+</div>
+{% endif %}
+
+{% if lista %}
+<div class="fin-filtros">
+    <div class="fin-filtros-cab" onclick="nvToggle('nvFiltroCorpo','nvChevron')">
+        <h3><i class="fas fa-filter" style="color:#22c55e; margin-right:4px;"></i>Filtros</h3>
+        <span class="fin-selo-filtro" id="nvFiltroN" hidden></span>
+        <i class="fas fa-chevron-down" id="nvChevron" style="font-size:11px; color:#9ca3af; transition:transform .25s;"></i>
+    </div>
+    <div id="nvFiltroCorpo" style="display:none;">
+        <div class="fin-grade">
+            {% if modo == 'lista' %}
+            <div><label>Tipo</label><select id="nvFTipo"><option value="">Todos</option>{% for k, t in TIPOS.items() if tipos_n.get(k) %}<option value="{{ k }}">{{ t[0] }} ({{ tipos_n[k] }})</option>{% endfor %}</select></div>
+            {% endif %}
+            <div><label>Quando</label><select id="nvFQuando"><option value="">Qualquer data</option><option value="semana">{{ 'Esta semana' if modo == 'lista' else 'Com mudança esta semana' }}</option>{% if modo == 'lista' %}<option value="mes">Este mês</option>{% endif %}</select></div>
+            <div><label>{{ 'Leitura' if eh_admin else 'Para você' }}</label><select id="nvFVista">
+                <option value="">Todas</option>
+                {% if eh_admin %}<option value="ninguem">Ninguém viu ainda</option><option value="duvida">Com dúvida</option>
+                {% else %}<option value="nova">Novas para mim</option><option value="util">Que eu entendi</option><option value="duvida">Que fiquei com dúvida</option>{% endif %}</select></div>
+            <div><label>{{ 'Título ou texto' if modo == 'lista' else 'Tema ou mudança' }}</label><input type="text" id="nvBusca" placeholder="boleto, NIRE, extrato..."></div>
+        </div>
+        <div class="fin-acoes-filtro">
+            <a class="btn btn-outline" id="nvLimpar">Limpar</a>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+{% if eh_admin and ver != 'rascunhos' and equipe_leitura %}
+<div class="fin-filtros">
+    <div class="fin-filtros-cab" onclick="nvToggle('nvEqCorpo','nvEqChevron')">
+        <h3><i class="fas fa-users" style="color:#22c55e; margin-right:4px;"></i>Quem está acompanhando</h3>
+        {% set _sem = equipe_leitura|selectattr('viu', 'equalto', 0)|list|length %}
+        {% if _sem %}<span class="fin-selo-filtro" style="background:#fee2e2;color:#b91c1c;">{{ _sem }} sem ver nada</span>{% endif %}
+        <i class="fas fa-chevron-down" id="nvEqChevron" style="font-size:11px; color:#9ca3af; transition:transform .25s;"></i>
+    </div>
+    <div id="nvEqCorpo" style="display:none;"><div class="nv-eq">
+        {% for u in equipe_leitura %}{% set pct = (100 * u.viu / u.podia)|round|int %}
+        <div class="nv-eq-l"><span>{{ u.nome }}{% if u.departamento %}<small>{{ u.departamento }}</small>{% endif %}</span><em>{{ u.viu }} de {{ u.podia }}</em>
+            <span class="nv-eq-bar"><i class="{{ 'zero' if not u.viu else ('baixa' if pct < 50) }}" style="width:{{ pct }}%"></i></span></div>
+        {% endfor %}
+    </div></div>
+</div>
+{% endif %}
+
+{% if lista %}
+<div class="nvc-faixa">
+    <span id="nvFaixa">{% if ver == 'rascunhos' %}<b>{{ lista|length }}</b> rascunho{{ 's' if lista|length > 1 }} esperando revisão. <b>Editar</b> ajusta texto, tipo, tela e print; <b>Publicar</b> solta como está.
+    {% elif modo == 'temas' %}<b>{{ temas|length }}</b> tema{{ 's' if temas|length != 1 }} com mudanças{% if kpi.temas_novos %} · <b>{{ kpi.temas_novos }}</b> com novidade para você{% endif %}.
+    {% else %}Mostrando <b>{{ lista|length }}</b> mudança{{ 's' if lista|length != 1 }} de <b>{{ tema_info.nome }}</b>.{% endif %}</span>
+    <span class="fin-fraco">{{ 'Clique no tema para ver as mudanças.' if modo == 'temas' else 'Clique no cartão para ler inteira.' }}</span>
+</div>
+
+{% if modo == 'temas' %}
+<div class="gc-grid">
+{% for t in temas %}
+    <a class="gc-card nvt" href="{{ url_for('novidades.index', tema=t.chave) }}" title="Ver as mudanças de {{ t.nome }}"
+       data-area="{{ t.area }}" data-tipo="" data-nova="{{ 1 if t.novas else 0 }}" data-semana="{{ 1 if t.semana else 0 }}" data-mes="1"
+       data-rea="" data-ninguem="{{ 1 if eh_admin and not t.viram else 0 }}" data-duvida="{{ 1 if t.duvidas else 0 }}" data-busca="{{ t.busca }}">
+        <header class="gc-head">
+            <span class="gc-ava nvt-ava" style="background:linear-gradient(135deg,{{ t.area_v[1] }},#0f3d2e)"><i class="fas {{ t.area_v[2] }}"></i><small>{{ t.n }} mud.</small></span>
+            <div class="gc-tit">
+                <h3 title="{{ t.nome }}">{{ t.nome }}</h3>
+                <span class="nvc-doc">{{ 'Para todos' if t.area == 'Todos' else t.area }} · última em <b>{{ t.ultima.strftime('%d/%m') }}</b></span>
+            </div>
+            {% if t.novas %}<span class="nf-pill nf-pill-novo">{{ t.novas }} NOVA{{ 'S' if t.novas > 1 }}</span>{% else %}<span class="nf-pill nf-pill-rascunho">EM DIA</span>{% endif %}
+        </header>
+        <div class="nvc-meta">
+            <div class="nvc-meta-leit">
+                <span class="nvc-num">{{ t.n }}<small>mudança{{ 's' if t.n != 1 }}</small></span>
+                {% if eh_admin and t.podem %}<span class="nvc-bar"><i style="width:{{ t.pct }}%"></i></span><span class="fin-fraco" style="font-size:12px;">{{ t.pct }}% de leitura{% if t.duvidas %} · <b style="color:#b45309;">{{ t.duvidas }} com dúvida</b>{% endif %}</span>
+                {% else %}<span class="fin-fraco" style="font-size:12px;">{{ t.tipos_txt }}</span>{% endif %}
+            </div>
+            <ul class="nvt-lista">
+                {% for x in t.titulos %}<li class="{{ 'nova' if x.nova }}"><i class="fas {{ x.tipo_v[1] }}"></i><span>{{ x.titulo }}</span>{% if x.nova %}<em class="nvt-novo">NOVO</em>{% endif %}<small>{{ x.data.strftime('%d/%m') }}</small></li>{% endfor %}
+                {% if t.n > 3 %}<li class="mais">e mais {{ t.n - 3 }}…</li>{% endif %}
+            </ul>
+        </div>
+        <footer class="cli-pe">
+            {% if eh_admin and t.podem %}
+                {% if not t.viram %}<span class="cli-selo cli-selo-bad"><i class="fas fa-eye-slash"></i><span class="cli-selo-t"><b>Ninguém viu ainda</b><small>nenhuma mudança deste tema foi aberta</small></span></span>
+                {% elif t.duvidas %}<span class="cli-selo cli-selo-warn"><i class="fas fa-circle-question"></i><span class="cli-selo-t"><b>{{ t.duvidas }} com dúvida</b><small>veja o chamado no Atendimento</small></span></span>
+                {% elif t.pct >= 70 %}<span class="cli-selo cli-selo-ok"><i class="fas fa-circle-check"></i><span class="cli-selo-t"><b>Quase todos viram</b><small>{{ t.util }} marcaram Entendi</small></span></span>
+                {% else %}<span class="cli-selo cli-selo-info"><i class="fas fa-eye"></i><span class="cli-selo-t"><b>Em leitura</b><small>{{ t.pct }}% das leituras feitas</small></span></span>{% endif %}
+            {% elif t.duvidas %}<span class="cli-selo cli-selo-warn"><i class="fas fa-circle-question"></i><span class="cli-selo-t"><b>Você ficou com dúvida</b><small>o suporte responde no Atendimento</small></span></span>
+            {% elif t.novas %}<span class="cli-selo cli-selo-info"><i class="fas fa-bell"></i><span class="cli-selo-t"><b>{{ t.novas }} nova{{ 's' if t.novas > 1 }} para você</b><small>abra para ver o que mudou</small></span></span>
+            {% else %}<span class="cli-selo cli-selo-sem"><i class="fas fa-circle-check"></i><span class="cli-selo-t"><b>Você já viu tudo</b><small>nada novo neste tema</small></span></span>{% endif %}
+            <div class="nvc-acoes">
+                {% if t.atalho %}<span class="fin-btn-tag" data-ir="{{ t.atalho.url }}" title="Abrir a tela"><i class="fas fa-arrow-up-right-from-square"></i> Abrir tela</span>{% endif %}
+                <span class="fin-btn-tag pri"><i class="fas fa-list"></i> Ver mudanças</span>
+            </div>
+        </footer>
+    </a>
+{% endfor %}
+</div>
+{% else %}
+<div class="gc-grid">
+{% for n in lista %}
+    <article class="gc-card nvc {{ 'nova' if n.nova }}" tabindex="0" role="button" title="Ler inteira"
+             data-area="{{ n.area }}" data-tipo="{{ n.tipo }}" data-nova="{{ 1 if n.nova else 0 }}" data-semana="{{ 1 if n.periodo[0] == 0 else 0 }}"
+             data-mes="{{ 1 if n.periodo[0] <= 2 else 0 }}" data-rea="{{ n.minha_reacao or '' }}"
+             data-ninguem="{{ 1 if n.leitura and not n.leitura.viram else 0 }}" data-duvida="{{ 1 if (n.leitura and n.leitura.duvida) or n.minha_reacao == 'duvida' else 0 }}"
+             data-busca="{{ (n.titulo ~ ' ' ~ n.texto ~ ' ' ~ n.area)|lower }}">
+        <header class="gc-head">
+            <span class="gc-ava nv-ava-{{ n.tipo }}" title="{{ n.tipo_v[0] }}">{{ n.dia }}<small>{{ n.mes }}</small></span>
+            <div class="gc-tit">
+                <h3 title="{{ n.titulo }}">{{ n.titulo }}</h3>
+                <span class="nvc-doc"><i class="fas {{ n.area_v[2] }}" style="color:{{ n.area_v[1] }}"></i> {{ 'Para todos' if n.area == 'Todos' else n.area }}{% if n.tela_nome %} › {{ n.tela_nome }}{% endif %}{% if n.por_nome %} · por <b>{{ n.por_nome }}</b>{% endif %}</span>
+            </div>
+            <span class="nf-pill nf-pill-{{ n.tipo }}">{{ n.tipo_v[0]|upper }}</span>
+        </header>
+
+        <div class="nvc-meta">
+            {% if eh_admin and n.leitura %}
+            <div class="nvc-meta-leit">
+                <span class="nvc-num">{{ n.leitura.viram }}<small>de {{ n.leitura.podem }} viram</small></span>
+                <span class="nvc-bar"><i style="width:{{ (100 * n.leitura.viram / n.leitura.podem)|round|int if n.leitura.podem else 0 }}%"></i></span>
+                <span class="fin-fraco" style="font-size:12px;">{{ n.leitura.util }} entenderam{% if n.leitura.duvida %} · <b style="color:#b45309;">{{ n.leitura.duvida }} com dúvida</b>{% endif %}</span>
+            </div>
+            {% endif %}
+            <div class="cli-campo"><span class="cli-rot">{{ 'Publicada' if n.situacao == 'publicada' else 'Data' }}</span><b class="cli-val">{{ n.data.strftime('%d/%m/%Y') }}</b></div>
+            <div class="cli-campo"><span class="cli-rot">Quando</span><b class="cli-val">{{ n.periodo[1] }}</b></div>
+            <div class="cli-campo"><span class="cli-rot">Para quem</span><b class="cli-val">{{ ('quem usa ' ~ n.tela_nome) if n.tela_nome else 'toda a equipe' }}</b></div>
+        </div>
+
+        <p class="nvc-desc">{{ n.resumo }} <span class="nvc-mais">ler mais</span></p>
+        <div class="nvc-full">
+            {% for tipo, c in n.blocos %}{% if tipo == 'p' %}<p>{{ c }}</p>{% elif tipo == 'ul' %}<ul>{% for i in c %}<li>{{ i }}</li>{% endfor %}</ul>{% else %}<ol>{% for i in c %}<li>{{ i }}</li>{% endfor %}</ol>{% endif %}{% endfor %}
+            {% if n.tem_imagem %}<div class="nvc-img" data-luz="{{ url_for('novidades.imagem', nid=n.id) }}"><img src="{{ url_for('novidades.imagem', nid=n.id) }}" alt="Print da tela" loading="lazy"></div><p class="nvc-img-rot">clique no print para ampliar</p>{% endif %}
+        </div>
+
+        <footer class="cli-pe">
+            {% if ver == 'rascunhos' %}
+            <span class="cli-selo cli-selo-warn"><i class="fas fa-pen-ruler"></i><span class="cli-selo-t"><b>Rascunho</b><small>{{ 'veio da publicação #' ~ n.commit_hash if n.commit_hash else 'escrito à mão' }}</small></span></span>
+            {% elif eh_admin and n.leitura %}
+                {% if not n.leitura.viram %}<span class="cli-selo cli-selo-bad"><i class="fas fa-eye-slash"></i><span class="cli-selo-t"><b>Ninguém viu ainda</b><small>{{ n.leitura.podem }} pessoas podem ver</small></span></span>
+                {% elif n.leitura.duvida %}<span class="cli-selo cli-selo-warn"><i class="fas fa-circle-question"></i><span class="cli-selo-t"><b>{{ n.leitura.duvida }} com dúvida</b><small>veja o chamado no Atendimento</small></span></span>
+                {% elif n.leitura.viram * 10 >= n.leitura.podem * 7 %}<span class="cli-selo cli-selo-ok"><i class="fas fa-circle-check"></i><span class="cli-selo-t"><b>Quase todos viram</b><small>{{ n.leitura.util }} marcaram Entendi</small></span></span>
+                {% else %}<span class="cli-selo cli-selo-info"><i class="fas fa-eye"></i><span class="cli-selo-t"><b>Em leitura</b><small>{{ n.leitura.podem - n.leitura.viram }} ainda não viram</small></span></span>{% endif %}
+            {% elif n.minha_reacao == 'util' %}<span class="cli-selo cli-selo-ok"><i class="fas fa-circle-check"></i><span class="cli-selo-t"><b>Você entendeu</b><small>obrigado por avisar</small></span></span>
+            {% elif n.minha_reacao == 'duvida' %}<span class="cli-selo cli-selo-warn"><i class="fas fa-circle-question"></i><span class="cli-selo-t"><b>Você ficou com dúvida</b><small>o suporte responde no Atendimento</small></span></span>
+            {% elif n.nova %}<span class="cli-selo cli-selo-info"><i class="fas fa-bell"></i><span class="cli-selo-t"><b>Novo para você</b><small>primeira vez que aparece</small></span></span>
+            {% else %}<span class="cli-selo cli-selo-sem"><i class="fas fa-eye"></i><span class="cli-selo-t"><b>Já visto</b><small>marque Entendi ou Dúvida</small></span></span>{% endif %}
+            <div class="nvc-acoes">
+                {% if n.atalho %}<a class="fin-btn-tag" href="{{ n.atalho.url }}" title="Abrir a tela"><i class="fas fa-arrow-up-right-from-square"></i> Abrir {{ n.atalho.rotulo }}</a>{% endif %}
+                {% if ver != 'rascunhos' %}
+                <button type="button" class="fin-btn-tag nv-rea {{ 'on' if n.minha_reacao == 'util' }}" data-rea="util" data-id="{{ n.id }}"><i class="fas fa-thumbs-up"></i> Entendi</button>
+                <button type="button" class="fin-btn-tag nv-rea duv {{ 'on' if n.minha_reacao == 'duvida' }}" data-rea="duvida" data-id="{{ n.id }}" data-at-novo="duvida" data-at-texto="Sobre a novidade «{{ n.titulo }}»: "><i class="fas fa-circle-question"></i> Dúvida</button>
+                {% if eh_admin and n.leitura %}<button type="button" class="fin-btn-tag" data-quem="{{ n.id }}"><i class="fas fa-users"></i> Quem viu</button>{% endif %}
+                {% endif %}
+                {% if eh_admin %}
+                <button type="button" class="fin-btn-tag" data-nv-editar='{{ {"id": n.id, "titulo": n.titulo, "texto": n.texto, "tipo": n.tipo, "area": n.area, "tela_id": n.tela_id or "", "data": n.data.isoformat(), "situacao": n.situacao, "img": n.tem_imagem}|tojson|forceescape }}'><i class="fas fa-pen"></i> Editar</button>
+                {% if n.situacao == 'publicada' %}<button type="button" class="fin-btn-tag" data-nv-sit="rascunho" data-id="{{ n.id }}" data-confirma="Tirar do ar?"><i class="fas fa-eye-slash"></i> Tirar do ar</button>
+                {% else %}<button type="button" class="fin-btn-tag" data-nv-sit="descartada" data-id="{{ n.id }}" data-confirma="Descartar?"><i class="fas fa-trash"></i> Descartar</button>
+                <button type="button" class="fin-btn-tag pri" data-nv-sit="publicada" data-id="{{ n.id }}" data-confirma="Publicar como está?"><i class="fas fa-bullhorn"></i> Publicar</button>{% endif %}
+                {% endif %}
+            </div>
+        </footer>
+    </article>
+{% endfor %}
+</div>
+{% endif %}
+<div class="fin-caixa" id="nvVazio" hidden><div class="fin-vazio"><i class="fas fa-filter" style="font-size:2em; display:block; margin-bottom:10px;"></i>Nenhuma novidade com esses filtros. <a id="nvLimpar2" style="font-weight:700;color:#15803d;cursor:pointer;">Limpar</a></div></div>
+{% else %}
+<div class="fin-caixa"><div class="fin-vazio"><i class="fas fa-bullhorn" style="font-size:2em; display:block; margin-bottom:10px;"></i>
+    {% if ver == 'rascunhos' %}Nenhum rascunho esperando revisão.{% else %}Ainda não há novidades publicadas. Quando algo mudar no sistema, o aviso aparece aqui e no número verde do menu.{% endif %}</div></div>
+{% endif %}
+
+<div class="nv-luz" id="nvLuz" hidden><img alt="Print ampliado"></div>
+
+{% if eh_admin %}
+<div class="at-fundo" id="nvEditor" hidden>
+  <form class="at-modal nv-editor" role="dialog" aria-modal="true" aria-labelledby="nvEdT" id="nvForm">
+    <div class="at-modal-cab"><div><h3 id="nvEdT">Publicar novidade</h3><p>Escreva para toda a equipe: o que mudou, onde fica e o que a pessoa faz agora</p></div>
+      <button type="button" data-fechar aria-label="Fechar"><i class="fas fa-xmark"></i></button></div>
+    <div class="at-modal-corpo">
+      <input type="hidden" name="id"><input type="hidden" name="tipo" value="melhoria"><input type="hidden" name="tirar_imagem" value="0">
+      <div><span class="at-rot">Que tipo de novidade é?</span>
+        <div class="at-chips" id="nvTipos">
+          {% for k, t in TIPOS.items() %}<button type="button" class="at-chip {{ 'on' if k == 'melhoria' }}" data-tipo="{{ k }}"><i class="fas {{ t[1] }}"></i> {{ t[0] }}</button>{% endfor %}
+        </div></div>
+      <div><span class="at-rot">Título</span><input type="text" name="titulo" maxlength="160" required placeholder="Ex.: O extrato da Efí entra sozinho todo dia"></div>
+      <div><span class="at-rot">Texto</span><textarea name="texto" class="nv-texto" required placeholder="O que mudou, onde fica e o que a pessoa faz agora."></textarea>
+        <div class="nv-dica">O primeiro parágrafo aparece no cartão fechado · linha em branco separa parágrafos · linhas com <code>- </code> viram lista · linhas com <code>1. </code> viram passo a passo · <code>**assim**</code> fica em negrito.</div></div>
+      <div><span class="at-rot">Print da tela (opcional)</span>
+        <div class="at-colar" id="nvColar" tabindex="0"><i class="fas fa-image"></i> Clique aqui e aperte <b>Ctrl+V</b> para colar o print,
+          arraste a imagem ou <label>escolha o arquivo<input type="file" accept="image/*" id="nvArq" hidden></label></div></div>
+      <div class="nv-form-lin">
+        <div><span class="at-rot">Assunto</span><select name="area" id="nvArea">
+          <option value="Todos">Para todos</option>
+          {% for g in grupos %}<option value="{{ g }}">{{ g }}</option>{% endfor %}</select></div>
+        <div><span class="at-rot">Tela (opcional)</span><select name="tela_id" id="nvTela"><option value="">— nenhuma —</option></select></div>
+        <div><span class="at-rot">Data</span><input type="date" name="data" value="{{ hoje }}"></div>
+      </div>
+      <div class="nv-dica">Com tela escolhida, o aviso ganha o atalho "Abrir" e aparece só para quem tem acesso àquela tela.</div>
+      <div class="nv-dica" id="nvErro" style="color:#b91c1c" hidden></div>
+    </div>
+    <div class="at-modal-pe">
+      <button type="button" class="at-bt" data-fechar>Cancelar</button>
+      <button type="submit" class="at-bt" data-acao="rascunho" id="nvBtRasc"><i class="fas fa-floppy-disk"></i> Guardar rascunho</button>
+      <button type="submit" class="at-bt at-bt-pri" data-acao="publicar" id="nvBtPub"><i class="fas fa-bullhorn"></i> Publicar</button>
+    </div>
+  </form>
+</div>
+<div class="at-fundo" id="nvQuem" hidden>
+  <div class="at-modal" role="dialog" aria-modal="true">
+    <div class="at-modal-cab"><div><h3>Quem viu</h3><p id="nvQuemS"></p></div><button type="button" data-fechar aria-label="Fechar"><i class="fas fa-xmark"></i></button></div>
+    <div class="at-modal-corpo"><div class="nv-quem"><div><h5>Já viram</h5><ul id="nvViram"></ul></div><div><h5>Ainda não viram</h5><ul id="nvFaltam"></ul></div></div></div>
+  </div>
+</div>
+{% endif %}
+{% endblock %}
+{% block extra_js %}
+<script>
+function nvToggle(corpo, chev) {
+    var c = document.getElementById(corpo), ch = document.getElementById(chev);
+    var aberto = c.style.display !== 'none';
+    c.style.display = aberto ? 'none' : '';
+    ch.style.transform = aberto ? '' : 'rotate(180deg)';
+}
+(function () {
+  var cards = [].slice.call(document.querySelectorAll('.nvc, .nvt'));
+  // "Abrir tela" dentro do cartão de tema (o cartão inteiro é o link para as mudanças)
+  document.querySelectorAll('.nvt [data-ir]').forEach(function (b) { b.addEventListener('click', function (ev) { ev.preventDefault(); ev.stopPropagation(); location.href = b.dataset.ir; }); });
+  var $ = function (id) { return document.getElementById(id); };
+  var F = { area: '', tipo: '', quando: '', vista: '', kpi: '', q: '' };
+  function filtra() {
+    var n = 0;
+    cards.forEach(function (c) {
+      var d = c.dataset, ok = (!F.area || d.area === F.area) && (!F.tipo || d.tipo === F.tipo)
+        && (!F.quando || d[F.quando] === '1') && (!F.q || d.busca.indexOf(F.q) >= 0);
+      if (F.kpi === 'nova') ok = ok && d.nova === '1';
+      if (F.kpi === 'semana') ok = ok && d.semana === '1';
+      if (F.kpi === 'mes') ok = ok && d.mes === '1';
+      if (F.kpi === 'duvida') ok = ok && d.duvida === '1';
+      if (F.vista === 'nova') ok = ok && d.nova === '1';
+      if (F.vista === 'util' || F.vista === 'duvida') ok = ok && (d.rea === F.vista || (F.vista === 'duvida' && d.duvida === '1'));
+      if (F.vista === 'ninguem') ok = ok && d.ninguem === '1';
+      c.hidden = !ok; if (ok) n++;
+    });
+    var v = $('nvVazio'); if (v) v.hidden = n > 0;
+    var ativos = [F.tipo, F.quando, F.vista, F.q].filter(Boolean).length;
+    var fn = $('nvFiltroN'); if (fn) { fn.hidden = !ativos; fn.textContent = ativos + ' ativo(s)'; }
+    var fx = $('nvFaixa'); if (fx && cards.length && (ativos || F.area || F.kpi)) fx.innerHTML = '<b>' + n + '</b> de ' + cards.length + ' {{ 'temas' if modo == 'temas' else 'mudanças' }} com os filtros. <a id="nvLimpar3">Limpar</a>';
+    else if (fx && cards.length && fx.dataset.orig) fx.innerHTML = fx.dataset.orig;
+    document.querySelectorAll('#nvAss .fin-chip').forEach(function (b) { b.classList.toggle('ativo', b.dataset.a === F.area); });
+    var selo = $('nvSelo'); if (selo) selo.innerHTML = F.area ? '<i class="fas fa-check-circle"></i> ' + (F.area === 'Todos' ? 'Para todos' : F.area) : '<i class="fas fa-globe"></i> Todos os assuntos';
+    document.querySelectorAll('.fin-kpi.clic').forEach(function (b) { b.classList.toggle('on', !!F.kpi && b.dataset.kpi === F.kpi); });
+    var l3 = $('nvLimpar3'); if (l3) l3.addEventListener('click', limpar);
+  }
+  function limpar() {
+    F = { area: '', tipo: '', quando: '', vista: '', kpi: '', q: '' };
+    ['nvFTipo', 'nvFQuando', 'nvFVista', 'nvBusca'].forEach(function (id) { var e = $(id); if (e) e.value = ''; });
+    filtra();
+  }
+  var fx0 = $('nvFaixa'); if (fx0) fx0.dataset.orig = fx0.innerHTML;
+  document.querySelectorAll('#nvAss .fin-chip').forEach(function (b) { b.addEventListener('click', function () { F.area = b.dataset.a; filtra(); }); });
+  document.querySelectorAll('.fin-kpi.clic').forEach(function (b) { b.addEventListener('click', function () { F.kpi = (F.kpi === b.dataset.kpi) ? '' : b.dataset.kpi; filtra(); }); });
+  [['nvFTipo', 'tipo'], ['nvFQuando', 'quando'], ['nvFVista', 'vista']].forEach(function (p) { var e = $(p[0]); if (e) e.addEventListener('change', function () { F[p[1]] = e.value; filtra(); }); });
+  var busca = $('nvBusca'); if (busca) busca.addEventListener('input', function () { F.q = busca.value.toLowerCase().trim(); filtra(); });
+  ['nvLimpar', 'nvLimpar2'].forEach(function (id) { var e = $(id); if (e) e.addEventListener('click', limpar); });
+
+  // o cartão abre/fecha o texto inteiro; botões e links seguem o próprio caminho
+  cards.forEach(function (card) {
+    function alterna(ev) { if (ev.target.closest('a, button, form, .nvc-img')) return; card.classList.toggle('aberto'); }
+    card.addEventListener('click', alterna);
+    card.addEventListener('keydown', function (ev) { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); alterna(ev); } });
+  });
+  var luz = $('nvLuz');
+  document.querySelectorAll('[data-luz]').forEach(function (b) { b.addEventListener('click', function (ev) { ev.stopPropagation(); luz.querySelector('img').src = b.dataset.luz; luz.hidden = false; }); });
+  luz.addEventListener('click', function () { luz.hidden = true; });
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape') luz.hidden = true; });
+
+  function post(url, fd, botao) {
+    if (botao) botao.disabled = true;
+    return fetch(url, { method: 'POST', body: fd, headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+      .then(function (r) { return r.json().catch(function () { return { ok: false, erro: 'Não foi possível (' + r.status + ').' }; }); })
+      .finally(function () { if (botao) botao.disabled = false; });
+  }
+  document.querySelectorAll('.nv-rea').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var ligar = !b.classList.contains('on'), rea = ligar ? b.dataset.rea : '';
+      var fd = new FormData(); if (rea) fd.append('reacao', rea);
+      post('/novidades/' + b.dataset.id + '/reagir', fd).then(function (j) {
+        if (!j.ok) return;
+        b.parentNode.querySelectorAll('.nv-rea').forEach(function (x) { x.classList.toggle('on', x === b && ligar); });
+        b.closest('.nvc').dataset.rea = rea;
+      });
+    });
+  });
+{% if eh_admin %}
+  var TELAS = {{ telas_por_grupo|tojson }};
+  var fundo = $('nvEditor'), form = $('nvForm'), area = $('nvArea'), tela = $('nvTela'), erro = $('nvErro');
+  var colar = $('nvColar'), COLAR_HTML = colar.innerHTML, imgB64 = null, acao = 'publicar';
+  function enche(sel) {
+    tela.innerHTML = '<option value="">— nenhuma —</option>';
+    (TELAS[area.value] || []).forEach(function (t) { var o = document.createElement('option'); o.value = t.id; o.textContent = t.nome; tela.appendChild(o); });
+    tela.value = sel || '';
+  }
+  area.addEventListener('change', function () { enche(''); });
+  function tipo(k) { form.tipo.value = k; document.querySelectorAll('#nvTipos .at-chip').forEach(function (c) { c.classList.toggle('on', c.dataset.tipo === k); }); }
+  document.querySelectorAll('#nvTipos .at-chip').forEach(function (c) { c.addEventListener('click', function () { tipo(c.dataset.tipo); }); });
+  function mostraImg(src) { imgB64 = src; colar.classList.add('tem'); colar.innerHTML = '<img alt="print" src="' + src + '"><a href="#" id="nvTiraImg">tirar o print</a>'; }
+  function limpaImg() { imgB64 = null; colar.classList.remove('tem'); colar.innerHTML = COLAR_HTML; }
+  function usarArquivo(f) { if (!f || f.type.indexOf('image') !== 0) return; var r = new FileReader(); r.onload = function () { mostraImg(r.result); form.tirar_imagem.value = '0'; }; r.readAsDataURL(f); }
+  function pegaImg(e) { var it = [].slice.call((e.clipboardData || {}).items || []).filter(function (i) { return i.type.indexOf('image') === 0; })[0]; if (it) { e.preventDefault(); usarArquivo(it.getAsFile()); } }
+  colar.addEventListener('paste', pegaImg); form.texto.addEventListener('paste', pegaImg);
+  colar.addEventListener('dragover', function (e) { e.preventDefault(); });
+  colar.addEventListener('drop', function (e) { e.preventDefault(); usarArquivo(e.dataTransfer.files[0]); });
+  colar.addEventListener('change', function (e) { if (e.target.id === 'nvArq') usarArquivo(e.target.files[0]); });
+  colar.addEventListener('click', function (e) { if (e.target.id === 'nvTiraImg') { e.preventDefault(); limpaImg(); form.tirar_imagem.value = '1'; } });
+  function abre(d) {
+    d = d || {};
+    form.id.value = d.id || ''; form.titulo.value = d.titulo || ''; form.texto.value = d.texto || '';
+    tipo(d.tipo || 'melhoria'); area.value = d.area || 'Todos'; enche(d.tela_id || '');
+    form.data.value = d.data || '{{ hoje }}'; form.tirar_imagem.value = '0';
+    if (d.img) mostraImg('/novidades/' + d.id + '/imagem'); else limpaImg();
+    $('nvEdT').textContent = d.id ? 'Editar novidade' : 'Publicar novidade';
+    $('nvBtRasc').hidden = d.situacao === 'publicada';
+    $('nvBtPub').innerHTML = d.situacao === 'publicada' ? '<i class="fas fa-check"></i> Salvar' : '<i class="fas fa-bullhorn"></i> Publicar';
+    erro.hidden = true; fundo.hidden = false; form.titulo.focus();
+  }
+  document.querySelectorAll('[data-nv-nova]').forEach(function (b) { b.addEventListener('click', function () { abre(); }); });
+  document.querySelectorAll('[data-nv-editar]').forEach(function (b) { b.addEventListener('click', function () { abre(JSON.parse(b.getAttribute('data-nv-editar'))); }); });
+  document.querySelectorAll('#nvEditor [data-fechar], #nvQuem [data-fechar]').forEach(function (b) { b.addEventListener('click', function () { b.closest('.at-fundo').hidden = true; }); });
+  form.querySelectorAll('button[type=submit]').forEach(function (b) { b.addEventListener('click', function () { acao = b.dataset.acao; }); });
+  form.addEventListener('submit', function (ev) {
+    ev.preventDefault();
+    var fd = new FormData(form); fd.append('acao', acao);
+    if (imgB64 && imgB64.indexOf('data:') === 0) fd.append('print_b64', imgB64);
+    post('{{ url_for("novidades.salvar") }}', fd, form.querySelector('[data-acao="' + acao + '"]')).then(function (j) {
+      if (j.ok) { location.href = j.ir; } else { erro.textContent = j.erro || 'Não foi possível salvar.'; erro.hidden = false; }
+    });
+  });
+  document.querySelectorAll('[data-nv-sit]').forEach(function (b) {
+    var armado = false;
+    b.addEventListener('click', function () {
+      if (!armado) { armado = true; b.dataset.antes = b.innerHTML; b.textContent = b.dataset.confirma + ' Clique de novo'; b.classList.add('destaque');
+        setTimeout(function () { armado = false; b.innerHTML = b.dataset.antes; b.classList.remove('destaque'); }, 4000); return; }
+      var fd = new FormData(); fd.append('situacao', b.dataset.nvSit);
+      post('/novidades/' + b.dataset.id + '/situacao', fd, b).then(function (j) { if (j.ok) location.reload(); });
+    });
+  });
+  document.querySelectorAll('[data-quem]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      fetch('/novidades/' + b.dataset.quem + '/quem-viu', { headers: { 'X-Requested-With': 'XMLHttpRequest' } }).then(function (r) { return r.json(); }).then(function (j) {
+        if (!j.ok) return;
+        $('nvQuemS').textContent = j.titulo;
+        function li(u) { return '<li>' + u.nome + (u.departamento ? ' <small>' + u.departamento + '</small>' : '')
+          + (u.reacao ? ' <span class="r r-' + u.reacao + '">' + (u.reacao === 'util' ? 'entendeu' : 'dúvida') + '</span>' : '') + (u.quando ? '<small class="q">' + u.quando + '</small>' : '') + '</li>'; }
+        $('nvViram').innerHTML = j.viram.map(li).join('') || '<li style="color:#94a3b8">Ninguém ainda</li>';
+        $('nvFaltam').innerHTML = j.faltam.map(li).join('') || '<li style="color:#94a3b8">Todos já viram</li>';
+        $('nvQuem').hidden = false;
+      });
+    });
+  });
+{% endif %}
+})();
+</script>
+{% endblock %}

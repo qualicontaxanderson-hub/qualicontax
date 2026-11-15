@@ -135,6 +135,14 @@
                     {% if atend_sinal %}<em class="rail-badge">{{ atend_sinal if atend_sinal < 100 else '99+' }}</em>{% endif %}
                 </a>
             </li>
+            {# Novidades (15/11/2026): o que mudou no sistema; o número verde é o que a pessoa ainda não viu. #}
+            <li>
+                <a href="{{ url_for('novidades.index') }}" class="rail-link rail-novidades {% if request.endpoint and request.endpoint.startswith('novidades.') %}active{% endif %}" title="Novidades">
+                    <i class="fas fa-bullhorn"></i>
+                    <span>Novidades</span>
+                    {% if novid_sinal %}<em class="rail-badge rail-badge-nv">{{ novid_sinal if novid_sinal < 100 else '99+' }}</em>{% endif %}
+                </a>
+            </li>
             {% if current_user.has_permission('configuracoes.index') %}
             <li>
                 <a href="{{ url_for('configuracoes.index') }}" class="rail-link rail-config {% if 'configuracoes' in request.endpoint %}active{% endif %}" title="Configurações">

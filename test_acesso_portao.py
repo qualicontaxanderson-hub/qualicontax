@@ -49,7 +49,8 @@ SEM_EMPRESA = {
 # ali aponta para cliente. Quem entra no Financeiro vê o Financeiro inteiro.
 # Atendimento (15/11/2026): os ids são de chamado/mensagem, e a rota confere que o chamado é
 # de quem pede (ou que é admin); a empresa do chamado só aparece se a pessoa pode vê-la.
-BLUEPRINTS_SEM_EMPRESA = {'financeiro', 'atendimento'}
+# Novidades (15/11/2026): o id é do aviso; a rota confere se a pessoa pode ver aquele aviso.
+BLUEPRINTS_SEM_EMPRESA = {'financeiro', 'atendimento', 'novidades'}
 # Rotas cujo 'id' NÃO é de empresa.
 ID_SEM_EMPRESA_PREFIXOS = ('grupos.', 'ramos_atividade.', 'municipios.', 'financeiro.',
                            'configuracoes.', 'contabil.')

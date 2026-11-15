@@ -84,6 +84,10 @@ MAPA = {
     'atendimento.avaliar':             'LOGIN',
     'atendimento.print':               'LOGIN',
     'atendimento.telas':               'LOGIN',
+    # Novidades (15/11/2026): todo usuário lê; escrever/publicar é @admin_required.
+    'novidades.index':                 'LOGIN',
+    'novidades.imagem':                'LOGIN',   # a rota confere se a pessoa pode ver o aviso
+    'novidades.reagir':                'LOGIN',
 
     # --- Cadastros: clientes ------------------------------------------------
     'clientes.novo':                   'clientes.create',

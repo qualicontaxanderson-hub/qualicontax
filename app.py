@@ -179,6 +179,8 @@ app.register_blueprint(manuais_bp)
 app.register_blueprint(qrobo)
 from routes.atendimento import atendimento as atendimento_bp   # noqa: E402  (chamados da equipe ao suporte; 15/11/2026)
 app.register_blueprint(atendimento_bp)
+from routes.novidades import novidades as novidades_bp   # noqa: E402  (o que mudou no sistema; 15/11/2026)
+app.register_blueprint(novidades_bp)
 
 # Gate do Portal do Instalador — DENY BY DEFAULT para a sessão de escopo
 # restrito. Registrado no APP (não no blueprint) de propósito: precisa rodar

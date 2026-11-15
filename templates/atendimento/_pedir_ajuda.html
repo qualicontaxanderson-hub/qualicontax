@@ -4,10 +4,14 @@
 .rail-atendimento        { color:#0E7490; }
 .rail-atendimento:hover  { color:#0E7490; background-color:rgba(14,116,144,.08); }
 .rail-atendimento.active { color:#0E7490; border-left-color:#0E7490; background-color:rgba(14,116,144,.12); }
+.rail-novidades        { color:#C2410C; }
+.rail-novidades:hover  { color:#C2410C; background-color:rgba(194,65,12,.08); }
+.rail-novidades.active { color:#C2410C; border-left-color:#C2410C; background-color:rgba(194,65,12,.12); }
 .rail-link { position:relative; }
 .rail-badge { position:absolute; top:4px; right:12px; min-width:17px; height:17px; border-radius:999px; background:#dc2626;
               color:#fff; font-size:10.5px; font-style:normal; font-weight:800; display:grid; place-items:center;
               padding:0 4px; box-shadow:0 0 0 2px #fff; line-height:1; }
+.rail-badge-nv { background:#16a34a; }
 .at-st { display:inline-flex; align-items:center; gap:6px; font-size:11.5px; font-weight:700; padding:3px 10px;
          border-radius:999px; white-space:nowrap; }
 .at-st::before { content:""; width:7px; height:7px; border-radius:50%; background:currentColor; }
@@ -136,15 +140,19 @@
   function clienteId() { var m = location.pathname.match(/\/clientes\/(\d+)/); return m ? m[1] : ''; }
   function abrir(id) { fechar(); $(id).hidden = false; }
   function fechar() { document.querySelectorAll('.at-fundo').forEach(function (f) { f.hidden = true; }); }
-  window.atAbrirChamado = function () {
+  window.atAbrirChamado = function (opts) {
+    opts = opts || {};
+    if (opts.tipo) { var ch = document.querySelector('#atTipos .at-chip[data-tipo="' + opts.tipo + '"]'); if (ch) ch.click(); }
+    if (opts.texto !== undefined && opts.texto !== null && opts.texto !== '') $('atTexto').value = opts.texto;
     $('atOnde').textContent = onde(); $('atNovoErro').textContent = '';
     $('atOndeBox').hidden = location.pathname.indexOf('/atendimento') === 0;
-    abrir('atNovo'); setTimeout(function () { $('atTexto').focus(); }, 50);
+    abrir('atNovo'); setTimeout(function () { var t = $('atTexto'); t.focus(); t.setSelectionRange(t.value.length, t.value.length); }, 50);
   };
   window.atAbrirAcesso = function () { $('atAcErro').textContent = ''; abrir('atAcesso'); carregarTelas(); };
 
   document.addEventListener('click', function (e) {
-    if (e.target.closest('[data-at-novo]')) { e.preventDefault(); window.atAbrirChamado(); return; }
+    var nv = e.target.closest('[data-at-novo]');
+    if (nv) { e.preventDefault(); window.atAbrirChamado({ tipo: nv.getAttribute('data-at-novo'), texto: nv.getAttribute('data-at-texto') }); return; }
     if (e.target.closest('[data-at-acesso]')) { e.preventDefault(); window.atAbrirAcesso(); return; }
     if (e.target.closest('[data-at-fechar]') || e.target.classList.contains('at-fundo')) { fechar(); return; }
     var c = e.target.closest('#atTipos .at-chip[data-tipo]');
