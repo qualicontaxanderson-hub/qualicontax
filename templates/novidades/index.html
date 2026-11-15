@@ -62,6 +62,16 @@
 .nvt-lista li.mais { color:#94a3b8; font-size:12px; padding-left:22px; }
 .nvt .nvc-meta { grid-template-columns:1fr; }
 .nvt .nvc-meta-leit { border-bottom:1px dashed #e2e8e4; }
+/* aviso pós-publicação com o texto do WhatsApp */
+.nv-zap-banner { background:#f0fdf4; border:1.5px solid #86efac; border-radius:12px; padding:12px 16px; margin:0 0 12px; font-size:13px; color:#14532d;
+                 display:flex; gap:10px 14px; align-items:center; justify-content:space-between; flex-wrap:wrap; }
+.nv-zap-banner > span:first-child i { color:#16a34a; font-size:16px; margin-right:4px; }
+.nv-zap-banner .nv-zap { border-color:#16a34a; background:#16a34a; color:#fff; } .nv-zap-banner .nv-zap:hover { background:#15803d; color:#fff; }
+.nv-zap-quem { flex-basis:100%; font-size:12.5px; color:#166534; background:#fff; border:1px solid #bbf7d0; border-radius:10px; padding:8px 12px; line-height:1.5; }
+.nv-zap-quem i { color:#16a34a; margin-right:4px; }
+.nv-zap-prev { flex-basis:100%; margin:4px 0 0; background:#fff; border:1px solid #d1fae5; border-radius:10px; padding:12px 14px; white-space:pre-wrap;
+               font:13px/1.55 inherit; font-family:inherit; color:#1f2937; max-width:70ch; }
+.fin-btn-tag.copiado { border-color:#16a34a; background:#dcfce7; color:#15803d; }
 .nvc-faixa { display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; margin:0 0 12px; font-size:13px; color:#64748b; }
 .nvc-faixa b { color:#0f3d2e; } .nvc-faixa a { font-weight:700; color:#15803d; cursor:pointer; }
 .nvc-ver { display:flex; gap:6px; margin:0 0 12px; flex-wrap:wrap; }
@@ -189,6 +199,22 @@
 </div>
 {% endif %}
 
+{% if zap_pub %}
+<div class="nv-zap-banner">
+    <span><i class="fab fa-whatsapp"></i> <b>Publicada!</b> "{{ zap_pub.titulo }}" já aparece para a equipe. Quer avisar no WhatsApp? O texto já está pronto:</span>
+    <span style="display:flex;gap:6px;flex-wrap:wrap;">
+        <button type="button" class="fin-btn-tag nv-zap" data-zap='{{ zap_pub.zap|tojson|forceescape }}'><i class="fab fa-whatsapp"></i> Copiar texto para o WhatsApp</button>
+        <button type="button" class="fin-btn-tag" onclick="nvToggle('nvZapPrev','nvZapChev')"><i class="fas fa-eye"></i> Ver o texto <i class="fas fa-chevron-down" id="nvZapChev" style="font-size:10px;"></i></button>
+    </span>
+    <span class="nv-zap-quem">
+        {% if zap_pub.para_todos %}<i class="fas fa-users"></i> <b>Toda a equipe vê</b> esta novidade no sistema: pode mandar no grupo geral.
+        {% elif zap_pub.quem %}<i class="fas fa-user-check"></i> <b>Quem vê no sistema ({{ zap_pub.quem|length }}):</b> {{ zap_pub.quem|join(', ') }}. Mande só para {{ 'essa pessoa' if zap_pub.quem|length == 1 else 'essas pessoas' }} ou no grupo do setor; para o resto da equipe a tela nem existe.
+        {% else %}<i class="fas fa-user-slash"></i> <b>Ninguém além dos admins vê</b> esta novidade hoje: nenhuma pessoa tem acesso a essa tela. Não precisa mandar no WhatsApp.{% endif %}
+    </span>
+    <pre id="nvZapPrev" class="nv-zap-prev" style="display:none;">{{ zap_pub.zap }}</pre>
+</div>
+{% endif %}
+
 {% if lista %}
 <div class="nvc-faixa">
     <span id="nvFaixa">{% if ver == 'rascunhos' %}<b>{{ lista|length }}</b> rascunho{{ 's' if lista|length > 1 }} esperando revisão. <b>Editar</b> ajusta texto, tipo, tela e print; <b>Publicar</b> solta como está.
@@ -266,7 +292,7 @@
             {% endif %}
             <div class="cli-campo"><span class="cli-rot">{{ 'Publicada' if n.situacao == 'publicada' else 'Data' }}</span><b class="cli-val">{{ n.data.strftime('%d/%m/%Y') }}</b></div>
             <div class="cli-campo"><span class="cli-rot">Quando</span><b class="cli-val">{{ n.periodo[1] }}</b></div>
-            <div class="cli-campo"><span class="cli-rot">Para quem</span><b class="cli-val">{{ ('quem usa ' ~ n.tela_nome) if n.tela_nome else 'toda a equipe' }}</b></div>
+            <div class="cli-campo"><span class="cli-rot">Para quem</span><b class="cli-val">{{ ('quem usa ' ~ n.tela_nome) if n.tela_nome else (('quem usa alguma tela de ' ~ n.area) if n.area != 'Todos' else 'toda a equipe') }}</b></div>
         </div>
 
         <p class="nvc-desc">{{ n.resumo }} <span class="nvc-mais">ler mais</span></p>
@@ -295,6 +321,7 @@
                 {% if eh_admin and n.leitura %}<button type="button" class="fin-btn-tag" data-quem="{{ n.id }}"><i class="fas fa-users"></i> Quem viu</button>{% endif %}
                 {% endif %}
                 {% if eh_admin %}
+                <button type="button" class="fin-btn-tag nv-zap" title="Copiar o texto pronto para mandar no WhatsApp" data-zap='{{ n.zap|tojson|forceescape }}'><i class="fab fa-whatsapp"></i> WhatsApp</button>
                 <button type="button" class="fin-btn-tag" data-nv-editar='{{ {"id": n.id, "titulo": n.titulo, "texto": n.texto, "tipo": n.tipo, "area": n.area, "tela_id": n.tela_id or "", "data": n.data.isoformat(), "situacao": n.situacao, "img": n.tem_imagem}|tojson|forceescape }}'><i class="fas fa-pen"></i> Editar</button>
                 {% if n.situacao == 'publicada' %}<button type="button" class="fin-btn-tag" data-nv-sit="rascunho" data-id="{{ n.id }}" data-confirma="Tirar do ar?"><i class="fas fa-eye-slash"></i> Tirar do ar</button>
                 {% else %}<button type="button" class="fin-btn-tag" data-nv-sit="descartada" data-id="{{ n.id }}" data-confirma="Descartar?"><i class="fas fa-trash"></i> Descartar</button>
@@ -338,7 +365,7 @@
         <div><span class="at-rot">Tela (opcional)</span><select name="tela_id" id="nvTela"><option value="">— nenhuma —</option></select></div>
         <div><span class="at-rot">Data</span><input type="date" name="data" value="{{ hoje }}"></div>
       </div>
-      <div class="nv-dica">Com tela escolhida, o aviso ganha o atalho "Abrir" e aparece só para quem tem acesso àquela tela.</div>
+      <div class="nv-dica"><b>Quem vê:</b> com tela escolhida, só quem tem acesso àquela tela (e ganha o atalho "Abrir"). Só com o assunto, quem tem acesso a alguma tela do assunto. "Para todos", toda a equipe. Vale a tela, não o departamento da pessoa.</div>
       <div class="nv-dica" id="nvErro" style="color:#b91c1c" hidden></div>
     </div>
     <div class="at-modal-pe">
@@ -423,6 +450,24 @@ function nvToggle(corpo, chev) {
       .then(function (r) { return r.json().catch(function () { return { ok: false, erro: 'Não foi possível (' + r.status + ').' }; }); })
       .finally(function () { if (botao) botao.disabled = false; });
   }
+  // Copiar o texto do WhatsApp (navegador novo copia direto; o antigo cai no selecionar+copiar)
+  function copiar(txt) {
+    if (navigator.clipboard && window.isSecureContext) return navigator.clipboard.writeText(txt);
+    return new Promise(function (ok, erro) {
+      var ta = document.createElement('textarea'); ta.value = txt; ta.style.position = 'fixed'; ta.style.opacity = '0';
+      document.body.appendChild(ta); ta.focus(); ta.select();
+      try { document.execCommand('copy') ? ok() : erro(); } catch (e) { erro(e); } finally { document.body.removeChild(ta); }
+    });
+  }
+  document.querySelectorAll('.nv-zap').forEach(function (b) {
+    b.addEventListener('click', function (ev) {
+      ev.stopPropagation();
+      var txt = JSON.parse(b.getAttribute('data-zap')), antes = b.innerHTML;
+      copiar(txt).then(function () { b.classList.add('copiado'); b.innerHTML = '<i class="fas fa-check"></i> Copiado! É só colar no WhatsApp'; },
+                       function () { b.innerHTML = '<i class="fas fa-triangle-exclamation"></i> Não copiou — selecione o texto em "Ver o texto"'; });
+      setTimeout(function () { b.classList.remove('copiado'); b.innerHTML = antes; }, 3000);
+    });
+  });
   document.querySelectorAll('.nv-rea').forEach(function (b) {
     b.addEventListener('click', function () {
       var ligar = !b.classList.contains('on'), rea = ligar ? b.dataset.rea : '';
@@ -484,7 +529,11 @@ function nvToggle(corpo, chev) {
       if (!armado) { armado = true; b.dataset.antes = b.innerHTML; b.textContent = b.dataset.confirma + ' Clique de novo'; b.classList.add('destaque');
         setTimeout(function () { armado = false; b.innerHTML = b.dataset.antes; b.classList.remove('destaque'); }, 4000); return; }
       var fd = new FormData(); fd.append('situacao', b.dataset.nvSit);
-      post('/novidades/' + b.dataset.id + '/situacao', fd, b).then(function (j) { if (j.ok) location.reload(); });
+      post('/novidades/' + b.dataset.id + '/situacao', fd, b).then(function (j) {
+        if (!j.ok) return;
+        // publicou um rascunho: volta para os temas já com o texto do WhatsApp pronto
+        location.href = b.dataset.nvSit === 'publicada' ? '/novidades/?zap=' + b.dataset.id : location.pathname + location.search;
+      });
     });
   });
   document.querySelectorAll('[data-quem]').forEach(function (b) {

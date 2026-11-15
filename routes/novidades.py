@@ -81,14 +81,29 @@ def _codigo_da_tela(tela_id, telas):
     return t[2] if t else None
 
 
+def _codigos_da_area(area):
+    """Os códigos de Ver de todas as telas de um assunto do catálogo (vazio para 'Todos')."""
+    from utils.permissions import DEPARTAMENTOS_PERMISSOES
+    for dep in DEPARTAMENTOS_PERMISSOES:
+        if dep['grupo'] == area:
+            return {t['ver'][0] for t in dep['telas'] if t.get('ver')}
+    return set()
+
+
 def _pode_ver(n, telas, perms=None, admin=None):
-    """A pessoa vê este aviso? Sem tela, todos; com tela, quem tem o Ver dela (ou admin)."""
+    """A pessoa vê este aviso? Vale a TELA, não o departamento (Anderson, 15/11/2026: quem lança
+    contrato no Financeiro não ganha, por isso, as novidades de Cobrança e Títulos).
+
+    - com tela: quem tem o Ver daquela tela;
+    - sem tela, mas com assunto (ex.: Financeiro): quem tem o Ver de ALGUMA tela do assunto;
+    - 'Para todos': todo mundo. Admin vê tudo."""
     cod = _codigo_da_tela(n.get('tela_id'), telas)
-    if not cod:
+    precisa = {cod} if cod else _codigos_da_area(n.get('area') or '')
+    if not precisa:
         return True
     if perms is None:
-        return current_user.is_admin() or current_user.has_permission(cod)
-    return bool(admin) or cod in perms
+        return current_user.is_admin() or any(current_user.has_permission(c) for c in precisa)
+    return bool(admin) or bool(precisa & perms)
 
 
 def _atalho(tela_id, telas):
@@ -179,7 +194,7 @@ def _sinal_novidades():
     if not current_user.is_authenticated or request.endpoint in (None, 'static'):
         return {}
     try:
-        rows = _q("""SELECT n.id, n.tela_id FROM novidades n
+        rows = _q("""SELECT n.id, n.tela_id, n.area FROM novidades n
                       LEFT JOIN novidades_lidas l ON l.novidade_id = n.id AND l.usuario_id = %s
                      WHERE n.situacao = 'publicada' AND l.novidade_id IS NULL
                        AND n.data >= CURDATE() - INTERVAL %s DAY""", (current_user.id, SELO_DIAS))
@@ -235,6 +250,20 @@ def index():
     tema = (request.args.get('tema') or '').strip()
     for n in out:
         n['tema'] = _tema_de(n, telas)
+        n['zap'] = _texto_zap(n)
+    # Acabou de publicar? A página volta com ?zap=<id> e oferece o texto pronto do WhatsApp.
+    zap_pub = None
+    try:
+        zid = int(request.args.get('zap') or 0)
+    except ValueError:
+        zid = 0
+    if zid:
+        zap_pub = next((n for n in out if n['id'] == zid and n['situacao'] == 'publicada'), None)
+        if zap_pub and admin:
+            # Quem vê no sistema (sem os admins): é para essas pessoas que o WhatsApp deve ir.
+            zap_pub['quem'] = [u['nome'] for u in _equipe()
+                               if not u['admin'] and _pode_ver(zap_pub, telas, u['perms'], u['admin'])]
+            zap_pub['para_todos'] = not zap_pub.get('tela_id') and zap_pub['area'] == 'Todos'
     modo = 'lista' if (ver == 'rascunhos' or tema) else 'temas'
     tema_info = None
     if tema and ver != 'rascunhos':
@@ -301,10 +330,74 @@ def index():
     kpi['temas'] = len(temas)
     kpi['temas_novos'] = sum(1 for t in temas if t['novas'])
     return render_template('novidades/index.html', lista=out, ver=ver or 'publicadas', kpi=kpi,
-                           modo=modo, temas=temas, tema_info=tema_info,
+                           modo=modo, temas=temas, tema_info=tema_info, zap_pub=zap_pub,
                            areas=areas, tipos_n=tipos_n, TIPOS=TIPOS, AREAS_VISUAL=AREAS_VISUAL,
                            eh_admin=admin, grupos=grupos, telas_por_grupo=_telas_por_grupo(telas),
                            equipe_leitura=equipe_leitura, hoje=hoje.isoformat())
+
+
+ZAP_EMOJI = {'novo': '✨', 'melhoria': '📈', 'correcao': '🔧', 'aviso': '⚠️'}
+ZAP_AREA = {'Financeiro': '💰', 'Cadastros': '📁', 'Escrita Fiscal': '🧾', 'Contábil': '📊', 'DP / Legalização': '🪪',
+            'Q-Robô': '🤖', 'Processos': '✅', 'Relatórios': '📈', 'Configurações': '⚙️'}
+
+
+def _texto_zap(n):
+    """Mensagem pronta para o WhatsApp (negrito com *asterisco*, itálico com _sublinhado_):
+    título, o primeiro parágrafo, a primeira lista (até 4 itens) e o caminho no sistema.
+    Anderson: "copiar um texto bem elegante para eu colocar no WhatsApp"."""
+    blocos = []
+    for bloco in (n['texto'] or '').replace('\r', '').split('\n\n'):
+        linhas = [l.strip() for l in bloco.split('\n') if l.strip()]
+        if linhas:
+            blocos.append(linhas)
+    corpo = []
+    if blocos:
+        corpo.append(' '.join(blocos[0]).replace('**', '*'))
+        for linhas in blocos[1:2]:
+            if all(re.match(r'^(?:[-•*]|\d+[.)])\s+', l) for l in linhas):
+                itens = [re.sub(r'^(?:[-•*])\s+', '• ', l).replace('**', '*') for l in linhas[:4]]
+                if len(linhas) > 4:
+                    itens.append('• …')
+                corpo.append('\n'.join(itens))
+    tipo_rotulo = TIPOS.get(n['tipo'], TIPOS['melhoria'])[0]
+    tema_nome = n['tema'][1] if n.get('tema') else ('Para todos' if n['area'] == 'Todos' else n['area'])
+    onde = 'Para todos' if n['area'] == 'Todos' else n['area']
+    if n.get('tela_nome'):
+        onde += ' › ' + n['tela_nome']
+    if n.get('tela_nome'):
+        vale = f"👥 Para quem usa *{n['tela_nome']}*. Não usa? Pode ignorar."
+    elif n['area'] != 'Todos':
+        vale = f"👥 Para quem usa as telas de *{n['area']}*. Não usa? Pode ignorar."
+    else:
+        vale = '👥 Para *toda a equipe*.'
+    linha = '━━━━━━━━━━━━━━━━━━━━'
+    # O departamento em destaque, logo abaixo do título (Anderson: "deixar mais claro qual o
+    # departamento que está sendo alterado").
+    if n['area'] == 'Todos':
+        cabeca = ['🏢 Departamento: *TODOS* (o sistema inteiro)']
+    else:
+        cabeca = [f"{ZAP_AREA.get(n['area'], '🏢')} Departamento: *{n['area'].upper()}*"]
+        if n.get('tela_nome'):
+            cabeca.append(f"🖥️ Tela: *{n['tela_nome']}*")
+    partes = [
+        '📢 *NOVIDADE NO QUALICONTAX*',
+        *cabeca,
+        linha,
+        f"{ZAP_EMOJI.get(n['tipo'], '✨')} *{n['titulo']}*",
+        f'🏷️ {tipo_rotulo}',
+        vale,
+        '',
+        '\n\n'.join(corpo),
+        '',
+        f'📣 *Leia com calma em Novidades › {tema_nome}* (menu da esquerda): texto completo, passo a passo e print. '
+        'Ao terminar, toque em *Entendi*.',
+        '',
+        '🎧 *Dúvida ou algo não funcionou?* Clique em *Pedir ajuda*, o botão verde de qualquer tela. Nada de grupo: '
+        'o chamado já vai com a tela e o print, e a resposta chega em *Atendimento*.',
+        linha,
+        '_Bom trabalho!_ 💚',
+    ]
+    return '\n'.join(partes)
 
 
 def _tema_de(n, telas):
@@ -373,7 +466,7 @@ def reagir(nid):
     r = request.form.get('reacao') or None
     if r is not None and r not in REACOES:
         return jsonify(ok=False, erro='Reação inválida.'), 400
-    n = _q("SELECT id, tela_id, situacao FROM novidades WHERE id = %s", (nid,), one=True)
+    n = _q("SELECT id, tela_id, area, situacao FROM novidades WHERE id = %s", (nid,), one=True)
     if not n or n['situacao'] != 'publicada' or not _pode_ver(n, _catalogo()[0]):
         abort(404)
     _w("""INSERT INTO novidades_lidas (usuario_id, novidade_id, reacao) VALUES (%s, %s, %s)
@@ -384,7 +477,7 @@ def reagir(nid):
 @novidades.route('/<int:nid>/quem-viu')
 @admin_required
 def quem_viu(nid):
-    n = _q("SELECT id, titulo, tela_id FROM novidades WHERE id = %s", (nid,), one=True)
+    n = _q("SELECT id, titulo, tela_id, area FROM novidades WHERE id = %s", (nid,), one=True)
     if not n:
         abort(404)
     telas, _ = _catalogo()
@@ -406,7 +499,7 @@ def quem_viu(nid):
 @novidades.route('/<int:nid>/imagem')
 @login_required
 def imagem(nid):
-    n = _q("SELECT tela_id, situacao, imagem_tipo, imagem_dados FROM novidades WHERE id = %s", (nid,), one=True)
+    n = _q("SELECT tela_id, area, situacao, imagem_tipo, imagem_dados FROM novidades WHERE id = %s", (nid,), one=True)
     if not n or not n['imagem_dados']:
         abort(404)
     if not current_user.is_admin() and (n['situacao'] != 'publicada' or not _pode_ver(n, _catalogo()[0])):
@@ -468,7 +561,7 @@ def salvar():
                   current_user.id if publicar else None, publicar))
     _registrar('escrita.novidade_publicada' if publicar else 'escrita.novidade_salva', nid,
                {'titulo': titulo, 'area': area, 'tipo': tipo}, {'titulo': antes['titulo']} if antes else None)
-    return jsonify(ok=True, id=nid, ir=url_for('novidades.index') if publicar
+    return jsonify(ok=True, id=nid, ir=url_for('novidades.index', zap=nid) if publicar
                    else url_for('novidades.index', ver='rascunhos'))
 
 
