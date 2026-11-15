@@ -148,6 +148,13 @@ a.tx-c { text-decoration:none; color:inherit; }
 .tx-painel .tx-data b { background:linear-gradient(135deg, var(--sec), var(--sec-e)); color:#fff; border-radius:99px; padding:3px 12px; font-size:15px; }
 .tx-painel .tx-dia span { background:linear-gradient(90deg, var(--sec-b), transparent); }
 .tx-painel .tx-dia small b { color:var(--sec-e); }
+/* total do dia logo ao lado da data e grande (Anderson, 15/11/2026: "melhore os totais por dia...
+   está no final e muito muito pequeno") */
+.tx-painel .tx-dia { align-items:center; flex-wrap:wrap; row-gap:6px; }
+.tx-painel .tx-dia small { order:2; display:inline-flex; align-items:baseline; gap:6px; background:var(--sec-f); border:1px solid var(--sec-b);
+                           border-radius:99px; padding:4px 14px; font-size:13px; font-weight:600; color:var(--sec-e); }
+.tx-painel .tx-dia small b { font-size:18px; font-weight:800; letter-spacing:-.01em; }
+.tx-painel .tx-dia span { order:3; min-width:20px; }
 
 .tx-ok   { --cor:#16a34a; --cor-e:#166534; --cor-f:#ecfdf3; --cor-b:#c9f0d7; }
 .tx-hoje { --cor:#2563eb; --cor-e:#1e40af; --cor-f:#eff4ff; --cor-b:#cfdefd; }
@@ -189,6 +196,7 @@ a.tx-c { text-decoration:none; color:inherit; }
   .tx-grade, .tx-grade.tx-g-ina { grid-template-columns:1fr; gap:8px; }
   .tx-c { padding:12px 12px 12px 16px; }
   .tx-c-top { margin:-12px -12px 0 -16px; padding:10px 12px 10px 16px; }
+  .tx-painel .tx-dia span { display:none; }
   .tx-c-nome { font-size:13.5px; }
   .tx-c-acoes { order:9; border-top:1px solid var(--cor-b, var(--linha)); padding-top:8px; background:transparent; }
   .tx-nota { flex-wrap:wrap; } .tx-nota a { margin-left:0; }
