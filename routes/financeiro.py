@@ -1398,6 +1398,31 @@ def contas():
     contas_cob = FinCobrancaConta.listar(empresa_ids=sel) if pode_cob else []
     dados['pode_cobranca'] = pode_cob
     dados['n_cobranca'] = len([c for c in contas_cob if c.get('ativo')])
+    # Cobrança dentro do cartão da conta (15/11/2026): o que já está ligado e o que vem do cadastro
+    dados['pode_ligar'] = pode_rota('financeiro.ligar_cobranca')
+    if dados['pode_ligar']:
+        from models.fin_cobranca import certificado_do_cadastro_info
+        from utils.bradesco_boletos import config as _cfg_brad
+        ligadas = FinCobrancaConta.da_conta_bancaria([c['id'] for c in contas])
+        for c in dados['contas']:
+            l = ligadas.get(c['id'])
+            if l:
+                cfg = _cfg_brad(l) if l['provedor'] == 'bradesco' else {}
+                c['cob'] = {'id': l['id'], 'ativo': bool(l['ativo']), 'ambiente': l['ambiente'],
+                            'carteira': cfg.get('carteira'), 'conta': cfg.get('conta'),
+                            'testado_em': _d(l['testado_em']), 'teste': (l['teste_resultado'] or '')[:300]}
+        certs = {}
+        for e in emps:
+            ci = certificado_do_cadastro_info(e['cliente_id'])
+            if ci:
+                certs[e['cliente_id']] = {'validade': _d(ci['validade'])}
+        dados['certs'] = certs
+        _ids = [e['cliente_id'] for e in emps] or [0]
+        dados['cnpjs'] = {r['id']: r['cpf_cnpj'] or '' for r in execute_query(
+            f"SELECT id, cpf_cnpj FROM clientes WHERE id IN ({','.join(['%s'] * len(_ids))})",
+            tuple(_ids), fetch=True) or []}
+        dados['url_ligar'] = url_for('financeiro.ligar_cobranca', fin_conta_id=0)
+        dados['url_testar_cob'] = url_for('financeiro.testar_cobranca_da_conta', fin_conta_id=0)
     return render_template(
         'financeiro/contas.html', dados=dados, ano=ano,
         contas=contas, fin_empresas=emps, sel_empresas=sel, emp_mapa=mapa,

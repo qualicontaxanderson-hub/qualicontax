@@ -114,6 +114,21 @@
 #ctb .lnk.cinza{color:var(--muted)}
 #ctb .lnk:hover{text-decoration:underline}
 
+/* Boletos dentro do cartão da conta (15/11/2026, modelo aprovado em 14/11) */
+#ctb .cc-cob{grid-column:1 / -1;display:flex;align-items:center;gap:10px;border-top:1px solid var(--borda);padding-top:10px;margin-top:4px;min-width:0}
+#ctb .cc-cob .ic{width:32px;height:32px;border-radius:9px;display:grid;place-items:center;flex:0 0 auto;background:var(--cinza-fundo);color:var(--apagado)}
+#ctb .cc-cob.on .ic{background:var(--verde-claro);color:var(--verde)}
+#ctb .cc-cob.mal .ic{background:var(--verm-fundo);color:var(--verm)}
+#ctb .cc-cob .tx{flex:1;min-width:0}
+#ctb .cc-cob .tx b{display:block;font-size:13.5px;color:#0f172a}
+#ctb .cc-cob .tx small{display:block;font-size:12.5px;color:var(--muted);overflow-wrap:anywhere}
+#ctb .cc-cob .bol{width:9px;height:9px;border-radius:50%;background:#cbd5e1;flex:0 0 auto}
+#ctb .cc-cob.on .bol{background:#22c55e} #ctb .cc-cob.mal .bol{background:#ef4444}
+#ctb .cc-ligar{grid-column:1 / -1;display:flex;align-items:center;justify-content:center;gap:8px;width:100%;font:inherit;font-size:13.5px;font-weight:700;border-radius:9px;padding:9px 14px;border:1px solid var(--verde);background:var(--verde);color:#fff;cursor:pointer;min-height:40px}
+#ctb .cc-ligar.sec{background:#fff;color:var(--verde)}
+#ctb .cc-cob-acoes{grid-column:1 / -1;display:flex;flex-wrap:wrap;gap:4px 16px;font-size:13px}
+#ctb .cc-cob-acoes form{margin:0;display:inline}
+
 /* TABELAS */
 #ctb .tbl-card{background:#fff;border:1px solid var(--borda);border-radius:14px;overflow:hidden}
 #ctb .tbl-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
@@ -285,6 +300,115 @@
             </div>
         </form>
     </div>
+</div>
+
+<!-- ── Ligar cobrança na conta (15/11/2026, modelo aprovado 14/11) ─────────── -->
+<style>
+#lgModal{position:fixed;inset:0;z-index:2000;background:rgba(15,40,30,.45);display:none;align-items:center;justify-content:center;padding:16px}
+#lgModal .lg-box{display:grid;grid-template-columns:280px minmax(0,1fr);width:100%;max-width:960px;max-height:calc(100vh - 32px);overflow:auto;border-radius:16px;background:#fff;box-shadow:0 20px 60px rgba(0,0,0,.25)}
+#lgModal .lg-esq{background:#0f3d2e;color:#d1fae5;padding:24px 20px;display:flex;flex-direction:column;gap:18px}
+#lgModal .lg-banco{display:flex;align-items:center;gap:12px}
+#lgModal .lg-logo{width:52px;height:52px;border-radius:12px;background:#fff;display:grid;place-items:center;flex:0 0 auto}
+#lgModal .lg-logo img{width:34px;height:34px}
+#lgModal .lg-banco b{display:block;color:#fff;font-size:17px}
+#lgModal .lg-banco small{font-family:ui-monospace,Consolas,monospace;font-size:12.5px;color:#a7f3d0}
+#lgModal .lg-cad{background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.12);border-radius:10px;padding:12px 14px;font-size:13px;line-height:1.55}
+#lgModal .lg-cad h5{margin:0 0 6px;font-size:11px;letter-spacing:1px;text-transform:uppercase;color:#a7f3d0}
+#lgModal .lg-cad div{display:flex;gap:7px;color:#fff}
+#lgModal .lg-cad i{color:#a7f3d0;margin-top:3px;font-size:11px}
+#lgModal .lg-passo{display:flex;gap:12px;align-items:flex-start;padding:10px 12px;border-radius:10px;font-size:13px}
+#lgModal .lg-passo.on{background:rgba(255,255,255,.1)}
+#lgModal .lg-passo .n{width:26px;height:26px;border-radius:50%;display:grid;place-items:center;flex:0 0 auto;border:2px solid #22c55e;color:#22c55e;font-weight:800;font-size:12px}
+#lgModal .lg-passo.on .n{background:#22c55e;color:#0f3d2e}
+#lgModal .lg-passo b{display:block;color:#fff}
+#lgModal .lg-passo small{color:#a7f3d0}
+#lgModal .lg-dir{padding:26px 28px;display:flex;flex-direction:column;gap:14px;min-width:0}
+#lgModal h3{margin:0;font-size:21px;color:#0f3d2e}
+#lgModal .lg-sub{margin:-8px 0 0;font-size:13.5px;color:#64748b}
+#lgModal .lg-g2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+#lgModal label.lg-l{display:block;font-size:11.5px;font-weight:800;letter-spacing:.4px;text-transform:uppercase;color:#334155;margin-bottom:5px}
+#lgModal input[type=text],#lgModal input[type=password]{width:100%;font:inherit;font-size:14px;border:1px solid #d7e3dc;border-radius:9px;padding:10px 12px;min-height:44px;background:#fff;color:#0f172a}
+#lgModal input:focus{outline:0;border-color:#22c55e;box-shadow:0 0 0 2px rgba(34,197,94,.15)}
+#lgModal .lg-ajuda{font-size:12px;color:#7d968a;margin-top:4px}
+#lgModal .lg-cert{display:flex;align-items:center;gap:12px;border:1px solid #bbf7d0;background:#f0fdf4;border-radius:10px;padding:12px 14px;font-size:13px}
+#lgModal .lg-cert.mal{border-color:#fecaca;background:#fff7f7}
+#lgModal .lg-cert b{display:block;color:#0f172a;font-size:13.5px}
+#lgModal .lg-cert small{color:#64748b}
+#lgModal .lg-cic{width:38px;height:38px;border-radius:9px;display:grid;place-items:center;background:#dcfce7;color:#15803d;flex:0 0 auto}
+#lgModal .lg-cic.mal{background:#fee2e2;color:#b91c1c}
+#lgModal .lg-seg{display:inline-flex;border:1px solid #d7e3dc;border-radius:9px;padding:3px;background:#f6f9f7}
+#lgModal .lg-seg label{margin:0;cursor:pointer}
+#lgModal .lg-seg input{position:absolute;opacity:0;pointer-events:none}
+#lgModal .lg-seg span{display:block;padding:8px 16px;border-radius:7px;font-size:13.5px;font-weight:700;color:#64748b}
+#lgModal .lg-seg input:checked + span{background:#fff;color:#0f3d2e;box-shadow:0 1px 3px rgba(0,0,0,.12)}
+#lgModal .lg-seg input:focus-visible + span{outline:2px solid #15803d}
+#lgModal .lg-pad{border:1px dashed #d7e3dc;border-radius:10px;padding:12px 14px;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;font-size:13px}
+#lgModal .lg-pad dt{font-size:10.5px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;color:#7d968a}
+#lgModal .lg-pad dd{margin:2px 0 0;font-weight:700;color:#0f172a}
+#lgModal .lg-pad p{grid-column:1 / -1;margin:0;font-size:12.5px;color:#64748b}
+#lgModal .lg-pe{display:flex;justify-content:flex-end;gap:10px;border-top:1px solid #e3ece7;padding-top:14px;margin-top:2px}
+#lgModal .lg-pe button{font:inherit;font-size:14px;font-weight:700;border-radius:9px;padding:10px 18px;min-height:44px;cursor:pointer}
+#lgModal .lg-cancel{border:1px solid #d7e3dc;background:#fff;color:#334155}
+#lgModal .lg-ok{border:1px solid #15803d;background:#15803d;color:#fff}
+#lgModal .lg-ok:disabled{opacity:.55;cursor:not-allowed}
+#lgModal a.lg-alt{font-size:12px;color:#15803d;font-weight:700}
+@media (max-width:760px){
+  #lgModal{padding:0;align-items:stretch}
+  #lgModal .lg-box{grid-template-columns:minmax(0,1fr);max-height:100vh;border-radius:0}
+  #lgModal .lg-esq{padding:18px 16px;gap:12px}
+  #lgModal .lg-passos{display:none}
+  #lgModal .lg-dir{padding:18px 16px}
+  #lgModal .lg-g2{grid-template-columns:minmax(0,1fr)}
+  #lgModal .lg-pad{grid-template-columns:1fr 1fr}
+}
+</style>
+<div id="lgModal" role="dialog" aria-modal="true" aria-labelledby="lgTit">
+  <form class="lg-box" method="POST" action="" autocomplete="off">
+    <aside class="lg-esq">
+      <div class="lg-banco"><span class="lg-logo"><img src="{{ url_for('static', filename='images/bancos/237.svg') }}" alt=""></span>
+        <span><b id="lgNome">Bradesco</b><small id="lgNum"></small></span></div>
+      <div class="lg-cad"><h5>Já vem do cadastro</h5>
+        <div><i class="fas fa-lock"></i><span id="lgEmp"></span></div>
+        <div><i class="fas fa-lock"></i><span id="lgAgCc"></span></div>
+        <a href="#" id="lgContaAlt" class="lg-alt" style="color:#a7f3d0">A conta da cobrança é sem o dígito? Corrigir</a>
+      </div>
+      <div class="lg-passos">
+        <div class="lg-passo on"><span class="n">1</span><span><b>Acesso ao banco</b><small>chaves do portal Bradesco</small></span></div>
+        <div class="lg-passo"><span class="n"><i class="fas fa-check"></i></span><span><b>Boleto</b><small>já vem do padrão do escritório</small></span></div>
+        <div class="lg-passo"><span class="n"><i class="fas fa-check"></i></span><span><b>Aviso ao cliente</b><small>Financeiro · pelo nosso app</small></span></div>
+      </div>
+    </aside>
+    <div class="lg-dir">
+      <h3 id="lgTit">Acesso ao banco</h3>
+      <p class="lg-sub">Cole as duas chaves que o portal do Bradesco mostrou. O resto já está pronto.</p>
+      <div class="lg-g2">
+        <div><label class="lg-l" for="lgCid">Client ID</label><input type="text" id="lgCid" name="client_id" spellcheck="false"></div>
+        <div><label class="lg-l" for="lgSec">Client Secret</label><input type="password" id="lgSec" name="client_secret" spellcheck="false" autocomplete="new-password"></div>
+      </div>
+      <div><label class="lg-l">Certificado digital</label><div class="lg-cert" id="lgCert"></div></div>
+      <div id="lgAgWrap" hidden><label class="lg-l" for="lgAg">Agência</label><input type="text" id="lgAg" name="agencia" inputmode="numeric" maxlength="6" placeholder="4 números, sem o dígito">
+        <div class="lg-ajuda">O cadastro desta conta está sem a agência. Digite uma vez e ela fica guardada na conta.</div></div>
+      <div id="lgContaWrap" hidden><label class="lg-l" for="lgConta">Conta da cobrança (sem o dígito)</label><input type="text" id="lgConta" name="conta_cobranca" inputmode="numeric" maxlength="8">
+        <div class="lg-ajuda">Como o gerente passou. Ex.: conta 1686-5 → 1686.</div></div>
+      <div class="lg-g2">
+        <div><label class="lg-l" for="lgCarteira">Carteira</label><input type="text" id="lgCarteira" name="carteira" inputmode="numeric" maxlength="3">
+          <div class="lg-ajuda">o número que o gerente passou</div></div>
+        <div><label class="lg-l">Ambiente</label>
+          <div class="lg-seg"><label><input type="radio" name="ambiente" value="producao" checked><span>Produção</span></label><label><input type="radio" name="ambiente" value="homologacao"><span>Teste</span></label></div></div>
+      </div>
+      <dl class="lg-pad">
+        <div><dt>Juros e multa</dt><dd>não cobra</dd></div>
+        <div><dt>Baixa após vencer</dt><dd>365 dias</dd></div>
+        <div><dt>Telefone</dt><dd>(11) 2523-1815</dd></div>
+        <div><dt>Envia por</dt><dd>Financeiro</dd></div>
+        <p><i class="fas fa-circle-check" style="color:#15803d"></i> Padrão do escritório, igual à Efí. Ao clicar, o sistema já pergunta ao banco se está tudo certo.</p>
+      </dl>
+      <div class="lg-pe">
+        <button type="button" class="lg-cancel" data-lg-fechar>Cancelar</button>
+        <button type="submit" class="lg-ok" id="lgOk">Testar e ligar <i class="fas fa-arrow-right"></i></button>
+      </div>
+    </div>
+  </form>
 </div>
 {% endblock %}
 
@@ -530,6 +654,7 @@ function cartaoEmp(e, itens, semCad) {
           <button class="lnk cinza" type="submit" title="${c.ativo ? 'Desativar (extratos dela voltam a ficar pendentes)' : 'Reativar'}">${c.ativo ? 'Desativar' : 'Reativar'}</button>
         </form>
       </div>
+      ${blocoCobranca(c)}
     </div>`; }).join('');
   const sc = semCad.map(s => `
     <div class="cc sem-cad">
@@ -540,6 +665,70 @@ function cartaoEmp(e, itens, semCad) {
     </div>`).join('');
   return `<article class="emp"><header class="emp-h"><span class="e-num">${esc(e.numero_cliente)}</span><span class="e-nome">${esc(e.apelido)}</span>${e.tipo_pessoa ? `<span class="e-tp">${esc(e.tipo_pessoa)}</span>` : ''}<span class="e-tot">${itens.length} conta(s)</span></header><div class="cc-grid">${cc}${sc}</div></article>`;
 }
+
+/* ---------- BOLETOS DENTRO DA CONTA (15/11/2026) ---------- */
+const COM_COBRANCA = {'237': 'Bradesco'};            // bancos com cobrança pela API (por enquanto só o Bradesco)
+const temCobranca = c => !!COM_COBRANCA[String(c.banco_id || '').replace(/^0+/, '')];
+const dmy = iso => iso ? new Date(iso.slice(0, 10) + 'T12:00').toLocaleDateString('pt-BR') : '';
+function blocoCobranca(c) {
+  if (!D.pode_ligar || !temCobranca(c) || !c.ativo) return '';
+  const k = c.cob;
+  if (!k) return `
+      <div class="cc-cob"><span class="ic"><i class="fas fa-barcode"></i></span>
+        <span class="tx"><b>Boletos</b><small>ainda não ligado</small></span><span class="bol"></span></div>
+      <button class="cc-ligar" type="button" data-ligar="${c.id}"><i class="fas fa-plug"></i> Ligar cobrança</button>`;
+  const ok = (k.teste || '').startsWith('OK');
+  const amb = k.ambiente === 'producao' ? 'Produção' : 'Teste (sandbox)';
+  const est = !k.ativo ? 'desligado' : !k.teste ? 'ligado · ainda não testado'
+            : ok ? `ligado · ${amb} · teste OK em ${dmy(k.testado_em)}` : `ligado · ${amb} · o último teste falhou`;
+  return `
+      <div class="cc-cob ${k.ativo && ok ? 'on' : (k.teste && !ok ? 'mal' : '')}"><span class="ic"><i class="fas fa-barcode"></i></span>
+        <span class="tx"><b>Boletos</b><small>${esc(est)}</small>${k.teste && !ok ? `<small style="color:var(--verm)">${esc(k.teste)}</small>` : ''}</span><span class="bol"></span></div>
+      <div class="cc-cob-acoes">
+        <form method="POST" action="${esc(url(D.url_testar_cob, c.id))}"><button class="lnk" type="submit"><i class="fas fa-vial"></i> Testar</button></form>
+        <button class="lnk" type="button" data-ligar="${c.id}"><i class="fas fa-key"></i> Trocar chaves ou carteira</button>
+        <a class="lnk cinza" href="#cobranca" data-ir-cob="1">Ver na aba Cobrança</a>
+      </div>`;
+}
+function abrirLigar(id) {
+  const c = D.contas.find(x => x.id === id); if (!c) return;
+  const e = apel[c.empresa_id] || {}, k = c.cob, cert = (D.certs || {})[c.empresa_id];
+  const m = document.getElementById('lgModal');
+  m.querySelector('form').action = url(D.url_ligar, c.id);
+  m.querySelector('#lgNome').textContent = COM_COBRANCA[String(c.banco_id).replace(/^0+/, '')] || c.banco_nome;
+  m.querySelector('#lgNum').textContent = (c.agencia ? 'ag ' + c.agencia + ' · ' : '') + 'cc ' + c.conta;
+  const doc = String(D.cnpjs?.[c.empresa_id] || '').replace(/\D/g, '');
+  const docF = doc.length === 14 ? doc.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, '$1.$2.$3/$4-$5') : doc;
+  m.querySelector('#lgEmp').textContent = (e.apelido || '') + (docF ? ' · CNPJ ' + docF : '');
+  const contaCob = (k && k.conta) || String(c.conta || '').replace(/\D/g, '').slice(0, 7);
+  m.querySelector('#lgAgCc').textContent = (c.agencia ? 'Agência ' + c.agencia + ' · ' : '') + 'Conta ' + contaCob;
+  m.querySelector('#lgAgWrap').hidden = !!c.agencia;
+  m.querySelector('#lgAg').required = !c.agencia;
+  m.querySelector('#lgConta').value = contaCob;
+  m.querySelector('#lgContaWrap').hidden = true;
+  m.querySelector('#lgCarteira').value = (k && k.carteira) || '09';
+  m.querySelector(`input[name="ambiente"][value="${k && k.ambiente === 'homologacao' ? 'homologacao' : 'producao'}"]`).checked = true;
+  ['lgCid', 'lgSec'].forEach(i => { const x = m.querySelector('#' + i); x.value = ''; x.required = !k;
+    x.placeholder = k ? 'deixe em branco para manter a que já está salva' : 'cole aqui'; });
+  m.querySelector('#lgCert').innerHTML = cert
+    ? `<span class="lg-cic"><i class="fas fa-file-shield"></i></span><span><b>Certificado A1 da ${esc(e.apelido || 'empresa')}</b><small>já cadastrado no sistema · vence ${dmy(cert.validade)}</small></span>`
+    : `<span class="lg-cic mal"><i class="fas fa-triangle-exclamation"></i></span><span><b>A empresa não tem certificado A1 válido</b><small>cadastre o certificado na ficha da empresa antes de ligar</small></span>`;
+  m.querySelector('#lgCert').classList.toggle('mal', !cert);
+  m.querySelector('#lgOk').disabled = !cert;
+  m.style.display = 'flex';
+  setTimeout(() => m.querySelector(k ? '#lgCarteira' : '#lgCid').focus(), 30);
+}
+document.addEventListener('click', ev => {
+  const b = ev.target.closest('[data-ligar]');
+  if (b) { abrirLigar(+b.dataset.ligar); return; }
+  if (ev.target.closest('[data-ir-cob]')) { ev.preventDefault(); abrir('cobranca'); return; }
+  if (ev.target.closest('[data-lg-fechar]') || ev.target.id === 'lgModal') document.getElementById('lgModal').style.display = 'none';
+  if (ev.target.closest('#lgContaAlt')) { ev.preventDefault(); const w = document.getElementById('lgContaWrap'); w.hidden = false; w.querySelector('input').focus(); }
+});
+document.addEventListener('keydown', ev => { if (ev.key === 'Escape') document.getElementById('lgModal').style.display = 'none'; });
+document.getElementById('lgModal').querySelector('form').addEventListener('submit', ev => {
+  const b = document.getElementById('lgOk'); b.disabled = true; b.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Testando com o banco…';
+});
 
 /* ---------- EXTRATOS RECEBIDOS ---------- */
 function faltas(c) { let n = 0; for (let m = primeiroMes(c.meses) + 1; m < MES_ABERTO && m <= 12; m++) if (!c.meses[m]) n++; return n; }

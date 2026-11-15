@@ -25,6 +25,39 @@ AVISA_POR = {'app': 'Nosso app, pela caixa de e-mail abaixo', 'efi': 'A Efí, pe
              'ninguem': 'Ninguém (só o PDF na tela)'}
 SEGREDOS = ('client_id_cif', 'client_secret_cif', 'certificado_cif', 'certificado_senha_cif', 'email_senha_cif')
 
+# O A1 do cadastro, baixado do Dropbox, fica em memória por processo (a consulta de hora em hora não baixa de novo).
+# A chave inclui o caminho e a validade: trocou o certificado na ficha, a chave muda e o novo é baixado.
+_CERT_CACHE = {}
+
+
+def certificado_do_cadastro_info(empresa_id):
+    """O A1 próprio, ativo e dentro da validade, da empresa (sem baixar nada), ou None."""
+    return execute_query(
+        "SELECT id, cliente_id, cnpj, dropbox_path, validade FROM dfe_certificados "
+        " WHERE cliente_id = %s AND ativo = 1 AND dropbox_path IS NOT NULL AND validade >= CURDATE() "
+        "   AND COALESCE(procuracao, 0) = 0 LIMIT 1", (empresa_id,), fetch=True, fetch_one=True)
+
+
+def certificado_do_cadastro(empresa_id):
+    """(pfx, senha) do A1 do cadastro da empresa. Levanta ValueError com o motivo para a tela."""
+    info = certificado_do_cadastro_info(empresa_id)
+    if not info:
+        raise ValueError('A empresa não tem certificado digital A1 válido no cadastro.')
+    chave = (info['dropbox_path'], str(info['validade']))
+    if chave in _CERT_CACHE:
+        return _CERT_CACHE[chave]
+    from models.dfe_certificado import DfeCertificado
+    from utils.certificado_digital import decifrar_senha
+    from utils import dropbox_sync
+    senha_cif = DfeCertificado.get_senha_cifrada(empresa_id)
+    if not senha_cif:
+        raise ValueError('O certificado do cadastro está sem a senha guardada.')
+    pfx = dropbox_sync._service.download_file(info['dropbox_path'])
+    if not pfx:
+        raise ValueError('Não consegui baixar o certificado do cadastro no Dropbox.')
+    _CERT_CACHE[chave] = (pfx, decifrar_senha(senha_cif))
+    return _CERT_CACHE[chave]
+
 
 class FinCobrancaConta:
 
@@ -169,8 +202,9 @@ class FinCobrancaConta:
             return (conta_id, None) if r is not None else (None, 'Não foi possível salvar.')
         if not client_id or not client_secret:
             return None, 'Client ID e Client Secret são obrigatórios na primeira vez.'
-        if provedor == 'bradesco' and not certificado:
-            return None, 'O Bradesco exige o certificado (.pfx) em toda chamada: envie o arquivo e a senha.'
+        if provedor == 'bradesco' and not certificado and not certificado_do_cadastro_info(empresa_id):
+            return None, ('O Bradesco exige o certificado digital A1 da empresa em toda chamada, e ela não tem um '
+                          'válido no cadastro. Cadastre o A1 na ficha da empresa.')
         cols = ['empresa_id', 'apelido', 'provedor', 'ambiente', 'fin_conta_id', 'chave_pix', 'juros_mes',
                 'multa_pct', 'dias_baixa', 'dia_vencimento', 'mensagem_padrao', 'email_remetente', 'email_nome',
                 'email_host', 'email_porta', 'avisa_por', 'config_json', 'webhook_segredo', 'alterado_por']
@@ -240,17 +274,34 @@ class FinCobrancaConta:
             raise ValueError('Conta de cobrança não encontrada.')
         if c['provedor'] != 'bradesco':
             raise ValueError('Esta conta não é do Bradesco.')
-        if not c.get('certificado_cif'):
-            raise ValueError('A conta do Bradesco está sem o certificado (.pfx).')
+        if c.get('certificado_cif'):
+            pfx = seg.decifrar_bytes(c['certificado_cif'])
+            pfx_senha = seg.decifrar_texto(c['certificado_senha_cif']) if c.get('certificado_senha_cif') else ''
+        else:
+            # 15/11/2026: sem arquivo próprio, vale o A1 do cadastro da empresa (o mesmo da captura de notas);
+            # quando o A1 for trocado na ficha, a cobrança passa a usar o novo sem ninguém mexer aqui
+            pfx, pfx_senha = certificado_do_cadastro(c['empresa_id'])
         cfg = config(c)
         cnpj = execute_query('SELECT cpf_cnpj FROM clientes WHERE id = %s', (c['empresa_id'],), fetch=True, fetch_one=True) or {}
         conta = ContaBradesco(client_id=seg.decifrar_texto(c['client_id_cif']),
                               client_secret=seg.decifrar_texto(c['client_secret_cif']),
                               cnpj=''.join(ch for ch in str(cnpj.get('cpf_cnpj') or '') if ch.isdigit()),
                               agencia=cfg['agencia'], conta=cfg['conta'], carteira=cfg['carteira'],
-                              ambiente=c['ambiente'], pfx=seg.decifrar_bytes(c['certificado_cif']),
-                              pfx_senha=seg.decifrar_texto(c['certificado_senha_cif']) if c.get('certificado_senha_cif') else '')
+                              ambiente=c['ambiente'], pfx=pfx, pfx_senha=pfx_senha)
         return Bradesco(conta), c
+
+    @staticmethod
+    def da_conta_bancaria(fin_conta_ids):
+        """{fin_conta_id: conta de cobrança ligada a ela} (a mais recente ativa), sem segredos."""
+        ids = [int(i) for i in fin_conta_ids or [] if str(i).isdigit()]
+        if not ids:
+            return {}
+        linhas = execute_query(
+            f"SELECT id, fin_conta_id, apelido, provedor, ambiente, ativo, so_consulta, testado_em, teste_resultado, "
+            f"       config_json, (client_secret_cif IS NOT NULL) AS tem_secret "
+            f"  FROM fin_cobranca_contas WHERE fin_conta_id IN ({','.join(['%s'] * len(ids))}) AND so_consulta = 0 "
+            f" ORDER BY ativo, id", tuple(ids), fetch=True) or []
+        return {l['fin_conta_id']: l for l in linhas}       # a última (ativa, mais nova) vence
 
     @staticmethod
     def por_webhook(segredo):
