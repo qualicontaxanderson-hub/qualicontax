@@ -390,6 +390,7 @@ MAPA = {
     'financeiro.cobranca_testar': 'financeiro.cobranca.contas',
     'financeiro.ligar_cobranca': 'financeiro.cobranca.contas',
     'financeiro.testar_cobranca_da_conta': 'financeiro.cobranca.contas',
+    'financeiro.puxar_extrato_da_conta': 'financeiro.cobranca.contas',
     'financeiro.cobranca_testar_email': 'financeiro.cobranca.contas',
     'financeiro.conta_alternar': 'financeiro.contas.alterar',
     'financeiro.conta_nova': 'financeiro.contas.incluir',

@@ -1067,6 +1067,17 @@ def main() -> int:
         logger.exception('[roteador] extrato diário da Efí falhou; tenta amanhã '
                          '(a deduplicação cobre o dia perdido).')
 
+    # E o extrato do Bradesco pela API (15/11/2026): de hora em hora, 7h-22h, os últimos 7 dias até
+    # hoje entram pelo núcleo do OFX (sem duplicar o que o OFX trouxe) e o Pix recebido que casa com
+    # UM título aberto do cliente dá baixa. Só age em conta com a cobrança do Bradesco ligada.
+    # Anderson: "não pode puxar o dia todo para ficar praticamente on line?". Desliga com
+    # BRADESCO_EXTRATO_ATIVO=0.
+    try:
+        from utils.bradesco_extrato import rodar_de_hora_em_hora as bradesco_extrato_de_hora
+        bradesco_extrato_de_hora()
+    except Exception:
+        logger.exception('[roteador] extrato do Bradesco falhou; tenta na próxima hora (a janela de 7 dias cobre).')
+
     # E os certificados digitais deixados na _ENTRADA com a senha no nome
     # ("175 senha 1234.pfx"): vincula sozinho, pelo mesmo núcleo da tela.
     # Pedido do Anderson em 13/09/2026 — o .p12 do posto 175 estava lá parado.

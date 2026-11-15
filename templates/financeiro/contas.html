@@ -688,6 +688,24 @@ function blocoCobranca(c) {
         <form method="POST" action="${esc(url(D.url_testar_cob, c.id))}"><button class="lnk" type="submit"><i class="fas fa-vial"></i> Testar</button></form>
         <button class="lnk" type="button" data-ligar="${c.id}"><i class="fas fa-key"></i> Trocar chaves ou carteira</button>
         <a class="lnk cinza" href="#cobranca" data-ir-cob="1">Ver na aba Cobrança</a>
+      </div>${blocoExtrato(c)}`;
+}
+/* Extrato pela API (15/11/2026): mesma credencial da cobrança, entra todo dia depois das 7h */
+function blocoExtrato(c) {
+  const k = c.cob;
+  if (!k || !k.ativo || k.ambiente !== 'producao') return '';
+  const x = c.ext;
+  const quando = x && x.em ? new Date(x.em.replace(' ', 'T')).toLocaleString('pt-BR', {day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit'}) : '';
+  const est = !x ? 'ligado · entra sozinho de hora em hora, das 7h às 22h'
+            : x.erro ? `a última puxada falhou (${quando})`
+            : `puxado em ${quando} · ${x.lidos} lido(s), ${x.novos} novo(s), ${(x.baixados || []).length} baixa(s)`;
+  const pend = x && !x.erro && (x.pendentes || []).length
+    ? `<small>${x.pendentes.length} Pix recebido(s) sem título — escolha no Extrato (Vincular)</small>` : '';
+  return `
+      <div class="cc-cob ${x && x.erro ? 'mal' : 'on'}"><span class="ic"><i class="fas fa-file-invoice-dollar"></i></span>
+        <span class="tx"><b>Extrato pela API</b><small>${esc(est)}</small>${pend}${x && x.erro ? `<small style="color:var(--verm)">${esc(x.erro)}</small>` : ''}</span><span class="bol"></span></div>
+      <div class="cc-cob-acoes">
+        <form method="POST" action="${esc(url(D.url_puxar_ext, c.id))}" data-puxar="1"><button class="lnk" type="submit"><i class="fas fa-rotate"></i> Puxar agora</button></form>
       </div>`;
 }
 function abrirLigar(id) {
@@ -728,6 +746,10 @@ document.addEventListener('click', ev => {
 document.addEventListener('keydown', ev => { if (ev.key === 'Escape') document.getElementById('lgModal').style.display = 'none'; });
 document.getElementById('lgModal').querySelector('form').addEventListener('submit', ev => {
   const b = document.getElementById('lgOk'); b.disabled = true; b.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Testando com o banco…';
+});
+document.addEventListener('submit', ev => {
+  if (!ev.target.matches('form[data-puxar]')) return;
+  const b = ev.target.querySelector('button'); b.disabled = true; b.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Puxando do banco…';
 });
 
 /* ---------- EXTRATOS RECEBIDOS ---------- */

@@ -439,7 +439,7 @@ def _chave_dv(data, valor):
     return (str(data)[:10], str(Decimal(str(valor)).quantize(Decimal('0.01'))))
 
 
-def ja_existe_por_data_valor(empresa_id, conta, novos):
+def ja_existe_por_data_valor(empresa_id, conta, novos, ja_casados=()):
     """Terceira camada: sem identificador, data + valor é o que sobra.
 
     O Dcto do Bradesco às vezes é curto demais para ser chave ('0000312' vira
@@ -457,6 +457,14 @@ def ja_existe_por_data_valor(empresa_id, conta, novos):
     datas = sorted(l['data'] for l in sem_id)
     rows = lancamentos_da_conta(empresa_id, conta, datas[0], datas[-1])
     disponivel = Counter(_chave_dv(r['data'], r['valor']) for r in rows)
+    # As linhas que JÁ casaram pela chave são elas mesmas no banco: não podem "consumir" outra.
+    # Sem isto, um 2º lançamento de mesma data e valor que chega depois (puxada de hora em hora do
+    # Bradesco: duas tarifas de R$ 2,50 no dia, uma às 9h e outra às 15h) era descartado como
+    # repetido do 1º, que já estava gravado (15/11/2026).
+    for l in ja_casados:
+        k = _chave_dv(l['data'], l['valor'])
+        if disponivel.get(k):
+            disponivel[k] -= 1
     restantes, repetidos = [], 0
     for h, l in novos:
         if l.get('fitid'):
@@ -540,7 +548,8 @@ def processar_lancamentos(dados, empresa_id, arquivo, usuario_id=None, origem='o
                 logger.exception('[extrato] completar pelo OFX o extrato da Efí falhou (segue).')
     # Sem FITID, o que resta é data + valor — e é assim que o PDF e a planilha
     # do mesmo mês não repetem o que o OFX já lançou.
-    novos, _repetidos_dv = ja_existe_por_data_valor(empresa_id, dados['conta'], novos)
+    novos, _repetidos_dv = ja_existe_por_data_valor(empresa_id, dados['conta'], novos,
+                                                    ja_casados=[l for h, l in unicos if h in ja])
     # O PDF pode ter chegado ANTES e criado a linha sem FITID: o arquivo com
     # FITID só encaixa nela — a descrição do PDF, que tem o nome, fica.
     encaixados = 0

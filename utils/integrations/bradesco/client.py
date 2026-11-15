@@ -41,6 +41,8 @@ P_GERAR = '/boleto-hibrido/cobranca-registro/v1/gerarBoleto'
 P_CONSULTAR = '/boleto-hibrido/cobranca-consulta-titulo/v1/consultar'
 P_BAIXAR = '/boleto/cobranca-baixa/v1/baixar'
 P_LISTAR = '/boleto-hibrido/cobranca-lista/v1/listar'
+P_EXTRATO = '/v1/fornecimento-extratos-contas/extratos'     # API Saldo e Extrato (assinatura 13/11)
+P_SALDO = '/v1/fornecimento-saldos-contas/saldos'
 TIMEOUT = (10, 45)
 COD_BAIXA_PEDIDO = 57                   # "conforme seu pedido"
 DIAS_BAIXA_MAX = 365                    # decurso de prazo: até 365 dias no boleto com QR (manual 1.8.3)
@@ -184,6 +186,32 @@ class Bradesco:
         if r.status_code != 200 or (isinstance(j, dict) and str(j.get('statusHttp') or j.get('status') or 200) not in ('200', '201')):
             raise BradescoErro(_msg(r, 'O Bradesco recusou'), r.status_code, j)
         return j
+
+    def _get(self, caminho, params):
+        """GET da API Saldo e Extrato (mesma credencial e certificado da cobrança)."""
+        with _CertTemp(self.c.pfx, self.c.pfx_senha) as cert:
+            tok = self._token(cert)
+            try:
+                r = requests.get(self.host + caminho, params=params, cert=cert, timeout=TIMEOUT,
+                                 headers={'Authorization': 'Bearer ' + tok})
+            except requests.RequestException as exc:
+                raise BradescoErro(f'O Bradesco não respondeu ({exc.__class__.__name__}).') from exc
+        j = _json(r)
+        if r.status_code != 200:
+            if isinstance(j, dict) and (j.get('descricao') or j.get('codigoErro')):
+                raise BradescoErro(f"O Bradesco recusou (HTTP {r.status_code}): {j.get('codigoErro') or ''} "
+                                   f"{j.get('descricao') or ''}".strip(), r.status_code, j)
+            raise BradescoErro(_msg(r, 'O Bradesco recusou'), r.status_code, j)
+        return j
+
+    def extrato(self, agencia, conta, de, ate):
+        """Lançamentos da conta corrente entre ``de`` e ``ate`` (API Saldo e Extrato, 15/11/2026).
+        A conta vai com o número inteiro do cadastro (16865), sem o dígito (3)."""
+        return self._get(P_EXTRATO, {'agencia': _num(agencia), 'conta': _num(conta), 'tipo': 'cc',
+                                     'dataInicio': de.strftime('%d%m%Y'), 'dataFim': ate.strftime('%d%m%Y')})
+
+    def saldo(self, agencia, conta):
+        return self._get(P_SALDO, {'agencia': _num(agencia), 'conta': _num(conta)})
 
     # ------------------------------------------------------------------ uso
     def testar(self):

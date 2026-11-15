@@ -129,6 +129,31 @@ def testar_cobranca_da_conta(fin_conta_id):
     return redirect(_volta(fc))
 
 
+@financeiro.route('/financeiro/contas/<int:fin_conta_id>/puxar-extrato', methods=['POST'])
+@permission_required('financeiro.cobranca')
+def puxar_extrato_da_conta(fin_conta_id):
+    """Puxa agora o extrato pela API (os últimos 7 dias até hoje), igual à rodada de hora em hora."""
+    fc = execute_query('SELECT * FROM fin_contas WHERE id = %s', (fin_conta_id,), fetch=True, fetch_one=True)
+    if not fc or fc['empresa_id'] not in FinEmpresa.ids_validos():
+        abort(404)
+    from utils import bradesco_extrato
+    if not bradesco_extrato.contas(fin_conta_id):
+        flash('Esta conta não tem a cobrança do Bradesco ligada em produção.', 'danger')
+        return redirect(_volta(fc))
+    res = bradesco_extrato.rodar(seco=False, fin_conta_id=fin_conta_id).get(fin_conta_id) or {}
+    registrar('escrita.puxou_extrato_api', 'financeiro', tabela='fin_contas', registro_id=fin_conta_id,
+              depois={k: (len(res.get(k) or []) if k in ('baixados', 'pendentes') else res.get(k))
+                      for k in ('de', 'ate', 'lidos', 'novos', 'baixados', 'pendentes', 'erro')})
+    if res.get('erro'):
+        flash(f"O extrato não veio: {res['erro']}", 'danger')
+    else:
+        flash(f"Extrato do Bradesco puxado ({res.get('lidos', 0)} lido(s) de {res.get('de', '')[8:10]}/{res.get('de', '')[5:7]} "
+              f"a {res.get('ate', '')[8:10]}/{res.get('ate', '')[5:7]}): {res.get('novos', 0)} novo(s), "
+              f"{len(res.get('baixados') or [])} baixa(s), {len(res.get('pendentes') or [])} Pix sem título para escolher.",
+              'success')
+    return redirect(_volta(fc))
+
+
 def testar(conta_id):
     """Mesmo teste do botão Testar da aba Cobrança: grava o resultado e audita. Devolve o texto."""
     try:

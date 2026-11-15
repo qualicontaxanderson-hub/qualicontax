@@ -1423,6 +1423,13 @@ def contas():
             tuple(_ids), fetch=True) or []}
         dados['url_ligar'] = url_for('financeiro.ligar_cobranca', fin_conta_id=0)
         dados['url_testar_cob'] = url_for('financeiro.testar_cobranca_da_conta', fin_conta_id=0)
+        dados['url_puxar_ext'] = url_for('financeiro.puxar_extrato_da_conta', fin_conta_id=0)
+        from utils.bradesco_extrato import ultimos as _ult_ext
+        _ext = _ult_ext()
+        for c in dados['contas']:
+            if c.get('cob') and _ext.get(c['id']):
+                x = _ext[c['id']]
+                c['ext'] = {k: x.get(k) for k in ('em', 'lidos', 'novos', 'baixados', 'pendentes', 'erro')}
     return render_template(
         'financeiro/contas.html', dados=dados, ano=ano,
         contas=contas, fin_empresas=emps, sel_empresas=sel, emp_mapa=mapa,
