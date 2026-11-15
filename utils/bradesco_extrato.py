@@ -68,10 +68,18 @@ def _valor(s, sinal):
 
 
 def ler(j):
-    """Resposta da API -> lista de lançamentos no formato do parser de OFX (sem as linhas de saldo)."""
+    """Resposta da API -> lista de lançamentos no formato do parser de OFX (sem as linhas de saldo).
+
+    Além do período, entra o grupo "Lancamentos Dia" dos últimos lançamentos: é onde o Pix recebido
+    aparece NA HORA (15/11/2026, domingo: o Pix de R$ 100 do Anderson veio só ali, com a data do
+    próximo dia útil, 16/11, e o período ainda não o tinha). Vem com a mesma data, documento e
+    descrição que o período trará depois, então não duplica. A tarifa agendada ("Ultimos
+    Lancamentos", data futura) continua de fora até o banco lançar."""
     por = (j or {}).get('extratoPorPeriodo') or {}
-    out = []
-    for l in por.get('lstLancamentoMensal') or []:
+    ult = ((j or {}).get('extratoUltimosLancamentos') or {}).get('listaLancamentos') or {}
+    dia = [l for g, ls in ult.items() if 'dia' in str(g).lower() for l in (ls or [])]
+    out, vistos = [], set()
+    for l in list(por.get('lstLancamentoMensal') or []) + dia:
         desc1 = re.sub(r'\s+', ' ', str(l.get('descritivoLancamentoCompleto') or l.get('descritivoLancamentoAbreviado') or '')).strip()
         if not desc1 or 'SALDO' in desc1.upper():
             continue
@@ -85,6 +93,10 @@ def ler(j):
         if not valor:
             continue
         doc = _num(l.get('numeroDocumento')).lstrip('0') or None
+        chave = (data, valor, doc, desc1, desc2)
+        if chave in vistos:                       # o mesmo lançamento no período e no "do dia"
+            continue
+        vistos.add(chave)
         out.append({'data': data, 'valor': valor, 'tipo': 'CREDIT' if valor > 0 else 'DEBIT',
                     'descricao': f'{desc1} {desc2}'.strip()[:500], 'documento': doc, 'fitid': None})
     return out
