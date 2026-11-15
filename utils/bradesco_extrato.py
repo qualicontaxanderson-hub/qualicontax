@@ -7,8 +7,9 @@ Como funciona
 -------------
 A conta bancária que tem a cobrança do Bradesco ligada (fin_cobranca_contas.fin_conta_id, produção,
 ativa) usa a MESMA credencial e o MESMO certificado A1 para a API Saldo e Extrato (assinatura de
-produção aprovada em 13/11). De hora em hora, das 7h às 22h (Anderson: "não pode puxar o dia todo
-para ficar praticamente on line?"):
+produção aprovada em 13/11). De 30 em 30 minutos, das 7h às 22h — Anderson: "não pode puxar o dia
+todo para ficar praticamente on line?"; "Pode puxar o Bradesco de 30 em 30 minutos". O roteador roda
+de 5 em 5: BRADESCO_EXTRATO_MINUTOS muda o intervalo (mínimo 5):
 
 1. pede ao banco os lançamentos dos últimos 7 dias ATÉ HOJE (só o "extratoPorPeriodo", que traz o que
    já foi lançado; os "últimos lançamentos" trazem tarifa com data futura e ficam de fora);
@@ -38,8 +39,8 @@ BANCO_NOME = 'Bradesco'
 REF = 'brad-extrato:'       # referência da baixa: documento + data do lançamento
 JANELA_ANTES, JANELA_DEPOIS = 60, 35   # vencimento entre data-60 e data+35 (igual à Efí)
 DIAS = 7
-HORAS = range(7, 23)        # 7h às 22h (Brasília), uma vez por hora
-_CHAVE_HORA = 'bradesco_extrato_ultima_hora'
+HORAS = range(7, 23)        # 7h às 22h (Brasília)
+_CHAVE_HORA = 'bradesco_extrato_ultima_vez'
 _CHAVE_RES = 'bradesco_extrato_ultimo'
 _ATOR = ('EXTRATO BRADESCO (automático)', 'extrato_bradesco')
 
@@ -287,7 +288,8 @@ def rodar(seco=True, de=None, ate=None, fin_conta_id=None):
 
 
 def rodar_de_hora_em_hora():
-    """Chamado a cada tick do roteador: UMA vez por hora, das 7h às 22h (Brasília)."""
+    """Chamado a cada tick do roteador (5 em 5 minutos): das 7h às 22h (Brasília), uma vez a cada
+    BRADESCO_EXTRATO_MINUTOS (padrão 30). O nome ficou; o intervalo é o da variável."""
     import os
     from zoneinfo import ZoneInfo
     if os.getenv('BRADESCO_EXTRATO_ATIVO', '1').strip() != '1':
@@ -295,13 +297,18 @@ def rodar_de_hora_em_hora():
     agora = datetime.now(ZoneInfo('America/Sao_Paulo'))
     if agora.hour not in HORAS:
         return None
-    marca = agora.strftime('%Y-%m-%d %H')
+    try:
+        passo = max(5, int(os.getenv('BRADESCO_EXTRATO_MINUTOS', '30')))
+    except ValueError:
+        passo = 30
+    minuto_do_dia = agora.hour * 60 + agora.minute
+    marca = f"{agora:%Y-%m-%d} {minuto_do_dia // passo}"
     r = _q('SELECT valor FROM app_config WHERE chave = %s', (_CHAVE_HORA,), one=True)
     if r and r.get('valor') == marca:
         return None
     if not contas():
         return None
-    # marca ANTES de rodar: erro não vira uma tentativa a cada 5 minutos; a janela de 7 dias cobre
+    # marca ANTES de rodar: duas voltas do roteador na mesma fatia não puxam duas vezes
     _x('INSERT INTO app_config (chave, valor) VALUES (%s, %s) '
        'ON DUPLICATE KEY UPDATE valor = VALUES(valor), updated_at = NOW()', (_CHAVE_HORA, marca))
     hoje = agora.date()

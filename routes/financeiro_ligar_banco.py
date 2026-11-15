@@ -132,7 +132,7 @@ def testar_cobranca_da_conta(fin_conta_id):
 @financeiro.route('/financeiro/contas/<int:fin_conta_id>/puxar-extrato', methods=['POST'])
 @permission_required('financeiro.cobranca')
 def puxar_extrato_da_conta(fin_conta_id):
-    """Puxa agora o extrato pela API (os últimos 7 dias até hoje), igual à rodada de hora em hora."""
+    """Puxa agora o extrato pela API (os últimos 7 dias até hoje), igual à rodada automática (30 em 30 minutos)."""
     fc = execute_query('SELECT * FROM fin_contas WHERE id = %s', (fin_conta_id,), fetch=True, fetch_one=True)
     if not fc or fc['empresa_id'] not in FinEmpresa.ids_validos():
         abort(404)

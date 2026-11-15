@@ -696,7 +696,7 @@ function blocoExtrato(c) {
   if (!k || !k.ativo || k.ambiente !== 'producao') return '';
   const x = c.ext;
   const quando = x && x.em ? new Date(x.em.replace(' ', 'T')).toLocaleString('pt-BR', {day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit'}) : '';
-  const est = !x ? 'ligado · entra sozinho de hora em hora, das 7h às 22h'
+  const est = !x ? 'ligado · entra sozinho de 30 em 30 minutos, das 7h às 22h'
             : x.erro ? `a última puxada falhou (${quando})`
             : `puxado em ${quando} · ${x.lidos} lido(s), ${x.novos} novo(s), ${(x.baixados || []).length} baixa(s)`;
   const pend = x && !x.erro && (x.pendentes || []).length
