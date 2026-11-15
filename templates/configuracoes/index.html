@@ -303,7 +303,7 @@
         <div class="bkp-rest">
             <div class="bkp-head" style="margin-bottom:6px">
                 <div class="bkp-tit"><i class="fas fa-rotate-left" style="color:#0f766e"></i> Teste de restauração
-                    <span style="font-weight:600;color:#94a3b8;font-size:11px;">o backup montado de verdade no PC, todo domingo 08:00</span></div>
+                    <span style="font-weight:600;color:#94a3b8;font-size:11px;">o backup montado de verdade no PC, todo dia 08:00</span></div>
                 {% if rs.registrado %}
                 <span class="bkp-selo {{ rs.cor }}">{{ 'FALHOU' if rs.cor == 'vermelho' else ('PROVADO' if rs.cor == 'verde' else 'ATRASADO') }}</span>
                 {% else %}<span class="bkp-selo cinza">AINDA NÃO TESTADO</span>{% endif %}
@@ -319,7 +319,7 @@
             {% if not rs.ok %}
             <div class="bkp-aviso vermelho"><i class="fas fa-circle-exclamation"></i> <b>O backup não voltou inteiro.</b> {{ rs.erro }}</div>
             {% elif rs.cor == 'amarelo' %}
-            <div class="bkp-aviso amarelo"><i class="fas fa-triangle-exclamation"></i> <b>Passou de 8 dias sem teste.</b> O PC estava desligado no domingo; ao ligar, o teste roda sozinho.</div>
+            <div class="bkp-aviso amarelo"><i class="fas fa-triangle-exclamation"></i> <b>Passou de 3 dias sem teste.</b> O PC ficou desligado; ao ligar, o teste roda sozinho.</div>
             {% endif %}
             {% endif %}
         </div>

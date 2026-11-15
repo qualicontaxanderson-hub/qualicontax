@@ -2,11 +2,12 @@
 """Teste de restauração do backup: monta o banco inteiro no MySQL do PC (15/11/2026).
 
 Anderson: "não podemos fazer um sistema aqui no meu PC e de vez em quando pegar o backup e subir";
-"Domingo 04:00", depois "Domingo as 08:00 ... certeza que estara ligado".
+"Domingo 04:00", depois "Domingo as 08:00", e por fim todo dia 08:00 junto com o modo reserva ("Vamos fazer a Opção A").
 
 Conferir o arquivo (CRC + "Dump completed on", que o cron já faz) não prova que ele VOLTA. Este script
 pega o backup mais recente da nuvem (``qualicontax_nuvem_*.sql.gz`` na pasta do Dropbox), monta o banco
-``qualicontax_copia`` no MySQL SEPARADO do PC (serviço QualicontaxCopia, porta 3310, só 127.0.0.1) e confere:
+``qualicontax_copia`` no MySQL SEPARADO do PC (porta 3310, só 127.0.0.1; liga só durante a rodada, ver
+scripts/copia_local_mysql.py) e confere:
 
 - o mysql terminou sem erro, o gzip fechou com o CRC certo e a última linha é "Dump completed on";
 - toda tabela criada no arquivo existe na cópia, e toda tabela que tinha dados ficou com dados;
@@ -177,6 +178,11 @@ def conferir(criadas, com_dados):
             'vazias': vazias, 'linhas': linhas, 'detalhe': tabs}
 
 
+def _data_do_arquivo(nome):
+    m = re.search(r'(\d{4})-(\d{2})-(\d{2})_(\d{2})(\d{2})', nome or '')
+    return '%s/%s/%s %s:%s' % (m.group(3), m.group(2), m.group(1), m.group(4), m.group(5)) if m else ''
+
+
 def gravar(payload):
     import config  # noqa: F401
     from utils.db_helper import execute_query
@@ -191,6 +197,22 @@ def main():
     a = ap.parse_args()
     os.makedirs(os.path.dirname(LOG), exist_ok=True)
     trava()
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    import copia_local_mysql as M
+    if M.ligado():
+        if M.reserva_aberto():
+            # alguém está consultando no modo reserva; não apaga o banco debaixo dele
+            log('PULADO: o modo reserva está aberto. Fica para a próxima rodada.')
+            return 0
+        M.desligar()  # sobrou ligado (janela do modo reserva fechada à força); desliga e segue
+    M.ligar()
+    try:
+        return _rodar(a, M)
+    finally:
+        M.desligar()
+
+
+def _rodar(a, M):
     ini = time.time()
     st = {'ok': False, 'quando': datetime.now().strftime('%d/%m/%Y %H:%M'), 'maquina': os.getenv('COMPUTERNAME', '')}
     try:
@@ -214,6 +236,10 @@ def main():
             problemas.append('%d tabela(s) voltaram vazias: %s' % (len(c['vazias']), ', '.join(c['vazias'][:5])))
         st['ok'] = not problemas
         st['erro'] = '; '.join(problemas)
+        if st['ok']:
+            with open(M.INFO, 'w', encoding='utf-8') as f:
+                json.dump({'arquivo': st['arquivo'], 'restaurado_em': st['quando'],
+                           'dados_de': _data_do_arquivo(st['arquivo'])}, f, ensure_ascii=False)
         for x in c['detalhe']:
             if x.get('max_id_prod') is not None:
                 log('  %-40s cópia %10d  maior id cópia %10d  produção %10d' %

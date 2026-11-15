@@ -164,9 +164,9 @@ def ler_status() -> dict:
 
 
 def ler_restauracao() -> dict:
-    """Último teste de restauração (scripts/restaurar_copia_local.py, no PC, domingo 08:00). NUNCA levanta.
+    """Último teste de restauração (scripts/restaurar_copia_local.py, no PC, todo dia 08:00). NUNCA levanta.
 
-    Verde: montou tudo há até 8 dias. Amarelo: passou de 8 dias (o PC estava desligado no domingo e não
+    Verde: montou tudo há até 3 dias. Amarelo: passou de 3 dias (o PC ficou desligado e não
     ligou depois). Vermelho: a última tentativa falhou."""
     try:
         row = execute_query(
@@ -181,7 +181,7 @@ def ler_restauracao() -> dict:
     st['registrado'] = True
     st['idade_fmt'] = _idade_fmt(idade)
     st['linhas_fmt'] = '{:,}'.format(int(st.get('linhas') or 0)).replace(',', '.')
-    st['cor'] = 'vermelho' if not st.get('ok') else ('amarelo' if idade > 8 * 86400 else 'verde')
+    st['cor'] = 'vermelho' if not st.get('ok') else ('amarelo' if idade > 3 * 86400 else 'verde')
     return st
 
 
