@@ -450,6 +450,74 @@
 .tu-dd-op.on .tu-ck { background:#16a34a; border-color:#16a34a; }
 .tu-pronto { align-self:flex-end; font:inherit; font-size:13px; font-weight:700; background:#16a34a; color:#fff; border:0; border-radius:10px; padding:8px 18px; cursor:pointer; }
 
+/* MODO EDITAR (16/11/2026) — Anderson: "um botão editar e aparecer todas as telas para alteração
+   inclusive a busca do CNPJ ... UMA tela só". Mesmo visual do modelo aprovado em 15/11. */
+.ed-id { position:relative; z-index:1; }
+.ed-id[hidden], .ed-pn[hidden], .ed-rf[hidden], .ed-pasta[hidden] { display:none !important; }
+.ed-modo { display:inline-flex; align-items:center; gap:7px; font-size:12px; font-weight:800; letter-spacing:.3px; background:#fbbf24; color:#422006; border-radius:8px; padding:4px 10px; }
+.ed-g { display:grid; grid-template-columns:repeat(12,1fr); gap:14px 16px; margin-top:14px; }
+.ed-f { display:flex; flex-direction:column; gap:6px; grid-column:span var(--c,6); min-width:0; }
+.ed-f > label { font-size:12px; font-weight:600; color:#a7d9c0; display:flex; gap:6px; align-items:center; flex-wrap:wrap; }
+.ed-f > label em { font-style:normal; font-size:10.5px; font-weight:700; background:rgba(74,222,128,.22); color:#bbf7d0; border-radius:6px; padding:1px 6px; }
+.ed-f > label b { color:#fca5a5; }
+.ed-in { height:46px; border-radius:12px; border:1.5px solid rgba(255,255,255,.35); background:#fff; color:#0f172a; font:inherit; font-size:15.5px; font-weight:600; padding:0 14px; width:100%; box-sizing:border-box; min-width:0; }
+.ed-in:focus { outline:0; border-color:#4ade80; box-shadow:0 0 0 4px rgba(74,222,128,.3); }
+.ed-in.big { font-size:19px; font-weight:800; height:52px; }
+.ed-in.ro { background:rgba(255,255,255,.10); color:#fff; border-color:rgba(255,255,255,.18); font-weight:600; font-size:14.5px; display:flex; align-items:center; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
+.ed-in.ro.vazio { color:#a7d9c0; font-weight:500; }
+.ed-in::placeholder { color:#94a3b8; font-weight:500; }
+.ed-in.ed-mudou { border-color:#facc15; box-shadow:0 0 0 3px rgba(250,204,21,.35); }
+.ed-in.ro.ed-mudou { background:rgba(250,204,21,.18); }
+.ed-row { display:flex; gap:8px; }
+.ed-rec { height:46px; border-radius:12px; border:0; background:#4ade80; color:#052e16; font:inherit; font-weight:800; font-size:14px; padding:0 16px; white-space:nowrap; display:inline-flex; gap:8px; align-items:center; cursor:pointer; }
+.ed-rec:hover { background:#86efac; } .ed-rec[disabled] { opacity:.6; cursor:default; }
+.ed-seg { display:flex; background:rgba(255,255,255,.12); border-radius:12px; padding:4px; gap:4px; height:46px; box-sizing:border-box; }
+.ed-seg > * { flex:1; display:flex; align-items:center; justify-content:center; gap:7px; border-radius:9px; font:inherit; font-size:13.5px; font-weight:700; color:#d1fae5; white-space:nowrap; padding:0 10px; background:none; border:0; cursor:pointer; }
+.ed-seg > .on { background:#fff; color:#065f46; box-shadow:0 1px 3px rgba(0,0,0,.2); }
+.ed-seg > [disabled] { cursor:not-allowed; }
+.ed-dica { font-size:12.5px; color:#bbf7d0; line-height:1.4; }
+.ed-ck { display:flex; align-items:center; gap:9px; font-size:13.5px; font-weight:600; color:#d1fae5; cursor:pointer; }
+.ed-ck input { width:18px; height:18px; accent-color:#4ade80; }
+/* comparação com a Receita */
+.ed-rf { margin-top:16px; background:#fff; color:#0f172a; border-radius:16px; padding:16px 18px; box-shadow:0 10px 30px rgba(0,0,0,.18); }
+.ed-rf h4 { margin:0 0 4px; font-size:15px; font-weight:800; display:flex; gap:8px; align-items:center; }
+.ed-rf h4 small { margin-left:auto; font-size:12px; font-weight:500; color:#64748b; }
+.ed-rf .ed-rf-sub { font-size:12.5px; color:#64748b; margin-bottom:10px; }
+.ed-rf table { width:100%; border-collapse:collapse; font-size:13.5px; }
+.ed-rf th { text-align:left; font-size:11.5px; font-weight:700; color:#64748b; text-transform:uppercase; letter-spacing:.3px; padding:6px 8px; border-bottom:1px solid #e2e8f0; }
+.ed-rf td { padding:8px; border-bottom:1px solid #f1f5f9; vertical-align:top; word-break:break-word; }
+.ed-rf td:first-child { width:28px; } .ed-rf td.r { font-weight:600; color:#334155; white-space:nowrap; }
+.ed-rf td.a { color:#94a3b8; text-decoration:line-through; } .ed-rf td.n { color:#15803d; font-weight:700; }
+.ed-rf input[type=checkbox] { width:18px; height:18px; accent-color:#16a34a; }
+.ed-rf .ed-rf-igual { font-size:13px; color:#15803d; font-weight:600; padding:6px 0; }
+.ed-rf .ed-rf-info { margin-top:10px; font-size:13px; color:#475569; background:#f8fafc; border-radius:10px; padding:9px 12px; line-height:1.45; }
+.ed-rf .ed-rf-alerta { background:#fff1f2; color:#9f1239; font-weight:600; }
+.ed-rf .ed-rf-bts { display:flex; gap:8px; justify-content:flex-end; flex-direction:row-reverse; margin-top:12px; }
+.ed-rf .ed-rf-bts button { font:inherit; font-size:14px; font-weight:700; border-radius:10px; padding:9px 16px; cursor:pointer; border:1px solid #e2e8f0; background:#fff; color:#475569; }
+.ed-rf .ed-rf-bts .ed-rf-ok { background:#16a34a; color:#fff; border-color:#16a34a; }
+/* painel da direita */
+.ed-pn { display:flex; flex-direction:column; gap:10px; margin-bottom:16px; padding-bottom:16px; border-bottom:1px solid #e2e8f0; }
+.ed-salvar { height:52px; border:0; border-radius:14px; background:linear-gradient(135deg,#16a34a,#0f5132); color:#fff; font:inherit; font-size:16px; font-weight:800; display:flex; align-items:center; justify-content:center; gap:9px; box-shadow:0 6px 16px rgba(22,163,74,.25); cursor:pointer; }
+.ed-salvar[disabled] { opacity:.45; box-shadow:none; cursor:default; }
+.ed-canc { height:42px; border:1px solid #e2e8f0; border-radius:12px; background:#fff; color:#475569; font:inherit; font-weight:600; font-size:14px; cursor:pointer; }
+.ed-canc:hover { background:#f8fafc; }
+.ed-alt { font-size:13px; color:#475569; line-height:1.45; } .ed-alt b { color:#0f172a; }
+.ed-pasta { font-size:12.5px; color:#92400e; background:#fffbeb; border:1px solid #fde68a; border-radius:10px; padding:8px 10px; line-height:1.45; }
+/* no modo editar: o topo verde vira os campos; todo valor de texto já aparece como campo */
+.tu-editando .qb-id > .qb-num, .tu-editando .qb-id > h1, .tu-editando .qb-id > .qb-fantasia, .tu-editando .qb-id > .qb-doc,
+.tu-editando .qb-id > .qb-linha, .tu-editando .qb-id > .qb-chips, .tu-editando #tuEditar, .tu-editando #tuSalvar { display:none !important; }
+.qb-kv.tu-fixo { cursor:default; padding:10px 12px; }
+.qb-kv.tu-fixo::after { content:none !important; }
+.qb-kv.tu-fixo:hover { background:transparent; }
+.qb-kv.tu-fixo.tu-mudou > small::after { content:'alterado'; margin-left:8px; font-size:10.5px; font-weight:800; letter-spacing:.4px; text-transform:uppercase; color:#a16207; }
+.tu-inp.tu-inp-fixo { margin-top:4px; border-color:#cbd5e1; box-shadow:none; }
+.tu-inp.tu-inp-fixo:focus-within { border-color:#16a34a; box-shadow:0 0 0 4px rgba(22,163,74,.13); }
+.tu-editando .qb-kv.tu-ed:not(.tu-fixo):not(.qb-opcoes):not(.tu-abrindo) > .tu-txt { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-top:4px;
+    min-height:44px; border:1.5px solid #cbd5e1; border-radius:12px; padding:6px 12px; background:#fff; box-sizing:border-box; }
+.tu-editando .qb-kv.tu-ed:not(.tu-fixo):not(.qb-opcoes):not(.tu-abrindo) > .tu-txt::after { content:'\f078'; font-family:'Font Awesome 6 Free'; font-weight:900; font-size:11px; color:#64748b; }
+.tu-editando .qb-kv.tu-ed:not(.tu-fixo):not(.qb-opcoes):hover::after { content:none; }
+@media (max-width:900px) { .ed-f { grid-column:span 12; } .ed-row { flex-wrap:wrap; } .ed-rec { width:100%; justify-content:center; } }
+
 /* identidade */
 .qb-id { background:radial-gradient(420px 260px at 100% 0%, rgba(255,255,255,.10), transparent 70%), linear-gradient(140deg,#0b3b2b 0%,#136c46 55%,#1f9a5c 100%);
     color:#fff; padding:24px 28px; overflow:hidden; }
@@ -955,6 +1023,7 @@
                     {% if qualif[0] %}<button type="button" class="qb-btn-v" data-copiar-texto="{{ qualif[0] }}" data-copiar-rotulo="Qualificação"
                             title="Copia o parágrafo de qualificação para contrato{% if qualif[1] %} — falta no cadastro: {{ qualif[1]|join(', ') }}{% endif %}"><i class="fas fa-file-signature"></i> Qualificação{% if qualif[1] %} <i class="fas fa-triangle-exclamation" style="color:#fbbf24;"></i>{% endif %}</button>{% endif %}
                     <button type="button" class="qb-btn-v" data-copiar-ficha="{{ cliente.nome_razao_social }}" title="Copia identificação, contato, dados fiscais e endereços"><i class="far fa-copy"></i> Copiar ficha</button>
+                    {% if pode_rota('clientes.salvar_campos') %}<button type="button" id="tuEditar" class="qb-btn-v qb-btn-salvar" title="Abre todos os campos da ficha para alterar, inclusive número, {{ 'razão social e a busca na Receita' if pj else 'nome e CPF' }}"><i class="fas fa-pen"></i> Editar</button>{% endif %}
                     {% if pode_rota('clientes.salvar_campos') %}<button type="button" id="tuSalvar" class="qb-btn-v qb-btn-salvar tu-salvar" disabled title="Grava o que você alterou na página"><i class="fas fa-check"></i> Salvar <b id="tuN"></b></button>{% endif %}
                 </div>
                 <script>
@@ -1003,8 +1072,45 @@
                     {% if cliente.porte_empresa %}<span>{{ cliente.porte_empresa }}</span>{% endif %}
                     {% if reserva and reserva.reservado %}<span title="Só administradores e as exceções veem esta empresa"><i class="fas fa-lock"></i> Reservada</span>{% endif %}
                 </div>
+                {% if pode_rota('clientes.salvar_campos') %}
+                <div class="ed-id" id="edId" hidden>
+                    <span class="ed-modo"><i class="fas fa-pen"></i> EDITANDO</span>
+                    <div class="ed-g">
+                        <div class="ed-f" style="--c:5"><label>Tipo de pessoa</label>
+                            <div class="ed-seg" title="Empresa e pessoa física têm campos diferentes: para trocar, faça um cadastro novo"><button type="button" disabled class="{{ 'on' if pj }}"><i class="fas fa-building"></i> Empresa (CNPJ)</button><button type="button" disabled class="{{ 'on' if not pj }}"><i class="fas fa-user"></i> Pessoa física (CPF)</button></div></div>
+                        <div class="ed-f" style="--c:4"><label>Cliente ou avulso</label>
+                            <div class="ed-seg" id="edCliAv"><button type="button" data-v="cliente" class="{{ 'on' if not cliente.avulso }}">Cliente</button><button type="button" data-v="avulso" class="{{ 'on' if cliente.avulso }}">Avulso</button></div></div>
+                        <div class="ed-f" style="--c:3"><label>Número do cliente{% if not cliente.avulso %} <b>*</b>{% endif %}</label>
+                            <input class="ed-in" data-campo="numero_cliente" data-rotulo="Número" data-valor="{{ cliente.numero_cliente or '' }}" value="{{ cliente.numero_cliente or '' }}" inputmode="numeric" autocomplete="off"
+                                   placeholder="{{ 'sem número (avulso)' if cliente.avulso else 'ex: 1083' }}"></div>
+                        <div class="ed-f" style="--c:{{ 6 if pj else 4 }}"><label>{{ 'CNPJ' if pj else 'CPF' }} <b>*</b></label>
+                            <div class="ed-row"><input class="ed-in mono" id="edDoc" data-campo="cpf_cnpj" data-rotulo="{{ 'CNPJ' if pj else 'CPF' }}" data-valor="{{ cliente.cpf_cnpj or '' }}" value="{{ cliente.cpf_cnpj or '' }}" autocomplete="off" inputmode="numeric"
+                                   placeholder="{{ '00.000.000/0000-00' if pj else '000.000.000-00' }}">
+                            {% if pj %}<button type="button" class="ed-rec" id="edReceita"><i class="fas fa-magnifying-glass"></i> Buscar na Receita</button>{% endif %}</div></div>
+                        <div class="ed-f" style="--c:{{ 6 if pj else 8 }}"><label>{{ 'Razão social' if pj else 'Nome completo' }} <b>*</b>{% if pj %} <em>Receita</em>{% endif %}</label>
+                            <input class="ed-in big" data-campo="nome_razao_social" data-rotulo="{{ 'Razão social' if pj else 'Nome' }}" data-valor="{{ cliente.nome_razao_social or '' }}" value="{{ cliente.nome_razao_social or '' }}" autocomplete="off"></div>
+                        {% if pj %}
+                        <div class="ed-f" style="--c:4"><label>Nome fantasia <em>Receita</em></label>
+                            <input class="ed-in" data-campo="nome_fantasia" data-rotulo="Nome fantasia" data-valor="{{ cliente.nome_fantasia or '' }}" value="{{ cliente.nome_fantasia or '' }}" placeholder="—" autocomplete="off"></div>
+                        <div class="ed-f" style="--c:4"><label>Natureza jurídica <em>Receita</em></label>
+                            <div class="ed-in ro{{ ' vazio' if not cliente.natureza_juridica }}" data-campo="natureza" data-rotulo="Natureza jurídica" data-valor="{{ (cliente.natureza_codigo or '') ~ '|' ~ (cliente.natureza_juridica or '') if cliente.natureza_codigo else '' }}" title="Vem da busca na Receita">{{ cliente.natureza_juridica or '—' }}</div></div>
+                        <div class="ed-f" style="--c:4"><label>Abertura <em>Receita</em></label>
+                            <div class="ed-in ro{{ ' vazio' if not cliente.data_inicio_atividade }}" data-campo="data_inicio_atividade" data-rotulo="Início da atividade" data-valor="{{ cliente.data_inicio_atividade.strftime('%Y-%m-%d') if cliente.data_inicio_atividade and cliente.data_inicio_atividade.strftime is defined else (cliente.data_inicio_atividade or '') }}" title="Vem da busca na Receita">{{ cliente.data_inicio_atividade|format_date if cliente.data_inicio_atividade else '—' }}</div></div>
+                        <div class="ed-f" style="--c:12"><label>Atividade principal (CNAE) <em>Receita</em></label>
+                            <div class="ed-in ro{{ ' vazio' if not cliente.cnae_fiscal }}" id="edCnae" data-campo="cnae_fiscal" data-rotulo="CNAE" data-valor="{{ cliente.cnae_fiscal or '' }}" data-desc="{{ cliente.cnae_fiscal_descricao or '' }}" title="Vem da busca na Receita">{% if cliente.cnae_fiscal %}{{ cliente.cnae_fiscal_descricao or '' }} · {{ cliente.cnae_fiscal }}{% else %}—{% endif %}</div></div>
+                        {% endif %}
+                        {% if current_user.is_admin() %}
+                        <div class="ed-f" style="--c:12"><label class="ed-ck"><input type="checkbox" id="edContador" data-campo="is_contador" data-rotulo="Marca de contador" data-valor="{{ '1' if cliente.is_contador else '0' }}"{{ ' checked' if cliente.is_contador }}>
+                            Este cadastro é um contador (pode ser vinculado como contador responsável de outros clientes) <small style="opacity:.7">· só o administrador vê</small></label></div>
+                        {% endif %}
+                    </div>
+                    <div id="edRf" class="ed-rf" hidden></div>
+                    <div class="qb-id-pe">
+                        <span class="ed-dica"><i class="fas fa-circle-info"></i> {% if pj %}Buscar na Receita mostra o que mudou e você escolhe o que trazer. {% endif %}Mudar o número ou {{ 'a razão social' if pj else 'o nome' }} renomeia a pasta da empresa no Dropbox, junto com o salvar. Todos os blocos abaixo também estão abertos para alterar.</span>
+                    </div>
+                </div>
+                {% endif %}
                 <div class="qb-id-pe">
-                    {% if pode_rota('clientes.editar') %}<a href="{{ url_for('clientes.editar', id=cliente.id) }}" class="qb-link-claro" title="Número, razão social e CNPJ mudam a pasta da empresa no Dropbox: ficam no editor completo, com a busca na Receita"><i class="fas fa-rotate"></i> {{ 'Receita, número e razão social' if pj else 'Nome, CPF e número' }}</a>{% endif %}
                     {% if cliente.situacao == 'ATIVO' and pode_rota('clientes.inativar') %}
                     <form action="{{ url_for('clientes.inativar', id=cliente.id) }}" method="POST" style="display:inline;">
                         <button type="submit" class="qb-link-claro qb-link-perigo" onclick="return confirm('Deseja realmente inativar este cliente?')"><i class="fas fa-ban"></i> Inativar</button>
@@ -1016,6 +1122,14 @@
             <!-- O QUE FALTA (a regra do A CADASTRAR) -->
             {% set n_tot = falta.faltam|length + falta.ok|length %}
             <section class="qb-b qb-prog s4" id="tuFalta">
+                {% if pode_rota('clientes.salvar_campos') %}
+                <div class="ed-pn" id="edPn" hidden>
+                    <button type="button" class="ed-salvar" id="edSalvar" disabled><i class="fas fa-check"></i> Salvar alterações</button>
+                    <button type="button" class="ed-canc" id="edCancelar">Cancelar</button>
+                    <div class="ed-alt" id="edAlt">Nenhuma alteração ainda. Altere o que precisar em qualquer bloco da página.</div>
+                    <div class="ed-pasta" id="edPasta" hidden></div>
+                </div>
+                {% endif %}
                 <h3>Cadastro</h3>
                 <div class="qb-big">{{ falta.ok|length }}<small> de {{ n_tot }} completos</small></div>
                 <div class="qb-trilho">{% for o in falta.ok %}<i></i>{% endfor %}{% for f in falta.faltam|reverse %}<i class="{{ 'v' if f.cor == 'verm' else 'a' }}"></i>{% endfor %}</div>
@@ -1083,15 +1197,20 @@
             <!-- DADOS PESSOAIS (PF) -->
             {% set ps = pessoa or {} %}
             <section class="qb-b s4" id="dados-pessoais" data-copiar-bloco>
-                <div class="qb-bh"><span class="qb-ico i-roxo"><i class="fas fa-id-card"></i></span><h3>Dados pessoais</h3>
-                    {% if pode_rota('clientes.editar') %}<a class="qb-add" href="{{ url_for('clientes.editar', id=cliente.id) }}"><i class="fas fa-pen"></i> Alterar</a>{% endif %}</div>
-                <div class="qb-kv"><small>Nascimento</small><b>{{ ps.data_nascimento|format_date if ps.data_nascimento else '—' }}</b></div>
-                <div class="qb-kv"><small>Documentos</small><b>{% for d in documentos or [] %}{{ d.tipo }} {{ d.numero }}{% if d.orgao %} · {{ d.orgao }}{% if d.uf %}/{{ d.uf }}{% endif %}{% endif %}{% if not loop.last %}<br>{% endif %}{% else %}—{% endfor %}</b></div>
-                <div class="qb-kv"><small>Estado civil</small><b>{{ pessoa_rotulo('estado_civil', ps.estado_civil) or '—' }}{% if ps.regime_bens %} <small class="qb-muted">· {{ pessoa_rotulo('regime_bens', ps.regime_bens) }}</small>{% endif %}</b></div>
-                {% if ps.conjuge_nome or ps.conjuge_cpf %}<div class="qb-kv"><small>Cônjuge</small><b>{% if conjuge_cad %}<a href="{{ url_for('clientes.detalhes', id=conjuge_cad.id) }}">{{ ps.conjuge_nome or conjuge_cad.nome_razao_social }}</a>{% else %}{{ ps.conjuge_nome or '—' }}{% endif %}{% if ps.conjuge_cpf %} <small class="qb-muted">· {{ ps.conjuge_cpf }}</small>{% endif %}</b></div>{% endif %}
-                <div class="qb-kv"><small>Nacionalidade · profissão</small><b>{{ ps.nacionalidade or '—' }} · {{ ps.profissao or '—' }}</b></div>
-                <div class="qb-kv"><small>Nome da mãe</small><b>{{ ps.nome_mae or '—' }}</b></div>
-                <div class="qb-kv"><small>Conta gov.br</small><b>{{ pessoa_rotulo('nivel_govbr', ps.nivel_govbr) or '—' }}</b></div>
+                <div class="qb-bh"><span class="qb-ico i-roxo"><i class="fas fa-id-card"></i></span><h3>Dados pessoais</h3>{{ selo(['documento']) }}</div>
+                {# 16/11/2026: os dados pessoais se alteram aqui mesmo (antes só pelo editor). Documentos ainda no editor até a etapa A2. #}
+                {{ campo('pf_nascimento', 'Nascimento', ps.data_nascimento.strftime('%Y-%m-%d') if ps.data_nascimento else '', exibe=(ps.data_nascimento|format_date if ps.data_nascimento else ''), tipo='date') }}
+                <div class="qb-kv" id="campo-documento"><small>Documentos</small><b>{% for d in documentos or [] %}{{ d.tipo }} {{ d.numero }}{% if d.orgao %} · {{ d.orgao }}{% if d.uf %}/{{ d.uf }}{% endif %}{% endif %}{% if not loop.last %}<br>{% endif %}{% else %}—{% endfor %}</b>
+                    {% if pode_rota('clientes.editar') %}<a class="qb-add" style="align-self:flex-start;margin-top:6px" href="{{ url_for('clientes.editar', id=cliente.id, antigo=1) }}#documentos"><i class="fas fa-pen"></i> Alterar documentos</a>{% endif %}</div>
+                {{ campo('pf_estado_civil', 'Estado civil', ps.estado_civil or '', exibe=pessoa_rotulo('estado_civil', ps.estado_civil) or '', tipo='select', ops=pf_ops.civil) }}
+                {{ campo('pf_regime_bens', 'Regime de bens', ps.regime_bens or '', exibe=pessoa_rotulo('regime_bens', ps.regime_bens) or '', tipo='select', ops=pf_ops.regime, ajuda='Só para casado(a) ou união estável.') }}
+                {{ campo('pf_conjuge_nome', 'Cônjuge', ps.conjuge_nome or '', ajuda='Só para casado(a) ou união estável. Opcional.') }}
+                {% if conjuge_cad %}<div class="qb-kv" style="padding-top:0"><small>Cônjuge cadastrado</small><b><a href="{{ url_for('clientes.detalhes', id=conjuge_cad.id) }}">{{ conjuge_cad.nome_razao_social | nome_proprio }}</a></b></div>{% endif %}
+                {{ campo('pf_conjuge_cpf', 'CPF do cônjuge', ps.conjuge_cpf or '', ph='000.000.000-00', mono=True) }}
+                {{ campo('pf_nacionalidade', 'Nacionalidade', ps.nacionalidade or '', tipo='select', ops=pf_ops.nacionalidade) }}
+                {{ campo('pf_profissao', 'Profissão', ps.profissao or '', tipo='select', ops=pf_ops.profissao) }}
+                {{ campo('pf_nome_mae', 'Nome da mãe', ps.nome_mae or '') }}
+                {{ campo('pf_nivel_govbr', 'Conta gov.br', ps.nivel_govbr or '', exibe=pessoa_rotulo('nivel_govbr', ps.nivel_govbr) or '', tipo='select', ops=pf_ops.govbr) }}
             </section>
             {% if produtor_rural or ies %}
             <section class="qb-b s4" id="ies-rural" data-copiar-bloco>
@@ -2373,11 +2492,23 @@
     } catch (e) {}
 
     function rotulos() {
-        return Object.keys(pend).map(function (k) { var el = tu.querySelector('[data-campo="' + k + '"]'); return el ? el.dataset.rotulo : k; });
+        return Object.keys(pend).filter(function (k) { return k !== 'cnae_fiscal_descricao'; })
+            .map(function (k) { var el = tu.querySelector('[data-campo="' + k + '"]'); return el ? el.dataset.rotulo : k; });
     }
     function atualizarBotao() {
         var n = Object.keys(pend).length;
         if (btn) { btn.disabled = !n; nEl.textContent = n ? '· ' + n : ''; }
+        var es = document.getElementById('edSalvar');
+        if (es) {
+            es.disabled = !n;
+            var rs = rotulos(), nr = rs.length;
+            document.getElementById('edAlt').innerHTML = nr
+                ? '<b>' + nr + (nr > 1 ? ' alterações' : ' alteração') + '</b> ainda não ' + (nr > 1 ? 'salvas' : 'salva') + ': ' + esc(rs.join(', ')) + '.'
+                : 'Nenhuma alteração ainda. Altere o que precisar em qualquer bloco da página.';
+            var pz = document.getElementById('edPasta');
+            pz.hidden = !(tem(pend, 'numero_cliente') || tem(pend, 'nome_razao_social'));
+            if (!pz.hidden) pz.innerHTML = '<i class="fas fa-folder-open"></i> Ao salvar, a pasta da empresa no Dropbox muda de nome junto.';
+        }
         if (barra) {
             barra.classList.toggle('on', n > 0);
             barra.setAttribute('aria-hidden', n ? 'false' : 'true');
@@ -2541,7 +2672,7 @@
             return;
         }
         var el = e.target.closest('.tu-v.tu-ed');
-        if (el && !el.classList.contains('tu-abrindo') && !e.target.closest('a, button')) abrir(el);
+        if (el && !el.classList.contains('tu-abrindo') && !el.classList.contains('tu-fixo') && !e.target.closest('a, button')) abrir(el);
     });
     tu.addEventListener('keydown', function (e) {
         if (e.key === 'Enter' && e.target.matches && e.target.matches('.tu-v.tu-ed:not(.qb-opcoes)')) { e.preventDefault(); abrir(e.target); }
@@ -2558,6 +2689,11 @@
     function restaurarBtn() { if (btn) { btn.innerHTML = '<i class="fas fa-check"></i> Salvar <b id="tuN"></b>'; nEl = document.getElementById('tuN'); } atualizarBotao(); }
     function salvar() {
         document.querySelectorAll('.tu-v.tu-abrindo').forEach(function (o) { if (o._confirmar) o._confirmar(); });
+        if (tem(pend, 'numero_cliente') || tem(pend, 'nome_razao_social')) {
+            var nn = tem(pend, 'numero_cliente') ? pend.numero_cliente : {{ (cliente.numero_cliente or '') | string | tojson }};
+            var rr = tem(pend, 'nome_razao_social') ? pend.nome_razao_social : {{ (cliente.nome_razao_social or '') | tojson }};
+            if (!confirm('O número ou o nome mudou: a pasta da empresa no Dropbox vai passar a se chamar\n\n"' + (nn ? nn + ' - ' : '') + String(rr).toUpperCase() + '"\n\nContinuar?')) return;
+        }
         var campos = {};
         Object.keys(pend).forEach(function (k) { campos[k] = k === 'ramos' ? String(pend[k]).split(',').filter(Boolean) : pend[k]; });
         if (!Object.keys(campos).length) return;
@@ -2568,8 +2704,10 @@
             .then(function (j) {
                 if (j.ok) {
                     pend = {};
-                    try { sessionStorage.setItem('tu_aviso', j.salvos && j.salvos.length ? 'Salvo: ' + j.salvos.join(', ') + '.' : 'Nada mudou.'); } catch (e) {}
-                    location.reload();
+                    var msg = j.salvos && j.salvos.length ? 'Salvo: ' + j.salvos.join(', ') + '.' : 'Nada mudou.';
+                    if (j.virou_cliente) msg += ' O avulso agora é cliente e aparece na lista de Clientes.';
+                    try { sessionStorage.setItem('tu_aviso', msg); } catch (e) {}
+                    if (editando) location.replace(location.pathname + location.hash); else location.reload();
                 } else { aviso(j.erro || 'Não foi possível salvar.', true); restaurarBtn(); if (b2) b2.disabled = false; }
             })
             .catch(function () { aviso('Sem conexão com o servidor. Nada foi salvo.', true); restaurarBtn(); if (b2) b2.disabled = false; });
@@ -2577,13 +2715,210 @@
     if (btn) btn.addEventListener('click', salvar);
     if (barra) {
         document.getElementById('tuSalvar2').addEventListener('click', salvar);
-        document.getElementById('tuDesfazer').addEventListener('click', function () {
-            document.querySelectorAll('.tu-v.tu-abrindo').forEach(function (o) { fechar(o); });
-            pend = {};
-            document.querySelectorAll('.tu-v.tu-ed').forEach(mostrar);
-            atualizarBotao();
+        document.getElementById('tuDesfazer').addEventListener('click', desfazerTudo);
+    }
+    function desfazerTudo() {
+        document.querySelectorAll('.tu-v.tu-abrindo').forEach(function (o) { fechar(o); });
+        pend = {};
+        document.querySelectorAll('.tu-v.tu-ed').forEach(function (el) { if (el._ctl) el._ctl.value = el.dataset.valor || ''; mostrar(el); });
+        document.querySelectorAll('#edId [data-campo]').forEach(function (x) {
+            x.classList.remove('ed-mudou');
+            if (x.type === 'checkbox') x.checked = x.dataset.valor === '1';
+            else if (x.tagName === 'INPUT') x.value = x.dataset.valor || '';
+            else if (x._texto0 != null) { x.textContent = x._texto0; }
+        });
+        var rf = document.getElementById('edRf'); if (rf) rf.hidden = true;
+        atualizarBotao();
+    }
+
+    // ---------------- MODO EDITAR (16/11/2026): a ficha inteira vira campos, sem sair da página
+    var editando = false;
+    function marcarPend(n, v, base) {
+        if (String(v) === String(base == null ? '' : base)) delete pend[n]; else pend[n] = v;
+        atualizarBotao();
+        return tem(pend, n);
+    }
+    function abrirFixo(el) {
+        if (el.classList.contains('tu-abrindo') && el._confirmar) el._confirmar();
+        if (el.classList.contains('tu-fixo')) return;
+        var t = el.dataset.tipo, w = document.createElement('div');
+        w.className = 'tu-inp tu-inp-fixo';
+        var ctl = t === 'textarea' ? document.createElement('textarea') : document.createElement('input');
+        if (t === 'textarea') ctl.rows = 2; else ctl.type = t === 'date' ? 'date' : 'text';
+        ctl.className = 'tu-ctl'; ctl.value = valorAtual(el);
+        ctl.placeholder = el.dataset.ph || '';
+        ctl.setAttribute('aria-label', el.dataset.rotulo || '');
+        var mk = window.QCMascara && { celular: QCMascara.fone, telefone: QCMascara.fone, nire: QCMascara.nire }[el.dataset.campo];
+        if (mk) QCMascara.ligar(ctl, mk);
+        w.appendChild(ctl);
+        var dica = linhaDica(el, '');
+        el.querySelector('.tu-txt').style.display = 'none';
+        el.appendChild(w); if (dica) el.appendChild(dica);
+        el.classList.add('tu-fixo'); el.removeAttribute('tabindex'); el.removeAttribute('title');
+        el._ctl = ctl;
+        var ler = function () { el.classList.toggle('tu-mudou', marcarPend(el.dataset.campo, (ctl.value || '').trim(), el.dataset.valor || '')); };
+        ctl.addEventListener('input', ler); ctl.addEventListener('change', ler); ctl.addEventListener('blur', ler);
+    }
+    function mascaraDoc(v, pj) {
+        var d = String(v || '').replace(/\D/g, '').slice(0, pj ? 14 : 11);
+        if (pj) return d.replace(/^(\d{2})(\d)/, '$1.$2').replace(/^(\d{2})\.(\d{3})(\d)/, '$1.$2.$3').replace(/\.(\d{3})(\d)/, '.$1/$2').replace(/(\d{4})(\d)/, '$1-$2');
+        return d.replace(/(\d{3})(\d)/, '$1.$2').replace(/(\d{3})(\d)/, '$1.$2').replace(/(\d{3})(\d{1,2})$/, '$1-$2');
+    }
+    var PJ = {{ 'true' if pj else 'false' }};
+    function ligarTopo() {
+        document.querySelectorAll('#edId [data-campo]').forEach(function (x) {
+            if (x.tagName !== 'INPUT') { x._texto0 = x.textContent; return; }
+            var n = x.dataset.campo;
+            var ler = function () {
+                if (x.type === 'checkbox') { x.classList.toggle('ed-mudou', marcarPend(n, x.checked ? '1' : '0', x.dataset.valor)); return; }
+                if (n === 'cpf_cnpj') {
+                    var m = mascaraDoc(x.value, PJ); if (m !== x.value) x.value = m;
+                    var igual = x.value.replace(/\D/g, '') === String(x.dataset.valor || '').replace(/\D/g, '');
+                    x.classList.toggle('ed-mudou', marcarPend(n, igual ? x.dataset.valor : x.value.trim(), x.dataset.valor));
+                    return;
+                }
+                if (n === 'numero_cliente') x.value = x.value.replace(/\D/g, '');
+                var v = x.value.trim();
+                if (n === 'nome_razao_social') v = v.replace(/\s+/g, ' ');
+                x.classList.toggle('ed-mudou', marcarPend(n, v, x.dataset.valor));
+            };
+            x.addEventListener(x.type === 'checkbox' ? 'change' : 'input', ler);
+        });
+        var seg = document.getElementById('edCliAv');
+        if (seg) seg.addEventListener('click', function (e) {
+            var b = e.target.closest('button'); if (!b) return;
+            var num = document.querySelector('#edId [data-campo="numero_cliente"]');
+            var eraAvulso = {{ 'true' if cliente.avulso else 'false' }};
+            if (b.dataset.v === 'cliente') {
+                if (eraAvulso) aviso('Para virar cliente, digite o número do cliente: ao salvar, o avulso passa para a lista de Clientes.');
+                num.focus();
+            } else if (!eraAvulso) {
+                aviso('Cliente não volta a ser avulso por aqui. Se precisar, fale com o administrador.', true);
+            }
         });
     }
+    function definir(k, v, texto) {
+        var x = document.querySelector('#edId [data-campo="' + k + '"]');
+        var el = x || tu.querySelector('.tu-v[data-campo="' + k + '"]');
+        var mud = marcarPend(k, v, el ? el.dataset.valor : '');
+        if (x) {
+            if (x.tagName === 'INPUT') x.value = v; else { x.textContent = texto || v || '—'; x.classList.toggle('vazio', !v); }
+            x.classList.toggle('ed-mudou', mud);
+        } else if (el) {
+            if (el._ctl) el._ctl.value = v;
+            mostrar(el);
+        }
+    }
+    function entrarEdicao(rolar) {
+        if (editando || !document.getElementById('edId')) return;
+        editando = true;
+        document.querySelectorAll('.tu-v.tu-abrindo').forEach(function (o) { if (o._confirmar) o._confirmar(); });
+        tu.classList.add('tu-editando');
+        document.getElementById('edId').hidden = false;
+        document.getElementById('edPn').hidden = false;
+        tu.querySelectorAll('.tu-v.tu-ed').forEach(function (el) {
+            var t = el.dataset.tipo;
+            if (t === 'text' || t === 'date' || t === 'textarea') abrirFixo(el);
+        });
+        ligarTopo();
+        atualizarBotao();
+        try { history.replaceState(null, '', location.pathname + '?editar=1' + location.hash); } catch (e) {}
+        if (rolar) window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+    var bEd = document.getElementById('tuEditar');
+    if (bEd) bEd.addEventListener('click', function () { entrarEdicao(true); });
+    var bSalvarEd = document.getElementById('edSalvar');
+    if (bSalvarEd) bSalvarEd.addEventListener('click', function () {
+        bSalvarEd.disabled = true; bSalvarEd.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Salvando…';
+        salvar();
+        setTimeout(function () { if (Object.keys(pend).length) { bSalvarEd.innerHTML = '<i class="fas fa-check"></i> Salvar alterações'; atualizarBotao(); } }, 400);
+    });
+    var bCanc = document.getElementById('edCancelar');
+    if (bCanc) bCanc.addEventListener('click', function () {
+        if (Object.keys(pend).length && !confirm('Descartar as alterações que ainda não foram salvas?')) return;
+        pend = {};
+        location.replace(location.pathname + location.hash);
+    });
+
+    // Buscar na Receita: mostra o que difere e a pessoa escolhe o que trazer
+    var bRec = document.getElementById('edReceita');
+    function fmtData(iso) { var p = String(iso || '').split('-'); return p.length === 3 ? p[2] + '/' + p[1] + '/' + p[0] : (iso || ''); }
+    function foneFmt(d) { d = String(d || '').replace(/\D/g, ''); return d.length === 10 ? '(' + d.slice(0, 2) + ') ' + d.slice(2, 6) + '-' + d.slice(6) : (d.length === 11 ? '(' + d.slice(0, 2) + ') ' + d.slice(2, 7) + '-' + d.slice(7) : d); }
+    function atualDe(k) {
+        var x = document.querySelector('#edId [data-campo="' + k + '"]');
+        if (x) return x.tagName === 'INPUT' ? x.value.trim() : (tem(pend, k) ? pend[k] : (x.dataset.valor || ''));
+        var el = tu.querySelector('.tu-v[data-campo="' + k + '"]');
+        return el ? valorAtual(el) : '';
+    }
+    if (bRec) bRec.addEventListener('click', function () {
+        var d = (document.getElementById('edDoc').value || '').replace(/\D/g, '');
+        if (d.length !== 14) { aviso('Digite os 14 números do CNPJ para buscar na Receita.', true); return; }
+        bRec.disabled = true; bRec.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Buscando…';
+        fetch('/api/consultar-cnpj/' + d).then(function (r) { return r.json(); }).then(function (j) {
+            bRec.disabled = false; bRec.innerHTML = '<i class="fas fa-magnifying-glass"></i> Buscar na Receita';
+            if (!j.success) { aviso(j.message || 'A Receita não respondeu.', true); return; }
+            mostrarReceita(j.data || {}, j.base_em);
+        }).catch(function () {
+            bRec.disabled = false; bRec.innerHTML = '<i class="fas fa-magnifying-glass"></i> Buscar na Receita';
+            aviso('Sem conexão com a Receita agora. Tente de novo em instantes.', true);
+        });
+    });
+    function mostrarReceita(d, baseEm) {
+        var cnaeAtual = document.getElementById('edCnae');
+        var linhas = [];
+        var add = function (k, rot, atualTxt, novoVal, novoTxt, marcar, extra) {
+            if (!novoVal) return;
+            linhas.push({ k: k, rot: rot, a: atualTxt, v: novoVal, t: novoTxt || novoVal, m: marcar, extra: extra });
+        };
+        var up = function (s) { return String(s || '').trim().replace(/\s+/g, ' ').toUpperCase(); };
+        if (up(d.razao_social) !== up(atualDe('nome_razao_social'))) add('nome_razao_social', 'Razão social', atualDe('nome_razao_social'), up(d.razao_social), null, true);
+        if (up(d.nome_fantasia) !== up(atualDe('nome_fantasia'))) add('nome_fantasia', 'Nome fantasia', atualDe('nome_fantasia'), String(d.nome_fantasia || '').trim(), null, true);
+        var natV = d.natureza_juridica_codigo ? d.natureza_juridica_codigo + '|' + (d.natureza_juridica || '') : '';
+        if (natV && natV !== atualDe('natureza')) add('natureza', 'Natureza jurídica', (atualDe('natureza').split('|')[1] || ''), natV, d.natureza_juridica, true);
+        if (d.data_inicio_atividade && d.data_inicio_atividade !== atualDe('data_inicio_atividade')) add('data_inicio_atividade', 'Abertura', fmtData(atualDe('data_inicio_atividade')), d.data_inicio_atividade, fmtData(d.data_inicio_atividade), true);
+        var cnaeV = String(d.cnae_fiscal || '');
+        var cnaeA = tem(pend, 'cnae_fiscal') ? pend.cnae_fiscal : (cnaeAtual ? cnaeAtual.dataset.valor : '');
+        if (cnaeV && cnaeV !== cnaeA) add('cnae_fiscal', 'Atividade (CNAE)', cnaeAtual ? cnaeAtual._texto0 : '', cnaeV, (d.cnae_fiscal_descricao || '') + ' · ' + cnaeV, true, d.cnae_fiscal_descricao || '');
+        var em = String(d.email || '').trim().toLowerCase();
+        if (em && em !== atualDe('email').toLowerCase()) add('email', 'E-mail da empresa', atualDe('email'), em, null, !atualDe('email'));
+        var tel = foneFmt(d.ddd_telefone_1);
+        if (tel && tel.replace(/\D/g, '') !== atualDe('telefone').replace(/\D/g, '')) add('telefone', 'Telefone da empresa', atualDe('telefone'), tel, null, !atualDe('telefone'));
+        var rf = document.getElementById('edRf');
+        var h = '<h4><i class="fas fa-landmark" style="color:#16a34a"></i> O que a Receita diz' + (baseEm ? '<small>base da Receita de ' + esc(baseEm) + '</small>' : '') + '</h4>';
+        if (linhas.length) {
+            h += '<div class="ed-rf-sub">Marque o que quer trazer para o cadastro. Nada é gravado até clicar em Salvar alterações.</div>'
+              + '<table><thead><tr><th></th><th>Campo</th><th>Hoje no cadastro</th><th>Na Receita</th></tr></thead><tbody>';
+            linhas.forEach(function (l, i) {
+                h += '<tr><td><input type="checkbox" data-i="' + i + '"' + (l.m ? ' checked' : '') + '></td><td class="r">' + esc(l.rot) + '</td><td class="a">' + (esc(l.a) || '<i>vazio</i>') + '</td><td class="n">' + esc(l.t) + '</td></tr>';
+            });
+            h += '</tbody></table>';
+        } else {
+            h += '<div class="ed-rf-igual"><i class="fas fa-circle-check"></i> Razão social, fantasia, natureza, abertura, CNAE, e-mail e telefone já estão iguais aos da Receita.</div>';
+        }
+        var sit = String(d.situacao_cadastral || d.situacao || '').toUpperCase();
+        if (sit && sit.indexOf('ATIVA') < 0) h += '<div class="ed-rf-info ed-rf-alerta"><i class="fas fa-triangle-exclamation"></i> Situação na Receita: ' + esc(sit) + '.</div>';
+        var end = [d.logradouro, d.numero, d.complemento, d.bairro, d.municipio && (d.municipio + (d.uf ? '/' + d.uf : '')), d.cep].filter(Boolean).join(', ');
+        if (end) h += '<div class="ed-rf-info"><i class="fas fa-location-dot"></i> Endereço na Receita: <b>' + esc(end) + '</b>. O endereço se altera no bloco <a href="#enderecos">Endereços</a>.</div>';
+        h += '<div class="ed-rf-bts"><button type="button" data-ac="fechar">Fechar</button>' + (linhas.length ? '<button type="button" class="ed-rf-ok" data-ac="trazer"><i class="fas fa-arrow-down"></i> Trazer os marcados</button>' : '') + '</div>';
+        rf.innerHTML = h; rf.hidden = false;
+        rf.onclick = function (e) {
+            var b = e.target.closest('button[data-ac]'); if (!b) return;
+            if (b.dataset.ac === 'trazer') {
+                var n = 0;
+                rf.querySelectorAll('input[type=checkbox]:checked').forEach(function (c) {
+                    var l = linhas[+c.dataset.i]; n++;
+                    if (l.k === 'cnae_fiscal') {
+                        definir('cnae_fiscal', l.v, l.t);
+                        var dsc = document.getElementById('edCnae');
+                        marcarPend('cnae_fiscal_descricao', l.extra, dsc ? dsc.dataset.desc : '');
+                    } else definir(l.k, l.v, l.t);
+                });
+                aviso(n ? n + (n > 1 ? ' campos trazidos' : ' campo trazido') + ' da Receita. Confira e clique em Salvar alterações.' : 'Nada marcado.');
+            }
+            rf.hidden = true;
+        };
+    }
+    if (/[?&]editar=1/.test(location.search)) entrarEdicao(false);
     window.addEventListener('beforeunload', function (e) {
         if (Object.keys(pend).length) { e.preventDefault(); e.returnValue = ''; }
     });

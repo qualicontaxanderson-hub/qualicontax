@@ -1626,6 +1626,9 @@ def detalhes(id):
                          contab_anterior=(Contabilidade.get(cliente['contabilidade_anterior_id'])
                                           if cliente.get('contabilidade_anterior_id') else None),
                          pessoa_rotulo=PessoaDados.rotulo,
+                         pf_ops=({'civil': ESTADOS_CIVIS, 'regime': REGIMES_BENS, 'govbr': NIVEIS_GOVBR,
+                                  **{t: [(n, n) for n in lst] for t, lst in Opcoes.todas().items()}}
+                                 if cliente.get('tipo_pessoa') == 'PF' else {}),
                          certificado=certificado,
                          contadores=contadores,
                          contadores_disponiveis=contadores_disponiveis,
@@ -1652,8 +1655,19 @@ def detalhes(id):
 # mudou para cá. Só entram campos SIMPLES (uma coluna, sem efeito colateral). Número, razão social e
 # CNPJ ficam fora: mudar qualquer um renomeia a pasta da empresa no Dropbox, e isso continua no editor.
 _CAMPOS_TEXTO = {'inscricao_estadual': 30, 'inscricao_municipal': 30, 'nire': 20,
-                 'email': 255, 'telefone': 20, 'celular': 20, 'observacoes': 5000}
-_CAMPOS_DATA = ('nire_data_registro', 'data_inicio_contrato')
+                 'email': 255, 'telefone': 20, 'celular': 20, 'observacoes': 5000,
+                 # modo Editar (16/11/2026): o que a busca na Receita traz para a ficha
+                 'nome_fantasia': 255, 'cnae_fiscal': 10, 'cnae_fiscal_descricao': 255}
+_CAMPOS_DATA = ('nire_data_registro', 'data_inicio_contrato', 'data_inicio_atividade')
+# Anderson (15/11/2026): "temos que ter um botão editar e aparecer todas as telas para alteração
+# inclusive a busca do CNPJ ... UMA tela só". Número, razão social e CNPJ/CPF entram na ficha; a pasta
+# do Dropbox é renomeada aqui, como no editor antigo (_trocar_identidade).
+_CAMPOS_ID = ('numero_cliente', 'nome_razao_social', 'cpf_cnpj')
+# Dados pessoais (PF) na ficha: chave da tela -> coluna de clientes_pf_dados (_ler_pessoa valida).
+_CAMPOS_PF = {'pf_nascimento': 'data_nascimento', 'pf_estado_civil': 'estado_civil',
+              'pf_regime_bens': 'regime_bens', 'pf_nacionalidade': 'nacionalidade',
+              'pf_profissao': 'profissao', 'pf_nome_mae': 'nome_mae', 'pf_nivel_govbr': 'nivel_govbr',
+              'pf_conjuge_nome': 'conjuge_nome', 'pf_conjuge_cpf': 'conjuge_cpf'}
 _CAMPOS_OPCAO = {'regime_tributario': ('SIMPLES', 'LUCRO_PRESUMIDO', 'LUCRO_REAL', 'MEI'),
                  'porte_empresa': ('MEI', 'ME', 'EPP', 'MEDIO', 'GRANDE'),
                  'cobranca': tuple(v for v, _ in COBRANCAS)}
@@ -1661,7 +1675,147 @@ _ROTULO_CAMPO = {'inscricao_estadual': 'Insc. Estadual', 'inscricao_municipal': 
                  'email': 'E-mail', 'telefone': 'Telefone', 'celular': 'Celular', 'observacoes': 'Observações',
                  'nire_data_registro': 'Data do registro', 'data_inicio_contrato': 'Início do contrato',
                  'regime_tributario': 'Regime', 'porte_empresa': 'Porte', 'cobranca': 'Cobrança',
-                 'origem': 'Origem', 'ramos': 'Ramo de atividade', 'grupo': 'Grupo'}
+                 'origem': 'Origem', 'ramos': 'Ramo de atividade', 'grupo': 'Grupo',
+                 'nome_fantasia': 'Nome fantasia', 'cnae_fiscal': 'CNAE', 'cnae_fiscal_descricao': 'Atividade',
+                 'data_inicio_atividade': 'Início da atividade', 'natureza': 'Natureza jurídica',
+                 'numero_cliente': 'Número', 'nome_razao_social': 'Razão social / nome', 'cpf_cnpj': 'CNPJ / CPF',
+                 'pf_nascimento': 'Nascimento', 'pf_estado_civil': 'Estado civil', 'pf_regime_bens': 'Regime de bens',
+                 'pf_nacionalidade': 'Nacionalidade', 'pf_profissao': 'Profissão', 'pf_nome_mae': 'Nome da mãe',
+                 'pf_nivel_govbr': 'Conta gov.br', 'pf_conjuge_nome': 'Cônjuge', 'pf_conjuge_cpf': 'CPF do cônjuge',
+                 'is_contador': 'Marca de contador'}
+
+
+def _cnpj_ok(v):
+    d = re.sub(r'\D', '', v or '')
+    if len(d) != 14 or d == d[0] * 14:
+        return False
+
+    def dv(base, pesos):
+        r = sum(int(a) * b for a, b in zip(base, pesos)) % 11
+        return '0' if r < 2 else str(11 - r)
+    p1 = [5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2]
+    return d[12] == dv(d[:12], p1) and d[13] == dv(d[:13], [6] + p1)
+
+
+def _doc_fmt(d, pj):
+    d = re.sub(r'\D', '', d or '')
+    return f'{d[:2]}.{d[2:5]}.{d[5:8]}/{d[8:12]}-{d[12:]}' if pj else f'{d[:3]}.{d[3:6]}.{d[6:9]}-{d[9:]}'
+
+
+def _reapontar_caminhos(pasta_de, pasta_para):
+    """A pasta da empresa mudou de nome: reaponta os caminhos gravados. O LIKE escapa % e _
+    (razões sanitizadas podem conter '_'), e o SUBSTRING preserva tudo depois do prefixo antigo."""
+    _like = (pasta_de.replace('\\', '\\\\').replace('%', '\\%').replace('_', '\\_')) + '/%'
+    _corte = len(pasta_de) + 1
+    tot = 0
+    for _t, _c in (('nfse_capturadas', 'xml_path'), ('cte_documentos', 'xml_caminho'),
+                   ('dfe_documentos', 'xml_caminho'), ('dfe_eventos', 'xml_caminho'),
+                   ('nfe_importacoes', 'xml_caminho'), ('dfe_certificados', 'dropbox_path'),
+                   ('documentos', 'caminho_arquivo')):
+        tot += execute_query(f'UPDATE {_t} SET {_c} = CONCAT(%s, SUBSTRING({_c}, %s)) WHERE {_c} LIKE %s',
+                             (pasta_para, _corte, _like)) or 0
+    return tot
+
+
+def _validar_identidade(cliente, campos):
+    """Confere número / razão / documento novos da ficha. Devolve (novo dict, erros)."""
+    id_, pj = cliente['id'], cliente.get('tipo_pessoa') != 'PF'
+    novo, erros = {}, []
+    if 'numero_cliente' in campos:
+        n = _numero_inteiro(str(campos.get('numero_cliente') or ''))
+        if not n and not cliente.get('avulso'):
+            erros.append('Número do cliente: obrigatório (só o avulso fica sem número).')
+        elif n and Cliente.existe_numero_cliente(n, id_):
+            erros.append(f'O número {n} já é de outro cliente.')
+        else:
+            novo['numero_cliente'] = n or None
+    if 'nome_razao_social' in campos:
+        r = ' '.join(str(campos.get('nome_razao_social') or '').split()).upper()[:255]
+        if not r:
+            erros.append(('Razão social' if pj else 'Nome') + ': obrigatório.')
+        else:
+            novo['nome_razao_social'] = r
+    if 'cpf_cnpj' in campos:
+        d = re.sub(r'\D', '', str(campos.get('cpf_cnpj') or ''))
+        if not (_cnpj_ok(d) if pj else cpf_valido(d)):
+            erros.append(('CNPJ' if pj else 'CPF') + ' inválido: confira os números.')
+        elif Cliente.existe_cpf_cnpj(d, id_):
+            erros.append(('CNPJ' if pj else 'CPF') + ' já é de outro cadastro.')
+        else:
+            novo['cpf_cnpj'] = _doc_fmt(d, pj)
+    return novo, erros
+
+
+def _trocar_identidade(cliente, novo):
+    """Grava número / razão / documento. Pasta do Dropbox renomeada ANTES (com o Dropbox fora,
+    nada muda); caminhos reapontados; avulso que ganhou número vira cliente. -> (salvos, erro, virou)."""
+    id_ = cliente['id']
+    mud = {k: v for k, v in novo.items() if str(cliente.get(k) or '') != str(v or '')}
+    if not mud:
+        return [], None, False
+    num = mud.get('numero_cliente', cliente.get('numero_cliente'))
+    raz = mud.get('nome_razao_social', cliente.get('nome_razao_social'))
+    pasta_antiga = dropbox_sync._build_empresa_folder(cliente.get('numero_cliente'), cliente.get('nome_razao_social') or '')
+    pasta_nova = dropbox_sync._build_empresa_folder(num, raz or '')
+    st, de, para = '', None, None
+    if pasta_nova != pasta_antiga:
+        st, de, para = dropbox_sync.renomear_pasta_empresa(pasta_antiga, pasta_nova)
+        if st == 'conflito':
+            return [], (f'Já existe uma pasta "{pasta_nova}" no Dropbox. Junte ou renomeie a pasta lá e '
+                        'tente de novo — nada foi alterado.'), False
+        if st == 'erro':
+            return [], ('Não consegui renomear a pasta da empresa no Dropbox agora. Nada foi alterado — '
+                        'tente novamente em instantes.'), False
+    ok = execute_query(f"UPDATE clientes SET {', '.join(f'{k} = %s' for k in mud)}, alterado_por = %s, "
+                       f"alterado_em = CURRENT_TIMESTAMP WHERE id = %s", (*mud.values(), current_user.id, id_))
+    if ok is None:
+        if st == 'movida':
+            dropbox_sync.renomear_pasta_empresa(pasta_nova, pasta_antiga)
+        return [], 'Erro ao gravar. Nada foi alterado.', False
+    registrar('escrita.alterou_cliente', 'cadastros', tabela='clientes', registro_id=id_,
+              antes={k: cliente.get(k) for k in mud}, depois=dict(mud))
+    if 'cpf_cnpj' in mud:
+        _vigia_concluir_se_aplicada(mud['cpf_cnpj'], id_)
+    virou = False
+    if cliente.get('avulso') and mud.get('numero_cliente'):
+        execute_query('UPDATE clientes SET avulso = 0, virou_cliente_em = NOW() WHERE id = %s AND avulso = 1', (id_,))
+        virou = True
+        registrar('escrita.converteu_avulso', 'cadastros', tabela='clientes', registro_id=id_,
+                  antes={'avulso': True, 'pasta': pasta_antiga},
+                  depois={'numero_cliente': mud['numero_cliente'], 'pasta': pasta_nova,
+                          'dropbox': st or 'sem_mudanca', 'nome': raz, 'por': 'ficha'})
+    if de:
+        tot = _reapontar_caminhos(de, para)
+        registrar('escrita.renomeou_pasta_empresa', 'cadastros', tabela='clientes', registro_id=id_,
+                  antes={'pasta': pasta_antiga},
+                  depois={'pasta': pasta_nova, 'dropbox': st, 'caminhos_atualizados': tot})
+    return [_ROTULO_CAMPO[k] for k in mud], None, virou
+
+
+def _validar_pessoa(cliente_id, campos):
+    """Dados pessoais vindos da ficha -> (antes, depois, erros). Parte do que está gravado e troca
+    só o que veio; o que _ler_pessoa joga fora (fora da lista, data ruim, CPF errado) vira erro."""
+    antes = PessoaDados.get(cliente_id)
+    form = {}
+    for k, col in _CAMPOS_PF.items():
+        v = antes.get(col)
+        form[k] = v.isoformat() if hasattr(v, 'isoformat') else (v or '')
+    for k in _CAMPOS_PF:
+        if k in campos:
+            form[k] = str(campos.get(k) or '').strip()
+    depois = _ler_pessoa(form, antes)
+    erros = []
+    for k, col in _CAMPOS_PF.items():
+        if k in campos and str(campos.get(k) or '').strip() and not depois.get(col):
+            if k == 'pf_regime_bens':
+                erros.append('Regime de bens: só para casado(a) ou união estável.')
+            elif k == 'pf_conjuge_cpf':
+                erros.append('CPF do cônjuge: confira os números (e o cônjuge é só para casado(a) ou união estável).')
+            elif k == 'pf_conjuge_nome':
+                erros.append('Cônjuge: só para casado(a) ou união estável.')
+            else:
+                erros.append(f'{_ROTULO_CAMPO[k]}: valor inválido.')
+    return antes, depois, erros
 
 
 @clientes.route('/clientes/<int:id>/campos', methods=['POST'])
@@ -1741,10 +1895,39 @@ def salvar_campos(id):
                                (*ids, tipo), fetch=True, fetch_one=True) or {}).get('n') or 0
             if n != len(ids):
                 erros.append('Ramo de atividade de ' + ('pessoa física.' if tipo == 'PF' else 'empresa.'))
+        elif k == 'natureza' and pj:
+            cod = re.sub(r'\D', '', str(v).partition('|')[0])
+            if not cod:
+                erros.append('Natureza jurídica: use a busca na Receita.')
+    if 'is_contador' in campos and not current_user.is_admin():
+        erros.append('Só o administrador marca um cadastro como contador.')
+    novo_id, e_id = _validar_identidade(cliente, {k: campos[k] for k in _CAMPOS_ID if k in campos})
+    erros += e_id
+    pf_campos = {k: campos[k] for k in _CAMPOS_PF if k in campos} if not pj else {}
+    if pf_campos:
+        pf_antes, pf_depois, e_pf = _validar_pessoa(id, pf_campos)
+        erros += e_pf
     if erros:
         return jsonify(ok=False, erro=' '.join(erros)), 400
 
     salvos = []
+    virou = False
+    if novo_id:
+        s_id, e_tr, virou = _trocar_identidade(cliente, novo_id)
+        if e_tr:
+            return jsonify(ok=False, erro=e_tr), 409
+        salvos += s_id
+        cliente = Cliente.get_by_id(id)
+    if 'is_contador' in campos:
+        marca = 1 if str(campos['is_contador']).lower() in ('1', 'true', 'on', 'sim') else 0
+        if marca != (1 if cliente.get('is_contador') else 0):
+            r_cont = ClienteContador.marcar_como_contador(id, marca)
+            if not r_cont.get('ok'):
+                return jsonify(ok=False, erro=r_cont.get('erro') or 'Não foi possível mudar a marca de contador.',
+                               salvos=salvos), 409
+            registrar('escrita.alterou_cliente', 'cadastros', tabela='clientes', registro_id=id,
+                      antes={'is_contador': 1 - marca}, depois={'is_contador': marca})
+            salvos.append('Marca de contador')
     for k, novo in list(sets.items()):
         velho = cliente.get(k)
         velho_cmp = velho.isoformat() if hasattr(velho, 'isoformat') else (velho if velho not in ('',) else None)
@@ -1801,7 +1984,27 @@ def salvar_campos(id):
                       depois={'ramos': sorted(r['nome'] for r in RamoAtividade.get_by_cliente(id))})
             salvos.append('Ramo de atividade')
 
-    return jsonify(ok=True, salvos=salvos, falta=AC.pendencias_do_cadastro(id))
+    if 'natureza' in campos and pj:
+        cod, _, desc = str(campos['natureza']).partition('|')
+        n0 = (cliente.get('natureza_codigo') or '', cliente.get('natureza_juridica') or '')
+        _salvar_natureza(id, {'natureza_codigo': cod, 'natureza_juridica': desc}, cliente)
+        n1 = execute_query('SELECT natureza_codigo, natureza_juridica FROM clientes WHERE id = %s',
+                           (id,), fetch=True, fetch_one=True) or {}
+        if (n1.get('natureza_codigo') or '', n1.get('natureza_juridica') or '') != n0:
+            salvos.append('Natureza jurídica')
+
+    if pf_campos:
+        def _s(v):
+            return v.isoformat() if hasattr(v, 'isoformat') else (v or None)
+        mudou = [c for c in PESSOA_CAMPOS if _s(pf_antes.get(c)) != _s(pf_depois.get(c))]
+        if mudou:
+            PessoaDados.salvar(id, pf_depois, current_user.id)
+            registrar('escrita.alterou_dados_pessoa', 'cadastros', tabela='clientes', registro_id=id,
+                      antes={c: _s(pf_antes.get(c)) for c in mudou}, depois={c: _s(pf_depois.get(c)) for c in mudou})
+            inv = {v: k for k, v in _CAMPOS_PF.items()}
+            salvos += [_ROTULO_CAMPO[inv[c]] for c in mudou if c in inv]
+
+    return jsonify(ok=True, salvos=salvos, virou_cliente=virou, falta=AC.pendencias_do_cadastro(id))
 
 
 @clientes.route('/clientes/opcoes/<tipo>', methods=['POST'])
@@ -2324,6 +2527,10 @@ def editar(id):
     if not cliente:
         flash('Cliente não encontrado!', 'danger')
         return redirect(url_for('clientes.index'))
+    # 16/11/2026 (Anderson: "para EDITAR ... UMA tela só"): editar é a própria ficha em modo Editar.
+    # O editor antigo fica só por ?antigo=1 (documentos da pessoa física, até a etapa A2).
+    if request.method == 'GET' and not request.args.get('antigo'):
+        return redirect(url_for('clientes.detalhes', id=id, editar=1))
     enderecos_cliente = EnderecoCliente.get_by_cliente(id)
     endereco_principal = next((e for e in enderecos_cliente if e.get('principal')), enderecos_cliente[0] if enderecos_cliente else None)
     
@@ -2456,21 +2663,7 @@ def editar(id):
                 # escapa % e _ (razões sanitizadas podem conter '_'), e o
                 # SUBSTRING preserva tudo depois do prefixo antigo.
                 if _pasta_de:
-                    _like = (_pasta_de.replace('\\', '\\\\')
-                             .replace('%', '\\%').replace('_', '\\_')) + '/%'
-                    _corte = len(_pasta_de) + 1
-                    _tot = 0
-                    for _t, _c in (('nfse_capturadas', 'xml_path'),
-                                   ('cte_documentos', 'xml_caminho'),
-                                   ('dfe_documentos', 'xml_caminho'),
-                                   ('dfe_eventos', 'xml_caminho'),
-                                   ('nfe_importacoes', 'xml_caminho'),
-                                   ('dfe_certificados', 'dropbox_path'),
-                                   ('documentos', 'caminho_arquivo')):
-                        _n = execute_query(
-                            f'UPDATE {_t} SET {_c} = CONCAT(%s, SUBSTRING({_c}, %s)) '
-                            f'WHERE {_c} LIKE %s', (_pasta_para, _corte, _like))
-                        _tot += _n or 0
+                    _tot = _reapontar_caminhos(_pasta_de, _pasta_para)
                     registrar('escrita.renomeou_pasta_empresa', 'cadastros',
                               tabela='clientes', registro_id=id,
                               antes={'pasta': pasta_antiga},
