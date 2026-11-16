@@ -21,7 +21,7 @@
   .cab .comp { font-size:14px; opacity:.9; margin-top:4px; }
   .cab .valor { font-size:38px; font-weight:900; letter-spacing:-.5px; margin:14px 0 6px; font-variant-numeric:tabular-nums; }
   .pill { display:inline-block; padding:5px 12px; border-radius:999px; font-weight:800; font-size:13.5px; background:#fff; color:var(--verde); }
-  .pill.vencido { background:#fde68a; color:#78350f; } .pill.pago { background:#bbf7d0; color:#14532d; } .pill.expirado, .pill.cancelado { background:#fecaca; color:#7f1d1d; }
+  .pill.vencido { background:#fde68a; color:#78350f; } .pill.pago, .pill.identificado { background:#bbf7d0; color:#14532d; } .pill.expirado, .pill.cancelado { background:#fecaca; color:#7f1d1d; }
   .cab .venc { font-size:14px; opacity:.9; margin-top:8px; }
   h2 { margin:0 0 10px; font-size:12.5px; text-transform:uppercase; letter-spacing:.6px; color:var(--cinza); font-weight:800; }
   .it { display:flex; justify-content:space-between; gap:12px; padding:7px 0; border-bottom:1px dashed var(--linha); font-size:15px; }
@@ -97,6 +97,8 @@
 
   {% if estado == 'pago' %}
   <div class="card aviso pago"><b>Pagamento recebido.</b> Obrigado! Esta cobrança já está quitada.</div>
+  {% elif estado == 'identificado' %}
+  <div class="card aviso pago"><b>Pagamento identificado.</b> O banco já viu o seu pagamento e está confirmando. Obrigado!</div>
   {% elif estado in ('expirado', 'cancelado') %}
   <div class="card aviso fim"><b>Este boleto não vale mais.</b> Fale com a gente para receber um boleto novo.</div>
   {% endif %}

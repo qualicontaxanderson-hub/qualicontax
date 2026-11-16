@@ -834,8 +834,10 @@ def pagina_pagamento(token):
     venc = b['vencimento']
     dias = (venc - hoje).days if venc else 0
     sit = b['situacao']
-    if sit == 'paid':
+    if sit in ('paid', 'settled'):
         estado, rotulo = 'pago', 'Pago em ' + cobranca_email._data(b.get('pago_em') or venc)
+    elif sit == 'identified':
+        estado, rotulo = 'identificado', 'Pagamento identificado'
     elif sit == 'canceled':
         estado, rotulo = 'cancelado', 'Boleto cancelado'
     elif sit == 'expired':

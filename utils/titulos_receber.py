@@ -113,8 +113,9 @@ def _cel(c):
 #    valores, serviços". Cada cartão leva o grupo, o serviço, a competência, o boleto e o valor;
 #    a tela filtra sem recarregar. ─────────────────────────────────────────────────────────────
 BOLETO_ROTULO = {'aberto': 'Boleto aguardando', 'vencido': 'Boleto vencido', 'expirado': 'Boleto expirado',
-                 'pago': 'Boleto pago', 'sem': 'Sem boleto'}
-_BOL = {'waiting': 'aberto', 'new': 'aberto', 'unpaid': 'vencido', 'expired': 'expirado', 'paid': 'pago'}
+                 'identificado': 'Pagamento identificado', 'pago': 'Boleto pago', 'sem': 'Sem boleto'}
+_BOL = {'waiting': 'aberto', 'new': 'aberto', 'unpaid': 'vencido', 'expired': 'expirado', 'paid': 'pago',
+        'identified': 'identificado'}      # a Efí viu o pagamento e ainda vai confirmar (16/11/2026)
 
 
 def _servico(t):
@@ -176,7 +177,7 @@ class _Catalogo:
     def saida(self):
         return {'grupos': sorted(self.grupos), 'servs': sorted(self.servs),
                 'comps': [(c, f'{MES[int(c[5:])]}/{c[:4]}') for c in sorted(self.comps, reverse=True)],
-                'bols': [(b, BOLETO_ROTULO[b]) for b in ('aberto', 'vencido', 'expirado', 'pago', 'sem') if b in self.bols]}
+                'bols': [(b, BOLETO_ROTULO[b]) for b in ('aberto', 'vencido', 'expirado', 'identificado', 'pago', 'sem') if b in self.bols]}
 
 
 def montar(empresa_ids=None, mes=None):

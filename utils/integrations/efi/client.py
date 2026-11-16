@@ -52,6 +52,7 @@ TIMEOUT = (10, 40)
 
 SITUACOES = {
     'new': 'Criada', 'waiting': 'Aguardando pagamento', 'paid': 'Paga', 'unpaid': 'Vencida (não paga)',
+    'identified': 'Pagamento identificado',      # o banco viu o pagamento; vira "Paga" quando compensar
     'canceled': 'Cancelada', 'settled': 'Baixada manualmente', 'link': 'Link de pagamento',
     'expired': 'Expirada', 'refunded': 'Devolvida', 'contested': 'Contestada',
 }
@@ -155,11 +156,27 @@ class Efi:
 
     def _cob(self, metodo, caminho, **kw):
         url = HOSTS['cobrancas'][self.amb] + caminho
-        h = {'Authorization': 'Bearer ' + self._token('cobrancas'), 'Content-Type': 'application/json'}
-        r = requests.request(metodo, url, headers=h, timeout=TIMEOUT, **kw)
-        if r.status_code >= 300:
-            raise EfiErro(self._msg(r, 'A Efí recusou a operação'), r.status_code, _json(r))
-        return _json(r) or {}
+        # Consulta (GET) tenta até 3 vezes quando a Efí devolve "muitas requisições" (429), erro do lado
+        # dela (5xx) ou a conexão cai: a rotina de hora em hora lê centenas de boletos em sequência e uma
+        # recusa no meio derrubava a rodada inteira (16/11/2026: 11 boletos pagos sem baixa o dia todo).
+        tentativas = 3 if metodo == 'GET' else 1
+        for i in range(1, tentativas + 1):
+            try:
+                h = {'Authorization': 'Bearer ' + self._token('cobrancas'), 'Content-Type': 'application/json'}
+                r = requests.request(metodo, url, headers=h, timeout=TIMEOUT, **kw)
+            except requests.RequestException as exc:
+                if i == tentativas:
+                    raise
+                logger.warning('[efi] %s %s: %s (tentativa %s de %s)', metodo, caminho, exc, i, tentativas)
+                time.sleep(2 * i)
+                continue
+            if r.status_code in (429, 500, 502, 503, 504) and i < tentativas:
+                logger.warning('[efi] %s %s: HTTP %s (tentativa %s de %s)', metodo, caminho, r.status_code, i, tentativas)
+                time.sleep(3 * i)
+                continue
+            if r.status_code >= 300:
+                raise EfiErro(self._msg(r, 'A Efí recusou a operação'), r.status_code, _json(r))
+            return _json(r) or {}
 
     def _pix(self, metodo, caminho, **kw):
         url = HOSTS['pix'][self.amb] + caminho

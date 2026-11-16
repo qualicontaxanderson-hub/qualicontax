@@ -208,7 +208,7 @@ def titulo_cobranca(titulo_id):
 
     # ── textos prontos para copiar (Pix / boleto / os dois), com o que está sendo cobrado ──
     copias = {'pix': '', 'boleto': '', 'ambos': '', 'pix_codigo': '', 'linha': '', 'pagina': ''}
-    if boleto and boleto['situacao'] not in ('erro', 'canceled', 'rascunho', 'paid'):
+    if boleto and boleto['situacao'] not in ('erro', 'canceled', 'rascunho', 'paid', 'settled', 'identified'):
         from utils.cobranca_email import _doc_fmt, _empresa, textos_para_copiar
         copias = textos_para_copiar(boleto, nota, _empresa(t['empresa_id']), cliente_nome=TR._nome(t['contraparte_nome']),
                                     cliente_doc=_doc_fmt(t.get('contraparte_doc')), competencia=TR._comp(t.get('competencia')),

@@ -701,6 +701,7 @@ table.fin-tab tbody tr:last-child td { border-bottom:none; }
 .cb-pix { display:grid; grid-template-columns:auto 1fr auto; gap:8px; font-size:12px; padding:3px 0; border-top:1px dashed #d1fae5; }
 .cb-sit-waiting, .cb-sit-new { background:#e0f2fe; color:#0369a1; }
 .cb-sit-paid, .cb-sit-settled { background:#dcfce7; color:#15803d; }
+.cb-sit-identified { background:#fef3c7; color:#92400e; }
 .cb-sit-unpaid { background:#fee2e2; color:#b91c1c; }
 .cb-sit-canceled, .cb-sit-expired, .cb-sit-rascunho { background:#f1f5f9; color:#64748b; }
 .cb-sit-erro { background:#fee2e2; color:#b91c1c; }

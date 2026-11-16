@@ -256,7 +256,7 @@ def sincronizar_conta(conta_id, efi=None):
             res['perdidos'] += int(feito == 'perdido')
     except Exception as e:
         logger.exception('[efi-boletos] conta %s', conta_id)
-        res['erros'].append(str(e)[:300])
+        res['erros'].append(f'{type(e).__name__}: {e}'[:300])
     return res
 
 
@@ -280,6 +280,7 @@ def rodar_de_hora_em_hora():
        (_CHAVE, marca))
     contas = _q("SELECT id FROM fin_cobranca_contas WHERE provedor = 'efi' AND ambiente = 'producao' AND ativo = 1")
     saida = []
+    inicio = datetime.now()
     for c in contas:
         res = sincronizar_conta(c['id'])
         saida.append(res)
@@ -288,4 +289,26 @@ def rodar_de_hora_em_hora():
                        res['baixas_app'], res['perdidos'], len(res['erros']))
         for e in res['erros']:
             logger.warning('[efi-boletos]   %s', e)
+    _guardar_resumo(agora, inicio, saida)
     return saida
+
+
+def _guardar_resumo(agora, inicio, saida):
+    """O que a rodada fez fica no banco (app_config efi_boletos_ultimo) e, se deu erro, na Auditoria —
+    o log do Railway não se lê do PC. 16/11/2026: 11 boletos do Conexa pagos de manhã e a aba Recebido
+    vazia à noite; a rotina rodava toda hora em 4 segundos e ninguém via o porquê."""
+    import json
+    resumo = {'em': agora.strftime('%d/%m/%Y %H:%M'), 'segundos': int((datetime.now() - inicio).total_seconds()),
+              'versao': (os.getenv('RAILWAY_GIT_COMMIT_SHA') or '')[:7],
+              'contas': [{k: v for k, v in r.items()} for r in saida]}
+    try:
+        _x('INSERT INTO app_config (chave, valor) VALUES (%s, %s) ON DUPLICATE KEY UPDATE valor = VALUES(valor), updated_at = NOW()',
+           ('efi_boletos_ultimo', json.dumps(resumo, ensure_ascii=False)[:4000]))
+    except Exception:
+        logger.exception('[efi-boletos] não gravou o resumo da rodada')
+    erros = [(r['conta'], e) for r in saida for e in r['erros']]
+    if erros:
+        from utils.atividade import registrar_agente
+        registrar_agente('erro.consulta_boletos_efi', 'financeiro', None, _ATOR[0], _ATOR[1], tabela='fin_cobranca_contas',
+                         registro_id=erros[0][0], depois={'erros': [f'conta {c}: {e}' for c, e in erros][:5],
+                                                          'segundos': resumo['segundos'], 'versao': resumo['versao']})

@@ -117,7 +117,7 @@
         {% endif %}
         {% if copias.pagina %}<a class="tj-ib" href="{{ copias.pagina }}" target="_blank" rel="noopener" title="A página que o cliente abre pelo link: Copiar código Pix, Copiar linha digitável, boleto e nota"><i class="fas fa-mobile-screen-button"></i>Página do cliente</a>
         {% elif boleto.link %}<a class="tj-ib" href="{{ boleto.link }}" target="_blank" rel="noopener"><i class="fas fa-arrow-up-right-from-square"></i>Página</a>{% endif %}
-        {% if vivo and pode_rota('financeiro.boleto_sincronizar') %}<form method="POST" action="{{ url_for('financeiro.boleto_sincronizar', boleto_id=boleto.id) }}"><input type="hidden" name="volta" value="{{ volta }}"><button class="tj-ib"><i class="fas fa-rotate"></i>Conferir</button></form>{% endif %}
+        {% if (vivo or boleto.situacao == 'identified') and pode_rota('financeiro.boleto_sincronizar') %}<form method="POST" action="{{ url_for('financeiro.boleto_sincronizar', boleto_id=boleto.id) }}"><input type="hidden" name="volta" value="{{ volta }}"><button class="tj-ib"><i class="fas fa-rotate"></i>Conferir</button></form>{% endif %}
         {% if vivo and pode_rota('financeiro.boleto_cancelar') %}<form method="POST" action="{{ url_for('financeiro.boleto_cancelar', boleto_id=boleto.id) }}" onsubmit="return confirm('Cancelar este boleto no banco? O cliente não vai mais conseguir pagá-lo.');"><input type="hidden" name="volta" value="{{ volta }}"><button class="tj-ib tj-ib-verm"><i class="fas fa-ban"></i>Cancelar</button></form>{% endif %}
       </div>
       {% if boleto.situacao in ('waiting', 'unpaid') and pode_rota('financeiro.boleto_vencimento') %}
