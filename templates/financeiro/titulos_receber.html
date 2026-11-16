@@ -600,7 +600,7 @@ a.tx-c { text-decoration:none; color:inherit; }
   {# ── RECEBIDO ── #}
   <div class="tx-painel{{ ' on' if aba == 'rec' }}" data-p="rec">
     <div class="tx-faixa">
-      <div class="tx-filtros" data-tipo="auto"><button type="button" class="tx-f on" data-v="todos">Todos <b>{{ m.rec_n }}</b></button><button type="button" class="tx-f" data-v="1">Efí automático <b>{{ m.rec_auto }}</b></button><button type="button" class="tx-f" data-v="0">Baixa manual <b>{{ m.rec_n - m.rec_auto }}</b></button></div>
+      <div class="tx-filtros" data-tipo="auto"><button type="button" class="tx-f on" data-v="todos">Todos <b>{{ m.rec_n }}</b></button><button type="button" class="tx-f" data-v="1">Pelo banco <b>{{ m.rec_auto }}</b></button><button type="button" class="tx-f" data-v="0">Sem extrato <b>{{ m.rec_n - m.rec_auto }}</b></button></div>
       <div class="tx-mes">
         <a href="{{ url_for('financeiro.titulos', aba='rec', mes=m.mes_ant, **_q) }}" title="Mês anterior"><i class="fas fa-chevron-left"></i></a>
         <b>{{ m.mes_rot }}</b>
@@ -617,7 +617,7 @@ a.tx-c { text-decoration:none; color:inherit; }
            data-g="{{ t.grupos | join('|') }}" data-s="{{ t.serv }}" data-k="{{ t.comp }}" data-b="{{ t.bol }}" data-v="{{ t.v }}">
         <div class="tx-c-top"><span class="tx-c-num">{{ t.num }}</span><span class="tx-c-nome">{{ t.nome }}</span></div>
         <div class="tx-c-meio"><div><div class="tx-c-val">{{ t.valor }}</div><div class="tx-c-desc">{{ t.desc }}</div></div>
-          {% if t.app %}<span class="tx-c-st" title="Boleto marcado como pago no app da Efí (o dinheiro não passou pela conta da Efí)"><i class="fas fa-mobile-screen-button"></i>app Efí</span>{% else %}<span class="tx-c-st" title="{{ 'Baixado sozinho pelo extrato da Efí' if t.auto else 'Baixa feita por alguém da equipe' }}"><i class="fas {{ 'fa-bolt' if t.auto else 'fa-hand' }}"></i>{{ 'Efí' if t.auto else 'manual' }}</span>{% endif %}</div>
+          {% if t.app %}<span class="tx-c-st" title="Boleto marcado como pago no app da Efí (o dinheiro não passou pela conta da Efí)"><i class="fas fa-mobile-screen-button"></i>app Efí</span>{% else %}<span class="tx-c-st" title="{{ ('Pagamento localizado no extrato do ' ~ t.banco) if t.auto else 'Baixa sem linha do extrato amarrada' }}"><i class="fas {{ 'fa-building-columns' if t.auto else 'fa-hand' }}"></i>{{ t.banco if t.auto else 'manual' }}</span>{% endif %}</div>
       </div>
       {% endfor %}
     </div>
@@ -921,7 +921,7 @@ a.tx-c { text-decoration:none; color:inherit; }
             return parseFloat(z.dataset['o' + k.toUpperCase()]) - parseFloat(a.dataset['o' + k.toUpperCase()]);
           }).forEach(function (c) { grade.appendChild(c); });
         } else { valor = b.dataset.v; }
-        aplicar();
+        aplicar(); resumo();
       });
     });
     if (input) input.addEventListener('input', function () { aplicar(); resumo(); });

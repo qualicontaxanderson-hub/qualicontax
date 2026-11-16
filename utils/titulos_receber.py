@@ -35,7 +35,17 @@ def _no_app(b):
 
 
 def _auto(b):
-    return b['origem'] in ('extrato', 'webhook') and not _no_app(b)
+    """Baixa com lastro no banco: veio do extrato/webhook OU está amarrada a uma linha do extrato
+    (15/11/2026: as do Conexa amarradas ao Sicredi/Efí deixam de aparecer como "manual")."""
+    return (b['origem'] in ('extrato', 'webhook') or bool(b.get('lancamento_id'))) and not _no_app(b)
+
+
+def _banco_baixa(b):
+    """Nome curto do banco onde o dinheiro caiu (pela linha do extrato amarrada; webhook = Efí)."""
+    bl = (b.get('banco_linha') or '').strip()
+    if bl:
+        return {'EFI': 'Efí'}.get(bl.upper(), bl)
+    return 'Efí' if b['origem'] in ('extrato', 'webhook') else ''
 
 
 def _nome(n):
@@ -178,11 +188,13 @@ def montar(empresa_ids=None, mes=None):
 
     # ── Recebido no mês ─────────────────────────────────────────────
     rec = q(f"""SELECT b.id, b.data_baixa, b.valor + b.juros + b.multa - b.desconto AS v, b.origem, b.referencia,
+                       b.lancamento_id, l.banco AS banco_linha,
                        t.id AS titulo_id, t.contraparte_nome, t.descricao, t.competencia, t.cliente_id, c.numero_cliente,
                        cat.nome AS categoria_nome
                   FROM fin_titulo_baixas b JOIN fin_titulos t ON t.id = b.titulo_id
                   LEFT JOIN clientes c ON c.id = t.cliente_id
                   LEFT JOIN fin_categorias cat ON cat.id = t.categoria_id
+                  LEFT JOIN extrato_lancamentos l ON l.id = b.lancamento_id
                  WHERE t.tipo = 'R' AND b.data_baixa >= %s AND b.data_baixa < %s{ec}
                  ORDER BY b.data_baixa DESC, b.id DESC""",
             (mes, prox, *ep), fetch=True) or []
@@ -203,7 +215,8 @@ def montar(empresa_ids=None, mes=None):
             itens_d.append({'id': b['titulo_id'], 'num': b['numero_cliente'] or '—', 'nome': _nome(b['contraparte_nome']),
                             'nome_full': b['contraparte_nome'] or '',
                             'valor': brl(b['v']), 'v': '%.2f' % float(b['v']), 'desc': _desc(b), 'cliente_id': b['cliente_id'],
-                            'auto': _auto(b), 'app': _no_app(b), **mk})
+                            'auto': _auto(b), 'app': _no_app(b),
+                            'banco': _banco_baixa(b), **mk})
         rec_g.append({'data': dt, 'sub': sub, 'tot': brl(sum(b['v'] for b in por_dia[d])),
                       'n': len(por_dia[d]), 'itens': itens_d})
 
