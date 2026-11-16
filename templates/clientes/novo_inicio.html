@@ -1,0 +1,279 @@
+{% extends "base.html" %}
+
+{% block title %}Novo cadastro - Qualicontax{% endblock %}
+
+{% block extra_css %}
+{% include 'clientes/_ficha_css.html' %}
+<style>
+/* Novo cadastro (A2, 16/11/2026): o topo verde da ficha com o essencial; o resto aparece travado até criar */
+.nv-ok { list-style:none; margin:14px 0 0; padding:0; display:grid; gap:8px; }
+.nv-ok li { display:flex; gap:10px; align-items:center; font-size:14px; font-weight:600; color:#64748b; background:#f8fafc; border-radius:12px; padding:10px 12px; }
+.nv-ok li i { width:18px; text-align:center; color:#cbd5e1; }
+.nv-ok li.ok { color:#14532d; background:#f0fdf4; } .nv-ok li.ok i { color:#16a34a; }
+.nv-ok li.erro { color:#9f1239; background:#fff1f2; } .nv-ok li.erro i { color:#e11d48; }
+.nv-trava { position:relative; opacity:.62; }
+.nv-trava .qb-bh h3 { color:#475569; }
+.nv-trava .nv-cad { display:flex; gap:8px; align-items:center; font-size:13px; color:#64748b; background:#f8fafc; border:1px dashed #cbd5e1; border-radius:12px; padding:12px 14px; }
+.nv-trava .qb-bh::after { content:'\f023'; font-family:'Font Awesome 6 Free'; font-weight:900; margin-left:auto; color:#94a3b8; font-size:13px; }
+.nv-dup a { color:#15803d; font-weight:700; }
+.nv-rf-l { display:grid; grid-template-columns:150px 1fr; gap:6px 12px; font-size:13.5px; }
+.nv-rf-l dt { color:#64748b; font-weight:600; } .nv-rf-l dd { margin:0; color:#0f172a; font-weight:600; word-break:break-word; }
+#nvNum[disabled] { background:rgba(255,255,255,.10); color:#a7d9c0; border-color:rgba(255,255,255,.18); }
+@media (max-width:900px) { .nv-rf-l { grid-template-columns:1fr; } .nv-rf-l dt { margin-top:6px; } }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="cliente-ficha qb">
+    {% include 'cadastros/_nav_cadastros.html' %}
+    <div class="qb-wrap" id="tu">
+        <div class="qb-bento">
+            <section class="qb-b qb-id s8" id="identificacao">
+                <div class="qb-id-acoes">
+                    <a href="{{ url_for('clientes.avulsos') if avulso_pre else url_for('clientes.index') }}" class="qb-btn-v"><i class="fas fa-arrow-left"></i> Voltar</a>
+                </div>
+                <div class="ed-id" id="nvId">
+                    <span class="ed-modo"><i class="fas fa-plus"></i> NOVO CADASTRO</span>
+                    <div class="ed-g">
+                        <div class="ed-f" style="--c:5"><label>Tipo de pessoa <b>*</b></label>
+                            <div class="ed-seg" id="nvTipo"><button type="button" data-v="PJ" class="on"><i class="fas fa-building"></i> Empresa (CNPJ)</button><button type="button" data-v="PF"><i class="fas fa-user"></i> Pessoa física (CPF)</button></div></div>
+                        <div class="ed-f" style="--c:4"><label>Cliente ou avulso <b>*</b></label>
+                            <div class="ed-seg" id="nvCliAv"><button type="button" data-v="cliente" class="{{ '' if avulso_pre else 'on' }}">Cliente</button><button type="button" data-v="avulso" class="{{ 'on' if avulso_pre }}">Avulso</button></div></div>
+                        <div class="ed-f" style="--c:3"><label>Número do cliente <b id="nvNumAst">*</b></label>
+                            <input class="ed-in" id="nvNum" inputmode="numeric" autocomplete="off" placeholder="ex: 1083"></div>
+                        <div class="ed-f" style="--c:6" id="nvDocF"><label id="nvDocRot">CNPJ <b>*</b></label>
+                            <div class="ed-row"><input class="ed-in mono" id="nvDoc" autocomplete="off" inputmode="numeric" placeholder="00.000.000/0000-00" value="{{ doc_pre }}">
+                            <button type="button" class="ed-rec" id="nvReceita"><i class="fas fa-magnifying-glass"></i> Buscar na Receita</button></div></div>
+                        <div class="ed-f" style="--c:6" id="nvRazF"><label id="nvRazRot">Razão social <b>*</b> <em>Receita</em></label>
+                            <input class="ed-in big" id="nvRazao" autocomplete="off"></div>
+                        <div class="ed-f nv-pj" style="--c:4"><label>Nome fantasia <em>Receita</em></label>
+                            <div class="ed-in ro vazio" id="nvFant">—</div></div>
+                        <div class="ed-f nv-pj" style="--c:4"><label>Natureza jurídica <em>Receita</em></label>
+                            <div class="ed-in ro vazio" id="nvNat">—</div></div>
+                        <div class="ed-f nv-pj" style="--c:4"><label>Abertura <em>Receita</em></label>
+                            <div class="ed-in ro vazio" id="nvAbe">—</div></div>
+                        <div class="ed-f nv-pj" style="--c:12"><label>Atividade principal (CNAE) <em>Receita</em></label>
+                            <div class="ed-in ro vazio" id="nvCnae">—</div></div>
+                    </div>
+                    <div id="nvDup" class="ed-rf nv-dup" hidden></div>
+                    <div id="nvRf" class="ed-rf" hidden></div>
+                    <div class="qb-id-pe">
+                        <span class="ed-dica" id="nvDica"><i class="fas fa-circle-info"></i> Comece só com o essencial. Ao criar, abre a ficha completa em modo Editar: registros, regime, contato, grupo e ramo, sócios, endereço, contatos e o resto se preenchem lá mesmo. O que ficar faltando aparece no A CADASTRAR.</span>
+                    </div>
+                </div>
+            </section>
+
+            <section class="qb-b qb-prog s4" id="tuFalta">
+                <div class="ed-pn">
+                    <button type="button" class="ed-salvar" id="nvCriar" disabled><i class="fas fa-check"></i> Criar cadastro</button>
+                    <a class="ed-canc" style="display:flex;align-items:center;justify-content:center;text-decoration:none" href="{{ url_for('clientes.avulsos') if avulso_pre else url_for('clientes.index') }}">Cancelar</a>
+                </div>
+                <h3>Para começar</h3>
+                <ul class="nv-ok" id="nvLista">
+                    <li data-k="tipo" class="ok"><i class="fas fa-circle-check"></i> Tipo de pessoa</li>
+                    <li data-k="num"><i class="far fa-circle"></i> <span>Número do cliente</span></li>
+                    <li data-k="doc"><i class="far fa-circle"></i> <span>CNPJ</span></li>
+                    <li data-k="raz"><i class="far fa-circle"></i> <span>Razão social</span></li>
+                </ul>
+                <p class="ed-alt" style="margin-top:14px">Depois de criar, a página vira a ficha da empresa já aberta para preencher o resto.</p>
+            </section>
+
+            {% for ic, cor, tit, so in [('fa-landmark', 'i-azul', 'Registros (NIRE, inscrições)', 'pj'), ('fa-scale-balanced', 'i-verde', 'Regime e origem', 'pj'),
+                                        ('fa-id-card', 'i-roxo', 'Dados pessoais e documentos', 'pf'), ('fa-file-signature', 'i-verde', 'Contrato', 'pf'),
+                                        ('fa-phone', 'i-azul', 'Contato', ''), ('fa-layer-group', 'i-roxo', 'Grupo, ramo e contador', ''),
+                                        ('fa-user-tie', 'i-roxo', 'Sócios', 'pj'), ('fa-location-dot', 'i-verde', 'Endereços', ''),
+                                        ('fa-address-book', 'i-azul', 'Contatos', ''), ('fa-certificate', 'i-verde', 'Certificado digital', ''),
+                                        ('fa-users', 'i-azul', 'Responsáveis no escritório', '')] %}
+            <section class="qb-b s4 nv-trava{{ ' nv-' ~ so if so }}"{% if so == 'pf' %} hidden{% endif %}>
+                <div class="qb-bh"><span class="qb-ico {{ cor }}"><i class="fas {{ ic }}"></i></span><h3>{{ tit }}</h3></div>
+                <div class="nv-cad"><i class="fas fa-lock"></i> Abre ao criar o cadastro.</div>
+            </section>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+    var PROX_PF = {{ proximo_pf|int }};
+    var tipo = 'PJ', avulso = {{ 'true' if avulso_pre else 'false' }}, rf = null, dup = null, numAuto = '';
+    var $ = function (id) { return document.getElementById(id); };
+    function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+    function so(d) { return String(d || '').replace(/\D/g, ''); }
+    function mascara(v) {
+        var d = so(v).slice(0, tipo === 'PJ' ? 14 : 11);
+        if (tipo === 'PJ') return d.replace(/^(\d{2})(\d)/, '$1.$2').replace(/^(\d{2})\.(\d{3})(\d)/, '$1.$2.$3').replace(/\.(\d{3})(\d)/, '.$1/$2').replace(/(\d{4})(\d)/, '$1-$2');
+        return d.replace(/(\d{3})(\d)/, '$1.$2').replace(/(\d{3})(\d)/, '$1.$2').replace(/(\d{3})(\d{1,2})$/, '$1-$2');
+    }
+    function cnpjOk(d) {
+        if (d.length !== 14 || /^(\d)\1+$/.test(d)) return false;
+        var dv = function (n) { var p = n === 12 ? [5,4,3,2,9,8,7,6,5,4,3,2] : [6,5,4,3,2,9,8,7,6,5,4,3,2], s = 0;
+            for (var i = 0; i < n; i++) s += +d[i] * p[i]; var r = s % 11; return r < 2 ? 0 : 11 - r; };
+        return dv(12) === +d[12] && dv(13) === +d[13];
+    }
+    function cpfOk(d) {
+        if (d.length !== 11 || /^(\d)\1+$/.test(d)) return false;
+        for (var n = 9; n <= 10; n++) { var s = 0; for (var i = 0; i < n; i++) s += +d[i] * (n + 1 - i);
+            var r = (s * 10) % 11 % 10; if (r !== +d[n]) return false; }
+        return true;
+    }
+    function docOk() { var d = so($('nvDoc').value); return tipo === 'PJ' ? cnpjOk(d) : cpfOk(d); }
+    function fmtData(iso) { var p = String(iso || '').split('-'); return p.length === 3 ? p[2] + '/' + p[1] + '/' + p[0] : (iso || ''); }
+    function foneFmt(d) { d = so(d); return d.length === 10 ? '(' + d.slice(0, 2) + ') ' + d.slice(2, 6) + '-' + d.slice(6) : (d.length === 11 ? '(' + d.slice(0, 2) + ') ' + d.slice(2, 7) + '-' + d.slice(7) : d); }
+    function ro(id, txt) { var x = $(id); x.textContent = txt || '—'; x.classList.toggle('vazio', !txt); }
+
+    function item(k, est, txt) {
+        var li = document.querySelector('#nvLista [data-k="' + k + '"]');
+        li.className = est; li.querySelector('i').className = est === 'ok' ? 'fas fa-circle-check' : (est === 'erro' ? 'fas fa-circle-exclamation' : 'far fa-circle');
+        if (txt) li.querySelector('span').textContent = txt;
+    }
+    function conferir() {
+        var pj = tipo === 'PJ', rot = pj ? 'CNPJ' : 'CPF';
+        var n = so($('nvNum').value), d = so($('nvDoc').value), r = $('nvRazao').value.trim();
+        var okNum = avulso || !!n, okDoc = docOk() && !dup, okRaz = !!r;
+        item('num', okNum ? 'ok' : '', avulso ? 'Avulso (sem número)' : 'Número do cliente' + (n ? ' ' + n : ''));
+        var cheio = d.length === (pj ? 14 : 11);
+        item('doc', okDoc ? 'ok' : (cheio ? 'erro' : ''), cheio && !docOk() ? rot + ' com dígito errado' : (dup ? rot + ' já cadastrado' : rot));
+        item('raz', okRaz ? 'ok' : '', pj ? 'Razão social' : 'Nome completo');
+        $('nvCriar').disabled = !(okNum && okDoc && okRaz);
+    }
+
+    function aplicarTipo(t) {
+        tipo = t;
+        var pj = t === 'PJ';
+        document.querySelectorAll('#nvTipo button').forEach(function (b) { b.classList.toggle('on', b.dataset.v === t); });
+        document.querySelectorAll('.nv-pj').forEach(function (x) { x.hidden = !pj; });
+        document.querySelectorAll('.nv-pf').forEach(function (x) { x.hidden = pj; });
+        $('nvDocRot').innerHTML = (pj ? 'CNPJ' : 'CPF') + ' <b>*</b>';
+        $('nvRazRot').innerHTML = (pj ? 'Razão social <b>*</b> <em>Receita</em>' : 'Nome completo <b>*</b>');
+        $('nvReceita').hidden = !pj;
+        $('nvDoc').placeholder = pj ? '00.000.000/0000-00' : '000.000.000-00';
+        $('nvDoc').value = mascara($('nvDoc').value);
+        $('nvDocF').style.setProperty('--c', pj ? 6 : 4);
+        $('nvRazF').style.setProperty('--c', pj ? 6 : 8);
+        // pessoa física cliente numera a partir de 5000: já vem o próximo livre (pode trocar)
+        var num = $('nvNum');
+        if (!pj && !avulso && (!num.value || num.value === numAuto)) { num.value = numAuto = String(PROX_PF); }
+        else if (pj && num.value && num.value === numAuto) { num.value = numAuto = ''; }
+        if (rf && $('nvRazao').value === String(rf.razao_social || '').trim().replace(/\s+/g, ' ').toUpperCase()) $('nvRazao').value = '';
+        rf = null; $('nvRf').hidden = true; ['nvFant', 'nvNat', 'nvAbe', 'nvCnae'].forEach(function (i) { ro(i, ''); });
+        dup = null; $('nvDup').hidden = true; ultimoDoc = '';
+        verDoc();
+        conferir();
+    }
+    function aplicarAvulso(a) {
+        avulso = a;
+        document.querySelectorAll('#nvCliAv button').forEach(function (b) { b.classList.toggle('on', (b.dataset.v === 'avulso') === a); });
+        var num = $('nvNum');
+        num.disabled = a; $('nvNumAst').hidden = a;
+        if (a) { num.dataset.guardado = num.value; num.value = ''; num.placeholder = 'sem número (avulso)'; }
+        else {
+            num.placeholder = 'ex: 1083';
+            if (num.dataset.guardado) num.value = num.dataset.guardado;
+            else if (tipo === 'PF' && !num.value) num.value = numAuto = String(PROX_PF);
+        }
+        conferir();
+    }
+    $('nvTipo').addEventListener('click', function (e) { var b = e.target.closest('button'); if (b && b.dataset.v !== tipo) aplicarTipo(b.dataset.v); });
+    $('nvCliAv').addEventListener('click', function (e) { var b = e.target.closest('button'); if (b) aplicarAvulso(b.dataset.v === 'avulso'); });
+    $('nvNum').addEventListener('input', function () { this.value = so(this.value); conferir(); });
+    $('nvRazao').addEventListener('input', conferir);
+
+    // documento: confere se já existe assim que fica completo; na empresa, já busca na Receita
+    var ultimoDoc = '';
+    function verDoc() {
+        var d = so($('nvDoc').value);
+        if (d === ultimoDoc) return;
+        ultimoDoc = d; dup = null; $('nvDup').hidden = true;
+        if (!docOk()) { conferir(); return; }
+        fetch('/api/clientes/documento-existe?doc=' + d).then(function (r) { return r.json(); }).then(function (j) {
+            if (so($('nvDoc').value) !== d) return;
+            var box = $('nvDup');
+            if (j.existe) {
+                dup = j;
+                var h = '<h4><i class="fas fa-triangle-exclamation" style="color:#e11d48"></i> Este ' + (tipo === 'PJ' ? 'CNPJ' : 'CPF') + ' já está cadastrado</h4>';
+                if (j.reservado) h += '<div class="ed-rf-sub">É uma empresa reservada: fale com o administrador.</div>';
+                else h += '<div class="ed-rf-sub"><b>' + esc(j.nome) + '</b> · ' + (j.avulso ? 'avulso' : 'cliente ' + esc(j.numero || '')) + (j.situacao && j.situacao !== 'ATIVO' ? ' · ' + esc(j.situacao) : '') + '</div>'
+                    + '<div class="ed-rf-bts"><a class="ed-rf-ok" style="text-decoration:none;color:#fff;border-radius:10px;padding:9px 16px;font-weight:700;background:#16a34a" href="' + esc(j.url) + (j.avulso ? '?editar=1' : '') + '">' + (j.avulso ? 'Abrir e dar o número do cliente' : 'Abrir o cadastro') + '</a></div>';
+                box.innerHTML = h; box.hidden = false;
+            } else if (j.conjuge && !$('nvRazao').value.trim()) {
+                $('nvRazao').value = j.conjuge.nome;
+                box.innerHTML = '<div class="ed-rf-sub" style="margin:0"><i class="fas fa-heart" style="color:#db2777"></i> Este CPF é do cônjuge de <b>' + esc(j.conjuge.de) + '</b>: o nome já veio de lá.</div>';
+                box.hidden = false;
+            } else if (tipo === 'PJ' && !rf) buscarReceita();
+            conferir();
+        }).catch(function () { conferir(); });
+        conferir();
+    }
+    $('nvDoc').addEventListener('input', function () { var m = mascara(this.value); if (m !== this.value) this.value = m; verDoc(); });
+
+    var bRec = $('nvReceita');
+    function buscarReceita() {
+        var d = so($('nvDoc').value);
+        if (d.length !== 14) { $('nvDoc').focus(); return; }
+        bRec.disabled = true; bRec.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Buscando…';
+        fetch('/api/consultar-cnpj/' + d).then(function (r) { return r.json(); }).then(function (j) {
+            bRec.disabled = false; bRec.innerHTML = '<i class="fas fa-magnifying-glass"></i> Buscar na Receita';
+            if (so($('nvDoc').value) !== d) return;
+            if (!j.success) { mostrarRf(null, j.message || 'A Receita não respondeu.'); return; }
+            rf = j.data || {}; mostrarRf(rf, null, j.base_em);
+        }).catch(function () {
+            bRec.disabled = false; bRec.innerHTML = '<i class="fas fa-magnifying-glass"></i> Buscar na Receita';
+            mostrarRf(null, 'Sem conexão com a Receita agora. Dá para criar assim mesmo e buscar depois, no Editar da ficha.');
+        });
+    }
+    bRec.addEventListener('click', buscarReceita);
+    function mostrarRf(d, erro, baseEm) {
+        var box = $('nvRf');
+        if (!d) { box.innerHTML = '<div class="ed-rf-info ed-rf-alerta" style="margin:0"><i class="fas fa-triangle-exclamation"></i> ' + esc(erro) + '</div>'; box.hidden = false; return; }
+        $('nvRazao').value = String(d.razao_social || '').trim().replace(/\s+/g, ' ').toUpperCase() || $('nvRazao').value;
+        ro('nvFant', String(d.nome_fantasia || '').trim());
+        ro('nvNat', d.natureza_juridica || '');
+        ro('nvAbe', fmtData(d.data_inicio_atividade));
+        ro('nvCnae', d.cnae_fiscal ? (d.cnae_fiscal_descricao || '') + ' · ' + d.cnae_fiscal : '');
+        var l = [];
+        var end = [[d.descricao_tipo_de_logradouro, d.logradouro].filter(Boolean).join(' '), d.numero, d.complemento, d.bairro, d.municipio && (d.municipio + (d.uf ? '/' + d.uf : '')), d.cep].filter(Boolean).join(', ');
+        if (end) l.push(['Endereço', end + ' (vira o endereço principal)']);
+        if (d.email) l.push(['E-mail da empresa', String(d.email).toLowerCase()]);
+        if (d.ddd_telefone_1) l.push(['Telefone', foneFmt(d.ddd_telefone_1)]);
+        var reg = d.opcao_pelo_mei === true ? 'MEI' : (d.opcao_pelo_simples === true ? 'Simples Nacional' : (d.opcao_pelo_simples === false ? 'não é do Simples (escolher na ficha: Presumido ou Real)' : ''));
+        if (reg) l.push(['Regime', reg]);
+        if (d.porte) l.push(['Porte', d.porte]);
+        if (d.qsa && d.qsa.length) l.push(['Sócios na Receita', d.qsa.length + ' — depois de criar, inclua no bloco Sócios da ficha']);
+        var h = '<h4><i class="fas fa-landmark" style="color:#16a34a"></i> Encontrado na Receita' + (baseEm ? '<small>base da Receita de ' + esc(baseEm) + '</small>' : '') + '</h4>'
+              + '<div class="ed-rf-sub">Isto entra junto ao criar o cadastro. Tudo pode ser alterado depois, na ficha.</div>';
+        if (l.length) h += '<dl class="nv-rf-l">' + l.map(function (x) { return '<dt>' + esc(x[0]) + '</dt><dd>' + esc(x[1]) + '</dd>'; }).join('') + '</dl>';
+        var sit = String(d.situacao_cadastral || d.descricao_situacao_cadastral || '').toUpperCase();
+        if (sit && sit.indexOf('ATIVA') < 0 && !/^\d+$/.test(sit)) h += '<div class="ed-rf-info ed-rf-alerta"><i class="fas fa-triangle-exclamation"></i> Situação na Receita: ' + esc(sit) + '.</div>';
+        box.innerHTML = h; box.hidden = false;
+        conferir();
+    }
+
+    $('nvCriar').addEventListener('click', function () {
+        var b = this; if (b.disabled) return;
+        b.disabled = true; b.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Criando…';
+        var fd = new FormData();
+        fd.append('inicio', '1'); fd.append('tipo_pessoa', tipo); fd.append('avulso', avulso ? '1' : '0');
+        fd.append('numero_cliente', avulso ? '' : so($('nvNum').value));
+        fd.append('cpf_cnpj', $('nvDoc').value); fd.append('nome_razao_social', $('nvRazao').value);
+        if (tipo === 'PJ' && rf) fd.append('receita', JSON.stringify(rf));
+        fetch('{{ url_for('clientes.novo') }}', { method: 'POST', body: fd }).then(function (r) { return r.json(); }).then(function (j) {
+            if (j.ok) { location.replace(j.url); return; }
+            b.innerHTML = '<i class="fas fa-check"></i> Criar cadastro'; conferir();
+            var box = $('nvDup');
+            box.innerHTML = '<div class="ed-rf-info ed-rf-alerta" style="margin:0"><i class="fas fa-triangle-exclamation"></i> ' + esc(j.erro || 'Não foi criado.') + (j.url ? ' <a href="' + esc(j.url) + '">Abrir</a>' : '') + '</div>';
+            box.hidden = false; box.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }).catch(function () {
+            b.innerHTML = '<i class="fas fa-check"></i> Criar cadastro'; conferir();
+            alert('Sem conexão com o servidor. Nada foi criado — tente de novo.');
+        });
+    });
+
+    aplicarAvulso(avulso);
+    if ($('nvDoc').value) { $('nvDoc').value = mascara($('nvDoc').value); verDoc(); }
+    conferir();
+})();
+</script>
+{% endblock %}

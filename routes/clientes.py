@@ -1294,10 +1294,122 @@ def _render_editar(cliente, endereco_principal):
                            **_ctx_form(cliente))
 
 
+_PORTE_RF = {'ME': 'ME', 'EPP': 'EPP', 'DEMAIS': 'MEDIO', 'MICRO EMPRESA': 'ME', 'EMPRESA DE PEQUENO PORTE': 'EPP'}
+
+
+def _receita_limpa(rf):
+    """O que a busca na Receita trouxe (vem da tela) -> só valores conferidos. Valor fora do formato cai fora,
+    não trava o cadastro: a ficha mostra o que faltar."""
+    rf = rf if isinstance(rf, dict) else {}
+
+    def t(k, n):
+        return ' '.join(str(rf.get(k) or '').split())[:n] or None
+    out = {'nome_fantasia': t('nome_fantasia', 255)}
+    cod = re.sub(r'\D', '', str(rf.get('natureza_juridica_codigo') or ''))
+    out['natureza'] = (cod, t('natureza_juridica', 255) or '') if cod else None
+    d = _data_iso(str(rf.get('data_inicio_atividade') or ''))
+    out['data_inicio_atividade'] = d.isoformat() if d else None
+    cnae = re.sub(r'\D', '', str(rf.get('cnae_fiscal') or ''))[:10]
+    out['cnae_fiscal'] = cnae or None
+    out['cnae_fiscal_descricao'] = t('cnae_fiscal_descricao', 255) if cnae else None
+    em = str(rf.get('email') or '').strip().lower()
+    out['email'] = em if em and re.fullmatch(r'[^@\s]+@[^@\s]+\.[^@\s]+', em) and len(em) <= 255 else None
+    tel = re.sub(r'\D', '', str(rf.get('ddd_telefone_1') or ''))
+    out['telefone'] = _fone_fmt(tel) if tel and _telefone_valido(tel) else None
+    out['porte_empresa'] = _PORTE_RF.get(str(rf.get('porte') or '').strip().upper())
+    out['regime_tributario'] = ('MEI' if rf.get('opcao_pelo_mei') is True
+                                else 'SIMPLES' if rf.get('opcao_pelo_simples') is True else None)
+    from utils.cnpj_receita import limpar_logradouro as _ll
+    lg = ' '.join(x for x in (str(rf.get('descricao_tipo_de_logradouro') or '').strip(),
+                              str(rf.get('logradouro') or '').strip()) if x)
+    cep = re.sub(r'\D', '', str(rf.get('cep') or ''))
+    uf = str(rf.get('uf') or '').strip().upper()
+    out['endereco'] = ({'cep': f'{cep[:5]}-{cep[5:]}' if len(cep) == 8 else cep, 'logradouro': _ll(lg)[:255],
+                        'numero': t('numero', 20) or '', 'complemento': t('complemento', 255) or '',
+                        'bairro': t('bairro', 100) or '', 'cidade': t('municipio', 100) or '',
+                        'estado': uf if uf in UFS else ''}
+                       if (cep or lg) else None)
+    return out
+
+
+def _criar_inicio():
+    """A2 (16/11/2026), Anderson: "para CADASTRAR uma empresa TENHA UMA UMA UMA TELA só". O Novo pede só o
+    essencial — tipo, cliente com número ou avulso, CPF/CNPJ e nome — e o que a busca na Receita trouxe. Grava
+    e abre a ficha em modo Editar, onde se completa o resto (o que faltar fica no A CADASTRAR). JSON."""
+    import json
+    f = request.form
+    pj = f.get('tipo_pessoa') != 'PF'
+    avulso = f.get('avulso') == '1'
+    erros = []
+    d = re.sub(r'\D', '', f.get('cpf_cnpj') or '')
+    rotdoc = 'CNPJ' if pj else 'CPF'
+    if not (_cnpj_ok(d) if pj else cpf_valido(d)):
+        erros.append(f'{rotdoc} inválido: confira os números.')
+    elif Cliente.existe_cpf_cnpj(d):
+        av = Cliente.avulso_por_documento(_doc_fmt(d, pj)) or Cliente.avulso_por_documento(d)
+        if av:
+            return jsonify(ok=False, erro=f'Este {rotdoc} já está cadastrado como AVULSO ({av["nome_razao_social"]}). '
+                                          'Abra a ficha dele e clique em Editar para dar o número do cliente.',
+                           url=url_for('clientes.detalhes', id=av['id'], editar=1)), 409
+        return jsonify(ok=False, erro=f'Este {rotdoc} já está cadastrado.'), 409
+    numero = None
+    if not avulso:
+        numero = _numero_inteiro(f.get('numero_cliente') or '')
+        if not numero:
+            erros.append('Digite o número do cliente (se ainda não tem número, escolha Avulso).')
+        elif Cliente.existe_numero_cliente(numero):
+            erros.append(f'O número {numero} já é de outro cliente.')
+    razao = ' '.join((f.get('nome_razao_social') or '').split()).upper()[:255]
+    if not razao:
+        erros.append(('Razão social' if pj else 'Nome completo') + ': obrigatório.')
+    if erros:
+        return jsonify(ok=False, erro=' '.join(erros)), 400
+    try:
+        rf = _receita_limpa(json.loads(f.get('receita') or '{}')) if pj else _receita_limpa({})
+    except ValueError:
+        rf = _receita_limpa({})
+    data = limpar_form({
+        'numero_cliente': numero or None, 'tipo_pessoa': 'PJ' if pj else 'PF', 'nome_razao_social': razao,
+        'nome_fantasia': rf['nome_fantasia'], 'cpf_cnpj': _doc_fmt(d, pj), 'email': rf['email'],
+        'telefone': rf['telefone'], 'regime_tributario': rf['regime_tributario'], 'porte_empresa': rf['porte_empresa'],
+        'cnae_fiscal': rf['cnae_fiscal'], 'cnae_fiscal_descricao': rf['cnae_fiscal_descricao'], 'situacao': 'ATIVO',
+        'data_inicio_atividade': rf['data_inicio_atividade'], 'avulso': avulso, 'criado_por': current_user.id,
+    })
+    cliente_id = Cliente.create(data)
+    if not cliente_id:
+        return jsonify(ok=False, erro='Erro ao criar o cadastro. Nada foi gravado — tente de novo.'), 500
+    registrar('escrita.criou_cliente', 'cadastros', tabela='clientes', registro_id=cliente_id,
+              depois={**data, 'por': 'novo (tela única)'})
+    from utils import cnpj_vigia as VG
+    VG.vincular_cliente(data['cpf_cnpj'], cliente_id)
+    _vigia_concluir_se_aplicada(data['cpf_cnpj'], cliente_id)
+    if rf['natureza']:
+        _salvar_natureza(cliente_id, {'natureza_codigo': rf['natureza'][0], 'natureza_juridica': rf['natureza'][1]})
+    _salvar_contador(cliente_id, _contador_padrao())      # o formulário antigo já vinha com ele marcado
+    e = rf['endereco']
+    if e:
+        try:
+            EnderecoCliente.create(cliente_id=cliente_id, tipo='COMERCIAL', cep=e['cep'], logradouro=e['logradouro'],
+                                   numero=e['numero'], complemento=e['complemento'], bairro=e['bairro'],
+                                   cidade=e['cidade'], estado=e['estado'], pais='Brasil', principal=True)
+        except Exception as ex:
+            logger.warning('[novo] endereço da Receita não gravou para %s: %s', cliente_id, ex)
+    flash('Cadastro criado. Complete o resto aqui mesmo e clique em Salvar alterações — '
+          'o que ficar faltando aparece no A CADASTRAR.', 'success')
+    return jsonify(ok=True, id=cliente_id, url=url_for('clientes.detalhes', id=cliente_id, editar=1))
+
+
 @clientes.route('/clientes/novo', methods=['GET', 'POST'])
 @login_required
 def novo():
-    """Criar novo cliente"""
+    """Criar novo cliente. Desde 16/11/2026 (A2) o GET abre o início do cadastro na mesma tela da ficha;
+    o formulário antigo fica só para a janela do sócio (?janela=1) e ?antigo=1."""
+    if request.method == 'POST' and request.form.get('inicio') == '1':
+        return _criar_inicio()
+    if request.method == 'GET' and not request.args.get('janela') and not request.args.get('antigo'):
+        return render_template('clientes/novo_inicio.html', proximo_pf=_proximo_numero_pf(),
+                               avulso_pre=request.args.get('avulso') == '1',
+                               doc_pre=re.sub(r'\D', '', request.args.get('doc') or '')[:14])
     if request.method == 'POST':
         # The form has duplicate-named fields (PF + PJ sections both submit
         # 'cpf_cnpj' and 'nome_razao_social'). The hidden section sends an empty
@@ -1627,7 +1739,8 @@ def detalhes(id):
                                           if cliente.get('contabilidade_anterior_id') else None),
                          pessoa_rotulo=PessoaDados.rotulo,
                          pf_ops=({'civil': ESTADOS_CIVIS, 'regime': REGIMES_BENS, 'govbr': NIVEIS_GOVBR,
-                                  **{t: [(n, n) for n in lst] for t, lst in Opcoes.todas().items()}}
+                                  **{t: [(n, n) for n in lst] for t, lst in Opcoes.todas().items()},
+                                  'doc_tipos': TIPOS_DOC, 'doc_sugestao': ORGAO_SUGERIDO, 'ufs': list(UFS)}
                                  if cliente.get('tipo_pessoa') == 'PF' else {}),
                          certificado=certificado,
                          contadores=contadores,
@@ -1682,7 +1795,7 @@ _ROTULO_CAMPO = {'inscricao_estadual': 'Insc. Estadual', 'inscricao_municipal': 
                  'pf_nascimento': 'Nascimento', 'pf_estado_civil': 'Estado civil', 'pf_regime_bens': 'Regime de bens',
                  'pf_nacionalidade': 'Nacionalidade', 'pf_profissao': 'Profissão', 'pf_nome_mae': 'Nome da mãe',
                  'pf_nivel_govbr': 'Conta gov.br', 'pf_conjuge_nome': 'Cônjuge', 'pf_conjuge_cpf': 'CPF do cônjuge',
-                 'is_contador': 'Marca de contador'}
+                 'is_contador': 'Marca de contador', 'pf_documentos': 'Documentos'}
 
 
 def _cnpj_ok(v):
@@ -1907,6 +2020,19 @@ def salvar_campos(id):
     if pf_campos:
         pf_antes, pf_depois, e_pf = _validar_pessoa(id, pf_campos)
         erros += e_pf
+    docs_novos = None
+    if 'pf_documentos' in campos:
+        import json as _json
+        if pj or not isinstance(campos['pf_documentos'], list):
+            erros.append('Documentos: só da pessoa física.')
+        else:
+            _f = {'pf_documentos_json': _json.dumps(campos['pf_documentos'])}
+            falta_doc = [x for x in _documentos_faltando(_f) if not x.startswith('documento de identificação')]
+            if falta_doc:
+                erros.append('Documentos: complete ' + ', '.join(falta_doc) + '.')
+            else:
+                docs_antes = Documentos.listar(id)
+                docs_novos = _ler_documentos(_f, docs_antes)
     if erros:
         return jsonify(ok=False, erro=' '.join(erros)), 400
 
@@ -2003,6 +2129,14 @@ def salvar_campos(id):
                       antes={c: _s(pf_antes.get(c)) for c in mudou}, depois={c: _s(pf_depois.get(c)) for c in mudou})
             inv = {v: k for k, v in _CAMPOS_PF.items()}
             salvos += [_ROTULO_CAMPO[inv[c]] for c in mudou if c in inv]
+
+    if docs_novos is not None:
+        r_antes, r_depois = Documentos.resumo(docs_antes), Documentos.resumo(docs_novos)
+        if r_antes != r_depois:
+            Documentos.salvar(id, docs_novos, current_user.id)
+            registrar('escrita.alterou_dados_pessoa', 'cadastros', tabela='clientes', registro_id=id,
+                      antes={'documentos': r_antes}, depois={'documentos': r_depois})
+            salvos.append('Documentos')
 
     return jsonify(ok=True, salvos=salvos, virou_cliente=virou, falta=AC.pendencias_do_cadastro(id))
 
