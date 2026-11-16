@@ -36,23 +36,51 @@
 .nvc-full { display:none; }
 /* gaveta de leitura */
 .nvk-fundo { position:fixed; inset:0; background:rgba(15,23,42,.35); z-index:900; } .nvk-fundo[hidden] { display:none !important; }
-.nvk-gav { position:fixed; top:0; right:0; bottom:0; width:min(620px,100%); background:#fff; z-index:901; display:flex; flex-direction:column;
-           box-shadow:-20px 0 50px rgba(0,0,0,.18); transform:translateX(0); }
+/* caixa de leitura CENTRALIZADA (Anderson, 15/11: "colocar a caixa centralizada na página") */
+.nvk-gav { position:fixed; inset:0; z-index:901; display:grid; place-items:center; padding:16px; }
 .nvk-gav[hidden] { display:none !important; }
+.nvk-box { width:min(1080px,100%); max-height:calc(100vh - 32px); background:#fff; border-radius:18px; overflow:hidden;
+           display:grid; grid-template-rows:auto minmax(0,1fr) auto; box-shadow:0 30px 80px rgba(0,0,0,.35); }
+.nvk-gav-corpo { display:grid; grid-template-columns:minmax(0,1fr) 360px; overflow:auto; padding:0 !important; }
+.nvk-main { padding:20px 24px; min-width:0; border-right:1px solid #eef2f0; }
+.nvk-side { padding:18px 20px; background:#f8fbf9; display:flex; flex-direction:column; gap:16px; min-width:0; }
+.nvk-side .nvk-gav-grid { grid-template-columns:1fr 1fr; margin:0; background:#fff; }
+.nvk-side .nvk-chk { grid-template-columns:1fr; }
+.nvk-side .nvk-sec { margin-top:0; }
+.nvk-nav { display:flex; gap:4px; margin-left:auto; flex:none; }
+.nvk-nav button, .nvk-gav-x { background:rgba(255,255,255,.15); border:0; color:#fff; width:32px; height:32px; border-radius:8px; font-size:14px; cursor:pointer; flex:none; }
+.nvk-nav button[disabled] { opacity:.35; cursor:default; }
+@media (max-width:900px) { .nvk-gav { padding:0; } .nvk-box { width:100%; height:100vh; height:100dvh; max-height:none; border-radius:0; }
+  .nvk-gav-corpo { grid-template-columns:1fr; } .nvk-main { border-right:0; padding:16px; } .nvk-side { padding:16px; } }
 .nvk-gav-cab { background:linear-gradient(135deg,#0f3d2e,#166534); color:#fff; padding:18px 22px; display:flex; gap:14px; align-items:flex-start; }
 .nvk-gav-cab .gc-ava { flex:none; width:52px; height:48px; border-radius:12px; display:inline-flex; flex-direction:column; align-items:center; justify-content:center; color:#fff; font-weight:800; font-size:17px; line-height:1.05; }
 .nvk-gav-cab .gc-ava small { font-size:8.5px; letter-spacing:.5px; text-transform:uppercase; opacity:.85; }
 .nvk-gav-cab h2 { margin:0; font-size:19px; line-height:1.25; color:#fff; text-wrap:balance; }
 .nvk-gav-cab p { margin:6px 0 0; font-size:12.5px; color:#bbf7d0; }
-.nvk-gav-x { margin-left:auto; background:rgba(255,255,255,.15); border:0; color:#fff; width:32px; height:32px; border-radius:8px; font-size:18px; cursor:pointer; flex:none; }
-.nvk-gav-corpo { padding:18px 22px; overflow:auto; flex:1; }
+.nvk-gav-x { font-size:18px; }
+.nvk-ed .nvk-gav-x { margin-left:auto; }
 .nvk-gav-corpo p, .nvk-gav-corpo li { font-size:14px; line-height:1.65; color:#334155; }
 .nvk-gav-corpo p { margin:0 0 10px; } .nvk-gav-corpo ul, .nvk-gav-corpo ol { margin:0 0 10px; padding-left:20px; } .nvk-gav-corpo li::marker { color:#16a34a; font-weight:700; }
 .nvk-gav-corpo .nvc-img { margin-top:6px; border:1px solid #e2e8f0; border-radius:10px; overflow:hidden; cursor:zoom-in; }
 .nvk-gav-corpo .nvc-img img { display:block; width:100%; height:auto; }
 .nvk-gav-corpo .nvc-img-rot { font-size:11px; color:#94a3b8; text-align:center; margin:4px 0 0; }
-.nvk-gav-meta { display:flex; gap:14px; flex-wrap:wrap; font-size:12.5px; color:#64748b; padding:0 0 14px; border-bottom:1px solid #eef2f0; margin-bottom:14px; }
-.nvk-gav-meta b { color:#0f172a; }
+.nvk-gav-cab .nvk-pills { display:flex; gap:6px; flex-wrap:wrap; margin-top:8px; }
+.nvk-gav-cab .nvk-pills span { font-size:10.5px; font-weight:800; letter-spacing:.04em; border-radius:99px; padding:3px 9px; background:rgba(255,255,255,.16); color:#eafff3; display:inline-flex; gap:5px; align-items:center; }
+.nvk-gav-cab .nvk-pills span.forte { background:#fff; color:#0f3d2e; }
+.nvk-gav-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(120px, 1fr)); gap:10px; background:#f8fbf9; border:1px solid #edf3ef; border-radius:12px; padding:12px 14px; margin-bottom:18px; }
+.nvk-gav-grid .cli-val { white-space:normal; }
+.nvk-sec { font-size:10px; letter-spacing:1.6px; font-weight:800; text-transform:uppercase; color:#15803d; display:flex; align-items:center; gap:12px; margin:18px 0 10px; }
+.nvk-sec::after { content:''; flex:1; height:1px; background:#e8f1ec; } .nvk-sec:first-child { margin-top:0; }
+.nvk-chk { list-style:none; margin:0; padding:0; display:grid; grid-template-columns:1fr 1fr; gap:6px 14px; }
+.nvk-chk li { display:flex; gap:8px; align-items:flex-start; font-size:12.5px; color:#334155; line-height:1.35; }
+.nvk-chk li i { width:18px; height:18px; border-radius:50%; display:grid; place-items:center; font-size:10px; flex:none; margin-top:1px; background:#dcfce7; color:#15803d; }
+.nvk-chk li.aviso i { background:#fef3c7; color:#b45309; } .nvk-chk li.aviso { color:#92400e; }
+.nvk-chk li small { display:block; color:#94a3b8; font-size:11px; }
+.nvk-chips { display:flex; gap:6px; flex-wrap:wrap; margin-top:8px; }
+.nvk-chips span { font-size:12px; font-weight:600; color:#14532d; background:#fff; border:1px solid #bbf7d0; border-radius:99px; padding:3px 10px; display:inline-flex; gap:6px; align-items:center; }
+.nvk-chips span i { color:#16a34a; font-size:10px; } .nvk-chips span.falta { color:#64748b; border-color:#e2e8f0; } .nvk-chips span.falta i { color:#cbd5e1; }
+.nvk-quem { margin-top:0; }
+@media (max-width:600px) { .nvk-chk { grid-template-columns:1fr; } }
 .nvk-quem { background:#f0fdf4; border:1px solid #bbf7d0; border-radius:10px; padding:10px 12px; font-size:12.5px; color:#14532d; display:flex; gap:8px; align-items:flex-start; margin:14px 0 0; line-height:1.5; }
 .nvk-quem[hidden] { display:none !important; }
 .nvk-quem i { color:#16a34a; margin-top:3px; } .nvk-quem.vazio { background:#fef2f2; border-color:#fecaca; color:#991b1b; } .nvk-quem.vazio i { color:#dc2626; }
@@ -354,17 +382,25 @@
 
 {# ===== gaveta de leitura ===== #}
 <div class="nvk-fundo" id="nvGavFundo" hidden></div>
-<aside class="nvk-gav" id="nvGav" hidden role="dialog" aria-modal="true" aria-labelledby="nvGavT">
+<div class="nvk-gav" id="nvGav" hidden role="dialog" aria-modal="true" aria-labelledby="nvGavT"><div class="nvk-box">
     <div class="nvk-gav-cab"><span class="gc-ava" id="nvGavAva"></span>
-        <div style="min-width:0"><h2 id="nvGavT"></h2><p id="nvGavSub"></p></div>
-        <button type="button" class="nvk-gav-x" id="nvGavX" aria-label="Fechar">&times;</button></div>
+        <div style="min-width:0"><h2 id="nvGavT"></h2><p id="nvGavSub"></p><div class="nvk-pills" id="nvGavPills"></div></div>
+        <div class="nvk-nav"><button type="button" id="nvGavPrev" title="Anterior (←)"><i class="fas fa-chevron-left"></i></button><button type="button" id="nvGavNext" title="Próxima (→)"><i class="fas fa-chevron-right"></i></button>
+            <button type="button" class="nvk-gav-x" id="nvGavX" aria-label="Fechar">&times;</button></div></div>
     <div class="nvk-gav-corpo">
-        <div class="nvk-gav-meta" id="nvGavMeta"></div>
-        <div id="nvGavTexto"></div>
-        <div class="nvk-quem" id="nvGavQuem" hidden><i class="fas fa-users"></i><span></span></div>
+        <div class="nvk-main">
+            <div class="nvk-sec">O que mudou</div>
+            <div id="nvGavTexto"></div>
+        </div>
+        <aside class="nvk-side">
+            <div class="nvk-gav-grid" id="nvGavMeta"></div>
+            <div id="nvGavChk" hidden><div class="nvk-sec">Antes de publicar</div><ul class="nvk-chk" id="nvGavChkL"></ul></div>
+            <div id="nvGavQuemBox" hidden><div class="nvk-sec" id="nvGavQuemT">Para quem</div>
+                <div class="nvk-quem" id="nvGavQuem"><i class="fas fa-users"></i><span></span></div></div>
+        </aside>
     </div>
     <div class="nvk-gav-pe" id="nvGavPe"></div>
-</aside>
+</div></div>
 <div class="nv-luz" id="nvLuz" hidden><img alt="Print ampliado"></div>
 
 {% if eh_admin %}
@@ -519,24 +555,46 @@ function nvToggle(corpo, chev) {
     var ava = $('nvGavAva'); ava.className = 'gc-ava nv-ava-' + n.tipo; ava.innerHTML = n.dia + '<small>' + esc(n.mes) + '</small>';
     $('nvGavT').textContent = n.titulo;
     var onde = (n.area === 'Todos' ? 'Para todos' : n.area) + (n.tela_nome ? ' › ' + n.tela_nome : '');
-    $('nvGavSub').innerHTML = '<i class="fas ' + n.icone + '"></i> ' + esc(onde) + ' · ' + esc(n.tipo_rotulo) + (n.situacao === 'rascunho' ? ' · rascunho' + (n.commit ? ' vindo da publicação #' + esc(n.commit) : '') : (n.por ? ' · publicada por ' + esc(n.por) : ''));
+    $('nvGavSub').innerHTML = '<i class="fas ' + n.icone + '"></i> ' + esc(onde) + (n.situacao === 'rascunho' ? (n.commit ? ' · veio da publicação #' + esc(n.commit) : ' · escrita à mão') : (n.por ? ' · publicada por ' + esc(n.por) : ''));
+    $('nvGavPills').innerHTML = '<span class="forte">' + esc(n.tipo_rotulo).toUpperCase() + '</span>'
+      + '<span>' + (n.situacao === 'rascunho' ? '<i class="fas fa-pen-ruler"></i> RASCUNHO' : '<i class="fas fa-bullhorn"></i> PUBLICADA') + '</span>'
+      + (n.img ? '<span><i class="fas fa-image"></i> COM PRINT</span>' : '');
     var quem = n.tela_nome ? 'quem usa ' + n.tela_nome : (n.area !== 'Todos' ? 'quem usa ' + n.area : 'toda a equipe');
-    $('nvGavMeta').innerHTML = '<span>Data <b>' + n.data_br + '</b></span><span>Quando <b>' + esc(n.quando) + '</b></span><span>Para quem <b>' + esc(quem) + '</b></span><span>Print <b>' + (n.img ? 'sim' : 'não') + '</b></span>'
-      + (n.leitura ? '<span>Leitura <b>' + n.leitura.viram + ' de ' + n.leitura.podem + '</b></span>' : '');
+    function campo(r, v) { return '<div class="cli-campo"><span class="cli-rot">' + r + '</span><b class="cli-val">' + v + '</b></div>'; }
+    $('nvGavMeta').innerHTML = campo(n.situacao === 'publicada' ? 'Publicada em' : 'Data', n.data_br + ' <small style="color:#94a3b8;font-weight:600">· ' + esc(n.quando).toLowerCase() + '</small>')
+      + campo('Tipo', esc(n.tipo_rotulo)) + campo('Para quem', esc(quem))
+      + (n.leitura ? campo('Leitura', n.leitura.viram + ' de ' + n.leitura.podem + ' viram' + (n.leitura.duvida ? ' <small style="color:#b45309;font-weight:700">· ' + n.leitura.duvida + ' com dúvida</small>' : ''))
+                   : campo('Print', n.img ? 'sim' : 'não'));
     $('nvGavTexto').innerHTML = card.querySelector('.nvc-full').innerHTML;
-    var q = $('nvGavQuem'); q.hidden = true;
+    // rascunho: a conferência antes de publicar
+    var chk = $('nvGavChk'); chk.hidden = n.situacao !== 'rascunho';
+    if (n.situacao === 'rascunho') {
+      var txt = (n.texto || ''), itens = [];
+      function it(ok, t, s) { itens.push('<li class="' + (ok ? '' : 'aviso') + '"><i class="fas ' + (ok ? 'fa-check' : 'fa-exclamation') + '"></i><span>' + t + (s ? '<small>' + s + '</small>' : '') + '</span></li>'); }
+      it(n.titulo.length >= 12 && n.titulo.length <= 90, 'Título curto e claro', n.titulo.length + ' letras');
+      it(txt.length >= 80, 'Texto explica o que mudou', txt.length >= 80 ? (txt.split(/\n\n+/).length) + ' parágrafo(s)' : 'está muito curto');
+      it(/(^|\n)\s*(?:[-•*]|\d+[.)])\s+/.test(txt), 'Tem lista ou passo a passo', /(^|\n)\s*(?:[-•*]|\d+[.)])\s+/.test(txt) ? 'fica fácil de ler' : 'opcional, mas ajuda');
+      it(!!n.img, 'Print da tela', n.img ? 'a equipe vê onde fica' : 'opcional: cole um no Editar');
+      it(!!n.tela_id || n.area === 'Todos', 'Tela definida', n.tela_id ? 'quem usa ' + n.tela_nome : (n.area === 'Todos' ? 'para toda a equipe' : 'só o assunto: vai para quem usa qualquer tela de ' + n.area));
+      it(true, 'Texto do WhatsApp pronto', 'botão WhatsApp aqui embaixo');
+      $('nvGavChkL').innerHTML = itens.join('');
+    }
+    var qb = $('nvGavQuemBox'), q = $('nvGavQuem'); qb.hidden = true;
     if (ADMIN) {
       fetch('/novidades/' + n.id + '/quem-viu', { headers: { 'X-Requested-With': 'XMLHttpRequest' } }).then(function (r) { return r.json(); }).then(function (j) {
         if (!j.ok || !atual || atual.n.id !== n.id) return;
+        var viu = {}; j.viram.forEach(function (u) { viu[u.nome] = u.reacao || 'viu'; });
         var todos = j.viram.concat(j.faltam).filter(function (u) { return !/^(Administrador|Anderson Vieira)$/.test(u.nome); });
         var nomes = todos.map(function (u) { return u.nome; });
-        var paraTodos = !n.tela_id && n.area === 'Todos';
+        var paraTodos = !n.tela_id && n.area === 'Todos', pub = n.situacao === 'publicada';
         q.classList.toggle('vazio', !nomes.length && !paraTodos);
-        var s = q.querySelector('span');
-        if (paraTodos) s.innerHTML = '<b>' + (n.situacao === 'publicada' ? 'Aparece' : 'Vai aparecer') + ' para toda a equipe (' + nomes.length + ' pessoas).</b> O texto do WhatsApp pode ir no grupo geral.';
-        else if (nomes.length) s.innerHTML = '<b>' + (n.situacao === 'publicada' ? 'Aparece' : 'Vai aparecer') + ' para ' + nomes.length + (nomes.length === 1 ? ' pessoa' : ' pessoas') + ':</b> ' + esc(nomes.join(', ')) + '.' + (n.situacao === 'publicada' ? '<small>Já viram: ' + (j.viram.length ? esc(j.viram.map(function (u) { return u.nome; }).join(', ')) : 'ninguém ainda') + '.</small>' : '<small>Mande o WhatsApp só para essas pessoas ou no grupo do setor.</small>');
-        else s.innerHTML = '<b>Ninguém além dos admins vê esta novidade hoje:</b> nenhuma pessoa tem acesso a essa tela.';
-        q.hidden = false;
+        $('nvGavQuemT').textContent = pub ? 'Quem vê e quem já viu' : 'Para quem vai aparecer';
+        var s = q.querySelector('span'), chips = '';
+        if (pub || !paraTodos) chips = '<span class="nvk-chips">' + nomes.map(function (nm) { var r = viu[nm]; return '<span class="' + (r ? '' : 'falta') + '"><i class="fas ' + (r === 'util' ? 'fa-thumbs-up' : r === 'duvida' ? 'fa-circle-question' : r ? 'fa-eye' : 'fa-circle') + '"></i>' + esc(nm) + '</span>'; }).join('') + '</span>';
+        if (paraTodos) s.innerHTML = '<b>' + (pub ? 'Aparece' : 'Vai aparecer') + ' para toda a equipe (' + nomes.length + ' pessoas).</b> O texto do WhatsApp pode ir no grupo geral.' + (pub ? '<small>' + j.viram.length + ' já viram · ' + j.faltam.length + ' ainda não. Verde = viu; polegar = entendeu; interrogação = dúvida.</small>' + chips : '');
+        else if (nomes.length) s.innerHTML = '<b>' + (pub ? 'Aparece' : 'Vai aparecer') + ' para ' + nomes.length + (nomes.length === 1 ? ' pessoa' : ' pessoas') + '.</b> ' + (pub ? '<small>' + j.viram.length + ' já viram · ' + j.faltam.length + ' ainda não.</small>' : '<small>Mande o WhatsApp só para essas pessoas ou no grupo do setor.</small>') + chips;
+        else s.innerHTML = '<b>Ninguém além dos admins vê esta novidade hoje:</b> nenhuma pessoa tem acesso a essa tela. Troque a tela no Editar, ou deixe "Para todos".';
+        qb.hidden = false;
       });
     }
     var pe = $('nvGavPe'), h = '';
@@ -557,11 +615,21 @@ function nvToggle(corpo, chev) {
       }
     }
     pe.innerHTML = h;
+    // o print ganha a própria seção dentro da gaveta
+    var img = $('nvGavTexto').querySelector('.nvc-img');
+    if (img) { var sec = document.createElement('div'); sec.className = 'nvk-sec'; sec.textContent = 'Print da tela'; img.parentNode.insertBefore(sec, img); }
+    var viz = visiveis(), ix = viz.indexOf(card);
+    $('nvGavPrev').disabled = ix <= 0; $('nvGavNext').disabled = ix < 0 || ix >= viz.length - 1;
     gavFundo.hidden = false; gav.hidden = false; gav.querySelector('.nvk-gav-corpo').scrollTop = 0;
+    document.body.style.overflow = 'hidden';     // a página de trás não rola enquanto a caixa está aberta
     try { history.replaceState(null, '', location.pathname + location.search + '#n=' + n.id); } catch (e) {}
   }
+  function visiveis() { return [].slice.call(document.querySelectorAll('.nvc[data-id]')).filter(function (c) { return !c.hidden; }); }
+  function vizinha(d) { if (!atual) return; var viz = visiveis(), ix = viz.indexOf(atual.card) + d; if (ix >= 0 && ix < viz.length) abrirGaveta(viz[ix]); }
+  $('nvGavPrev').addEventListener('click', function () { vizinha(-1); }); $('nvGavNext').addEventListener('click', function () { vizinha(1); });
+  document.addEventListener('keydown', function (e) { if (gav.hidden || e.target.closest('input, textarea')) return; if (e.key === 'ArrowLeft') vizinha(-1); if (e.key === 'ArrowRight') vizinha(1); });
   function fecharGaveta() {
-    gav.hidden = true; gavFundo.hidden = true; atual = null;
+    gav.hidden = true; gavFundo.hidden = true; atual = null; document.body.style.overflow = '';
     document.querySelectorAll('.nvc.sel').forEach(function (c) { c.classList.remove('sel'); });
     try { history.replaceState(null, '', location.pathname + location.search); } catch (e) {}
   }
@@ -571,6 +639,7 @@ function nvToggle(corpo, chev) {
     card.addEventListener('keydown', function (ev) { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); abre(ev); } });
   });
   $('nvGavX').addEventListener('click', fecharGaveta); gavFundo.addEventListener('click', fecharGaveta);
+  gav.addEventListener('click', function (e) { if (e.target === gav) fecharGaveta(); });   // clique fora da caixa fecha
   document.addEventListener('keydown', function (e) { if (e.key === 'Escape') { if (!luz.hidden) luz.hidden = true; else if (!gav.hidden) fecharGaveta(); } });
   var m = location.hash.match(/^#n=(\d+)$/); if (m && $('nv' + m[1])) abrirGaveta($('nv' + m[1]));
 

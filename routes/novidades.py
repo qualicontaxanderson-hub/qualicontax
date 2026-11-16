@@ -54,6 +54,11 @@ AREAS_VISUAL = {
 REACOES = ('util', 'duvida')
 
 
+def _hoje_br():
+    from zoneinfo import ZoneInfo
+    return datetime.now(ZoneInfo('America/Sao_Paulo')).date()
+
+
 def _q(sql, p=(), one=False):
     return execute_query(sql, p, fetch=True, fetch_one=one) if one else (execute_query(sql, p, fetch=True) or [])
 
@@ -221,7 +226,7 @@ def index():
     telas, grupos = _catalogo()
     admin = current_user.is_admin()
     ver = request.args.get('ver', '') if admin else ''
-    hoje = date.today()
+    hoje = _hoje_br()          # o app roda em UTC: às 21h de domingo já seria "segunda" e o dia viraria "semana passada"
     if ver == 'rascunhos':
         lista = _q(_SEL + " WHERE n.situacao = 'rascunho' ORDER BY n.data DESC, n.id DESC")
     else:
@@ -562,7 +567,7 @@ def salvar():
     try:
         data = datetime.strptime(f.get('data') or '', '%Y-%m-%d').date()
     except ValueError:
-        data = date.today()
+        data = _hoje_br()
     try:
         img_tipo, img_dados = _ler_print()
     except ValueError as e:
