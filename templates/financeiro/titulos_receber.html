@@ -234,7 +234,7 @@ a.tx-c { text-decoration:none; color:inherit; }
 .tx-gav[hidden] { display:none; }
 .tx-gav-fundo { position:absolute; inset:0; background:rgba(15,23,42,.45); backdrop-filter:blur(2px); animation:txFade .2s; }
 /* no computador abre no meio da tela (Anderson, 15/11/2026: "ao lado fica um pouco disfuncional"); no celular sobe de baixo */
-.tx-gav-pane { position:absolute; left:50%; top:3vh; transform:translateX(-50%); width:min(1240px, 97vw); height:min(900px, 94vh); border-radius:20px;
+.tx-gav-pane { position:absolute; left:50%; top:3vh; transform:translateX(-50%); width:min(1320px, 97vw); max-height:94vh; border-radius:20px;
                background:#f3f6f4; box-shadow:0 30px 80px rgba(15,23,42,.35); overflow:hidden; display:flex; flex-direction:column;
                animation:txPop .22s cubic-bezier(.2,.8,.2,1); }
 .tx-gav-corpo { flex:1; min-height:0; display:flex; flex-direction:column; }
@@ -358,12 +358,103 @@ a.tx-c { text-decoration:none; color:inherit; }
   .tj-cab { padding:16px 56px 14px 16px; flex-wrap:wrap; gap:10px; }
   .tj-cab-val { flex-direction:row; align-items:center; gap:8px 10px; width:100%; flex-wrap:wrap; } .tj-cab-val b { font-size:26px; order:-1; white-space:nowrap; }
   .tj-kpis .nf-pill { white-space:normal; line-height:1.3; }
-  .tj-quem-l1 b { white-space:normal; font-size:16px; }
+  .tj-quem-l1 { flex-wrap:wrap; gap:6px 10px; } .tj-quem-l1 b { white-space:normal; font-size:18px; line-height:1.2; }
+  .tj-avatar { width:46px; height:46px; font-size:16px; border-radius:14px; align-self:flex-start; }
+  .tj-quem-l2 { font-size:13px; gap:4px 12px; } .tj-quem-l2 span, .tj-quem-l2 a { display:inline-flex; align-items:center; gap:4px; }
   .tj-kpis { grid-template-columns:1fr 1fr; } .tj-kpis > div:last-child { grid-column:1 / -1; }
   .tj-kpis dd, .tj-bol-top dd { white-space:normal; } .tj-bol-top { grid-template-columns:1fr 1fr; }
   .tj-col3 { order:-1; }
   .tj-bol-acoes { grid-template-columns:repeat(3, 1fr); }
 }
+
+/* escala maior (15/11/2026: "texto minúsculos difícil de visualizar") e a janela com a altura do conteúdo */
+.tj { height:auto; }
+.tj-cab { padding:22px 70px 20px 26px; }
+.tj-avatar { width:62px; height:62px; font-size:21px; border-radius:18px; }
+.tj-quem-l1 b { font-size:23px; } .tj-num { font-size:14px; padding:4px 10px; }
+.tj-quem-l2 { font-size:14px; margin-top:7px; gap:5px 14px; } .tj-quem-l2 code { font-size:13px; padding:3px 8px; } .tj-quem-l2 i { font-size:12.5px; }
+.tj-regua { margin-top:11px; } .tj-regua i { width:22px; height:8px; } .tj-regua small { font-size:12px; }
+.tj-cab-val b { font-size:40px; } .tj-cab-val small { font-size:14px; } .tj-tag { font-size:13px; padding:5px 14px; }
+.tj-kpis > div { padding:14px 18px; gap:13px; } .tj-kpis > div > i { width:42px; height:42px; font-size:17px; border-radius:12px; }
+.tj-kpis dt { font-size:11.5px; } .tj-kpis dd { font-size:17px; margin-top:2px; } .tj-kpis small { font-size:13px; margin-top:1px; } .tj-kpis .nf-pill { font-size:12px; padding:3px 10px; }
+.tj-corpo { gap:14px; padding:14px 16px 16px; }
+.tj-sec { padding:16px 18px; border-radius:16px; } .tj-sec h4 { font-size:13px; margin-bottom:14px; gap:9px; } .tj-sec h4 > i { width:28px; height:28px; font-size:13px; border-radius:8px; } .tj-sec h4 small { font-size:12.5px; }
+.tj-tl::before { left:17px; } .tj-tl li { gap:14px; padding:9px 0; } .tj-tl li > i { width:30px; height:30px; font-size:12.5px; }
+.tj-tl li b { font-size:15px; } .tj-tl li small { font-size:13px; margin-top:2px; } .tj-tl li time { font-size:12.5px; padding-top:5px; }
+.tj-aviso { font-size:13.5px; padding:10px 12px; } .tj-linha b { font-size:14px; } .tj-linha small { font-size:12.5px; }
+.tj-bol-top { gap:12px; padding-bottom:12px; } .tj-bol-top dt, .tj-copia dt, .tj-pag dt, .tj-form label { font-size:11.5px; }
+.tj-bol-top dd { font-size:18px; } .tj-bol-top > div:first-child dd { font-size:24px; }
+.tj-copia { margin-top:12px; } .tj-copia code { font-size:13px; padding:9px 40px 9px 11px; max-height:none; } .tj-cp { width:30px; height:30px; font-size:13px; }
+.tj-bol-acoes { gap:8px; margin-top:14px; } .tj-ib { height:62px; font-size:12.5px; gap:5px; } .tj-ib i { font-size:17px; }
+.tj-form { margin-top:12px; padding-top:12px; } .tj-form > div { margin-top:6px; gap:8px; } .tj-form input { height:40px; font-size:14.5px; padding:0 12px; }
+.tj-form button { height:40px; font-size:13.5px; padding:0 14px; } .tj-form label small { font-size:12px; }
+.tj-itens { font-size:13.5px; margin-top:12px; } .tj-pag { font-size:14px; } .tj-pag div span { font-size:13px; }
+.tj-vazio { font-size:14px; padding:20px; } .tj-vazio > i { font-size:30px; }
+.tj-sec-acoes { gap:10px; } .tj-b { font-size:15px; padding:12px 16px; gap:14px; border-radius:14px; } .tj-b > i { width:38px; height:38px; font-size:17px; border-radius:11px; }
+.tj-b small { font-size:12.5px; margin-top:2px; } .tj-b-par { gap:10px; } .tj-b-par .tj-b { font-size:14px; padding:11px 14px; }
+.tj-regra { font-size:12.5px; margin-top:6px; } .tj-regra i { font-size:13px; }
+.tj-outros { gap:8px; } .tj-o { padding:9px 12px 9px 14px; gap:12px; } .tj-o b { font-size:14px; } .tj-o small { font-size:12.5px; } .tj-o em { font-size:15px; }
+.tj-ok { font-size:14px; padding:12px 14px; }
+.tx-gav-x { width:38px; height:38px; font-size:20px; right:14px; top:14px; }
+/* composição do honorário, nota fiscal e destinatários do e-mail (15/11/2026) */
+.tj-comp { margin-top:12px; padding:12px 14px; background:var(--cor-f); border:1px solid var(--cor-b); border-radius:12px; }
+.tj-comp dt { font-size:11.5px; text-transform:uppercase; letter-spacing:.5px; color:var(--cor-e); font-weight:800; margin-bottom:6px; }
+.tj-comp dt small { text-transform:none; letter-spacing:0; font-weight:600; color:#64748b; }
+.tj-comp > div { display:flex; justify-content:space-between; gap:12px; font-size:14px; color:var(--tinta); padding:4px 0; border-bottom:1px dashed rgba(0,0,0,.08); }
+.tj-comp > div b { font-variant-numeric:tabular-nums; white-space:nowrap; } .tj-comp > div em { font-style:normal; font-size:11px; background:#fff; border-radius:5px; padding:1px 6px; color:#64748b; margin-left:6px; }
+.tj-comp-tot { border-bottom:0 !important; font-weight:800; padding-top:7px !important; } .tj-comp-tot b { font-size:16px; color:var(--cor-e); }
+.tj-comp-aviso { margin:8px 0 0; font-size:12.5px; color:#92400e; background:#fffbeb; border-radius:8px; padding:7px 10px; line-height:1.4; } .tj-comp-aviso i { color:#d97706; margin-right:4px; }
+.tj-nf { margin-top:12px; display:flex; align-items:center; gap:12px; padding:10px 12px; border:1px solid var(--linha); border-radius:12px; background:#fff; }
+.tj-nf-ico { width:40px; height:40px; border-radius:11px; background:#ecfdf3; color:#15803d; display:inline-flex; align-items:center; justify-content:center; font-size:17px; flex-shrink:0; }
+.tj-nf-txt { flex:1; min-width:0; } .tj-nf-txt b { display:block; font-size:15px; } .tj-nf-txt small { font-size:12.5px; color:#64748b; }
+.tj-ib-mini { height:46px; min-width:76px; font-size:12px; } .tj-ib-mini i { font-size:15px; }
+.tj-bol-acoes { grid-template-columns:repeat(auto-fit, minmax(82px, 1fr)); }
+.tj-sec-email .tj-form-solta { margin-top:0; padding-top:0; border-top:0; }
+.tj-ctt, .tj-form > .tj-ctt { display:flex; flex-direction:column; gap:5px; margin-top:6px; }
+.tj-corpo { grid-template-columns:minmax(0, 1.05fr) minmax(0, 1.15fr) minmax(0, .95fr); } .tj-col3 { min-width:0; }
+.tj-ctt label { display:flex; align-items:center; gap:9px; padding:7px 10px; border:1px solid var(--linha); border-radius:10px; cursor:pointer; font-size:13.5px; color:var(--tinta); text-transform:none; letter-spacing:0; margin:0; background:#fff; }
+.tj-ctt label:has(input:checked) { border-color:var(--cor-b); background:var(--cor-f); }
+.tj-ctt input { width:17px; height:17px; accent-color:var(--cor); flex-shrink:0; }
+.tj-ctt b { font-weight:800; white-space:nowrap; } .tj-ctt small { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:#475569; font-size:12.5px; }
+.tj-ctt em { font-style:normal; font-size:10.5px; font-weight:700; color:#fff; background:var(--cor); border-radius:99px; padding:1px 7px; white-space:nowrap; }
+.tj-ctt em.sec { background:#94a3b8; }
+.tj-wa-lista { display:flex; flex-direction:column; gap:5px; }
+.tj-ctt label { padding:5px 9px 5px 10px; gap:8px; } .tj-ctt label.sem-email { opacity:.85; }
+.tj-ctt-ico { width:17px; text-align:center; color:#94a3b8; font-size:12px; flex-shrink:0; }
+.tj-wa { width:32px; height:32px; border-radius:9px; background:#dcfce7; color:#15803d; display:inline-flex; align-items:center; justify-content:center; font-size:16px; flex-shrink:0; text-decoration:none; }
+.tj-wa:hover { background:#bbf7d0; } .tj-wa.off { background:#f1f5f9; color:#cbd5e1; font-size:12px; cursor:default; }
+.tj-sec-email .tj-ctt + div { margin-top:8px; }
+.tj-wa-lista dt { font-size:11.5px; text-transform:uppercase; letter-spacing:.5px; color:#15803d; font-weight:800; margin:2px 0 1px; } .tj-wa-lista dt small { text-transform:none; letter-spacing:0; font-weight:600; color:#64748b; }
+.tj-b-sem { opacity:.75; cursor:default; } .tj-b-sem > i { background:#f1f5f9; color:#94a3b8; } .tj-b-sem small a { color:var(--cor-e); font-weight:700; }
+.tj-wa-lista .tj-b { padding:8px 12px; } .tj-wa-lista .tj-b > i { width:32px; height:32px; font-size:15px; }
+.tj-dest span { display:flex; width:100%; align-items:center; gap:8px; border-radius:10px; padding:6px 10px; }
+.tj-dest span small { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; } .tj-dest span em { white-space:nowrap; }
+.tj-radios label { text-transform:none; letter-spacing:0; font-size:13.5px; color:var(--tinta); font-weight:600; margin:0; }
+/* mais compacto para caber na tela de 1000px de altura sem rolar */
+.tj-cab { padding:16px 70px 14px 24px; } .tj-regua { margin-top:8px; }
+.tj-kpis > div { padding:9px 16px; } .tj-kpis > div > i { width:38px; height:38px; }
+.tj-corpo { padding:10px 14px 12px; gap:12px; } .tj-sec { padding:12px 14px; } .tj-sec h4 { margin-bottom:10px; }
+.tj-tl li { padding:6px 0; } .tj-comp { margin-top:10px; padding:9px 12px; } .tj-comp > div { padding:3px 0; }
+.tj-nf { margin-top:10px; padding:7px 10px; } .tj-ib-mini { height:42px; } .tj-copia { margin-top:9px; } .tj-copia code { padding:7px 40px 7px 10px; }
+.tj-bol-acoes { margin-top:10px; gap:6px; } .tj-ib { height:54px; } .tj-form { margin-top:9px; padding-top:9px; }
+.tj-sec-acoes { gap:8px; } .tj-b { padding:10px 14px; } .tj-b-prim, .tj-b-wa { padding:9px 14px; }
+.tj-regra { margin-top:2px; }
+.tj-sec-email .tj-form-solta > label { margin-top:8px; }
+.tj-ib-pix i { color:#0f766e; } .tj-ib-pix:hover { border-color:#0f766e; background:#f0fdfa; }
+.tj-banco { display:flex !important; align-items:center; gap:8px; } .tj-banco .bco-logo { border-radius:9px; box-shadow:0 1px 3px rgba(15,23,42,.15); } .tj-banco span { font-size:15px; }
+.tj-dest { display:flex; flex-wrap:wrap; gap:6px; margin-top:6px; }
+.tj-dest span { display:inline-flex; align-items:center; gap:6px; background:#f1f5f9; border-radius:99px; padding:4px 10px 4px 8px; font-size:12.5px; color:var(--tinta); font-weight:700; }
+.tj-dest span i { color:var(--cor); font-size:11px; } .tj-dest span small { font-weight:500; color:#475569; } .tj-dest span em { font-style:normal; font-weight:600; font-size:10.5px; color:#fff; background:var(--cor); border-radius:99px; padding:1px 7px; }
+.tj-dest-falta { background:#fef2f2; color:#991b1b; border-radius:8px; padding:7px 10px; font-size:12.5px; display:block; } .tj-dest-falta i { color:#dc2626; margin-right:4px; }
+.tj-radios { display:flex; gap:14px; margin-top:8px; font-size:13.5px; color:var(--tinta); }
+.tj-radios label { display:inline-flex; align-items:center; gap:6px; cursor:pointer; font-weight:600; } .tj-radios input { width:16px; height:16px; accent-color:var(--cor); }
+/* cada coluna rola por dentro quando não cabe (a janela nunca passa de 94vh) e nada fica cortado */
+.tj-corpo { overflow:hidden; grid-template-rows:minmax(0, 1fr); }
+.tj-sec { overflow:auto; }
+.tj-kpis .nf-pill, .tj-kpis dd { white-space:normal; line-height:1.25; }
+.tj-bol-top { grid-template-columns:auto auto 1fr; gap:18px; } .tj-bol-top dd { white-space:normal; line-height:1.2; }
+.tj-bol-top > div:first-child dd { white-space:nowrap; font-size:22px; } .tj-bol-top > div:nth-child(2) dd { white-space:nowrap; } .tj-bol-top > div:last-child dd { font-size:15px; }
+@media (max-width:900px) { .tj-corpo { overflow:visible; } .tj-sec { overflow:visible; } }
 
 @media (hover:none) {
   .tx-c-acoes { position:static; opacity:1; padding:0; justify-content:flex-end; }

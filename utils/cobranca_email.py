@@ -350,8 +350,58 @@ def emails_financeiro_do_boleto(b):
     return emails_financeiro(cliente_id)
 
 
-def enviar_boleto(boleto_id, para=None, usuario_id=None):
-    """Manda o e-mail de cobrança do boleto pela caixa da conta. Devolve (ok, mensagem para a tela)."""
+def destinatarios_cobranca(cliente_id, email_cadastro=None):
+    """Quem recebe a cobrança, em ordem de preferência — Anderson (15/11/2026): "está puxando o e-mail do
+    CNPJ porque no cadastro está outro... isso não pode falhar de jeito nenhum".
+
+    1. contatos ativos do departamento Financeiro (id 8);
+    2. senão, o contato principal ativo com e-mail;
+    3. senão, qualquer contato ativo com e-mail;
+    4. por último, o e-mail do cadastro da empresa (o do CNPJ).
+    Devolve [{'email', 'nome', 'fonte'}] sem repetir e-mail."""
+    out, vistos = [], set()
+
+    def add(email, nome, fonte):
+        e = (email or '').strip().lower()
+        if '@' in e and e not in vistos:
+            vistos.add(e); out.append({'email': e, 'nome': (nome or '').strip(), 'fonte': fonte})
+
+    if cliente_id:
+        contatos = execute_query(
+            """SELECT c.id, c.nome, c.email, c.principal,
+                      EXISTS(SELECT 1 FROM contatos_departamentos cd WHERE cd.contato_id = c.id AND cd.departamento_id = 8) AS financeiro,
+                      (SELECT GROUP_CONCAT(m.valor SEPARATOR ',') FROM contatos_meios m WHERE m.contato_id = c.id AND m.tipo = 'EMAIL') AS mais
+                 FROM contatos_clientes c WHERE c.cliente_id = %s AND c.ativo = 1
+                ORDER BY c.principal DESC, c.id""", (cliente_id,), fetch=True) or []
+        for filtro, fonte in ((lambda c: c['financeiro'], 'contato do Financeiro'),
+                              (lambda c: c['principal'], 'contato principal'),
+                              (lambda c: True, 'contato da empresa')):
+            for c in contatos:
+                if filtro(c):
+                    add(c['email'], c['nome'], fonte)
+                    for m in (c['mais'] or '').split(','):
+                        add(m, c['nome'], fonte)
+            if out:
+                return out
+    add(email_cadastro, '', 'e-mail do cadastro (CNPJ)')
+    return out
+
+
+def destinatarios_do_boleto(b):
+    cliente_id = None
+    if b.get('titulo_id'):
+        t = execute_query('SELECT cliente_id FROM fin_titulos WHERE id = %s', (b['titulo_id'],), fetch=True, fetch_one=True)
+        cliente_id = (t or {}).get('cliente_id')
+    email_cad = None
+    if cliente_id:
+        c = execute_query('SELECT email FROM clientes WHERE id = %s', (cliente_id,), fetch=True, fetch_one=True)
+        email_cad = (c or {}).get('email')
+    return destinatarios_cobranca(cliente_id, email_cad or b.get('pagador_email'))
+
+
+def enviar_boleto(boleto_id, para=None, usuario_id=None, com_nota=True):
+    """Manda o e-mail de cobrança do boleto pela caixa da conta. Devolve (ok, mensagem para a tela).
+    ``com_nota=False`` manda só o boleto, mesmo quando há nota fiscal (Anderson, 15/11/2026)."""
     from models.fin_cobranca import FinBoleto, FinCobrancaConta
     from models.nfse_emissao import NfseEmitida
     from utils import email_envio
@@ -363,8 +413,10 @@ def enviar_boleto(boleto_id, para=None, usuario_id=None):
     # Regra do Anderson (05/11/2026): sem destinatário escolhido, a cobrança vai para TODOS os contatos
     # da empresa marcados no departamento Financeiro; o e-mail do cadastro (o do CNPJ) é só o recurso
     # de quem não tem contato financeiro.
+    # 15/11/2026: sem contato do Financeiro, vai para o contato principal / os contatos da empresa; o
+    # e-mail do CNPJ só quando a empresa não tem contato nenhum com e-mail (destinatarios_cobranca).
     if not para:
-        para = ', '.join(emails_financeiro_do_boleto(b)) or None
+        para = ', '.join(d['email'] for d in destinatarios_do_boleto(b)) or None
     destinos = [p.strip().lower() for p in str(para or b.get('pagador_email') or '').replace(';', ',').split(',') if p.strip()]
     if not destinos:
         return False, 'A empresa não tem contato do Financeiro com e-mail nem e-mail no cadastro: informe um endereço para enviar.'
@@ -374,7 +426,7 @@ def enviar_boleto(boleto_id, para=None, usuario_id=None):
         rem = FinCobrancaConta.remetente_email(b['conta_cobranca_id'])
     except ValueError as exc:
         return False, f'{exc} Preencha o bloco "E-mail de cobrança" na conta de cobrança.'
-    nota = NfseEmitida.get(b['nfse_id']) if b.get('nfse_id') else None
+    nota = NfseEmitida.get(b['nfse_id']) if (b.get('nfse_id') and com_nota) else None
     garantir_token(b)
     assunto, html, texto, anexos, faltas = montar(b, nota, _empresa(b['empresa_id']),
                                                   telefone=_telefone_empresa(b['empresa_id']))

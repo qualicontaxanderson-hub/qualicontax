@@ -581,10 +581,14 @@ def boleto_enviar_email(boleto_id):
     b = FinBoleto.get(boleto_id)
     if not b or b['empresa_id'] not in FinEmpresa.ids_validos():
         abort(404)
-    ok, msg = cobranca_email.enviar_boleto(boleto_id, para=request.form.get('para'), usuario_id=current_user.id)
+    so_boleto = request.form.get('so_boleto') == '1'          # 15/11/2026: reenviar os 2 ou só o boleto
+    # 15/11/2026: a janela da cobrança manda os contatos marcados (para_chk) + e-mails digitados (para)
+    para = ', '.join(p for p in request.form.getlist('para_chk') + [request.form.get('para') or ''] if p.strip()) or None
+    ok, msg = cobranca_email.enviar_boleto(boleto_id, para=para, usuario_id=current_user.id, com_nota=not so_boleto)
     flash(msg, 'success' if ok else 'danger')
     registrar('escrita.enviou_email_boleto', 'financeiro', tabela='fin_boletos', registro_id=boleto_id,
-              depois={'ok': ok, 'para': (request.form.get('para') or b.get('pagador_email') or '')[:200], 'msg': msg[:200]})
+              depois={'ok': ok, 'para': (para or b.get('pagador_email') or '')[:200], 'msg': msg[:200],
+                      'so_boleto': so_boleto})
     volta = request.form.get('volta') or (url_for('financeiro.nota_detalhe', nota_id=b['nfse_id']) + '#boleto'
                                           if b.get('nfse_id') else url_for('financeiro.boleto_detalhe', boleto_id=boleto_id))
     return redirect(volta)

@@ -53,11 +53,16 @@ def titulo_cobranca(titulo_id):
     saldo = float(t['valor'] or 0) - float(t['valor_baixado'] or 0)
 
     boletos = execute_query(
-        """SELECT b.*, cc.apelido AS conta_apelido
+        """SELECT b.*, cc.apelido AS conta_apelido, cc.provedor AS conta_provedor, fc.banco_id AS conta_banco_id
              FROM fin_boletos b JOIN fin_cobranca_contas cc ON cc.id = b.conta_cobranca_id
+             LEFT JOIN fin_contas fc ON fc.id = cc.fin_conta_id
             WHERE b.titulo_id = %s ORDER BY b.id DESC""", (titulo_id,), fetch=True) or []
     vivos = [b for b in boletos if b['situacao'] not in ('erro', 'canceled', 'rascunho')]
     boleto = (vivos or boletos or [None])[0]
+    # o banco do boleto aparece pelo LOGO (Anderson, 15/11/2026): Efí 364, Bradesco 237, senão o banco da conta
+    for b in boletos:
+        b['banco_logo'] = {'efi': '364', 'bradesco': '237'}.get(b.get('conta_provedor') or '') or b.get('conta_banco_id') or ''
+        b['banco_nome'] = {'efi': 'Efí', 'bradesco': 'Bradesco'}.get(b.get('conta_provedor') or '') or ''
     if boleto and isinstance(boleto.get('itens_json'), str):
         try:
             boleto['itens_json'] = json.loads(boleto['itens_json'])
@@ -161,10 +166,50 @@ def titulo_cobranca(titulo_id):
     else:
         tag, cls = 'cancelado', 'tx-perd'
 
+    # ── os CONTATOS da empresa mandam no e-mail e no telefone (Anderson, 15/11/2026: "o telefone e e-mail
+    #    têm que vir dos contatos... lembre sempre: o e-mail e telefone do CNPJ" são só o último recurso).
+    #    E-mail: pode ir para um, dois ou todos os contatos; os do Financeiro já vêm marcados. ──
+    from utils.cobranca_email import destinatarios_cobranca
+    destinatarios = destinatarios_cobranca(cid, t.get('email'))
+    padrao = {d['email'] for d in destinatarios}
+    contatos = []
+    if cid:
+        for c in execute_query(
+                """SELECT c.id, c.nome, c.cargo, c.email, c.celular, c.telefone, c.principal,
+                          EXISTS(SELECT 1 FROM contatos_departamentos cd WHERE cd.contato_id = c.id AND cd.departamento_id = 8) AS financeiro,
+                          (SELECT GROUP_CONCAT(m.valor SEPARATOR ',') FROM contatos_meios m WHERE m.contato_id = c.id AND m.tipo = 'EMAIL') AS mais
+                     FROM contatos_clientes c WHERE c.cliente_id = %s AND c.ativo = 1
+                    ORDER BY financeiro DESC, c.principal DESC, c.nome""", (cid,), fetch=True) or []:
+            emails = [e.strip().lower() for e in ([c['email'] or ''] + (c['mais'] or '').split(',')) if '@' in (e or '')]
+            contatos.append({'id': c['id'], 'nome': TR._nome(c['nome']), 'cargo': c['cargo'] or '', 'emails': emails,
+                             'celular': c['celular'] or '', 'cel': TR._cel(c['celular']), 'principal': bool(c['principal']),
+                             'financeiro': bool(c['financeiro']), 'padrao': any(e in padrao for e in emails)})
+    whats = [c for c in contatos if c['cel']]
+    if not whats and TR._cel(t.get('celular')):
+        whats = [{'nome': 'celular do cadastro (CNPJ)', 'celular': t['celular'], 'cel': TR._cel(t['celular']), 'financeiro': False, 'principal': False}]
+    email_cab = destinatarios[0]['email'] if destinatarios else ''
+    fone_cab = (whats[0]['celular'] if whats else '') or t.get('celular') or t.get('telefone') or ''
+
+    # ── composição do honorário: a lista do boleto; o boleto do Conexa não trazia, então vale o contrato ──
+    composicao, comp_fonte, comp_soma = [], '', 0.0
+    if boleto and boleto.get('itens_json'):
+        composicao = [{'nome': i.get('nome') or '', 'valor': float(i.get('valor') or 0), 'nota': i.get('emite_nota', True)}
+                      for i in boleto['itens_json']]
+        comp_fonte = 'boleto'
+    elif cid:
+        ctr = execute_query('SELECT id, descricao, valor FROM fin_contratos WHERE cliente_id = %s AND ativo = 1 ORDER BY id DESC LIMIT 1',
+                            (cid,), fetch=True, fetch_one=True)
+        if ctr:
+            from models.fin_contrato import FinContrato
+            composicao = [{'nome': i['descricao'], 'valor': float(i['valor'] or 0), 'nota': True} for i in FinContrato.itens(ctr['id'])]
+            comp_fonte = 'contrato'
+    comp_soma = sum(i['valor'] for i in composicao)
+    comp_difere = bool(composicao) and abs(comp_soma - float(t['valor'] or 0)) > 0.01
+
     aba = request.args.get('aba') if request.args.get('aba') in ('rec', 'abe', 'atr', 'ina', 'perd') else 'abe'
     emp = request.args.get('emp') or None
     volta = url_for('financeiro.titulos', aba=aba, emp=emp) + f'#cob={titulo_id}'
-    cel = TR._cel(t.get('celular'))
+    cel = whats[0]['cel'] if whats else ''
     nome = TR._nome(t['contraparte_nome'])
     return render_template(
         'financeiro/_titulo_cobranca.html', t=t, aberto=aberto, saldo=saldo, saldo_txt=TR.brl(saldo), valor_txt=TR.brl(t['valor']),
@@ -173,6 +218,9 @@ def titulo_cobranca(titulo_id):
         iniciais=''.join(p[0] for p in nome.split()[:2]).upper(),
         boleto=boleto, boletos=boletos, nota=nota, outros=outros, outros_tot=TR.brl(sum(float(o['v']) for o in outros)),
         cli_n=cli_n, cli_tot=TR.brl(cli_tot), regua=regua, eventos=ev, pagtos=pagtos,
+        destinatarios=destinatarios, contatos=contatos, whats=whats, email_cab=email_cab, fone_cab=fone_cab,
+        composicao=composicao, comp_fonte=comp_fonte, comp_soma=TR.brl(comp_soma),
+        comp_difere=comp_difere, nota_pdf_ok=bool(nota and nota.get('situacao') in ('autorizada', 'cancelada')),
         BOLETO_ROTULO=TR.BOLETO_ROTULO, SIT_BOLETO=SITUACOES, volta=volta, email_padrao=t.get('email') or '',
         cel=cel, msg=TR._msg_cobranca([t], saldo) if cel else '',
         cancelavel=t['status'] == 'aberto' and not t['valor_baixado'], hoje=hoje, hoje_iso=hoje.isoformat())

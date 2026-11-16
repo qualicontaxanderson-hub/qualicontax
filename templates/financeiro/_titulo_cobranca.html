@@ -1,9 +1,10 @@
 {# Janela "Cobrança" de um honorário a receber (15/11/2026) — abre ao clicar no cartão da tela Títulos.
    Anderson: "uma tela bonita a qual mostre o que está envolvido naquele honorário, quais são as cobranças";
    "baixar mediante depósito — nada de baixar aleatório — ou então excluir a cobrança"; "tudo numa tela só sem
-   precisar ficar rolando". Tudo cabe na tela: cabeçalho (cliente + régua de 12 meses + valor), faixa de dados,
-   e três colunas: linha do tempo | boleto | ações + outros em aberto. O CSS (tj-*) mora em titulos_receber.html.
-   Variáveis: ver routes/financeiro_titulo_cobranca.py. #}
+   precisar ficar rolando"; "mostrar os detalhes dos boletos (Honorários contábeis + LMC)"; "o e-mail não pode
+   falhar"; "quando houver nota fiscal, ver junto e botão para ir à nota; reenviar os 2 ou só o boleto".
+   Três colunas: linha do tempo | boleto (composição, nota, e-mail) | ações + outros em aberto.
+   O CSS (tj-*) mora em titulos_receber.html. Variáveis: ver routes/financeiro_titulo_cobranca.py. #}
 <div class="tj {{ cls }}">
   <header class="tj-cab">
     <div class="tj-cab-cli">
@@ -13,8 +14,8 @@
         <div class="tj-quem-l2">
           {% if doc %}<code data-copiar data-copiar-rotulo="CPF/CNPJ" title="Clique para copiar">{{ doc | format_cnpj if doc|length == 14 else (doc | format_cpf if doc|length == 11 else doc) }}</code>{% endif %}
           {% for g in grupos %}<span class="tj-chip"><i class="fas fa-layer-group"></i> {{ g }}</span>{% endfor %}
-          {% if t.email %}<span><i class="fas fa-envelope"></i> {{ t.email }}</span>{% endif %}
-          {% if t.celular %}<span><i class="fas fa-mobile-screen"></i> {{ t.celular }}</span>{% endif %}
+          {% if email_cab %}<span title="{{ destinatarios[0].fonte }}"><i class="fas fa-envelope"></i> {{ email_cab }}{% if destinatarios|length > 1 %} +{{ destinatarios|length - 1 }}{% endif %}</span>{% endif %}
+          {% if fone_cab %}<span title="{{ whats[0].nome if whats else 'telefone do cadastro' }}"><i class="fas fa-mobile-screen"></i> {{ fone_cab }}{% if whats %} · {{ whats[0].nome }}{% endif %}</span>{% endif %}
           {% if t.cliente_id %}<a href="{{ url_for('clientes.detalhes', id=t.cliente_id) }}"><i class="fas fa-arrow-up-right-from-square"></i> cadastro</a>{% endif %}
         </div>
         <div class="tj-regua" title="Os últimos 12 meses deste cliente: verde pago, vermelho em aberto, cinza sem honorário">
@@ -48,10 +49,9 @@
         {% endfor %}
       </ol>
       {% if t.perdido_em %}<div class="tj-aviso"><i class="fas fa-quote-left"></i> {{ t.perdido_motivo }}</div>{% endif %}
-      {% if nota %}<a class="tj-linha" href="{{ url_for('financeiro.nota_detalhe', nota_id=nota.id) }}"><i class="fas fa-file-lines"></i><span><b>Nota fiscal {{ ('nº ' ~ nota.numero_nfse) if nota.numero_nfse else ('DPS ' ~ nota.numero_dps) }}</b><small>{{ nota.situacao }}{% if nota.dh_emissao %} · {{ nota.dh_emissao.strftime('%d/%m/%Y') }}{% endif %}</small></span><i class="fas fa-chevron-right"></i></a>{% endif %}
     </section>
 
-    {# ── coluna 2: o boleto ── #}
+    {# ── coluna 2: o que foi cobrado, a nota, o boleto ── #}
     <section class="tj-sec">
       {% if boleto %}
       {% set vivo = boleto.situacao in ('waiting', 'unpaid', 'new') %}
@@ -59,29 +59,54 @@
       <div class="tj-bol-top">
         <div><dt>Valor</dt><dd>{{ boleto.valor | float | format_currency }}</dd></div>
         <div><dt>Vencimento</dt><dd>{{ boleto.vencimento.strftime('%d/%m/%Y') }}</dd></div>
-        {% if boleto.pago_em %}<div><dt>Pago em</dt><dd>{{ boleto.pago_em.strftime('%d/%m/%Y') }}</dd></div>{% else %}<div><dt>Conta</dt><dd>{{ boleto.conta_apelido | nome_proprio }}</dd></div>{% endif %}
+        {% if boleto.pago_em %}<div><dt>Pago em</dt><dd>{{ boleto.pago_em.strftime('%d/%m/%Y') }}</dd></div>{% else %}<div><dt>Banco</dt><dd class="tj-banco" title="{{ boleto.conta_apelido }}">{{ logo_banco(boleto.banco_logo, '#94a3b8', 36, boleto.conta_apelido) }}<span>{{ boleto.banco_nome }}</span></dd></div>{% endif %}
       </div>
+      {% else %}
+      <h4><i class="fas fa-barcode"></i> Boleto</h4>
+      <div class="tj-vazio"><i class="fas fa-barcode"></i><b>Este honorário não tem boleto.</b><span>{% if aberto %}O cliente paga por Pix ou transferência; a baixa entra quando o depósito aparece no extrato.{% else %}Foi pago sem boleto.{% endif %}</span>
+        {% if aberto and pode_rota('financeiro.nota_nova') %}<a class="tj-b" href="{{ url_for('financeiro.nota_nova', emp=t.empresa_id) }}"><i class="fas fa-plus"></i> Nova cobrança</a>{% endif %}</div>
+      {% endif %}
+
+      {# o que está sendo cobrado #}
+      {% if composicao %}
+      <div class="tj-comp">
+        <dt>O que está sendo cobrado <small>· {{ 'conforme o boleto' if comp_fonte == 'boleto' else 'conforme o contrato de honorários' }}</small></dt>
+        {% for i in composicao %}<div><span>{{ i.nome }}{% if not i.nota and nota %} <em>só boleto</em>{% endif %}</span><b>{{ i.valor | format_currency }}</b></div>{% endfor %}
+        <div class="tj-comp-tot"><span>Total</span><b>{{ comp_soma }}</b></div>
+        {% if comp_difere %}<p class="tj-comp-aviso"><i class="fas fa-triangle-exclamation"></i> O contrato soma {{ comp_soma }}; este honorário é de {{ valor_txt }}. O boleto veio do Conexa sem a lista do que foi cobrado.</p>{% endif %}
+      </div>
+      {% endif %}
+
+      {# nota fiscal #}
+      {% if nota %}
+      <div class="tj-nf">
+        <span class="tj-nf-ico"><i class="fas fa-file-lines"></i></span>
+        <span class="tj-nf-txt"><b>Nota fiscal {{ ('nº ' ~ nota.numero_nfse) if nota.numero_nfse else ('DPS ' ~ nota.numero_dps) }}</b><small>{{ nota.situacao }}{% if nota.dh_emissao %} · emitida em {{ nota.dh_emissao.strftime('%d/%m/%Y') }}{% endif %}</small></span>
+        {% if nota_pdf_ok and pode_rota('financeiro.nota_pdf') %}<a class="tj-ib tj-ib-mini" href="{{ url_for('financeiro.nota_pdf', nota_id=nota.id) }}" target="_blank" rel="noopener" title="Ver a nota (PDF)"><i class="fas fa-eye"></i>Ver nota</a>{% endif %}
+        <a class="tj-ib tj-ib-mini" href="{{ url_for('financeiro.nota_detalhe', nota_id=nota.id) }}" title="Ir para a página da nota fiscal"><i class="fas fa-arrow-right"></i>Ir à nota</a>
+      </div>
+      {% endif %}
+
+      {% if boleto %}
       {% if boleto.linha_digitavel %}
       <div class="tj-copia"><dt>Linha digitável</dt><code>{{ boleto.linha_digitavel }}</code><button type="button" class="tj-cp" data-copiar data-copiar-rotulo="Linha digitável" data-copiar-texto="{{ boleto.linha_digitavel }}" title="Copiar"><i class="fas fa-copy"></i></button></div>
       {% endif %}
-      {% if boleto.pix_copia_cola %}
-      <div class="tj-copia"><dt>Pix copia e cola</dt><code>{{ boleto.pix_copia_cola }}</code><button type="button" class="tj-cp" data-copiar data-copiar-rotulo="Pix" data-copiar-texto="{{ boleto.pix_copia_cola }}" title="Copiar"><i class="fas fa-copy"></i></button></div>
-      {% endif %}
       {% if boleto.erro %}<div class="tj-aviso tj-aviso-erro"><i class="fas fa-triangle-exclamation"></i> {{ boleto.erro }}</div>{% endif %}
       <div class="tj-bol-acoes">
+        {% if boleto.pix_copia_cola %}<button type="button" class="tj-ib tj-ib-pix" data-copiar data-copiar-rotulo="Pix copia e cola" data-copiar-texto="{{ boleto.pix_copia_cola }}" title="Copia o Pix copia e cola do boleto"><i class="fas fa-qrcode"></i>Copiar Pix</button>{% endif %}
         {% if boleto.pdf_url %}
-        <a class="tj-ib" href="{{ url_for('financeiro.boleto_pdf', boleto_id=boleto.id) }}" target="_blank" rel="noopener"><i class="fas fa-eye"></i>Ver</a>
-        <a class="tj-ib" href="{{ url_for('financeiro.boleto_pdf', boleto_id=boleto.id, baixar=1) }}"><i class="fas fa-download"></i>PDF</a>
+        <a class="tj-ib" href="{{ url_for('financeiro.boleto_pdf', boleto_id=boleto.id) }}" target="_blank" rel="noopener"><i class="fas fa-eye"></i>Ver boleto</a>
+        <a class="tj-ib" href="{{ url_for('financeiro.boleto_pdf', boleto_id=boleto.id, baixar=1) }}"><i class="fas fa-download"></i>Baixar PDF</a>
         {% endif %}
         {% if boleto.link %}<a class="tj-ib" href="{{ boleto.link }}" target="_blank" rel="noopener"><i class="fas fa-arrow-up-right-from-square"></i>Página</a>{% endif %}
         {% if vivo and pode_rota('financeiro.boleto_sincronizar') %}<form method="POST" action="{{ url_for('financeiro.boleto_sincronizar', boleto_id=boleto.id) }}"><input type="hidden" name="volta" value="{{ volta }}"><button class="tj-ib"><i class="fas fa-rotate"></i>Conferir</button></form>{% endif %}
-        {% if vivo and pode_rota('financeiro.boleto_cancelar') %}<form method="POST" action="{{ url_for('financeiro.boleto_cancelar', boleto_id=boleto.id) }}" onsubmit="return confirm('Cancelar este boleto na Efí?');"><input type="hidden" name="volta" value="{{ volta }}"><button class="tj-ib tj-ib-verm"><i class="fas fa-ban"></i>Cancelar</button></form>{% endif %}
+        {% if vivo and pode_rota('financeiro.boleto_cancelar') %}<form method="POST" action="{{ url_for('financeiro.boleto_cancelar', boleto_id=boleto.id) }}" onsubmit="return confirm('Cancelar este boleto no banco? O cliente não vai mais conseguir pagá-lo.');"><input type="hidden" name="volta" value="{{ volta }}"><button class="tj-ib tj-ib-verm"><i class="fas fa-ban"></i>Cancelar</button></form>{% endif %}
       </div>
       {% if boleto.situacao in ('waiting', 'unpaid') and pode_rota('financeiro.boleto_vencimento') %}
       <form method="POST" action="{{ url_for('financeiro.boleto_vencimento', boleto_id=boleto.id) }}" class="tj-form">
         <input type="hidden" name="volta" value="{{ volta }}">
-        <label for="tjv_{{ boleto.id }}">Mudar o vencimento</label>
-        <div><input type="date" id="tjv_{{ boleto.id }}" name="vencimento" required min="{{ hoje_iso }}"><button type="submit"><i class="fas fa-calendar-check"></i> Mudar na Efí</button></div>
+        <label for="tjv_{{ boleto.id }}">Prorrogar vencimento <small>· o mesmo boleto passa a vencer na data nova</small></label>
+        <div><input type="date" id="tjv_{{ boleto.id }}" name="vencimento" required min="{{ hoje_iso }}"><button type="submit"><i class="fas fa-calendar-check"></i> Prorrogar</button></div>
       </form>
       {% elif boleto.situacao == 'expired' and aberto and pode_rota('financeiro.boleto_reemitir') %}
       <form method="POST" action="{{ url_for('financeiro.boleto_reemitir', boleto_id=boleto.id) }}" class="tj-form" onsubmit="return confirm('Emitir um boleto NOVO para este honorário?');">
@@ -90,18 +115,6 @@
         <div><input type="date" id="tjr_{{ boleto.id }}" name="vencimento" required min="{{ hoje_iso }}"><button type="submit" class="tj-prim"><i class="fas fa-redo"></i> Reemitir</button></div>
       </form>
       {% endif %}
-      {% if boleto.situacao not in ('canceled', 'erro') and pode_rota('financeiro.boleto_enviar_email') %}
-      <form method="POST" action="{{ url_for('financeiro.boleto_enviar_email', boleto_id=boleto.id) }}" class="tj-form"{% if boleto.email_enviado_em %} onsubmit="return confirm('Já foi enviado em {{ boleto.email_enviado_em.strftime('%d/%m/%Y %H:%M') }}. Enviar de novo?');"{% endif %}>
-        <input type="hidden" name="volta" value="{{ volta }}">
-        <label for="tje_{{ boleto.id }}">{{ 'Reenviar' if boleto.email_enviado_em else 'Enviar' }} por e-mail {% if boleto.email_enviado_em %}<small>· enviado {{ boleto.email_enviado_em.strftime('%d/%m %H:%M') }}{% if boleto.abriu_boleto_em %} · aberto {{ boleto.abriu_boleto_em.strftime('%d/%m %H:%M') }}{% endif %}</small>{% endif %}</label>
-        <div><input type="text" id="tje_{{ boleto.id }}" name="para" value="{{ boleto.pagador_email or email_padrao }}" placeholder="e-mail do cliente"><button type="submit"><i class="fas fa-paper-plane"></i> Enviar</button></div>
-      </form>
-      {% endif %}
-      {% if boleto.itens_json %}<div class="tj-itens">{% for i in boleto.itens_json %}<span>{{ i.nome }}<b>{{ i.valor | float | format_currency }}</b></span>{% endfor %}</div>{% endif %}
-      {% else %}
-      <h4><i class="fas fa-barcode"></i> Boleto</h4>
-      <div class="tj-vazio"><i class="fas fa-barcode"></i><b>Este honorário não tem boleto.</b><span>{% if aberto %}O cliente paga por Pix ou transferência; a baixa entra quando o depósito aparece no extrato.{% else %}Foi pago sem boleto.{% endif %}</span>
-        {% if aberto and pode_rota('financeiro.nota_nova') %}<a class="tj-b" href="{{ url_for('financeiro.nota_nova', emp=t.empresa_id) }}"><i class="fas fa-plus"></i> Nova cobrança</a>{% endif %}</div>
       {% endif %}
       {% if pagtos %}
       <div class="tj-pag"><dt>Como foi pago</dt>
@@ -116,7 +129,6 @@
       <section class="tj-sec tj-sec-acoes">
         <h4><i class="fas fa-bolt"></i> O que fazer</h4>
         {% if pode_rota('financeiro.vincular_achar') %}<a class="tj-b tj-b-prim" href="{{ url_for('financeiro.vincular_achar', titulo_id=t.id) }}"><i class="fas fa-building-columns"></i><span>Baixar com o depósito<small>procura o crédito no extrato do banco</small></span></a>{% endif %}
-        {% if cel %}<a class="tj-b tj-b-wa" href="https://wa.me/{{ cel }}?text={{ msg | urlencode }}" target="_blank" rel="noopener"><i class="fab fa-whatsapp"></i><span>Cobrar no WhatsApp<small>{{ t.celular }}</small></span></a>{% endif %}
         <div class="tj-b-par">
           {% if cancelavel and pode_rota('financeiro.titulo_perdido') %}<button type="button" class="tj-b tj-b-roxo" onclick="txPerdido({{ t.id }}, {{ t.contraparte_nome | tojson | forceescape }})"><i class="fas fa-user-slash"></i><span>Perdido</span></button>{% endif %}
           {% if cancelavel and pode_rota('financeiro.titulo_cancelar') %}<button type="button" class="tj-b tj-b-verm" onclick="txAcao('cancelar', {{ t.id }})"><i class="fas fa-ban"></i><span>Excluir</span></button>{% endif %}
@@ -127,6 +139,47 @@
       <section class="tj-sec tj-sec-acoes"><h4><i class="fas fa-bolt"></i> O que fazer</h4>
         <button type="button" class="tj-b" onclick="txVoltar({{ t.id }})"><i class="fas fa-rotate-left"></i><span>Voltar para em aberto</span></button></section>
       {% endif %}
+
+      {% set pode_email = boleto and boleto.situacao not in ('canceled', 'erro') and pode_rota('financeiro.boleto_enviar_email') %}
+      <section class="tj-sec tj-sec-email">
+        <h4><i class="fas fa-address-book"></i> Contatos <small>· e-mail e WhatsApp{% if boleto and boleto.email_enviado_em %} · e-mail enviado {{ boleto.email_enviado_em.strftime('%d/%m %H:%M') }}{% if boleto.abriu_boleto_em %} · cliente abriu {{ boleto.abriu_boleto_em.strftime('%d/%m %H:%M') }}{% endif %}{% endif %}</small></h4>
+        {% if pode_email %}<form method="POST" action="{{ url_for('financeiro.boleto_enviar_email', boleto_id=boleto.id) }}" class="tj-form tj-form-email tj-form-solta"{% if boleto.email_enviado_em %} onsubmit="return confirm('Já foi enviado em {{ boleto.email_enviado_em.strftime('%d/%m/%Y %H:%M') }}. Enviar de novo?');"{% endif %}>
+        <input type="hidden" name="volta" value="{{ volta }}">{% endif %}
+        {% macro wa(cel, celular, nome) -%}
+          {% if cel %}<a class="tj-wa" href="https://wa.me/{{ cel }}?text={{ msg | urlencode }}" target="_blank" rel="noopener" title="WhatsApp {{ celular }} · abre a conversa com a mensagem de cobrança pronta; nada sai sozinho"><i class="fab fa-whatsapp"></i></a>
+          {%- else %}<span class="tj-wa off" title="{{ nome }} está sem celular no cadastro"><i class="fas fa-phone-slash"></i></span>{% endif %}
+        {%- endmacro %}
+        <div class="tj-ctt">
+          {% for c in contatos %}
+            {% set e = c.emails[0] if c.emails else '' %}
+            <label{% if not e %} class="sem-email"{% endif %}>
+              {% if e and pode_email %}<input type="checkbox" name="para_chk" value="{{ e }}"{% if c.padrao %} checked{% endif %}>{% else %}<i class="fas fa-user tj-ctt-ico"></i>{% endif %}
+              <b>{{ c.nome }}</b><small>{{ e or 'sem e-mail' }}{% if c.celular %} · {{ c.celular }}{% endif %}</small>
+              {% if c.financeiro %}<em>Financeiro</em>{% elif c.principal %}<em class="sec">principal</em>{% endif %}
+              {{ wa(c.cel, c.celular, c.nome) }}
+            </label>
+            {% for e2 in c.emails[1:] %}
+            <label>{% if pode_email %}<input type="checkbox" name="para_chk" value="{{ e2 }}"{% if c.padrao %} checked{% endif %}>{% else %}<i class="fas fa-user tj-ctt-ico"></i>{% endif %}<b>{{ c.nome }}</b><small>{{ e2 }}</small></label>
+            {% endfor %}
+          {% endfor %}
+          {% set emails_ctt = contatos | map(attribute='emails') | sum(start=[]) %}
+          {% if (t.email and (t.email | lower) not in emails_ctt) or (not contatos and t.celular) %}
+            <label class="cnpj">{% if t.email and pode_email %}<input type="checkbox" name="para_chk" value="{{ t.email | lower }}"{% if not contatos %} checked{% endif %}>{% else %}<i class="fas fa-building tj-ctt-ico"></i>{% endif %}
+              <b>Cadastro (CNPJ)</b><small>{{ t.email or 'sem e-mail' }}{% if t.celular %} · {{ t.celular }}{% endif %}</small><em class="sec">último recurso</em>{{ wa(cel if not contatos else '', t.celular, 'o cadastro') }}</label>
+          {% endif %}
+          {% if not contatos and not t.email %}<div class="tj-dest tj-dest-falta"><i class="fas fa-triangle-exclamation"></i> A empresa não tem contato com e-mail nem celular{% if t.cliente_id %}: <a href="{{ url_for('clientes.detalhes', id=t.cliente_id) }}#contatos">cadastrar</a>{% endif %}.</div>{% endif %}
+        </div>
+        {% if pode_email %}
+        <div><input type="text" id="tje_{{ boleto.id }}" name="para" value="" placeholder="outro e-mail (opcional)"><button type="submit" class="tj-prim"><i class="fas fa-paper-plane"></i> {{ 'Reenviar' if boleto.email_enviado_em else 'Enviar' }}</button></div>
+        {% if nota %}
+        <div class="tj-radios">
+          <label><input type="radio" name="so_boleto" value="0" checked> Boleto e nota fiscal</label>
+          <label><input type="radio" name="so_boleto" value="1"> Só o boleto</label>
+        </div>
+        {% endif %}
+        </form>
+        {% endif %}
+      </section>
 
       <section class="tj-sec tj-sec-outros">
         <h4><i class="fas fa-list"></i> Outros em aberto <small>{% if outros %}· {{ outros|length }} · {{ outros_tot }}{% endif %}</small></h4>
