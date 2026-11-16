@@ -32,8 +32,12 @@ PENDENCIAS_EMPRESA = [
     # conflito com o cadastro precisa de alguém olhar no Sintegra.
     ('ie_rural', 'IE de produtor rural', 'verm', 'produtor rural sem inscrição estadual (uma por propriedade)'),
     ('ie_conferir', 'Conferir IE', 'verm', 'inscrição estadual em conflito: conferir no Sintegra e salvar ou excluir'),
+    ('telefone_ruim', 'Corrigir telefone', 'verm', 'telefone ou celular gravado num formato que não vale (veio da migração): corrigir ou apagar'),
     ('grupo', 'Grupo', 'cinza', 'grupo de empresas'),
-    ('celular', 'Celular', 'cinza', 'celular de contato'),
+    # 15/11/2026 (Anderson): "no cadastro está obrigado a colocar o CELULAR ... deixar puxar o que vier e não colocar
+    # obrigatório... somente no Cadastro do Contato" — na empresa (PJ) celular deixou de ser pendência; na pessoa
+    # física o contato É a própria pessoa, então continua.
+    ('celular', 'Celular', 'cinza', 'celular da pessoa'),
     ('ramo', 'Ramo', 'cinza', 'ramo de atividade'),
     ('contador', 'Contador', 'cinza', 'contador responsável'),
     ('origem', 'Origem', 'cinza', 'aberta pela Qualicontax ou contabilidade anterior'),
@@ -42,7 +46,8 @@ PENDENCIAS_AVULSO = [
     ('email', 'E-mail', 'verm', 'sem e-mail'),
     ('regime', 'Regime', 'verm', 'PJ com regime tributário em branco: Simples, Lucro Presumido, Lucro Real ou MEI'),
     ('contato_celular', 'Celular do contato', 'amb', 'há contato sem celular (obrigatório desde 05/11/2026)'),
-    ('celular', 'Celular', 'amb', 'sem celular'),
+    ('telefone_ruim', 'Corrigir telefone', 'verm', 'telefone ou celular gravado num formato que não vale (veio da migração): corrigir ou apagar'),
+    ('celular', 'Celular', 'amb', 'pessoa física sem celular'),
     ('grupo', 'Grupo', 'cinza', 'sem grupo de empresas'),
     ('ramo', 'Ramo', 'cinza', 'sem ramo de atividade'),
     ('conferir', 'Conferir', 'verm', 'há uma observação pedindo conferência'),
@@ -52,7 +57,7 @@ PENDENCIAS_AVULSO = [
 # Tabelas derivadas em vez de subconsulta por linha: 5,2 s → 1,1 s no Railway, mesmo resultado (medido 06/11/2026).
 _SQL_EMPRESAS = """
 SELECT c.id, c.numero_cliente, c.nome_razao_social, c.nome_fantasia, c.cpf_cnpj, c.tipo_pessoa, c.situacao,
-       c.nire, c.inscricao_municipal, c.inscricao_estadual, c.email, c.celular, c.cobranca, c.conexa_id,
+       c.nire, c.inscricao_municipal, c.inscricao_estadual, c.email, c.celular, c.telefone, c.cobranca, c.conexa_id,
        c.aberta_pela_casa, c.contabilidade_anterior_id, c.regime_tributario, c.observacoes,
        COALESCE(s.n, 0) AS n_socios,
        COALESCE(k.n_email, 0) AS n_contatos_email,
@@ -102,6 +107,18 @@ SELECT c.id, c.nome_razao_social, c.cpf_cnpj, c.tipo_pessoa, c.situacao, c.email
 
 def _vazio(v):
     return v is None or str(v).strip() == ''
+
+
+def fone_valido(v):
+    """10 ou 11 dígitos, sem enchimento (000..., dígito repetido) — a mesma regra de routes/clientes._telefone_valido."""
+    d = ''.join(ch for ch in str(v or '') if ch.isdigit())
+    return len(d) in (10, 11) and len(set(d)) > 1 and not d.startswith('0')
+
+
+def fone_ruim(c):
+    """Telefone/celular PREENCHIDO num formato que não vale (ex.: "1114766513;111653737" do Conexa). Desde 15/11/2026
+    não trava mais o salvar: vai para o A CADASTRAR como "Corrigir telefone"."""
+    return any(not _vazio(c.get(k)) and not fone_valido(c.get(k)) for k in ('telefone', 'celular'))
 
 
 def empresas_pendentes(ocultas=frozenset()):
@@ -155,9 +172,11 @@ def _pend_empresa(c):
         p.append('ie_conferir')
     if c['n_contatos_sem_celular']:
         p.append('contato_celular')
+    if fone_ruim(c):
+        p.append('telefone_ruim')
     if not c['n_grupos']:
         p.append('grupo')
-    if _vazio(c['celular']):
+    if not pj and _vazio(c['celular']):
         p.append('celular')
     if not c['n_ramos']:
         p.append('ramo')
@@ -188,7 +207,9 @@ def _pend_avulso(c):
         p.append('regime')
     if c['n_contatos_sem_celular']:
         p.append('contato_celular')
-    if _vazio(c['celular']):
+    if fone_ruim(c):
+        p.append('telefone_ruim')
+    if c['tipo_pessoa'] == 'PF' and _vazio(c['celular']):
         p.append('celular')
     if not c['n_grupos']:
         p.append('grupo')
@@ -231,7 +252,7 @@ def contadores(lista, catalogo):
 # que abre já editável. O A CADASTRAR usa o mesmo mapa: clicar no NIRE leva ao NIRE.
 ALVO = {
     'nire': 'campo-nire', 'nire_errado': 'campo-nire', 'im': 'campo-im', 'ie': 'campo-ie', 'regime': 'campo-regime',
-    'cobranca': 'campo-cobranca', 'celular': 'campo-celular', 'ramo': 'campo-ramos',
+    'cobranca': 'campo-cobranca', 'celular': 'campo-celular', 'telefone_ruim': 'campo-telefone', 'ramo': 'campo-ramos',
     'origem': 'campo-origem', 'conferir': 'campo-observacoes',
     'grupo': 'campo-grupo', 'socios': 'socios', 'email': 'contatos', 'contato_celular': 'contatos',
     'contato': 'contatos', 'contador': 'contadores', 'documento': 'dados-pessoais',
@@ -240,7 +261,7 @@ ALVO = {
 
 _SQL_UM = """
 SELECT c.id, c.avulso, c.tipo_pessoa, c.nire, c.inscricao_municipal, c.inscricao_estadual, c.email, c.celular,
-       c.cobranca, c.aberta_pela_casa, c.contabilidade_anterior_id, c.regime_tributario, c.observacoes,
+       c.telefone, c.cobranca, c.aberta_pela_casa, c.contabilidade_anterior_id, c.regime_tributario, c.observacoes,
        (SELECT COUNT(*) FROM socios_clientes s WHERE s.cliente_id = c.id AND s.ativo = 1) AS n_socios,
        (SELECT COALESCE(SUM(s.percentual_participacao), 0) FROM socios_clientes s WHERE s.cliente_id = c.id AND s.ativo = 1) AS pct_socios,
        (SELECT COUNT(*) FROM contatos_clientes k WHERE k.cliente_id = c.id AND k.ativo = 1) AS n_contatos,
@@ -320,12 +341,12 @@ def pendencias_do_cadastro(cliente_id):
 
     # O que não se aplica a este cadastro (ex.: NIRE de pessoa física) não entra em nenhuma das listas.
     so_pj = {'nire', 'nire_errado', 'im', 'ie', 'socios', 'regime', 'email', 'origem'} if not avulso else {'regime'}
-    so_pf = {'contato', 'documento', 'ie_rural'} if not avulso else set()
+    so_pf = ({'contato', 'documento', 'ie_rural'} if not avulso else set()) | {'celular'}
     faltam, ok = [], []
     for k, rotulo, cor, ajuda in catalogo:
         if (k in so_pj and not pj) or (k in so_pf and pj):
             continue
-        if k in ('conferir', 'ie_conferir', 'nire_errado') and k not in p:
+        if k in ('conferir', 'ie_conferir', 'nire_errado', 'telefone_ruim') and k not in p:
             continue
         if k == 'ie_rural' and not c['n_ramo_rural']:
             continue                      # só o produtor rural precisa de IE

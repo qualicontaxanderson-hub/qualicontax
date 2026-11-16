@@ -932,7 +932,7 @@
             {% if pj %}<a href="#registros"><i class="qb-pt qb-pt-{{ bol(['nire', 'nire_errado', 'im', 'ie', 'ie_conferir']) }}"></i>Registros</a>{% endif %}
             {% if pode_fin %}<a href="#financeiro"><i class="qb-pt qb-pt-{{ bol(['cobranca']) if contrato else ('verm' if 'cobranca' in fcor else 'amb') }}"></i>Financeiro</a>{% endif %}
             <a href="#regime"><i class="qb-pt qb-pt-{{ bol(['regime', 'origem', 'conferir']) }}"></i>{{ 'Regime' if pj else 'Contrato' }}</a>
-            <a href="#contato-empresa"><i class="qb-pt qb-pt-{{ bol(['celular'] + (['email'] if falta.avulso else [])) }}"></i>Contato</a>
+            <a href="#contato-empresa"><i class="qb-pt qb-pt-{{ bol(['celular', 'telefone_ruim'] + (['email'] if falta.avulso else [])) }}"></i>Contato</a>
             <a href="#grupo-ramo"><i class="qb-pt qb-pt-{{ bol(['grupo', 'ramo', 'contador']) }}"></i>Grupo e ramo</a>
             {% if not pj %}<a href="#dados-pessoais"><i class="qb-pt qb-pt-{{ bol(['documento']) }}"></i>Dados pessoais</a>{% endif %}
             {% if pj %}<a href="#socios"><i class="qb-pt qb-pt-{{ bol(['socios']) }}"></i>Sócios</a>{% else %}<a href="#socio-em"><i class="qb-pt qb-pt-cinza"></i>Sócio em</a>{% endif %}
@@ -951,7 +951,7 @@
             <section class="qb-b qb-id s8" id="identificacao" data-copiar-bloco>
                 <div class="qb-id-acoes">
                     <a href="#" id="btnVoltarGrupo" class="qb-btn-v" style="display:none;"><i class="fas fa-arrow-left"></i> Voltar ao grupo</a>
-                    <a href="{{ url_for('clientes.index') }}" id="btnVoltar" class="qb-btn-v"><i class="fas fa-arrow-left"></i> <span>Voltar</span></a>
+                    <a href="{{ url_for('clientes.avulsos') if cliente.avulso else url_for('clientes.index') }}" id="btnVoltar" class="qb-btn-v"><i class="fas fa-arrow-left"></i> <span>Voltar</span></a>
                     {% if qualif[0] %}<button type="button" class="qb-btn-v" data-copiar-texto="{{ qualif[0] }}" data-copiar-rotulo="Qualificação"
                             title="Copia o parágrafo de qualificação para contrato{% if qualif[1] %} — falta no cadastro: {{ qualif[1]|join(', ') }}{% endif %}"><i class="fas fa-file-signature"></i> Qualificação{% if qualif[1] %} <i class="fas fa-triangle-exclamation" style="color:#fbbf24;"></i>{% endif %}</button>{% endif %}
                     <button type="button" class="qb-btn-v" data-copiar-ficha="{{ cliente.nome_razao_social }}" title="Copia identificação, contato, dados fiscais e endereços"><i class="far fa-copy"></i> Copiar ficha</button>
@@ -1119,9 +1119,10 @@
             <!-- CONTATO DA EMPRESA -->
             {% set cel_dig = (cliente.celular or '') | replace('(', '') | replace(')', '') | replace('-', '') | replace(' ', '') %}
             <section class="qb-b s4" id="contato-empresa" data-copiar-bloco>
-                <div class="qb-bh"><span class="qb-ico i-ciano"><i class="fas fa-phone"></i></span><h3>Contato da empresa</h3>{{ selo(['celular'] + (['email'] if falta.avulso else [])) }}</div>
-                {{ campo('celular', 'Celular', cliente.celular, ancora='campo-celular', chave='celular', ph='(11) 98888-7777', ajuda='Obrigatório: DDD + número.', mono=True) }}
-                {{ campo('telefone', 'Telefone', cliente.telefone, ph='(11) 3333-4444', mono=True) }}
+                <div class="qb-bh"><span class="qb-ico i-ciano"><i class="fas fa-phone"></i></span><h3>Contato da empresa</h3>{{ selo(['celular', 'telefone_ruim'] + (['email'] if falta.avulso else [])) }}</div>
+                {# 15/11/2026: celular obrigatório só na pessoa física; na empresa vale o do CONTATO #}
+                {{ campo('celular', 'Celular', cliente.celular, ancora='campo-celular', chave='celular', ph='(11) 98888-7777', ajuda=('DDD + número.' if pj else 'Obrigatório: DDD + número.'), mono=True) }}
+                {{ campo('telefone', 'Telefone', cliente.telefone, ancora='campo-telefone', chave='telefone_ruim', ph='(11) 3333-4444', mono=True) }}
                 {{ campo('email', 'E-mail', cliente.email, ancora='campo-email', chave=('email' if falta.avulso else ''), ph='nome@empresa.com.br', ajuda=('No PJ é o e-mail do CNPJ; boletos e documentos vão para os e-mails dos CONTATOS.' if pj else '')) }}
                 {% if cliente.celular or cliente.email %}
                 <div class="qb-acoes-c" data-nocopiar>

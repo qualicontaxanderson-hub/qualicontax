@@ -30,6 +30,9 @@
 {% endfor %}
 {# a fila de sócios é uma aba de A CADASTRAR (05/11/2026) #}
 {% if request.path.startswith('/clientes/socios-pendentes') %}{% set _ativa.pref = '/clientes/a-cadastrar' %}{% endif %}
+{# a ficha e o editor de um AVULSO acendem AVULSOS, não CLIENTES (Anderson, 15/11/2026: "a Midas está como AVULSOS,
+   quando eu clico em cima ele vai para clientes") #}
+{% if _ativa.pref == '/clientes' and cliente is defined and cliente and cliente.avulso %}{% set _ativa.pref = '/clientes/avulsos' %}{% endif %}
 
 <nav class="nav-fiscal" aria-label="Navegação de Cadastros">
     <div class="nav-fiscal-track">

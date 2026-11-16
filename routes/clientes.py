@@ -242,11 +242,13 @@ def _obrigatorios_faltando(form, avulso=False, cliente_id=None):
                                               (cliente_id,), fetch=True, fetch_one=True)['n']
         if not ja_tem and not _contatos_do_form(form) and not _telefone_valido(form.get('celular')):
             falta.append('contato (nome e celular): a pessoa física precisa de ao menos um')
-    if not _telefone_valido(form.get('celular')):
+    # 15/11/2026: celular só falta na pessoa física (na empresa vem o que a Receita mandar; o obrigatório é o do contato)
+    if form.get('tipo_pessoa') == 'PF' and not _telefone_valido(form.get('celular')):
         falta.append('celular')
-    tel = form.get('telefone') or ''
-    if re.sub(r'\D', '', tel) and not _telefone_valido(tel):
-        falta.append('telefone (número inválido)')
+    for _k, _rot in (('celular', 'celular (número inválido: DDD + número)'), ('telefone', 'telefone (número inválido)')):
+        _v = form.get(_k) or ''
+        if re.sub(r'\D', '', _v) and not _telefone_valido(_v) and _rot not in falta:
+            falta.append(_rot)
     ids = [int(r) for r in form.getlist('ramos_atividade_ids') if r.strip().isdigit()]
     tipo = 'PF' if form.get('tipo_pessoa') == 'PF' else 'PJ'
     if not ids:
@@ -387,9 +389,15 @@ def _travas(form, avulso=False, cliente_id=None):
         if f == 'grupo de empresas' and not form.get('grupo_id', type=int):
             continue
         if f == 'celular':
-            if not re.sub(r'\D', '', form.get('celular') or ''):
+            continue                          # vazio só FALTA (A CADASTRAR); inválido vem abaixo
+        if f.startswith(('celular (', 'telefone (')) and cliente_id:
+            # 15/11/2026: o número ruim que JÁ estava gravado (migração do Conexa) não impede salvar o resto —
+            # fica no A CADASTRAR como "Corrigir telefone". Digitado agora errado continua barrando.
+            _k = f.split(' ', 1)[0]
+            _ant = execute_query('SELECT %s AS v FROM clientes WHERE id = %%s' % _k, (cliente_id,),
+                                 fetch=True, fetch_one=True) or {}
+            if (_ant.get('v') or '').strip() == (form.get(_k) or '').strip():
                 continue
-            f = 'celular (número inválido: DDD + número)'
         out.append(f)
     if form.get('tipo_pessoa') != 'PF' and AC.nire_errado(form.get('nire')):
         out.append('NIRE (são 11 números: XX.XXX.XXX.XXX)')
@@ -1694,8 +1702,8 @@ def salvar_campos(id):
                 if not re.fullmatch(r'[^@\s]+@[^@\s]+\.[^@\s]+', novo):
                     erros.append('E-mail inválido.')
                     continue
-            if k == 'celular' and not _telefone_valido(novo):
-                erros.append('Celular: digite DDD + número (10 ou 11 dígitos). O celular é obrigatório.')
+            if k == 'celular' and novo and not _telefone_valido(novo):
+                erros.append('Celular: digite DDD + número (10 ou 11 dígitos), ou apague.')
                 continue
             if k == 'telefone' and novo and not _telefone_valido(novo):
                 erros.append('Telefone inválido (DDD + número).')

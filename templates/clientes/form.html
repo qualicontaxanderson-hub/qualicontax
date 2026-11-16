@@ -68,7 +68,8 @@
                 {% if not janela %}
                 <div class="nf-id-acoes">
                     {% if cliente %}<a href="{{ url_for('clientes.detalhes', id=cliente.id) }}" class="qb-btn-v" title="Volta para a ficha sem salvar"><i class="fas fa-id-card"></i> Ver ficha</a>{% endif %}
-                    <a href="{{ url_for('clientes.index') }}" class="qb-btn-v"><i class="fas fa-arrow-left"></i> Clientes</a>
+                    {% if cliente and cliente.avulso %}<a href="{{ url_for('clientes.avulsos') }}" class="qb-btn-v"><i class="fas fa-arrow-left"></i> Avulsos</a>
+                    {% else %}<a href="{{ url_for('clientes.index') }}" class="qb-btn-v"><i class="fas fa-arrow-left"></i> Clientes</a>{% endif %}
                 </div>
                 {% endif %}
             </div>
@@ -564,7 +565,7 @@
                            value="{{ cliente.telefone if cliente else '' }}">
                 </div>
                 <div class="cf-fg cf-s3">
-                    <label class="cf-lbl" for="celular">Celular <span class="cf-req">*</span></label>
+                    <label class="cf-lbl" for="celular">Celular <span class="cf-req pf-only">*</span><span class="cf-opt pj-only">(se a Receita trouxer)</span></label>
                     <input type="text" id="celular" name="celular" class="cf-ctrl phone-mask" placeholder="(00) 00000-0000"
                            value="{{ cliente.celular if cliente else '' }}">
                 </div>
@@ -3016,7 +3017,7 @@ function atualizarResumo() {
         }
         itens.push([typeof CT_SEM_CEL === 'undefined' || !CT_SEM_CEL, 'Celular de todos os contatos', 'a']);
         itens.push([grupo, 'Grupo de empresas', 'c']);
-        itens.push([cel.length >= 10, 'Celular', 'c']);
+        if (!pj) itens.push([cel.length >= 10, 'Celular', 'c']);   // 15/11/2026: na empresa só o do contato
         itens.push([ramo, 'Ramo de atividade', 'c']);
         itens.push([!!val('contador_id'), 'Contador responsável', 'c']);
         if (pj) {
@@ -3027,7 +3028,7 @@ function atualizarResumo() {
         itens.push([!!val('email'), 'E-mail', 'v']);
         if (pj) itens.push([regime, 'Regime tributário', 'v']);
         itens.push([typeof CT_SEM_CEL === 'undefined' || !CT_SEM_CEL, 'Celular de todos os contatos', 'a']);
-        itens.push([cel.length >= 10, 'Celular', 'a']);
+        if (!pj) itens.push([cel.length >= 10, 'Celular', 'a']);
         itens.push([grupo, 'Grupo de empresas', 'c']);
         itens.push([ramo, 'Ramo de atividade', 'c']);
         itens.push([!/conferir/i.test(val('observacoes')), 'Conferir (há "conferir" nas observações)', 'v']);
