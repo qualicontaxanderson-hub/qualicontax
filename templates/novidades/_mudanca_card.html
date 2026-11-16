@@ -1,0 +1,42 @@
+{# Cartão de MUDANÇA no molde de Títulos a receber: faixa de cima na cor do tipo, corpo branco; abre na caixa de leitura.
+   Variáveis: n, eh_admin. #}
+    <article class="gc-card nvc nv-t-{{ n.tipo }} {{ 'nova' if n.nova }}" tabindex="0" role="button" title="Ler inteiro" id="nv{{ n.id }}"
+             data-id="{{ n.id }}" data-tema="{{ n.tema[0] }}" data-rasc="{{ 1 if n.situacao == 'rascunho' else 0 }}" data-tipo="{{ n.tipo }}"
+             data-nova="{{ 1 if n.nova else 0 }}" data-semana="{{ 1 if n.periodo[0] == 0 else 0 }}" data-rea="{{ n.minha_reacao or '' }}"
+             data-duvida="{{ 1 if (n.leitura and n.leitura.duvida) or n.minha_reacao == 'duvida' else 0 }}"
+             data-busca="{{ (n.titulo ~ ' ' ~ n.texto ~ ' ' ~ n.area ~ ' ' ~ (n.tela_nome or ''))|lower }}"
+             data-info='{{ {"id": n.id, "titulo": n.titulo, "texto": n.texto, "tipo": n.tipo, "tipo_rotulo": n.tipo_v[0], "area": n.area, "tela_id": n.tela_id or "", "tela_nome": n.tela_nome or "", "data": n.data.isoformat(), "data_br": n.data.strftime("%d/%m/%Y"), "dia": n.dia, "mes": n.mes, "situacao": n.situacao, "img": n.tem_imagem, "por": n.por_nome or "", "commit": n.commit_hash or "", "atalho": n.atalho, "zap": n.zap, "quando": n.periodo[1], "leitura": (n.leitura if n.leitura is defined else none), "rea": n.minha_reacao or "", "icone": n.area_v[2], "cor": n.area_v[1]}|tojson|forceescape }}'>
+        <div class="nvc-topo">
+            <span class="nvc-tipo"><i class="fas {{ n.tipo_v[1] }}"></i> {{ n.tipo_v[0] }}</span>
+            <span class="nvc-onde" title="{{ 'Para todos' if n.area == 'Todos' else n.area }}{% if n.tela_nome %} › {{ n.tela_nome }}{% endif %}"><i class="fas {{ n.area_v[2] }}"></i>{{ 'Para todos' if n.area == 'Todos' else n.area }}{% if n.tela_nome %} › {{ n.tela_nome }}{% endif %}</span>
+            {% if n.situacao == 'rascunho' %}<span class="nvc-marca rasc">RASCUNHO</span>{% elif n.nova %}<span class="nvc-marca">NOVA</span>{% endif %}
+        </div>
+        <h3 title="{{ n.titulo }}">{{ n.titulo }}</h3>
+        <p class="nvk-res">{{ n.resumo }}</p>
+        <div class="nvc-full">
+            {% for tipo, c in n.blocos %}{% if tipo == 'p' %}<p>{{ c }}</p>{% elif tipo == 'ul' %}<ul>{% for i in c %}<li>{{ i }}</li>{% endfor %}</ul>{% else %}<ol>{% for i in c %}<li>{{ i }}</li>{% endfor %}</ol>{% endif %}{% endfor %}
+            {% if n.tem_imagem %}<div class="nvc-img" data-luz="{{ url_for('novidades.imagem', nid=n.id) }}"><img src="{{ url_for('novidades.imagem', nid=n.id) }}" alt="Print da tela" loading="lazy"></div><p class="nvc-img-rot">clique no print para ampliar</p>{% endif %}
+        </div>
+        <footer class="cli-pe">
+            {% if n.situacao == 'rascunho' %}
+            <span class="cli-selo cli-selo-warn"><i class="fas fa-pen-ruler"></i><span class="cli-selo-t"><b>Rascunho{{ ' · com print' if n.tem_imagem }}</b><small>{{ ('#' ~ n.commit_hash ~ ' · ') if n.commit_hash }}{{ ('quem usa ' ~ n.tela_nome) if n.tela_nome else (('quem usa ' ~ n.area) if n.area != 'Todos' else 'toda a equipe') }}</small></span></span>
+            {% elif eh_admin and n.leitura %}
+                {% if not n.leitura.viram %}<span class="cli-selo cli-selo-bad"><i class="fas fa-eye-slash"></i><span class="cli-selo-t"><b>Ninguém viu ainda</b><small>{{ n.leitura.podem }} pessoas podem ver</small></span></span>
+                {% elif n.leitura.duvida %}<span class="cli-selo cli-selo-warn"><i class="fas fa-circle-question"></i><span class="cli-selo-t"><b>{{ n.leitura.duvida }} com dúvida</b><small>{{ n.leitura.viram }} de {{ n.leitura.podem }} viram</small></span></span>
+                {% elif n.leitura.viram * 10 >= n.leitura.podem * 7 %}<span class="cli-selo cli-selo-ok"><i class="fas fa-circle-check"></i><span class="cli-selo-t"><b>{{ n.leitura.viram }} de {{ n.leitura.podem }} viram</b><small>{{ n.leitura.util }} marcaram Entendi</small></span></span>
+                {% else %}<span class="cli-selo cli-selo-info"><i class="fas fa-eye"></i><span class="cli-selo-t"><b>{{ n.leitura.viram }} de {{ n.leitura.podem }} viram</b><small>{{ n.leitura.podem - n.leitura.viram }} ainda não</small></span></span>{% endif %}
+            {% elif n.minha_reacao == 'util' %}<span class="cli-selo cli-selo-ok"><i class="fas fa-circle-check"></i><span class="cli-selo-t"><b>Você entendeu</b><small>obrigado por avisar</small></span></span>
+            {% elif n.minha_reacao == 'duvida' %}<span class="cli-selo cli-selo-warn"><i class="fas fa-circle-question"></i><span class="cli-selo-t"><b>Você ficou com dúvida</b><small>o suporte responde no Atendimento</small></span></span>
+            {% elif n.nova %}<span class="cli-selo cli-selo-info"><i class="fas fa-bell"></i><span class="cli-selo-t"><b>Novo para você</b><small>primeira vez que aparece</small></span></span>
+            {% else %}<span class="cli-selo cli-selo-sem"><i class="fas fa-eye"></i><span class="cli-selo-t"><b>Já visto</b><small>marque Entendi ou Dúvida</small></span></span>{% endif %}
+            <div class="nvc-acoes">
+                {% if n.situacao == 'rascunho' %}
+                <button type="button" class="fin-btn-tag" data-nv-editar="{{ n.id }}"><i class="fas fa-pen"></i> Editar</button>
+                <button type="button" class="fin-btn-tag pri" data-nv-sit="publicada" data-id="{{ n.id }}" data-confirma="Publicar?"><i class="fas fa-bullhorn"></i> Publicar</button>
+                {% else %}
+                <button type="button" class="fin-btn-tag nv-rea {{ 'on' if n.minha_reacao == 'util' }}" data-rea="util" data-id="{{ n.id }}"><i class="fas fa-thumbs-up"></i> Entendi</button>
+                <button type="button" class="fin-btn-tag nv-rea duv {{ 'on' if n.minha_reacao == 'duvida' }}" data-rea="duvida" data-id="{{ n.id }}" data-at-novo="duvida" data-at-texto="Sobre a novidade «{{ n.titulo }}»: "><i class="fas fa-circle-question"></i> Dúvida</button>
+                {% endif %}
+            </div>
+        </footer>
+    </article>

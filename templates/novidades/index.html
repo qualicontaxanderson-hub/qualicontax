@@ -1,32 +1,39 @@
 {% extends "base.html" %}
 {% block title %}Novidades - Qualicontax{% endblock %}
 {% block content %}
-{# Novidades (15/11/2026) no padrão de Financeiro › COBRANÇAS (Anderson: "faça estilo da cobrança
-   no financeiro"): cabeçalho branco, faixa escura de escopo, KPIs coloridos, Filtros recolhidos,
-   faixa de contagem e cartões .gc-card em grade. Dois níveis: TEMAS → MUDANÇAS. O cartão da
-   mudança tem altura igual e abre numa GAVETA à direita (modelo aprovado 15/11); o editor é em
-   duas colunas com a prévia ao vivo. Estilos .fin-* vêm de identidade.css. #}
+{# Novidades (16/11/2026) no molde de Financeiro › TÍTULOS A RECEBER (Anderson: "a ideia de lá está mais
+   interessante"): faixa verde, os quadros coloridos são as ABAS (Novas para você, Esta semana, Todas,
+   Com dúvida, Rascunhos), a linha de TEMAS filtra, as mudanças vêm agrupadas por DIA em cartões com a
+   faixa de cima na cor do tipo. O cartão abre a caixa de leitura centralizada (15/11); o editor é em
+   duas colunas com a prévia ao vivo. Estilos .ef-*/.fin-* vêm de identidade.css. #}
 {% include 'clientes/_cartao_css.html' %}
 <style>
-/* cartão de MUDANÇA (nível 2) — altura igual, abre na gaveta */
-.nvc { display:flex; flex-direction:column; gap:10px; cursor:pointer; }
-.nvc .gc-head { align-items:flex-start; }
-.nvc .gc-ava { font-size:17px; letter-spacing:0; flex-direction:column; line-height:1.05; width:52px; height:48px; }
-.nvc .gc-ava small { font-size:8.5px; font-weight:800; letter-spacing:.5px; opacity:.85; text-transform:uppercase; }
-.nv-ava-novo { background:linear-gradient(135deg,#16a34a,#0f3d2e) !important; }
-.nv-ava-melhoria { background:linear-gradient(135deg,#0ea5e9,#0c4a6e) !important; }
-.nv-ava-correcao { background:linear-gradient(135deg,#d97706,#78350f) !important; }
-.nv-ava-aviso { background:linear-gradient(135deg,#ef4444,#7f1d1d) !important; }
-.nvc .gc-tit h3 { white-space:normal; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; line-height:1.25; font-size:15px; }
-.nvk-onde { display:flex; align-items:center; gap:6px; font-size:12px; color:#64748b; margin-top:4px; min-width:0; }
-.nvk-onde i { width:14px; text-align:center; flex:none; } .nvk-onde b { color:#0f3d2e; font-weight:700; }
-.nvk-onde span { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-.nvc.nova { border-color:#86efac; box-shadow:0 0 0 3px #dcfce7; }
-.nvc.sel { border-color:#16a34a; box-shadow:0 0 0 3px #bbf7d0; }
+/* cartão de MUDANÇA — molde de Financeiro › Títulos a receber (Anderson, 16/11): faixa de cima cheia na cor
+   do TIPO, corpo branco; a data fica no cabeçalho do dia, como os vencimentos */
+.nv-t-novo     { --cor:#16a34a; --cor-e:#166534; --cor-f:#ecfdf3; --cor-b:#c9f0d7; }
+.nv-t-melhoria { --cor:#2563eb; --cor-e:#1e40af; --cor-f:#eff4ff; --cor-b:#cfdefd; }
+.nv-t-correcao { --cor:#f97316; --cor-e:#c2410c; --cor-f:#fff4ec; --cor-b:#fddcc0; }
+.nv-t-aviso    { --cor:#dc2626; --cor-e:#991b1b; --cor-f:#fef2f2; --cor-b:#fbd5d5; }
+.nvc { display:flex; flex-direction:column; gap:8px; cursor:pointer; padding:0 0 12px !important; overflow:hidden; min-width:0;
+       border-color:var(--cor-b) !important; box-shadow:0 6px 16px rgba(15,23,42,.06); transition:all .15s; }
+.nvc:hover { border-color:var(--cor) !important; box-shadow:0 12px 26px rgba(15,23,42,.12); transform:translateY(-1px); }
+.nvc-topo { display:flex; align-items:center; gap:8px; padding:8px 12px 8px 14px; background:linear-gradient(135deg, var(--cor) 0%, var(--cor-e) 100%); color:#fff; min-width:0; }
+.nvc-tipo { font-size:10.5px; font-weight:800; letter-spacing:.06em; text-transform:uppercase; background:rgba(255,255,255,.22); border-radius:6px; padding:3px 7px; flex:none; display:inline-flex; gap:5px; align-items:center; }
+.nvc-onde { font-size:12px; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-width:0; flex:1; }
+.nvc-onde i { opacity:.85; margin-right:3px; }
+.nvc-marca { flex:none; font-size:9.5px; font-weight:800; letter-spacing:.06em; border-radius:99px; padding:3px 8px; background:#fff; color:var(--cor-e); }
+.nvc-marca.rasc { background:rgba(255,255,255,.22); color:#fff; border:1px dashed rgba(255,255,255,.7); }
+.nvc h3 { margin:2px 16px 0; font-size:15px; line-height:1.3; color:#0f172a; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; text-wrap:balance; }
+.nvk-res { margin:0 16px; font-size:13px; color:#475569; line-height:1.5; display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; flex:1; }
+.nvc .cli-pe { margin:4px 12px 0 16px; } .nvc .cli-selo { min-width:0; }
+.nvc.nova { box-shadow:0 0 0 3px var(--cor-f), 0 6px 16px rgba(15,23,42,.06); }
+.nvc.sel { border-color:var(--cor) !important; box-shadow:0 0 0 3px var(--cor-b); }
 .nf-pill-novo { background:#dcfce7; color:#15803d; } .nf-pill-melhoria { background:#e0f2fe; color:#0369a1; }
 .nf-pill-correcao { background:#fef3c7; color:#92400e; } .nf-pill-aviso { background:#fee2e2; color:#b91c1c; }
-.nvk-res { margin:0; font-size:13px; color:#475569; line-height:1.5; display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; flex:1; }
-.nvc .cli-pe { margin-top:auto; } .nvc .cli-selo { min-width:0; }
+.nv-ava-novo { background:linear-gradient(135deg,#16a34a,#0f3d2e) !important; }
+.nv-ava-melhoria { background:linear-gradient(135deg,#2563eb,#1e40af) !important; }
+.nv-ava-correcao { background:linear-gradient(135deg,#f97316,#c2410c) !important; }
+.nv-ava-aviso { background:linear-gradient(135deg,#dc2626,#991b1b) !important; }
 .cli-selo-info { background:#eff6ff; border-color:#bfdbfe; color:#1d4ed8; }
 .nvc-acoes { display:flex; gap:4px; flex-wrap:wrap; justify-content:flex-end; }
 .nvc-acoes .fin-btn-tag { white-space:nowrap; }
@@ -89,48 +96,73 @@
 .nvk-gav-pe .esq { margin-right:auto; display:flex; gap:6px; }
 .nvk-gav-pe .btn { padding:8px 14px; font-size:13px; }
 .nvk-gav-pe .btn.on { background:#0f3d2e; border-color:#0f3d2e; color:#fff; } .nvk-gav-pe .btn.on.duv { background:#b45309; border-color:#b45309; }
-/* cartão de TEMA (nível 1) */
-.nvt { text-decoration:none; color:inherit; display:flex; flex-direction:column; gap:12px; min-width:0; }
-.nvt > *, .nvt .nvc-meta > * { min-width:0; }
-.nvt .gc-ava { font-size:17px; flex-direction:column; line-height:1.05; width:52px; height:48px; }
-.nvt .gc-ava small { font-size:8.5px; font-weight:800; letter-spacing:.5px; opacity:.85; text-transform:uppercase; }
-.nvc-doc { display:block; font-size:12px; color:#64748b; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; } .nvc-doc b { color:#0f3d2e; }
-.nvc-meta { display:grid; grid-template-columns:1fr; gap:8px 12px; padding:10px 12px; background:#f8fbf9; border:1px solid #edf3ef; border-radius:11px; }
-.nvc-meta-leit { display:flex; align-items:baseline; justify-content:space-between; gap:10px; padding-bottom:8px; border-bottom:1px dashed #e2e8e4; flex-wrap:wrap; }
-.nvc-num { font-size:22px; font-weight:800; color:#0f3d2e; font-variant-numeric:tabular-nums; line-height:1; } .nvc-num small { font-size:12px; font-weight:600; color:#64748b; margin-left:6px; }
-.nvc-bar { width:110px; height:6px; border-radius:99px; background:#e2e8e4; overflow:hidden; align-self:center; } .nvc-bar i { display:block; height:100%; background:#16a34a; }
-.nvt .nvc-meta-leit .fin-fraco { min-width:0; overflow-wrap:anywhere; }
-.nvt-lista { list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:5px; min-width:0; }
-.nvt-lista li { display:flex; align-items:center; gap:8px; font-size:12.5px; color:#334155; min-width:0; }
-.nvt-lista li i { width:14px; color:#94a3b8; font-size:11px; text-align:center; flex:none; }
-.nvt-lista li span { flex:1; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-.nvt-lista li small { color:#94a3b8; font-variant-numeric:tabular-nums; flex:none; }
-.nvt-lista li.nova span { font-weight:700; color:#0f172a; } .nvt-lista li.nova i { color:#16a34a; }
-.nvt-novo { flex:none; font-style:normal; font-size:9px; font-weight:800; letter-spacing:.06em; color:#fff; background:#16a34a; border-radius:99px; padding:2px 6px; line-height:1; }
-.nvt-lista li.mais { color:#94a3b8; font-size:12px; padding-left:22px; }
-.nvt .cli-selo { min-width:200px; }
-/* página (hero + tiles da home) */
-.ef-car-card.clic { border:0; font:inherit; text-align:left; cursor:pointer; color:inherit; }
-.ef-car-card.clic.on { outline:3px solid #86efac; }
-.ef-hero-badges.nv-abas { margin-top:12px; } .nv-abas .ef-btn { font-size:12px; padding:6px 12px; }
-.nv-ass-rot { font-size:11px; font-weight:800; letter-spacing:.06em; text-transform:uppercase; color:#7d968a; display:inline-flex; align-items:center; gap:6px; padding:7px 4px; }
-#nvAss a { cursor:pointer; } #nvAss a b { margin-left:4px; color:#94a3b8; font-weight:700; } #nvAss a.on b { color:#86efac; }
-.ef-card.nvt { position:relative; }
-.nvt-pill { position:absolute; top:12px; right:12px; font-size:9.5px; font-weight:800; letter-spacing:.06em; border-radius:99px; padding:3px 8px; }
-.nvt-pill-nova { background:#16a34a; color:#fff; } .nvt-pill-duv { background:#fef3c7; color:#b45309; }
-.ef-card-num small { font-size:11px; font-weight:600; color:#7d968a; }
-.nvc-faixa { display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; margin:0 0 12px; font-size:13px; color:#64748b; }
-.nvc-faixa b { color:#0f3d2e; } .nvc-faixa a { font-weight:700; color:#15803d; cursor:pointer; }
-.nvc-ver { display:flex; gap:6px; margin:0 0 12px; flex-wrap:wrap; }
-.nvc-ver a { font-size:13px; font-weight:700; padding:7px 14px; border-radius:99px; border:1.5px solid #d7e3dc; color:#4b6358; text-decoration:none; background:#fff; }
-.nvc-ver a.on { background:#0f3d2e; border-color:#0f3d2e; color:#fff; }
-.fin-kpi.clic { cursor:pointer; border:0; text-align:left; font:inherit; width:100%; } .fin-kpi.clic.on { outline:3px solid #fff; outline-offset:-6px; }
+/* ===== página no molde de Títulos a receber: ABAS coloridas, linha de TEMAS, dias e grade ===== */
+.nv { --verde:#0f3d2e; --linha:#e6eeea; --mudo:#7d968a; --tinta:#0f172a; }
+.nv-abas { display:grid; grid-template-columns:repeat(auto-fit, minmax(190px, 1fr)); gap:12px; margin-top:-34px; position:relative; z-index:2; margin-bottom:18px; }
+.nva { position:relative; text-align:left; font:inherit; cursor:pointer; border:0; border-radius:18px; padding:16px 18px 14px; color:#fff;
+       background:linear-gradient(135deg, var(--cor) 0%, var(--cor-e) 100%); box-shadow:0 10px 24px rgba(15,23,42,.14); transition:all .18s;
+       display:flex; align-items:center; gap:14px; overflow:hidden; min-width:0; }
+.nva:hover { transform:translateY(-1px); box-shadow:0 14px 32px rgba(15,23,42,.18); }
+.nva.on { transform:translateY(-2px); box-shadow:0 0 0 3px #fff, 0 0 0 5px var(--cor), 0 16px 32px rgba(15,23,42,.22); }
+.nva-ico { width:44px; height:44px; border-radius:14px; background:rgba(255,255,255,.2); display:flex; align-items:center; justify-content:center; font-size:17px; flex-shrink:0; }
+.nva-txt { min-width:0; flex:1; }
+.nva-lbl { display:block; font-size:11.5px; font-weight:700; letter-spacing:.6px; text-transform:uppercase; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.nva-val { display:block; font-size:24px; font-weight:800; letter-spacing:-.02em; font-variant-numeric:tabular-nums; line-height:1.1; margin-top:2px; }
+.nva-sub { display:block; font-size:12px; color:rgba(255,255,255,.82); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.nva-n { align-self:flex-start; font-size:11px; font-weight:800; background:rgba(255,255,255,.2); border-radius:99px; padding:3px 9px; white-space:nowrap; }
+.nva-nova   { --cor:#f97316; --cor-e:#c2410c; --cor-f:#fff4ec; --cor-b:#fed7b5; }
+.nva-semana { --cor:#2563eb; --cor-e:#1e40af; --cor-f:#eff4ff; --cor-b:#bfdbfe; }
+.nva-todas  { --cor:#16a34a; --cor-e:#166534; --cor-f:#ecfdf3; --cor-b:#bbf7d0; }
+.nva-duvida { --cor:#dc2626; --cor-e:#991b1b; --cor-f:#fef1f1; --cor-b:#fecaca; }
+.nva-rasc   { --cor:#475569; --cor-e:#1e293b; --cor-f:#f1f5f9; --cor-b:#e2e8f0; }
+/* a cor da aba escolhida pinta a linha de temas e os cabeçalhos dos dias */
+.nv[data-p="nova"]   { --sec:#f97316; --sec-e:#c2410c; --sec-f:#fff4ec; --sec-b:#fed7b5; }
+.nv[data-p="semana"] { --sec:#2563eb; --sec-e:#1e40af; --sec-f:#eff4ff; --sec-b:#bfdbfe; }
+.nv[data-p="todas"]  { --sec:#16a34a; --sec-e:#166534; --sec-f:#ecfdf3; --sec-b:#bbf7d0; }
+.nv[data-p="duvida"] { --sec:#dc2626; --sec-e:#991b1b; --sec-f:#fef1f1; --sec-b:#fecaca; }
+.nv[data-p="rasc"]   { --sec:#475569; --sec-e:#1e293b; --sec-f:#f1f5f9; --sec-b:#e2e8f0; }
+
+.nv-refino { display:flex; align-items:center; gap:8px; flex-wrap:wrap; background:#fff; border:1px solid var(--linha); border-radius:16px;
+             padding:8px 10px; margin-bottom:16px; box-shadow:0 6px 18px rgba(15,61,46,.06); }
+.nv-refino > i.fa-layer-group { color:#a3b3ab; margin:0 2px 0 6px; font-size:13px; }
+.nv-ref-rot { font-size:11px; font-weight:800; letter-spacing:.06em; text-transform:uppercase; color:#7d968a; margin-right:2px; }
+.nv-f { display:inline-flex; align-items:center; gap:6px; border:1px solid var(--linha); background:#fff; color:#475569; border-radius:99px; height:32px; padding:0 12px; font:inherit; font-size:12.5px; font-weight:600; cursor:pointer; max-width:260px; min-width:0; }
+.nv-f > span { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.nv-f > i { font-size:11px; color:#94a3b8; flex:none; }
+.nv-f b { color:#94a3b8; font-variant-numeric:tabular-nums; flex:none; }
+.nv-f em { width:7px; height:7px; border-radius:50%; background:#16a34a; flex:none; box-shadow:0 0 0 2px #dcfce7; }
+.nv-f.on { background:var(--sec, var(--verde)); border-color:var(--sec, var(--verde)); color:#fff; } .nv-f.on b, .nv-f.on > i { color:#fff; opacity:.85; } .nv-f.on em { box-shadow:0 0 0 2px rgba(255,255,255,.5); background:#fff; }
+.nv-f[hidden] { display:none !important; }
+.nv-busca { position:relative; margin-left:auto; width:280px; max-width:100%; }
+.nv-busca input { width:100%; height:34px; border:1px solid var(--linha); border-radius:11px; padding:0 12px 0 34px; font:inherit; font-size:13px; background:#fff; box-sizing:border-box; }
+.nv-busca input:focus { outline:none; border-color:var(--sec, var(--verde)); box-shadow:0 0 0 3px var(--sec-f, #ecfdf3); }
+.nv-busca i { position:absolute; left:12px; top:50%; transform:translateY(-50%); color:#a3b3ab; font-size:13px; }
+.nv-ref-resumo { display:inline-flex; align-items:center; gap:6px; font-size:12.5px; color:#64748b; white-space:nowrap; background:var(--sec-f, #ecfdf3); border:1px solid var(--sec-b, #bbf7d0); border-radius:99px; padding:0 12px; height:32px; }
+.nv-ref-resumo b { font-size:15px; color:var(--sec-e, var(--verde)); font-variant-numeric:tabular-nums; }
+.nv-ref-limpar { border:0; background:#fef2f2; color:#b91c1c; border-radius:99px; height:30px; padding:0 12px; font:inherit; font-size:12px; font-weight:700; cursor:pointer; }
+.nv-ref-limpar[hidden] { display:none !important; }
+
+.nv-dia { display:flex; align-items:center; gap:10px; margin:6px 2px 10px; flex-wrap:wrap; row-gap:6px; }
+.nv-dia[hidden] { display:none !important; }
+.nv-data { display:flex; align-items:center; gap:8px; }
+.nv-data b { background:linear-gradient(135deg, var(--sec), var(--sec-e)); color:#fff; border-radius:99px; padding:3px 12px; font-size:15px; font-weight:800; letter-spacing:-.01em; font-variant-numeric:tabular-nums; }
+.nv-data em { font-style:normal; font-size:12px; font-weight:600; color:var(--mudo); }
+.nv-dia small { display:inline-flex; align-items:baseline; gap:6px; background:var(--sec-f); border:1px solid var(--sec-b); border-radius:99px; padding:4px 14px; font-size:13px; font-weight:600; color:var(--sec-e); }
+.nv-dia small b { font-size:18px; font-weight:800; letter-spacing:-.01em; font-variant-numeric:tabular-nums; }
+.nv-dia span { flex:1; min-width:20px; height:1px; background:linear-gradient(90deg, var(--sec-b), transparent); align-self:center; }
+.nv-grade { display:grid; grid-template-columns:repeat(auto-fill, minmax(320px, 1fr)); gap:12px; margin-bottom:22px; }
+.nv-grade[hidden] { display:none !important; }
+.nv-vazio { text-align:center; color:var(--mudo); font-size:13px; padding:40px 10px; background:#fff; border:1px dashed var(--linha); border-radius:14px; margin-bottom:16px; }
+.nv-vazio i { display:block; font-size:22px; color:#bcd3c6; margin-bottom:8px; } .nv-vazio a { font-weight:700; color:#15803d; cursor:pointer; }
+.nv-vazio[hidden] { display:none !important; }
 .nv-eq { display:grid; grid-template-columns:repeat(auto-fill, minmax(220px, 1fr)); gap:8px 18px; margin-top:12px; }
 .nv-eq-l { display:grid; grid-template-columns:minmax(0,1fr) 54px; gap:4px 10px; font-size:12.5px; align-items:center; }
 .nv-eq-l span:first-child { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; color:#0f172a; } .nv-eq-l small { color:#64748b; font-size:11px; margin-left:4px; }
 .nv-eq-l em { font-style:normal; text-align:right; color:#475569; font-size:12px; font-variant-numeric:tabular-nums; }
 .nv-eq-bar { grid-column:1/-1; height:5px; border-radius:99px; background:#eef2f0; overflow:hidden; }
 .nv-eq-bar i { display:block; height:100%; background:#16a34a; } .nv-eq-bar i.baixa { background:#f59e0b; } .nv-eq-bar i.zero { background:#dc2626; min-width:4px; }
+@media (max-width:900px) { .nv-abas { grid-template-columns:1fr 1fr; gap:8px; margin-top:-24px; } .nva { padding:12px 12px; gap:10px; border-radius:14px; } .nva-ico { width:36px; height:36px; font-size:14px; border-radius:11px; } .nva-lbl { white-space:normal; font-size:10.5px; line-height:1.2; } .nva-val { font-size:20px; } .nva-sub { display:none; } .nva-n { display:none; } }
+@media (max-width:600px) { .nv-grade { grid-template-columns:1fr; } .nv-busca { margin-left:0; width:100%; } .nv-ref-resumo { margin-left:auto; } }
 .nv-luz { position:fixed; inset:0; background:rgba(15,23,42,.88); z-index:1100; display:grid; place-items:center; padding:20px; cursor:zoom-out; }
 .nv-luz[hidden] { display:none !important; } .nv-luz img { max-width:100%; max-height:100%; border-radius:10px; box-shadow:0 20px 60px rgba(0,0,0,.5); }
 .nv-zap-banner { background:#f0fdf4; border:1.5px solid #86efac; border-radius:12px; padding:12px 16px; margin:0 0 12px; font-size:13px; color:#14532d; display:flex; gap:10px 14px; align-items:center; justify-content:space-between; flex-wrap:wrap; }
@@ -184,105 +216,38 @@
 .nv-quem li { display:flex; gap:8px; align-items:center; } .nv-quem li small { color:#94a3b8; white-space:nowrap; } .nv-quem li small.q { margin-left:auto; }
 .nv-quem li .r { font-size:11px; border-radius:6px; padding:1px 6px; font-weight:700; } .nv-quem li .r-util { background:#dcfce7; color:#15803d; } .nv-quem li .r-duvida { background:#fef3c7; color:#b45309; }
 @media (max-width:980px) { .nvk-ed-box { grid-template-columns:1fr; grid-template-rows:auto minmax(0,1fr) auto; } .nvk-ed-prev { display:none; } .nvk-ed-form { border-right:0; } }
-@media (max-width:600px) { .gc-grid { grid-template-columns:1fr; } .nvt .cli-selo { min-width:0; flex-basis:100%; } .nvc-acoes { width:100%; justify-content:flex-start; } .nv-quem { grid-template-columns:1fr; }
+@media (max-width:600px) { .nvc .cli-pe { flex-wrap:wrap; } .nvc .cli-selo { flex-basis:100%; } .nvc-acoes { width:100%; justify-content:flex-start; } .nv-quem { grid-template-columns:1fr; }
   .nvk-gav-cab { padding:14px 16px; } .nvk-gav-corpo, .nvk-gav-pe { padding-left:16px; padding-right:16px; } }
 </style>
 
-{# ===== HERO verde, igual ao Início do Financeiro (Anderson, 15/11: "igual ao padrão que estamos fazendo") ===== #}
-<div class="ef-hero"><div class="ef-hero-inner">
-    <div class="ef-hero-head">
-        <div>
-            <h1 class="ef-hero-title">Novidades</h1>
-            <p class="ef-hero-sub">{% if tema_info %}<b style="color:#fff">{{ tema_info.nome }}</b>{% if tema_info.area and tema_info.area != tema_info.nome %} · {{ 'Para todos' if tema_info.area == 'Todos' else tema_info.area }}{% endif %} — {{ lista|length }} mudança{{ 's' if lista|length != 1 }}; clique no cartão para ler inteira{% if kpi.novas %} · <b style="color:#fff">{{ kpi.novas }}</b> que você ainda não tinha visto{% endif %}
-            {% elif ver == 'rascunhos' %}Rascunhos esperando revisão — clique no cartão para ler inteiro, ajustar e publicar
-            {% else %}O que mudou no sistema, explicado para a equipe — cada bloco é um tema; clique para ver as mudanças dele{% endif %}</p>
-            {% if eh_admin or tema_info %}
-            <div class="ef-hero-badges nv-abas">
-                {% if tema_info %}
-                <a class="ef-btn" href="{{ url_for('novidades.index') }}"><i class="fas fa-arrow-left"></i> Todos os temas</a>
-                <a class="ef-btn ef-btn-primary" href="{{ url_for('novidades.index', tema=tema_info.chave) }}"><i class="fas {{ tema_info.area_v[2] }}"></i> {{ tema_info.nome }}</a>
-                {% else %}
-                <a class="ef-btn {{ 'ef-btn-primary' if ver == 'publicadas' }}" href="{{ url_for('novidades.index') }}"><i class="fas fa-th-large"></i> Temas</a>
-                {% endif %}
-                {% if eh_admin %}<a class="ef-btn {{ 'ef-btn-primary' if ver == 'rascunhos' }}" href="{{ url_for('novidades.index', ver='rascunhos') }}"><i class="fas fa-pen-ruler"></i> Rascunhos{% if kpi.rascunhos %} ({{ kpi.rascunhos }}){% endif %}</a>{% endif %}
-            </div>
-            {% endif %}
-        </div>
-        <div class="ef-hero-actions">
-            <button type="button" class="ef-btn" data-at-novo="sugestao" data-at-texto="Sugestão de melhoria: "><i class="fas fa-lightbulb"></i> Sugerir melhoria</button>
-            {% if eh_admin %}<button type="button" class="ef-btn ef-btn-primary" data-nv-nova><i class="fas fa-bullhorn"></i> Publicar novidade</button>{% endif %}
-        </div>
+{# ===== HERO verde (padrão do Financeiro); os quadros coloridos logo abaixo são as ABAS, como em Títulos a receber ===== #}
+<div class="nv" id="nvPag" data-p="{{ aba_ini }}">
+<div class="ef-hero"><div class="ef-hero-inner ef-hero-head">
+    <div>
+        <h1 class="ef-hero-title">Novidades</h1>
+        <p class="ef-hero-sub">O que mudou no sistema, explicado para a equipe · clique no cartão para ler inteiro e marque <b style="color:#fff">Entendi</b></p>
     </div>
-    {% if modo == 'temas' %}
-    <div class="ef-carousel"><div class="ef-car-track">
-        <button type="button" class="ef-car-card clic" data-kpi="nova"><div class="ef-cc-top"><span class="ef-cc-titulo"><i class="fas fa-bell"></i> Novas para você</span>{% if kpi.novas %}<span class="ef-cc-pill ef-pill-alta">{{ kpi.temas_novos }} tema{{ 's' if kpi.temas_novos != 1 }}</span>{% endif %}</div>
-            <div class="ef-cc-valor">{{ kpi.novas }}</div><div class="ef-cc-apoio">{{ 'mudanças que você ainda não abriu' if kpi.novas else 'você já viu todas' }}</div></button>
-        <button type="button" class="ef-car-card clic" data-kpi="semana"><div class="ef-cc-top"><span class="ef-cc-titulo"><i class="fas fa-calendar-week"></i> Esta semana</span></div>
-            <div class="ef-cc-valor">{{ kpi.semana }}</div><div class="ef-cc-apoio">mudanças publicadas desde segunda</div></button>
-        <button type="button" class="ef-car-card clic" data-kpi="duvida"><div class="ef-cc-top"><span class="ef-cc-titulo"><i class="fas fa-circle-question"></i> {{ 'Com dúvida' if eh_admin else 'Minhas dúvidas' }}</span>{% if kpi.duvidas %}<span class="ef-cc-pill ef-pill-baixa">atenção</span>{% endif %}</div>
-            <div class="ef-cc-valor">{{ kpi.duvidas }}</div><div class="ef-cc-apoio">{{ 'a dúvida vira chamado no Atendimento' if kpi.duvidas else 'nenhuma dúvida aberta' }}</div></button>
-        <button type="button" class="ef-car-card clic" data-kpi=""><div class="ef-cc-top"><span class="ef-cc-titulo"><i class="fas fa-layer-group"></i> Temas</span></div>
-            <div class="ef-cc-valor">{{ kpi.temas }}<small> · {{ kpi.total }} mud.</small></div><div class="ef-cc-apoio">{{ kpi.total }} mudança{{ 's' if kpi.total != 1 }} publicada{{ 's' if kpi.total != 1 }} no total</div></button>
-        {% if eh_admin %}
-        <a class="ef-car-card" href="{{ url_for('novidades.index', ver='rascunhos') }}" style="text-decoration:none"><div class="ef-cc-top"><span class="ef-cc-titulo"><i class="fas fa-pen-ruler"></i> Rascunhos</span>{% if kpi.rascunhos %}<span class="ef-cc-pill ef-pill-neutro">a revisar</span>{% endif %}</div>
-            <div class="ef-cc-valor">{{ kpi.rascunhos }}</div><div class="ef-cc-apoio">nascidos das publicações do sistema</div></a>
-        {% else %}
-        <button type="button" class="ef-car-card clic" data-kpi="mes"><div class="ef-cc-top"><span class="ef-cc-titulo"><i class="fas fa-calendar-days"></i> Este mês</span></div>
-            <div class="ef-cc-valor">{{ kpi.mes }}</div><div class="ef-cc-apoio">mudanças em {{ hoje[5:7] }}/{{ hoje[:4] }}</div></button>
-        {% endif %}
-    </div></div>
-    {% endif %}
+    <div class="ef-hero-actions">
+        <button type="button" class="ef-btn" data-at-novo="sugestao" data-at-texto="Sugestão de melhoria: "><i class="fas fa-lightbulb"></i> Sugerir melhoria</button>
+        {% if eh_admin %}<button type="button" class="ef-btn ef-btn-primary" data-nv-nova><i class="fas fa-bullhorn"></i> Publicar novidade</button>{% endif %}
+    </div>
 </div></div>
 
 <div class="ef-body">
-{% if lista and not tema_info %}
-<div class="nvc-ver" id="nvAss">
-    <span class="nv-ass-rot"><i class="fas fa-layer-group"></i> Assunto</span>
-    <a class="on" data-a="">Todos</a>
-    {% for a, c in areas|dictsort %}<a data-a="{{ a }}" title="{{ c }} novidade{{ 's' if c > 1 }}">{{ 'Para todos' if a == 'Todos' else a }} <b>{{ c }}</b></a>{% endfor %}
+<div class="nv-abas">
+    <button type="button" class="nva nva-nova" data-aba="nova"><span class="nva-ico"><i class="fas fa-bell"></i></span>
+        <span class="nva-txt"><span class="nva-lbl">Novas para você</span><span class="nva-val">{{ kpi.novas }}</span><span class="nva-sub">{{ 'que você ainda não abriu' if kpi.novas else 'você já viu todas' }}</span></span></button>
+    <button type="button" class="nva nva-semana" data-aba="semana"><span class="nva-ico"><i class="fas fa-calendar-week"></i></span>
+        <span class="nva-txt"><span class="nva-lbl">Esta semana</span><span class="nva-val">{{ kpi.semana }}</span><span class="nva-sub">publicadas desde segunda</span></span></button>
+    <button type="button" class="nva nva-todas" data-aba="todas"><span class="nva-ico"><i class="fas fa-layer-group"></i></span>
+        <span class="nva-txt"><span class="nva-lbl">Todas</span><span class="nva-val">{{ kpi.total }}</span><span class="nva-sub">em {{ kpi.temas }} tema{{ 's' if kpi.temas != 1 }}</span></span></button>
+    <button type="button" class="nva nva-duvida" data-aba="duvida"><span class="nva-ico"><i class="fas fa-circle-question"></i></span>
+        <span class="nva-txt"><span class="nva-lbl">{{ 'Com dúvida' if eh_admin else 'Minhas dúvidas' }}</span><span class="nva-val">{{ kpi.duvidas }}</span><span class="nva-sub">{{ ('a dúvida vira chamado no Atendimento' if eh_admin else 'o suporte responde no Atendimento') if kpi.duvidas else 'nenhuma dúvida aberta' }}</span></span></button>
+    {% if eh_admin %}
+    <button type="button" class="nva nva-rasc" data-aba="rasc"><span class="nva-ico"><i class="fas fa-pen-ruler"></i></span>
+        <span class="nva-txt"><span class="nva-lbl">Rascunhos</span><span class="nva-val">{{ kpi.rascunhos }}</span><span class="nva-sub">{{ 'para revisar e publicar' if kpi.rascunhos else 'nada esperando revisão' }}</span></span>{% if kpi.rascunhos %}<span class="nva-n">a revisar</span>{% endif %}</button>
+    {% endif %}
 </div>
-{% endif %}
-
-{% if lista %}
-<div class="fin-filtros">
-    <div class="fin-filtros-cab" onclick="nvToggle('nvFiltroCorpo','nvChevron')">
-        <h3><i class="fas fa-filter" style="color:#22c55e; margin-right:4px;"></i>Filtros</h3>
-        <span class="fin-selo-filtro" id="nvFiltroN" hidden></span>
-        <i class="fas fa-chevron-down" id="nvChevron" style="font-size:11px; color:#9ca3af; transition:transform .25s;"></i>
-    </div>
-    <div id="nvFiltroCorpo" style="display:none;">
-        <div class="fin-grade">
-            {% if modo == 'lista' %}
-            <div><label>Tipo</label><select id="nvFTipo"><option value="">Todos</option>{% for k, t in TIPOS.items() if tipos_n.get(k) %}<option value="{{ k }}">{{ t[0] }} ({{ tipos_n[k] }})</option>{% endfor %}</select></div>
-            {% endif %}
-            <div><label>Quando</label><select id="nvFQuando"><option value="">Qualquer data</option><option value="semana">{{ 'Esta semana' if modo == 'lista' else 'Com mudança esta semana' }}</option>{% if modo == 'lista' %}<option value="mes">Este mês</option>{% endif %}</select></div>
-            <div><label>{{ 'Leitura' if eh_admin else 'Para você' }}</label><select id="nvFVista">
-                <option value="">Todas</option>
-                {% if eh_admin %}<option value="ninguem">Ninguém viu ainda</option><option value="duvida">Com dúvida</option>
-                {% else %}<option value="nova">Novas para mim</option><option value="util">Que eu entendi</option><option value="duvida">Que fiquei com dúvida</option>{% endif %}</select></div>
-            <div><label>{{ 'Título ou texto' if modo == 'lista' else 'Tema ou mudança' }}</label><input type="text" id="nvBusca" placeholder="boleto, NIRE, extrato..."></div>
-        </div>
-        <div class="fin-acoes-filtro"><a class="btn btn-outline" id="nvLimpar">Limpar</a></div>
-    </div>
-</div>
-{% endif %}
-
-{% if eh_admin and ver != 'rascunhos' and equipe_leitura %}
-<div class="fin-filtros">
-    <div class="fin-filtros-cab" onclick="nvToggle('nvEqCorpo','nvEqChevron')">
-        <h3><i class="fas fa-users" style="color:#22c55e; margin-right:4px;"></i>Quem está acompanhando</h3>
-        {% set _sem = equipe_leitura|selectattr('viu', 'equalto', 0)|list|length %}
-        {% if _sem %}<span class="fin-selo-filtro" style="background:#fee2e2;color:#b91c1c;">{{ _sem }} sem ver nada</span>{% endif %}
-        <i class="fas fa-chevron-down" id="nvEqChevron" style="font-size:11px; color:#9ca3af; transition:transform .25s;"></i>
-    </div>
-    <div id="nvEqCorpo" style="display:none;"><div class="nv-eq">
-        {% for u in equipe_leitura %}{% set pct = (100 * u.viu / u.podia)|round|int %}
-        <div class="nv-eq-l"><span>{{ u.nome }}{% if u.departamento %}<small>{{ u.departamento }}</small>{% endif %}</span><em>{{ u.viu }} de {{ u.podia }}</em>
-            <span class="nv-eq-bar"><i class="{{ 'zero' if not u.viu else ('baixa' if pct < 50) }}" style="width:{{ pct }}%"></i></span></div>
-        {% endfor %}
-    </div></div>
-</div>
-{% endif %}
 
 {% if zap_pub %}
 <div class="nv-zap-banner">
@@ -300,85 +265,56 @@
 </div>
 {% endif %}
 
-{% if lista %}
-<div class="nvc-faixa">
-    <span id="nvFaixa">{% if ver == 'rascunhos' %}<b>{{ lista|length }}</b> rascunho{{ 's' if lista|length > 1 }} esperando revisão.
-    {% elif modo == 'temas' %}<b>{{ temas|length }}</b> tema{{ 's' if temas|length != 1 }} com mudanças{% if kpi.temas_novos %} · <b>{{ kpi.temas_novos }}</b> com novidade para você{% endif %}.
-    {% else %}Mostrando <b>{{ lista|length }}</b> mudança{{ 's' if lista|length != 1 }} de <b>{{ tema_info.nome }}</b>.{% endif %}</span>
-    <span class="fin-fraco">{{ 'Clique no tema para ver as mudanças.' if modo == 'temas' else 'Clique no cartão para ler inteiro.' }}</span>
+{# linha de TEMAS (a tela do catálogo ou o assunto) + busca — o que era um bloco inteiro de "tiles" #}
+{% if lista or rasc %}
+<div class="nv-refino" id="nvRefino">
+    <i class="fas fa-layer-group"></i><span class="nv-ref-rot">Tema</span>
+    <button type="button" class="nv-f" data-tema=""><span>Todos</span><b>0</b></button>
+    {% for t in temas %}<button type="button" class="nv-f" data-tema="{{ t.chave }}" title="{{ t.nome }}{% if t.area and t.area != t.nome and t.area != 'Todos' %} · {{ t.area }}{% endif %}"><i class="fas {{ t.area_v[2] }}"></i><span>{{ t.nome }}</span>{% if t.novas %}<em title="tem novidade para você"></em>{% endif %}<b>0</b></button>{% endfor %}
+    <button type="button" class="nv-ref-limpar" id="nvLimpar" hidden><i class="fas fa-xmark"></i> Limpar</button>
+    <div class="nv-busca"><i class="fas fa-magnifying-glass"></i><input type="search" id="nvBusca" placeholder="Título, texto ou tela" autocomplete="off"></div>
+    <span class="nv-ref-resumo" id="nvResumo"><b>0</b> mudanças</span>
 </div>
+{% endif %}
 
-{% if modo == 'temas' %}
-{# blocos brancos iguais ao "Dia a dia" do Início do Financeiro: ícone, nome, número grande, uma linha #}
-{% set _novos = temas|selectattr('novas')|list %}
-{% if _novos %}
-<div class="ef-section-label ef-line">Com novidade para você</div>
-<div class="ef-grid">
-{% for t in _novos %}{% include 'novidades/_tema_tile.html' %}{% endfor %}
+{% if eh_admin and equipe_leitura %}
+<div class="fin-filtros" style="margin-bottom:16px">
+    <div class="fin-filtros-cab" onclick="nvToggle('nvEqCorpo','nvEqChevron')">
+        <h3><i class="fas fa-users" style="color:#22c55e; margin-right:4px;"></i>Quem está acompanhando</h3>
+        {% set _sem = equipe_leitura|selectattr('viu', 'equalto', 0)|list|length %}
+        {% if _sem %}<span class="fin-selo-filtro" style="background:#fee2e2;color:#b91c1c;">{{ _sem }} sem ver nada</span>{% endif %}
+        <i class="fas fa-chevron-down" id="nvEqChevron" style="font-size:11px; color:#9ca3af; transition:transform .25s;"></i>
+    </div>
+    <div id="nvEqCorpo" style="display:none;"><div class="nv-eq">
+        {% for u in equipe_leitura %}{% set pct = (100 * u.viu / u.podia)|round|int %}
+        <div class="nv-eq-l"><span>{{ u.nome }}{% if u.departamento %}<small>{{ u.departamento }}</small>{% endif %}</span><em>{{ u.viu }} de {{ u.podia }}</em>
+            <span class="nv-eq-bar"><i class="{{ 'zero' if not u.viu else ('baixa' if pct < 50) }}" style="width:{{ pct }}%"></i></span></div>
+        {% endfor %}
+    </div></div>
 </div>
 {% endif %}
-{% set _resto = temas|rejectattr('novas')|list %}
-{% if _resto %}
-<div class="ef-section-label ef-line">{{ 'Em dia' if _novos else 'Temas' }}</div>
-<div class="ef-grid">
-{% for t in _resto %}{% include 'novidades/_tema_tile.html' %}{% endfor %}
-</div>
-{% endif %}
-{% else %}
-<div class="gc-grid">
-{% for n in lista %}
-    <article class="gc-card nvc {{ 'nova' if n.nova }}" tabindex="0" role="button" title="Ler inteiro" id="nv{{ n.id }}"
-             data-id="{{ n.id }}" data-area="{{ n.area }}" data-tipo="{{ n.tipo }}" data-nova="{{ 1 if n.nova else 0 }}" data-semana="{{ 1 if n.periodo[0] == 0 else 0 }}"
-             data-mes="{{ 1 if n.periodo[0] <= 2 else 0 }}" data-rea="{{ n.minha_reacao or '' }}"
-             data-ninguem="{{ 1 if n.leitura and not n.leitura.viram else 0 }}" data-duvida="{{ 1 if (n.leitura and n.leitura.duvida) or n.minha_reacao == 'duvida' else 0 }}"
-             data-busca="{{ (n.titulo ~ ' ' ~ n.texto ~ ' ' ~ n.area)|lower }}"
-             data-info='{{ {"id": n.id, "titulo": n.titulo, "texto": n.texto, "tipo": n.tipo, "tipo_rotulo": n.tipo_v[0], "area": n.area, "tela_id": n.tela_id or "", "tela_nome": n.tela_nome or "", "data": n.data.isoformat(), "data_br": n.data.strftime("%d/%m/%Y"), "dia": n.dia, "mes": n.mes, "situacao": n.situacao, "img": n.tem_imagem, "por": n.por_nome or "", "commit": n.commit_hash or "", "atalho": n.atalho, "zap": n.zap, "quando": n.periodo[1], "leitura": (n.leitura if n.leitura is defined else none), "rea": n.minha_reacao or "", "icone": n.area_v[2], "cor": n.area_v[1]}|tojson|forceescape }}'>
-        <header class="gc-head">
-            <span class="gc-ava nv-ava-{{ n.tipo }}" title="{{ n.tipo_v[0] }}">{{ n.dia }}<small>{{ n.mes }}</small></span>
-            <div class="gc-tit">
-                <h3 title="{{ n.titulo }}">{{ n.titulo }}</h3>
-                <span class="nvk-onde"><i class="fas {{ n.area_v[2] }}" style="color:{{ n.area_v[1] }}"></i><span><b>{{ 'Para todos' if n.area == 'Todos' else n.area }}{% if n.tela_nome %} › {{ n.tela_nome }}{% endif %}</b></span></span>
-            </div>
-            <span class="nf-pill nf-pill-{{ n.tipo }}">{{ n.tipo_v[0]|upper }}</span>
-        </header>
-        <p class="nvk-res">{{ n.resumo }}</p>
-        <div class="nvc-full">
-            {% for tipo, c in n.blocos %}{% if tipo == 'p' %}<p>{{ c }}</p>{% elif tipo == 'ul' %}<ul>{% for i in c %}<li>{{ i }}</li>{% endfor %}</ul>{% else %}<ol>{% for i in c %}<li>{{ i }}</li>{% endfor %}</ol>{% endif %}{% endfor %}
-            {% if n.tem_imagem %}<div class="nvc-img" data-luz="{{ url_for('novidades.imagem', nid=n.id) }}"><img src="{{ url_for('novidades.imagem', nid=n.id) }}" alt="Print da tela" loading="lazy"></div><p class="nvc-img-rot">clique no print para ampliar</p>{% endif %}
-        </div>
-        <footer class="cli-pe">
-            {% if ver == 'rascunhos' %}
-            <span class="cli-selo cli-selo-warn"><i class="fas fa-pen-ruler"></i><span class="cli-selo-t"><b>Rascunho{{ ' · com print' if n.tem_imagem }}</b><small>{{ ('#' ~ n.commit_hash ~ ' · ') if n.commit_hash }}{{ ('quem usa ' ~ n.tela_nome) if n.tela_nome else (('quem usa ' ~ n.area) if n.area != 'Todos' else 'toda a equipe') }}</small></span></span>
-            {% elif eh_admin and n.leitura %}
-                {% if not n.leitura.viram %}<span class="cli-selo cli-selo-bad"><i class="fas fa-eye-slash"></i><span class="cli-selo-t"><b>Ninguém viu ainda</b><small>{{ n.leitura.podem }} pessoas podem ver</small></span></span>
-                {% elif n.leitura.duvida %}<span class="cli-selo cli-selo-warn"><i class="fas fa-circle-question"></i><span class="cli-selo-t"><b>{{ n.leitura.duvida }} com dúvida</b><small>{{ n.leitura.viram }} de {{ n.leitura.podem }} viram</small></span></span>
-                {% elif n.leitura.viram * 10 >= n.leitura.podem * 7 %}<span class="cli-selo cli-selo-ok"><i class="fas fa-circle-check"></i><span class="cli-selo-t"><b>{{ n.leitura.viram }} de {{ n.leitura.podem }} viram</b><small>{{ n.leitura.util }} marcaram Entendi</small></span></span>
-                {% else %}<span class="cli-selo cli-selo-info"><i class="fas fa-eye"></i><span class="cli-selo-t"><b>{{ n.leitura.viram }} de {{ n.leitura.podem }} viram</b><small>{{ n.leitura.podem - n.leitura.viram }} ainda não</small></span></span>{% endif %}
-            {% elif n.minha_reacao == 'util' %}<span class="cli-selo cli-selo-ok"><i class="fas fa-circle-check"></i><span class="cli-selo-t"><b>Você entendeu</b><small>obrigado por avisar</small></span></span>
-            {% elif n.minha_reacao == 'duvida' %}<span class="cli-selo cli-selo-warn"><i class="fas fa-circle-question"></i><span class="cli-selo-t"><b>Você ficou com dúvida</b><small>o suporte responde no Atendimento</small></span></span>
-            {% elif n.nova %}<span class="cli-selo cli-selo-info"><i class="fas fa-bell"></i><span class="cli-selo-t"><b>Novo para você</b><small>primeira vez que aparece</small></span></span>
-            {% else %}<span class="cli-selo cli-selo-sem"><i class="fas fa-eye"></i><span class="cli-selo-t"><b>Já visto</b><small>marque Entendi ou Dúvida</small></span></span>{% endif %}
-            <div class="nvc-acoes">
-                {% if ver == 'rascunhos' %}
-                <button type="button" class="fin-btn-tag" data-nv-editar="{{ n.id }}"><i class="fas fa-pen"></i> Editar</button>
-                <button type="button" class="fin-btn-tag pri" data-nv-sit="publicada" data-id="{{ n.id }}" data-confirma="Publicar?"><i class="fas fa-bullhorn"></i> Publicar</button>
-                {% else %}
-                <button type="button" class="fin-btn-tag nv-rea {{ 'on' if n.minha_reacao == 'util' }}" data-rea="util" data-id="{{ n.id }}"><i class="fas fa-thumbs-up"></i> Entendi</button>
-                <button type="button" class="fin-btn-tag nv-rea duv {{ 'on' if n.minha_reacao == 'duvida' }}" data-rea="duvida" data-id="{{ n.id }}" data-at-novo="duvida" data-at-texto="Sobre a novidade «{{ n.titulo }}»: "><i class="fas fa-circle-question"></i> Dúvida</button>
-                {% endif %}
-            </div>
-        </footer>
-    </article>
+
+{# as mudanças, agrupadas por DIA como os vencimentos; a aba e o tema só escondem/mostram #}
+{% macro dia_cab(g, palavra) %}
+<div class="nv-dia" data-dia="{{ g.chave }}"><div class="nv-data"><b>{{ g.rot }}</b><em>{{ g.sub }}</em></div><small data-pal="{{ palavra }}"><b>{{ g.itens|length }}</b> {{ palavra }}{{ 's' if g.itens|length != 1 }}</small><span></span></div>
+{% endmacro %}
+<div id="nvLista">
+{% for g in dias %}
+{{ dia_cab(g, 'mudança') }}
+<div class="nv-grade">{% for n in g.itens %}{% include 'novidades/_mudanca_card.html' %}{% endfor %}</div>
+{% endfor %}
+{% for g in dias_rasc %}
+{{ dia_cab(g, 'rascunho') }}
+<div class="nv-grade">{% for n in g.itens %}{% include 'novidades/_mudanca_card.html' %}{% endfor %}</div>
 {% endfor %}
 </div>
-{% endif %}
-<div class="fin-caixa" id="nvVazio" hidden><div class="fin-vazio"><i class="fas fa-filter" style="font-size:2em; display:block; margin-bottom:10px;"></i>Nenhuma novidade com esses filtros. <a id="nvLimpar2" style="font-weight:700;color:#15803d;cursor:pointer;">Limpar</a></div></div>
-{% else %}
-<div class="fin-caixa"><div class="fin-vazio"><i class="fas fa-bullhorn" style="font-size:2em; display:block; margin-bottom:10px;"></i>
-    {% if ver == 'rascunhos' %}Nenhum rascunho esperando revisão.{% else %}Ainda não há novidades publicadas. Quando algo mudar no sistema, o aviso aparece aqui e no número verde do menu.{% endif %}</div></div>
+<div class="nv-vazio" id="nvVazio" hidden><i class="fas fa-mug-hot"></i><span id="nvVazioT"></span></div>
+{% if not lista and not rasc %}
+<div class="nv-vazio"><i class="fas fa-bullhorn"></i>Ainda não há novidades publicadas. Quando algo mudar no sistema, o aviso aparece aqui e no número verde do menu.</div>
 {% endif %}
 
 </div>{# /ef-body #}
+</div>{# /nv #}
 
 {# ===== gaveta de leitura ===== #}
 <div class="nvk-fundo" id="nvGavFundo" hidden></div>
@@ -445,10 +381,9 @@
       <div class="nvk-tabs"><button type="button" class="on" data-aba="cartao"><i class="fas fa-id-card"></i> Como a equipe vê</button><button type="button" data-aba="zap"><i class="fab fa-whatsapp"></i> Texto do WhatsApp</button></div>
       <div id="nvAbaCartao">
         <p class="nvk-prev-rot">Cartão fechado</p>
-        <article class="gc-card nvc" id="nvPrevCard">
-          <header class="gc-head"><span class="gc-ava nv-ava-melhoria" id="nvPvAva">{{ hoje[8:10]|int }}<small>{{ ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'][hoje[5:7]|int - 1] }}</small></span>
-            <div class="gc-tit"><h3 id="nvPvTit">Título da novidade</h3><span class="nvk-onde"><i class="fas fa-bullhorn" id="nvPvIco" style="color:#c2410c"></i><span><b id="nvPvOnde">Para todos</b></span></span></div>
-            <span class="nf-pill nf-pill-melhoria" id="nvPvPill">MELHORIA</span></header>
+        <article class="gc-card nvc nv-t-melhoria" id="nvPrevCard">
+          <div class="nvc-topo"><span class="nvc-tipo" id="nvPvPill"><i class="fas fa-arrow-trend-up"></i> Melhoria</span><span class="nvc-onde"><i class="fas fa-bullhorn" id="nvPvIco"></i><span id="nvPvOnde">Para todos</span></span><span class="nvc-marca">NOVA</span></div>
+          <h3 id="nvPvTit">Título da novidade</h3>
           <p class="nvk-res" id="nvPvRes">O primeiro parágrafo do texto aparece aqui.</p>
           <footer class="cli-pe"><span class="cli-selo cli-selo-info"><i class="fas fa-bell"></i><span class="cli-selo-t"><b>Novo para você</b><small>primeira vez que aparece</small></span></span>
             <div class="nvc-acoes"><span class="fin-btn-tag"><i class="fas fa-thumbs-up"></i> Entendi</span><span class="fin-btn-tag"><i class="fas fa-circle-question"></i> Dúvida</span></div></footer>
@@ -485,47 +420,55 @@ function nvToggle(corpo, chev) {
 }
 (function () {
   var $ = function (id) { return document.getElementById(id); };
-  var ADMIN = {{ 'true' if eh_admin else 'false' }}, RASC = {{ 'true' if ver == 'rascunhos' else 'false' }};
-  var cards = [].slice.call(document.querySelectorAll('.nvc[data-id], .nvt'));
+  var ADMIN = {{ 'true' if eh_admin else 'false' }};
+  var cards = [].slice.call(document.querySelectorAll('.nvc[data-id]'));
 
-  // ---- filtros (temas e mudanças)
-  var F = { area: '', tipo: '', quando: '', vista: '', kpi: '', q: '' };
+  // ---- abas (os quadros coloridos), tema e busca — tudo na página, sem recarregar
+  var pag = $('nvPag'), F = { aba: pag.dataset.p || 'todas', tema: {{ tema_sel|tojson }}, q: '' };
+  var chips = [].slice.call(document.querySelectorAll('#nvRefino .nv-f'));
+  var VAZIO = { nova: 'Você já abriu todas as novidades. Quando sair algo novo, aparece aqui e no número verde do menu.',
+                semana: 'Nada publicado desde segunda.', todas: 'Nenhuma mudança publicada ainda.',
+                duvida: ADMIN ? 'Ninguém da equipe marcou dúvida.' : 'Você não marcou dúvida em nenhuma novidade.',
+                rasc: 'Nenhum rascunho esperando revisão.' };
+  function passaAba(d) {
+    if (F.aba === 'rasc') return d.rasc === '1';
+    if (d.rasc === '1') return false;
+    if (F.aba === 'nova') return d.nova === '1';
+    if (F.aba === 'semana') return d.semana === '1';
+    if (F.aba === 'duvida') return d.duvida === '1';
+    return true;
+  }
   function filtra() {
+    var porTema = {}, total = 0;
+    cards.forEach(function (c) { if (passaAba(c.dataset)) { total++; porTema[c.dataset.tema] = (porTema[c.dataset.tema] || 0) + 1; } });
+    if (F.tema && !porTema[F.tema]) F.tema = '';          // o tema escolhido não tem nada nesta aba: volta para Todos
     var n = 0;
     cards.forEach(function (c) {
-      var d = c.dataset, ok = (!F.area || d.area === F.area) && (!F.tipo || d.tipo === F.tipo)
-        && (!F.quando || d[F.quando] === '1') && (!F.q || d.busca.indexOf(F.q) >= 0);
-      if (F.kpi === 'nova') ok = ok && d.nova === '1';
-      if (F.kpi === 'semana') ok = ok && d.semana === '1';
-      if (F.kpi === 'mes') ok = ok && d.mes === '1';
-      if (F.kpi === 'duvida') ok = ok && d.duvida === '1';
-      if (F.vista === 'nova') ok = ok && d.nova === '1';
-      if (F.vista === 'util' || F.vista === 'duvida') ok = ok && (d.rea === F.vista || (F.vista === 'duvida' && d.duvida === '1'));
-      if (F.vista === 'ninguem') ok = ok && d.ninguem === '1';
+      var d = c.dataset, ok = passaAba(d) && (!F.tema || d.tema === F.tema) && (!F.q || d.busca.indexOf(F.q) >= 0);
       c.hidden = !ok; if (ok) n++;
     });
-    var v = $('nvVazio'); if (v) v.hidden = n > 0;
-    var ativos = [F.tipo, F.quando, F.vista, F.q].filter(Boolean).length;
-    var fn = $('nvFiltroN'); if (fn) { fn.hidden = !ativos; fn.textContent = ativos + ' ativo(s)'; }
-    var fx = $('nvFaixa');
-    if (fx && cards.length && (ativos || F.area || F.kpi)) fx.innerHTML = '<b>' + n + '</b> de ' + cards.length + ' {{ 'temas' if modo == 'temas' else 'mudanças' }} com os filtros. <a id="nvLimpar3">Limpar</a>';
-    else if (fx && cards.length && fx.dataset.orig) fx.innerHTML = fx.dataset.orig;
-    document.querySelectorAll('#nvAss a').forEach(function (b) { b.classList.toggle('on', b.dataset.a === F.area); });
-    document.querySelectorAll('.ef-car-card.clic').forEach(function (b) { b.classList.toggle('on', !!F.kpi && b.dataset.kpi === F.kpi); });
-    document.querySelectorAll('.ef-section-label.ef-line').forEach(function (l) { var g = l.nextElementSibling; if (g && g.classList.contains('ef-grid')) { var vis = g.querySelector('.nvt:not([hidden])'); l.hidden = !vis; g.hidden = !vis; } });
-    var l3 = $('nvLimpar3'); if (l3) l3.addEventListener('click', limpar);
+    document.querySelectorAll('.nv-dia').forEach(function (h) {
+      var g = h.nextElementSibling, k = g ? g.querySelectorAll('.nvc:not([hidden])').length : 0;
+      h.hidden = !k; if (g) g.hidden = !k;
+      var s = h.querySelector('small'); if (s && k) s.innerHTML = '<b>' + k + '</b> ' + s.dataset.pal + (k !== 1 ? 's' : '');
+    });
+    chips.forEach(function (ch) {
+      var t = ch.dataset.tema, k = t === '' ? total : (porTema[t] || 0);
+      ch.querySelector('b').textContent = k; ch.hidden = t !== '' && !k; ch.classList.toggle('on', F.tema === t);
+    });
+    document.querySelectorAll('.nva').forEach(function (b) { b.classList.toggle('on', b.dataset.aba === F.aba); });
+    pag.dataset.p = F.aba;
+    var r = $('nvResumo'); if (r) r.innerHTML = '<b>' + n + '</b> ' + (F.aba === 'rasc' ? 'rascunho' : 'mudança') + (n !== 1 ? 's' : '') + (n !== total ? ' de ' + total : '');
+    var lp = $('nvLimpar'); if (lp) lp.hidden = !(F.tema || F.q);
+    var v = $('nvVazio'); if (v) { v.hidden = n > 0; $('nvVazioT').innerHTML = (F.tema || F.q) ? 'Nada com esse filtro. <a id="nvLimpar2">Limpar</a>' : VAZIO[F.aba]; var l2 = $('nvLimpar2'); if (l2) l2.addEventListener('click', limpar); }
+    try { var u = new URL(location.href); if (F.aba === 'rasc') u.searchParams.set('ver', 'rascunhos'); else u.searchParams.delete('ver'); if (F.tema) u.searchParams.set('tema', F.tema); else u.searchParams.delete('tema'); history.replaceState(null, '', u.pathname + u.search + location.hash); } catch (e) {}
   }
-  function limpar() {
-    F = { area: '', tipo: '', quando: '', vista: '', kpi: '', q: '' };
-    ['nvFTipo', 'nvFQuando', 'nvFVista', 'nvBusca'].forEach(function (id) { var e = $(id); if (e) e.value = ''; });
-    filtra();
-  }
-  var fx0 = $('nvFaixa'); if (fx0) fx0.dataset.orig = fx0.innerHTML;
-  document.querySelectorAll('#nvAss a').forEach(function (b) { b.addEventListener('click', function () { F.area = b.dataset.a; filtra(); }); });
-  document.querySelectorAll('.ef-car-card.clic').forEach(function (b) { b.addEventListener('click', function () { F.kpi = (F.kpi === b.dataset.kpi) ? '' : b.dataset.kpi; filtra(); }); });
-  [['nvFTipo', 'tipo'], ['nvFQuando', 'quando'], ['nvFVista', 'vista']].forEach(function (p) { var e = $(p[0]); if (e) e.addEventListener('change', function () { F[p[1]] = e.value; filtra(); }); });
+  function limpar() { F.tema = ''; F.q = ''; var b0 = $('nvBusca'); if (b0) b0.value = ''; filtra(); }
+  document.querySelectorAll('.nva').forEach(function (b) { b.addEventListener('click', function () { F.aba = b.dataset.aba; filtra(); window.scrollTo({ top: 0, behavior: 'smooth' }); }); });
+  chips.forEach(function (ch) { ch.addEventListener('click', function () { F.tema = (F.tema === ch.dataset.tema) ? '' : ch.dataset.tema; filtra(); }); });
   var busca = $('nvBusca'); if (busca) busca.addEventListener('input', function () { F.q = busca.value.toLowerCase().trim(); filtra(); });
-  ['nvLimpar', 'nvLimpar2'].forEach(function (id) { var e = $(id); if (e) e.addEventListener('click', limpar); });
+  var lp0 = $('nvLimpar'); if (lp0) lp0.addEventListener('click', limpar);
+  filtra();
 
   // ---- utilidades
   function post(url, fd, botao) {
@@ -620,6 +563,9 @@ function nvToggle(corpo, chev) {
     if (img) { var sec = document.createElement('div'); sec.className = 'nvk-sec'; sec.textContent = 'Print da tela'; img.parentNode.insertBefore(sec, img); }
     var viz = visiveis(), ix = viz.indexOf(card);
     $('nvGavPrev').disabled = ix <= 0; $('nvGavNext').disabled = ix < 0 || ix >= viz.length - 1;
+    if (n.situacao === 'publicada' && card.dataset.nova === '1') {   // leu pela página de temas: conta como visto
+      post('/novidades/' + n.id + '/reagir', new FormData()); card.dataset.nova = '0';
+    }
     gavFundo.hidden = false; gav.hidden = false; gav.querySelector('.nvk-gav-corpo').scrollTop = 0;
     document.body.style.overflow = 'hidden';     // a página de trás não rola enquanto a caixa está aberta
     try { history.replaceState(null, '', location.pathname + location.search + '#n=' + n.id); } catch (e) {}
@@ -764,10 +710,10 @@ function nvToggle(corpo, chev) {
         if (!j.ok) return;
         $('nvPvTit').textContent = tit.value.trim() || 'Título da novidade';
         $('nvPvRes').textContent = j.resumo || 'O primeiro parágrafo do texto aparece aqui.';
-        var pill = $('nvPvPill'); pill.className = 'nf-pill nf-pill-' + form.tipo.value; pill.textContent = j.tipo_rotulo.toUpperCase();
-        $('nvPvAva').className = 'gc-ava nv-ava-' + form.tipo.value;
+        $('nvPvPill').innerHTML = '<i class="fas ' + (TIPOS_V[form.tipo.value] || TIPOS_V.melhoria)[1] + '"></i> ' + esc(j.tipo_rotulo);
+        $('nvPrevCard').className = 'gc-card nvc nv-t-' + form.tipo.value;
         $('nvPvOnde').textContent = (j.area === 'Todos' ? 'Para todos' : j.area) + (j.tela_nome ? ' › ' + j.tela_nome : '');
-        var ic = telaBtnOn ? telaBtnOn.closest('.lin').dataset.dep : ''; $('nvPvIco').className = 'fas ' + (AREAS[j.area] ? AREAS[j.area][2] : 'fa-bullhorn'); $('nvPvIco').style.color = AREAS[j.area] ? AREAS[j.area][1] : '#c2410c';
+        $('nvPvIco').className = 'fas ' + (AREAS[j.area] ? AREAS[j.area][2] : 'fa-bullhorn');
         $('nvPvTexto').innerHTML = j.html || '<p style="color:#94a3b8">O texto inteiro aparece aqui.</p>';
         $('nvPvZap').textContent = j.zap;
         var alvo = $('nvAlvo'), s = alvo.querySelector('span');
@@ -778,7 +724,7 @@ function nvToggle(corpo, chev) {
       });
     }, 350);
   }
-  var AREAS = {{ AREAS_VISUAL|tojson }};
+  var AREAS = {{ AREAS_VISUAL|tojson }}, TIPOS_V = {{ TIPOS|tojson }};
   document.querySelectorAll('.nvk-tabs button').forEach(function (b) { b.addEventListener('click', function () {
     document.querySelectorAll('.nvk-tabs button').forEach(function (x) { x.classList.toggle('on', x === b); });
     $('nvAbaCartao').hidden = b.dataset.aba !== 'cartao'; $('nvAbaZap').hidden = b.dataset.aba !== 'zap'; }); });

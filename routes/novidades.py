@@ -183,6 +183,39 @@ _SEL = """SELECT n.*, COALESCE(NULLIF(u.nick, ''), u.nome) AS por_nome
             FROM novidades n LEFT JOIN usuarios u ON u.id = COALESCE(n.publicada_por, n.criado_por)"""
 
 
+DIAS_SEMANA = ['segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sábado', 'domingo']
+
+
+def _quando(d, hoje):
+    """'hoje', 'ontem', 'há 3 dias', 'há 2 semanas', 'há 3 meses' — para o cabeçalho do dia."""
+    dif = (hoje - d).days
+    if dif <= 0:
+        return 'hoje'
+    if dif == 1:
+        return 'ontem'
+    if dif < 7:
+        return f'há {dif} dias'
+    if dif < 30:
+        s = dif // 7
+        return 'há 1 semana' if s == 1 else f'há {s} semanas'
+    m = (hoje.year - d.year) * 12 + hoje.month - d.month
+    return 'há 1 mês' if m <= 1 else f'há {m} meses'
+
+
+def _agrupar_dias(lista, hoje):
+    """Como os vencimentos em Títulos a receber: um cabeçalho por dia e os cartões daquele dia.
+    A lista já vem da mais nova para a mais antiga."""
+    dias = []
+    for n in lista:
+        d = n['data']
+        if not dias or dias[-1]['data'] != d:
+            dias.append({'data': d, 'chave': d.isoformat(),
+                         'rot': d.strftime('%d/%m') + ('' if d.year == hoje.year else f'/{d.year}'),
+                         'sub': DIAS_SEMANA[d.weekday()] + ' · ' + _quando(d, hoje), 'hoje': d == hoje, 'itens': []})
+        dias[-1]['itens'].append(n)
+    return dias
+
+
 def _periodo(d, hoje):
     """Cabeçalho do grupo na lista."""
     seg = hoje - timedelta(days=hoje.weekday())
@@ -223,25 +256,29 @@ def _sinal_novidades():
 @novidades.route('/')
 @login_required
 def index():
+    """Uma página só, no molde de Financeiro › Títulos a receber (Anderson, 16/11: "a ideia de lá está
+    mais interessante"): os quadros coloridos de cima são as ABAS (Novas para você, Esta semana, Todas,
+    Com dúvida e, para o admin, Rascunhos); embaixo a linha de TEMAS filtra, e as mudanças vêm agrupadas
+    por dia. Ler a mudança (abrir a caixa) ou marcar Entendi é o que conta como visto."""
     telas, grupos = _catalogo()
     admin = current_user.is_admin()
     ver = request.args.get('ver', '') if admin else ''
     hoje = _hoje_br()          # o app roda em UTC: às 21h de domingo já seria "segunda" e o dia viraria "semana passada"
-    if ver == 'rascunhos':
-        lista = _q(_SEL + " WHERE n.situacao = 'rascunho' ORDER BY n.data DESC, n.id DESC")
-    else:
-        lista = _q(_SEL + " WHERE n.situacao = 'publicada' ORDER BY n.data DESC, n.publicada_em DESC, n.id DESC LIMIT 300")
+    lista = _q(_SEL + " WHERE n.situacao = 'publicada' ORDER BY n.data DESC, n.publicada_em DESC, n.id DESC LIMIT 300")
+    if admin:
+        lista += _q(_SEL + " WHERE n.situacao = 'rascunho' ORDER BY n.data DESC, n.id DESC")
     for n in lista:
         n.pop('imagem_dados', None)
     minhas = {r['novidade_id']: r for r in _q(
         "SELECT novidade_id, lida_em, reacao FROM novidades_lidas WHERE usuario_id = %s", (current_user.id,))}
 
-    out = []
+    out, rasc = [], []
     for n in lista:
-        if not _pode_ver(n, telas):
+        publicada = n['situacao'] == 'publicada'
+        if publicada and not _pode_ver(n, telas):
             continue
         m = minhas.get(n['id'])
-        n['nova'] = ver != 'rascunhos' and not m
+        n['nova'] = publicada and not m
         n['minha_reacao'] = (m or {}).get('reacao')
         n['atalho'] = _atalho(n.get('tela_id'), telas)
         n['tela_nome'] = telas.get(n.get('tela_id') or '', (None, None))[1]
@@ -253,15 +290,10 @@ def index():
         n['area_v'] = AREAS_VISUAL.get(n['area'], AREAS_VISUAL['Todos'])
         n['periodo'] = _periodo(d, hoje)
         n['tem_imagem'] = bool(n.get('imagem_tipo'))
-        out.append(n)
-
-    # Dois níveis (Anderson: "quero que apareça o tema e ao clicar traz as modificações"):
-    # sem ?tema= a página mostra os TEMAS (a tela do catálogo, ou o assunto); com ?tema= mostra
-    # as mudanças daquele tema. Só abrir o tema conta como visto.
-    tema = (request.args.get('tema') or '').strip()
-    for n in out:
         n['tema'] = _tema_de(n, telas)
         n['zap'] = _texto_zap(n)
+        (out if publicada else rasc).append(n)
+
     # Acabou de publicar? A página volta com ?zap=<id> e oferece o texto pronto do WhatsApp.
     zap_pub = None
     try:
@@ -269,80 +301,66 @@ def index():
     except ValueError:
         zid = 0
     if zid:
-        zap_pub = next((n for n in out if n['id'] == zid and n['situacao'] == 'publicada'), None)
+        zap_pub = next((n for n in out if n['id'] == zid), None)
         if zap_pub and admin:
             # Quem vê no sistema (sem os admins): é para essas pessoas que o WhatsApp deve ir.
             zap_pub['quem'] = [u['nome'] for u in _equipe()
                                if not u['admin'] and _pode_ver(zap_pub, telas, u['perms'], u['admin'])]
             zap_pub['para_todos'] = not zap_pub.get('tela_id') and zap_pub['area'] == 'Todos'
-    modo = 'lista' if (ver == 'rascunhos' or tema) else 'temas'
-    tema_info = None
-    if tema and ver != 'rascunhos':
-        out = [n for n in out if n['tema'][0] == tema]
-        if out:
-            tema_info = {'chave': tema, 'nome': out[0]['tema'][1], 'area': out[0]['tema'][2],
-                         'atalho': out[0]['atalho'], 'area_v': out[0]['area_v']}
-        else:
-            tema_info = {'chave': tema, 'nome': _nome_tema(tema, telas), 'area': '', 'atalho': None,
-                         'area_v': AREAS_VISUAL['Todos']}
-    novas = [n['id'] for n in out if n['nova']]
-    if novas and modo == 'lista' and ver != 'rascunhos':   # abriu o tema = viu as mudanças dele
-        try:
-            _w("INSERT IGNORE INTO novidades_lidas (usuario_id, novidade_id) VALUES "
-               + ','.join(['(%s,%s)'] * len(novas)),
-               tuple(v for i in novas for v in (current_user.id, i)))
-        except Exception:
-            logger.exception('novidades: não marcou como visto')
 
     # --- números: só dado real
+    novas = [n['id'] for n in out if n['nova']]
     seg = hoje - timedelta(days=hoje.weekday())
     kpi = {
         'novas': len(novas),
         'semana': sum(1 for n in out if n['data'] >= seg),
-        'mes': sum(1 for n in out if n['data'].year == hoje.year and n['data'].month == hoje.month),
         'total': len(out),
-        'rascunhos': 0,
+        'temas': len({n['tema'][0] for n in out}),
+        'rascunhos': len(rasc),
     }
-    equipe, leitura, equipe_leitura = [], {}, []
-    if admin:
-        kpi['rascunhos'] = (_q("SELECT COUNT(*) n FROM novidades WHERE situacao = 'rascunho'", one=True) or {}).get('n') or 0
-        if ver != 'rascunhos' and out:
-            equipe = _equipe()
-            ids = [n['id'] for n in out]
-            vistos = {}
-            for r in _q("SELECT novidade_id, usuario_id, reacao FROM novidades_lidas WHERE novidade_id IN (%s)"
-                        % ','.join(['%s'] * len(ids)), tuple(ids)):
-                vistos.setdefault(r['novidade_id'], {})[r['usuario_id']] = r['reacao']
-            por_pessoa = {u['id']: [0, 0] for u in equipe}      # viu, podia ver
-            for n in out:
-                podem = [u for u in equipe if _pode_ver(n, telas, u['perms'], u['admin'])]
-                v = vistos.get(n['id'], {})
-                viram = [u for u in podem if u['id'] in v]
-                n['leitura'] = {'podem': len(podem), 'viram': len(viram),
-                                'util': sum(1 for u in viram if v[u['id']] == 'util'),
-                                'duvida': sum(1 for u in viram if v[u['id']] == 'duvida')}
-                for u in podem:
-                    por_pessoa[u['id']][1] += 1
-                    if u['id'] in v:
-                        por_pessoa[u['id']][0] += 1
-            equipe_leitura = sorted(
-                [{'id': u['id'], 'nome': u['nome'], 'departamento': u['departamento'],
-                  'viu': por_pessoa[u['id']][0], 'podia': por_pessoa[u['id']][1]}
-                 for u in equipe if u['id'] != current_user.id and por_pessoa[u['id']][1]],
-                key=lambda x: (x['viu'] / x['podia'], x['nome']))
+    equipe, equipe_leitura = [], []
+    if admin and out:
+        equipe = _equipe()
+        ids = [n['id'] for n in out]
+        vistos = {}
+        for r in _q("SELECT novidade_id, usuario_id, reacao FROM novidades_lidas WHERE novidade_id IN (%s)"
+                    % ','.join(['%s'] * len(ids)), tuple(ids)):
+            vistos.setdefault(r['novidade_id'], {})[r['usuario_id']] = r['reacao']
+        por_pessoa = {u['id']: [0, 0] for u in equipe}      # viu, podia ver
+        for n in out:
+            podem = [u for u in equipe if _pode_ver(n, telas, u['perms'], u['admin'])]
+            v = vistos.get(n['id'], {})
+            viram = [u for u in podem if u['id'] in v]
+            n['leitura'] = {'podem': len(podem), 'viram': len(viram),
+                            'util': sum(1 for u in viram if v[u['id']] == 'util'),
+                            'duvida': sum(1 for u in viram if v[u['id']] == 'duvida')}
+            for u in podem:
+                por_pessoa[u['id']][1] += 1
+                if u['id'] in v:
+                    por_pessoa[u['id']][0] += 1
+        equipe_leitura = sorted(
+            [{'id': u['id'], 'nome': u['nome'], 'departamento': u['departamento'],
+              'viu': por_pessoa[u['id']][0], 'podia': por_pessoa[u['id']][1]}
+             for u in equipe if u['id'] != current_user.id and por_pessoa[u['id']][1]],
+            key=lambda x: (x['viu'] / x['podia'], x['nome']))
     # Dúvidas: admin vê as da equipe; a pessoa, as que ela mesma marcou.
-    kpi['duvidas'] = sum(1 for n in out if (n.get('leitura') or {}).get('duvida')) if admin \
-        else sum(1 for n in out if n['minha_reacao'] == 'duvida')
-    areas, tipos_n = {}, {}
-    for n in out:
-        areas[n['area']] = areas.get(n['area'], 0) + 1
-        tipos_n[n['tipo']] = tipos_n.get(n['tipo'], 0) + 1
-    temas = _agrupar_temas(out, admin) if modo == 'temas' else []
-    kpi['temas'] = len(temas)
-    kpi['temas_novos'] = sum(1 for t in temas if t['novas'])
-    return render_template('novidades/index.html', lista=out, ver=ver or 'publicadas', kpi=kpi,
-                           modo=modo, temas=temas, tema_info=tema_info, zap_pub=zap_pub,
-                           areas=areas, tipos_n=tipos_n, TIPOS=TIPOS, AREAS_VISUAL=AREAS_VISUAL,
+    kpi['duvidas'] = sum(1 for n in out if (n.get('leitura') or {}).get('duvida')) if admin         else sum(1 for n in out if n['minha_reacao'] == 'duvida')
+
+    # A linha de temas (a tela do catálogo ou o assunto) e os dias, como os vencimentos em Títulos.
+    temas = _agrupar_temas(out + rasc, admin)
+    tema = (request.args.get('tema') or '').strip()
+    if tema and not any(t['chave'] == tema for t in temas):
+        tema = ''
+    if ver == 'rascunhos':
+        aba = 'rasc'
+    elif tema or zap_pub or not novas:
+        aba = 'todas'
+    else:
+        aba = 'nova'
+    return render_template('novidades/index.html', lista=out, rasc=rasc, kpi=kpi, zap_pub=zap_pub,
+                           dias=_agrupar_dias(out, hoje), dias_rasc=_agrupar_dias(rasc, hoje),
+                           temas=temas, tema_sel=tema, aba_ini=aba,
+                           TIPOS=TIPOS, AREAS_VISUAL=AREAS_VISUAL,
                            eh_admin=admin, grupos=grupos, telas_por_grupo=_telas_por_grupo(telas),
                            equipe_leitura=equipe_leitura, hoje=hoje.isoformat())
 
