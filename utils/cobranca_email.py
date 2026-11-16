@@ -18,6 +18,7 @@ devolve ``(ok, mensagem)`` para a tela.
 import json
 import logging
 import os
+import re
 import secrets
 from datetime import date, datetime
 from decimal import Decimal
@@ -103,6 +104,12 @@ def _doc_fmt(doc):
     if len(d) == 14:
         return f'CNPJ {d[:2]}.{d[2:5]}.{d[5:8]}/{d[8:12]}-{d[12:]}'
     return str(doc or '')
+
+
+def nome_proprio_pagador(boleto):
+    """Nome do pagador do boleto como a gente escreve (Midas Distribuidora..., não MIDAS DISTRIBUIDORA...)."""
+    from utils.texto import nome_proprio
+    return nome_proprio(boleto.get('pagador_nome') or '') or 'Cliente'
 
 
 def _primeiro_nome(nome):
@@ -217,6 +224,47 @@ def pdf_da_nota(nota):
     except Exception as exc:                        # noqa: BLE001
         logger.warning('[cobranca-email] PDF da nota %s: %s', nota.get('id'), exc)
         return None
+
+
+def textos_para_copiar(boleto, nota, empresa_nome, cliente_nome='', cliente_doc='', competencia='', itens=None):
+    """Três textos prontos para colar no WhatsApp — Anderson (16/11/2026): "o copia e cola tem que vir com o
+    texto belo... informando a cobrança e mencionando a chave Pix... tem que ter um do boleto também... e um
+    dos dois"; depois: "quero que o cliente tenha o boleto, código de barras e o Pix... que ele clicasse em
+    cima e conseguisse copiar e colar no celular". No WhatsApp não há botão de copiar, então o texto leva à
+    PÁGINA DE PAGAMENTO (/c/<token>, sem login), que tem os botões Copiar código Pix e Copiar linha digitável.
+    Tom "caloroso, enxuto" (escolhido entre três modelos). Devolve {'pix','boleto','ambos','pix_codigo','linha'};
+    sem meio de pagar, a chave vem vazia."""
+    pix = (boleto.get('pix_copia_cola') or '').strip()
+    linha = (boleto.get('linha_digitavel') or '').strip()
+    tok = garantir_token(boleto)
+    pagina = f'{APP_URL}/c/{tok}' if tok else (boleto.get('link') or '')
+    tem_nota = bool(nota and nota.get('numero_nfse') and nota.get('situacao') == 'autorizada')
+    linhas = [(i.get('nome') or '', _brl(i.get('valor'))) for i in (itens or _itens(boleto)) if i.get('nome')]
+    if not linhas:
+        linhas = [('Honorários e serviços', _brl(boleto['valor']))]
+    total, venc = _brl(boleto['valor']), _data(boleto['vencimento'])
+    meses = {'jan': 'janeiro', 'fev': 'fevereiro', 'mar': 'março', 'abr': 'abril', 'mai': 'maio', 'jun': 'junho',
+             'jul': 'julho', 'ago': 'agosto', 'set': 'setembro', 'out': 'outubro', 'nov': 'novembro', 'dez': 'dezembro'}
+    m = re.match(r'^([a-z]{3})/(\d{4})$', (competencia or '').strip().lower())
+    comp = f'{meses[m.group(1)]}/{m.group(2)}' if m and m.group(1) in meses else (competencia or '')
+
+    cab = [f'Olá! Aqui é da *{empresa_nome}*. 😊', '',
+           ('Segue a cobrança dos honorários' + (f' de *{comp}*' if comp else '')
+            + (f' da *{cliente_nome.rstrip(".")}*' if cliente_nome else '') + ':'), '']
+    cab += [f'• {n} — {v}' for n, v in linhas]
+    if tem_nota:
+        cab.append(f"• Nota fiscal de serviço nº {nota['numero_nfse']}, emitida em "
+                   f"{_data(nota.get('dh_emissao') or nota.get('data_processamento'))}")
+    cab += ['', f'💰 *{total}* · 📅 vence em *{venc}*', '']
+    rod = ['', 'Qualquer dúvida é só responder por aqui. Obrigado pela parceria! 🙏']
+
+    def junta(frase):
+        return '\n'.join(cab + [frase, pagina] + rod) if pagina else ''
+
+    return {'pix': junta('Para pagar com *Pix*, toque no link, copie o código e cole no app do banco:') if pix else '',
+            'boleto': junta('Para pagar o *boleto*, toque no link: dá para copiar a linha digitável ou baixar o PDF:') if (linha or pagina) else '',
+            'ambos': junta('Para pagar com *Pix ou boleto*, toque no link, copie o código e cole no app do banco:') if pix and (linha or pagina) else '',
+            'pix_codigo': pix, 'linha': linha, 'pagina': pagina}
 
 
 def montar(boleto, nota, empresa_nome, com_anexos=False, telefone=''):

@@ -82,23 +82,41 @@
       <div class="tj-nf">
         <span class="tj-nf-ico"><i class="fas fa-file-lines"></i></span>
         <span class="tj-nf-txt"><b>Nota fiscal {{ ('nº ' ~ nota.numero_nfse) if nota.numero_nfse else ('DPS ' ~ nota.numero_dps) }}</b><small>{{ nota.situacao }}{% if nota.dh_emissao %} · emitida em {{ nota.dh_emissao.strftime('%d/%m/%Y') }}{% endif %}</small></span>
-        {% if nota_pdf_ok and pode_rota('financeiro.nota_pdf') %}<a class="tj-ib tj-ib-mini" href="{{ url_for('financeiro.nota_pdf', nota_id=nota.id) }}" target="_blank" rel="noopener" title="Ver a nota (PDF)"><i class="fas fa-eye"></i>Ver nota</a>{% endif %}
+        <span class="tj-nf-btns">
+        {% if nota_pdf_ok and pode_rota('financeiro.nota_pdf') %}<a class="tj-ib tj-ib-mini" href="{{ url_for('financeiro.nota_pdf', nota_id=nota.id, inline=1) }}" target="_blank" rel="noopener" title="Abre a nota numa aba nova, sem salvar"><i class="fas fa-eye"></i>Ver nota</a>
+        <a class="tj-ib tj-ib-mini" href="{{ url_for('financeiro.nota_pdf', nota_id=nota.id) }}" title="Salva o PDF da nota no computador"><i class="fas fa-download"></i>Baixar PDF</a>{% endif %}
         <a class="tj-ib tj-ib-mini" href="{{ url_for('financeiro.nota_detalhe', nota_id=nota.id) }}" title="Ir para a página da nota fiscal"><i class="fas fa-arrow-right"></i>Ir à nota</a>
+        </span>
       </div>
       {% endif %}
 
       {% if boleto %}
-      {% if boleto.linha_digitavel %}
+      {% if boleto.linha_digitavel and not copias.linha %}
       <div class="tj-copia"><dt>Linha digitável</dt><code>{{ boleto.linha_digitavel }}</code><button type="button" class="tj-cp" data-copiar data-copiar-rotulo="Linha digitável" data-copiar-texto="{{ boleto.linha_digitavel }}" title="Copiar"><i class="fas fa-copy"></i></button></div>
       {% endif %}
       {% if boleto.erro %}<div class="tj-aviso tj-aviso-erro"><i class="fas fa-triangle-exclamation"></i> {{ boleto.erro }}</div>{% endif %}
+      {% if copias.pix or copias.boleto %}
+      <div class="tj-copias">
+        <dt>1 · Texto da cobrança <small>· o que está sendo cobrado, valor, vencimento e como pagar; cole no WhatsApp</small></dt>
+        <div>
+          {% if copias.pix %}<button type="button" class="tj-ib tj-ib-pix" data-copiar data-copiar-rotulo="Texto da cobrança (Pix)" data-copiar-texto="{{ copias.pix }}" title="Texto da cobrança falando só do Pix"><i class="fas fa-qrcode"></i>Pix</button>{% endif %}
+          {% if copias.boleto %}<button type="button" class="tj-ib tj-ib-pix" data-copiar data-copiar-rotulo="Texto da cobrança (boleto)" data-copiar-texto="{{ copias.boleto }}" title="Texto da cobrança falando só do boleto"><i class="fas fa-barcode"></i>Boleto</button>{% endif %}
+          {% if copias.ambos %}<button type="button" class="tj-ib tj-ib-pix" data-copiar data-copiar-rotulo="Texto da cobrança (Pix e boleto)" data-copiar-texto="{{ copias.ambos }}" title="Texto da cobrança com as duas formas de pagar"><i class="fas fa-clone"></i>Pix e boleto</button>{% endif %}
+        </div>
+        <dt class="tj-copias-2">2 · Código para pagar <small>· mande cada um numa mensagem só dele: no celular o cliente copia a mensagem inteira e cola no app do banco</small></dt>
+        <div class="tj-copias-cod">
+          {% if copias.pix_codigo %}<button type="button" class="tj-ib tj-ib-pix" data-copiar data-copiar-rotulo="Código Pix copia e cola" data-copiar-texto="{{ copias.pix_codigo }}" title="Só o código do Pix copia e cola"><i class="fas fa-key"></i>Código Pix</button>{% endif %}
+          {% if copias.linha %}<button type="button" class="tj-ib tj-ib-pix" data-copiar data-copiar-rotulo="Linha digitável" data-copiar-texto="{{ copias.linha }}" title="Só a linha digitável do boleto"><i class="fas fa-grip-lines"></i>Linha digitável</button>{% endif %}
+        </div>
+      </div>
+      {% endif %}
       <div class="tj-bol-acoes">
-        {% if boleto.pix_copia_cola %}<button type="button" class="tj-ib tj-ib-pix" data-copiar data-copiar-rotulo="Pix copia e cola" data-copiar-texto="{{ boleto.pix_copia_cola }}" title="Copia o Pix copia e cola do boleto"><i class="fas fa-qrcode"></i>Copiar Pix</button>{% endif %}
         {% if boleto.pdf_url %}
         <a class="tj-ib" href="{{ url_for('financeiro.boleto_pdf', boleto_id=boleto.id) }}" target="_blank" rel="noopener"><i class="fas fa-eye"></i>Ver boleto</a>
         <a class="tj-ib" href="{{ url_for('financeiro.boleto_pdf', boleto_id=boleto.id, baixar=1) }}"><i class="fas fa-download"></i>Baixar PDF</a>
         {% endif %}
-        {% if boleto.link %}<a class="tj-ib" href="{{ boleto.link }}" target="_blank" rel="noopener"><i class="fas fa-arrow-up-right-from-square"></i>Página</a>{% endif %}
+        {% if copias.pagina %}<a class="tj-ib" href="{{ copias.pagina }}" target="_blank" rel="noopener" title="A página que o cliente abre pelo link: Copiar código Pix, Copiar linha digitável, boleto e nota"><i class="fas fa-mobile-screen-button"></i>Página do cliente</a>
+        {% elif boleto.link %}<a class="tj-ib" href="{{ boleto.link }}" target="_blank" rel="noopener"><i class="fas fa-arrow-up-right-from-square"></i>Página</a>{% endif %}
         {% if vivo and pode_rota('financeiro.boleto_sincronizar') %}<form method="POST" action="{{ url_for('financeiro.boleto_sincronizar', boleto_id=boleto.id) }}"><input type="hidden" name="volta" value="{{ volta }}"><button class="tj-ib"><i class="fas fa-rotate"></i>Conferir</button></form>{% endif %}
         {% if vivo and pode_rota('financeiro.boleto_cancelar') %}<form method="POST" action="{{ url_for('financeiro.boleto_cancelar', boleto_id=boleto.id) }}" onsubmit="return confirm('Cancelar este boleto no banco? O cliente não vai mais conseguir pagá-lo.');"><input type="hidden" name="volta" value="{{ volta }}"><button class="tj-ib tj-ib-verm"><i class="fas fa-ban"></i>Cancelar</button></form>{% endif %}
       </div>

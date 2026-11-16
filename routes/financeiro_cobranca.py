@@ -14,6 +14,7 @@ Decisões do Anderson (02/11/2026): tudo pelo nosso app (a Efí não manda
 e-mail), Pix no boleto, webhook obrigatório (é ele que dá a baixa no título),
 credenciais cifradas no banco por empresa, nunca no Railway.
 """
+import io
 import json
 import logging
 from datetime import date, timedelta
@@ -811,6 +812,61 @@ def boleto_reemitir(boleto_id):
 # ---------------------------------------------------------------------------
 # Webhook da Efí (público; o segredo da URL identifica a conta)
 # ---------------------------------------------------------------------------
+@cobranca_publica.route('/c/<token>')
+def pagina_pagamento(token):
+    """Página de pagamento do cliente (16/11/2026) — Anderson: "quero que o cliente tenha o boleto, código de
+    barras e o Pix... que ele clicasse em cima e conseguisse copiar e colar no celular; que ficasse disponível,
+    algo prático". No WhatsApp não há botão de copiar; aqui há: Copiar código Pix, Copiar linha digitável,
+    boleto e nota em PDF. Sem login: só quem tem o código do link chega; abrir carimba como "abriu o boleto"."""
+    from utils import cobranca_email
+    b = cobranca_email.registrar_abertura(token, 'boleto')
+    if not b:
+        abort(404)
+    empresa = cobranca_email._empresa(b['empresa_id'])
+    nota = NfseEmitida.get(b['nfse_id']) if b.get('nfse_id') else None
+    tem_nota = bool(nota and nota.get('numero_nfse') and nota.get('situacao') == 'autorizada')
+    itens = [{'nome': i.get('nome') or '', 'valor': cobranca_email._brl(i.get('valor'))}
+             for i in cobranca_email._itens(b) if i.get('nome')]
+    if not itens:
+        itens = [{'nome': 'Honorários e serviços', 'valor': cobranca_email._brl(b['valor'])}]
+    comp = cobranca_email._competencia_txt(nota) if nota else cobranca_email._competencia_do_titulo(b)
+    hoje = _hoje()
+    venc = b['vencimento']
+    dias = (venc - hoje).days if venc else 0
+    sit = b['situacao']
+    if sit == 'paid':
+        estado, rotulo = 'pago', 'Pago em ' + cobranca_email._data(b.get('pago_em') or venc)
+    elif sit == 'canceled':
+        estado, rotulo = 'cancelado', 'Boleto cancelado'
+    elif sit == 'expired':
+        estado, rotulo = 'expirado', 'Boleto expirado'
+    elif dias < 0:
+        estado, rotulo = 'vencido', 'Venceu há %d dia%s' % (-dias, '' if dias == -1 else 's')
+    elif dias == 0:
+        estado, rotulo = 'aberto', 'Vence hoje'
+    else:
+        estado, rotulo = 'aberto', 'Vence em %d dia%s' % (dias, '' if dias == 1 else 's')
+    pagavel = estado in ('aberto', 'vencido')
+    pix = (b.get('pix_copia_cola') or '').strip() if pagavel else ''
+    qr = ''
+    if pix:
+        import base64
+        import qrcode
+        q = qrcode.QRCode(border=1, box_size=8)
+        q.add_data(pix)
+        q.make(fit=True)
+        buf = io.BytesIO()
+        q.make_image().save(buf, format='PNG')
+        qr = base64.b64encode(buf.getvalue()).decode()
+    urls = cobranca_email.links_do_email(b)
+    return render_template('financeiro/pagar_publico.html', b=b, empresa=empresa, nota=nota, tem_nota=tem_nota,
+                           itens=itens, comp=comp, valor=cobranca_email._brl(b['valor']),
+                           venc=cobranca_email._data(venc), estado=estado, rotulo=rotulo, pagavel=pagavel,
+                           pix=pix, qr=qr, linha=(b.get('linha_digitavel') or '').strip() if pagavel else '',
+                           urls=urls, tem_pdf=bool(b.get('pdf_url') or b.get('link')),
+                           cliente=cobranca_email.nome_proprio_pagador(b), slogan='a EMPRESA é sua, a PARCERIA é NOSSA')
+
+
 @cobranca_publica.route('/c/<token>/boleto')
 def abrir_boleto(token):
     """Cliente clicou em "Abrir o boleto": carimba e mostra o PDF do boleto no navegador (nosso endereco,

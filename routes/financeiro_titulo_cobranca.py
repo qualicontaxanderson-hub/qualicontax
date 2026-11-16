@@ -206,6 +206,14 @@ def titulo_cobranca(titulo_id):
     comp_soma = sum(i['valor'] for i in composicao)
     comp_difere = bool(composicao) and abs(comp_soma - float(t['valor'] or 0)) > 0.01
 
+    # ── textos prontos para copiar (Pix / boleto / os dois), com o que está sendo cobrado ──
+    copias = {'pix': '', 'boleto': '', 'ambos': '', 'pix_codigo': '', 'linha': '', 'pagina': ''}
+    if boleto and boleto['situacao'] not in ('erro', 'canceled', 'rascunho', 'paid'):
+        from utils.cobranca_email import _doc_fmt, _empresa, textos_para_copiar
+        copias = textos_para_copiar(boleto, nota, _empresa(t['empresa_id']), cliente_nome=TR._nome(t['contraparte_nome']),
+                                    cliente_doc=_doc_fmt(t.get('contraparte_doc')), competencia=TR._comp(t.get('competencia')),
+                                    itens=[{'nome': i['nome'], 'valor': i['valor']} for i in composicao] if composicao and not comp_difere else None)
+
     aba = request.args.get('aba') if request.args.get('aba') in ('rec', 'abe', 'atr', 'ina', 'perd') else 'abe'
     emp = request.args.get('emp') or None
     volta = url_for('financeiro.titulos', aba=aba, emp=emp) + f'#cob={titulo_id}'
@@ -220,7 +228,7 @@ def titulo_cobranca(titulo_id):
         cli_n=cli_n, cli_tot=TR.brl(cli_tot), regua=regua, eventos=ev, pagtos=pagtos,
         destinatarios=destinatarios, contatos=contatos, whats=whats, email_cab=email_cab, fone_cab=fone_cab,
         composicao=composicao, comp_fonte=comp_fonte, comp_soma=TR.brl(comp_soma),
-        comp_difere=comp_difere, nota_pdf_ok=bool(nota and nota.get('situacao') in ('autorizada', 'cancelada')),
+        comp_difere=comp_difere, copias=copias, nota_pdf_ok=bool(nota and nota.get('situacao') in ('autorizada', 'cancelada')),
         BOLETO_ROTULO=TR.BOLETO_ROTULO, SIT_BOLETO=SITUACOES, volta=volta, email_padrao=t.get('email') or '',
         cel=cel, msg=TR._msg_cobranca([t], saldo) if cel else '',
         cancelavel=t['status'] == 'aberto' and not t['valor_baixado'], hoje=hoje, hoje_iso=hoje.isoformat())
