@@ -3,56 +3,76 @@
 {% block content %}
 {# Novidades (15/11/2026) no padrão de Financeiro › COBRANÇAS (Anderson: "faça estilo da cobrança
    no financeiro"): cabeçalho branco, faixa escura de escopo, KPIs coloridos, Filtros recolhidos,
-   faixa de contagem e cartões .gc-card em grade. Estilos .fin-* vêm de identidade.css. #}
+   faixa de contagem e cartões .gc-card em grade. Dois níveis: TEMAS → MUDANÇAS. O cartão da
+   mudança tem altura igual e abre numa GAVETA à direita (modelo aprovado 15/11); o editor é em
+   duas colunas com a prévia ao vivo. Estilos .fin-* vêm de identidade.css. #}
 {% include 'clientes/_cartao_css.html' %}
 <style>
+/* cartão de MUDANÇA (nível 2) — altura igual, abre na gaveta */
+.nvc { display:flex; flex-direction:column; gap:10px; cursor:pointer; }
+.nvc .gc-head { align-items:flex-start; }
 .nvc .gc-ava { font-size:17px; letter-spacing:0; flex-direction:column; line-height:1.05; width:52px; height:48px; }
 .nvc .gc-ava small { font-size:8.5px; font-weight:800; letter-spacing:.5px; opacity:.85; text-transform:uppercase; }
-.nvc .gc-ava.nv-ava-novo { background:linear-gradient(135deg,#16a34a,#0f3d2e); }
-.nvc .gc-ava.nv-ava-melhoria { background:linear-gradient(135deg,#0ea5e9,#0c4a6e); }
-.nvc .gc-ava.nv-ava-correcao { background:linear-gradient(135deg,#d97706,#78350f); }
-.nvc .gc-ava.nv-ava-aviso { background:linear-gradient(135deg,#ef4444,#7f1d1d); }
+.nv-ava-novo { background:linear-gradient(135deg,#16a34a,#0f3d2e) !important; }
+.nv-ava-melhoria { background:linear-gradient(135deg,#0ea5e9,#0c4a6e) !important; }
+.nv-ava-correcao { background:linear-gradient(135deg,#d97706,#78350f) !important; }
+.nv-ava-aviso { background:linear-gradient(135deg,#ef4444,#7f1d1d) !important; }
+.nvc .gc-tit h3 { white-space:normal; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; line-height:1.25; font-size:15px; }
+.nvk-onde { display:flex; align-items:center; gap:6px; font-size:12px; color:#64748b; margin-top:4px; min-width:0; }
+.nvk-onde i { width:14px; text-align:center; flex:none; } .nvk-onde b { color:#0f3d2e; font-weight:700; }
+.nvk-onde span { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .nvc.nova { border-color:#86efac; box-shadow:0 0 0 3px #dcfce7; }
-.nvc-doc { display:block; font-size:12px; color:#64748b; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-.nvc-doc b { color:#0f3d2e; }
+.nvc.sel { border-color:#16a34a; box-shadow:0 0 0 3px #bbf7d0; }
 .nf-pill-novo { background:#dcfce7; color:#15803d; } .nf-pill-melhoria { background:#e0f2fe; color:#0369a1; }
 .nf-pill-correcao { background:#fef3c7; color:#92400e; } .nf-pill-aviso { background:#fee2e2; color:#b91c1c; }
-.nvc-meta { display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px 12px; padding:10px 12px;
-            background:#f8fbf9; border:1px solid #edf3ef; border-radius:11px; }
-.nvc-meta .cli-val { white-space:normal; }
-.nvc-meta-leit { grid-column:1 / -1; display:flex; align-items:baseline; justify-content:space-between; gap:10px;
-                 padding-bottom:8px; border-bottom:1px dashed #e2e8e4; flex-wrap:wrap; }
-.nvc-num { font-size:22px; font-weight:800; color:#0f3d2e; font-variant-numeric:tabular-nums; line-height:1; }
-.nvc-num small { font-size:12px; font-weight:600; color:#64748b; margin-left:6px; }
-.nvc-bar { width:110px; height:6px; border-radius:99px; background:#e2e8e4; overflow:hidden; align-self:center; }
-.nvc-bar i { display:block; height:100%; background:#16a34a; }
-.nvc-desc { margin:0; font-size:13px; color:#475569; line-height:1.5; display:-webkit-box; -webkit-line-clamp:3;
-            -webkit-box-orient:vertical; overflow:hidden; }
-.nvc-full { display:none; }
-.nvc.aberto .nvc-desc { display:none; } .nvc.aberto .nvc-full { display:block; }
-.nvc-full p { margin:0 0 8px; font-size:13.5px; line-height:1.6; color:#334155; }
-.nvc-full ul, .nvc-full ol { margin:0 0 8px; padding-left:20px; font-size:13.5px; line-height:1.6; color:#334155; }
-.nvc-full li::marker { color:#16a34a; font-weight:700; }
-.nvc-img { margin-top:6px; border:1px solid #e2e8f0; border-radius:10px; overflow:hidden; background:#f8fafc; cursor:zoom-in; }
-.nvc-img img { display:block; width:100%; height:auto; }
-.nvc-img-rot { font-size:11px; color:#94a3b8; text-align:center; margin:4px 0 0; }
-.nvc-mais { font-size:12px; font-weight:700; color:#15803d; }
-.nvc .cli-pe { flex-wrap:wrap; } .nvc .cli-selo { min-width:200px; }
+.nvk-res { margin:0; font-size:13px; color:#475569; line-height:1.5; display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; flex:1; }
+.nvc .cli-pe { margin-top:auto; } .nvc .cli-selo { min-width:0; }
 .cli-selo-info { background:#eff6ff; border-color:#bfdbfe; color:#1d4ed8; }
 .nvc-acoes { display:flex; gap:4px; flex-wrap:wrap; justify-content:flex-end; }
 .nvc-acoes .fin-btn-tag { white-space:nowrap; }
-.nvc-acoes .fin-btn-tag.on { border-color:#0f3d2e; background:#0f3d2e; color:#fff; }
-.nvc-acoes .fin-btn-tag.on.duv { border-color:#b45309; background:#b45309; }
-.nvc-acoes .fin-btn-tag.pri { border-color:#15803d; background:#15803d; color:#fff; }
-.nvc-commit { font-family:Consolas,'Courier New',monospace; font-size:10.5px; color:#94a3b8; align-self:center; }
+.fin-btn-tag.on { border-color:#0f3d2e; background:#0f3d2e; color:#fff; } .fin-btn-tag.on.duv { border-color:#b45309; background:#b45309; }
+.fin-btn-tag.pri { border-color:#15803d; background:#15803d; color:#fff; } .fin-btn-tag.pri:hover { background:#166534; color:#fff; }
+.fin-btn-tag.copiado { border-color:#16a34a; background:#dcfce7; color:#15803d; }
+.nvc-full { display:none; }
+/* gaveta de leitura */
+.nvk-fundo { position:fixed; inset:0; background:rgba(15,23,42,.35); z-index:900; } .nvk-fundo[hidden] { display:none !important; }
+.nvk-gav { position:fixed; top:0; right:0; bottom:0; width:min(620px,100%); background:#fff; z-index:901; display:flex; flex-direction:column;
+           box-shadow:-20px 0 50px rgba(0,0,0,.18); transform:translateX(0); }
+.nvk-gav[hidden] { display:none !important; }
+.nvk-gav-cab { background:linear-gradient(135deg,#0f3d2e,#166534); color:#fff; padding:18px 22px; display:flex; gap:14px; align-items:flex-start; }
+.nvk-gav-cab .gc-ava { flex:none; width:52px; height:48px; border-radius:12px; display:inline-flex; flex-direction:column; align-items:center; justify-content:center; color:#fff; font-weight:800; font-size:17px; line-height:1.05; }
+.nvk-gav-cab .gc-ava small { font-size:8.5px; letter-spacing:.5px; text-transform:uppercase; opacity:.85; }
+.nvk-gav-cab h2 { margin:0; font-size:19px; line-height:1.25; color:#fff; text-wrap:balance; }
+.nvk-gav-cab p { margin:6px 0 0; font-size:12.5px; color:#bbf7d0; }
+.nvk-gav-x { margin-left:auto; background:rgba(255,255,255,.15); border:0; color:#fff; width:32px; height:32px; border-radius:8px; font-size:18px; cursor:pointer; flex:none; }
+.nvk-gav-corpo { padding:18px 22px; overflow:auto; flex:1; }
+.nvk-gav-corpo p, .nvk-gav-corpo li { font-size:14px; line-height:1.65; color:#334155; }
+.nvk-gav-corpo p { margin:0 0 10px; } .nvk-gav-corpo ul, .nvk-gav-corpo ol { margin:0 0 10px; padding-left:20px; } .nvk-gav-corpo li::marker { color:#16a34a; font-weight:700; }
+.nvk-gav-corpo .nvc-img { margin-top:6px; border:1px solid #e2e8f0; border-radius:10px; overflow:hidden; cursor:zoom-in; }
+.nvk-gav-corpo .nvc-img img { display:block; width:100%; height:auto; }
+.nvk-gav-corpo .nvc-img-rot { font-size:11px; color:#94a3b8; text-align:center; margin:4px 0 0; }
+.nvk-gav-meta { display:flex; gap:14px; flex-wrap:wrap; font-size:12.5px; color:#64748b; padding:0 0 14px; border-bottom:1px solid #eef2f0; margin-bottom:14px; }
+.nvk-gav-meta b { color:#0f172a; }
+.nvk-quem { background:#f0fdf4; border:1px solid #bbf7d0; border-radius:10px; padding:10px 12px; font-size:12.5px; color:#14532d; display:flex; gap:8px; align-items:flex-start; margin:14px 0 0; line-height:1.5; }
+.nvk-quem[hidden] { display:none !important; }
+.nvk-quem i { color:#16a34a; margin-top:3px; } .nvk-quem.vazio { background:#fef2f2; border-color:#fecaca; color:#991b1b; } .nvk-quem.vazio i { color:#dc2626; }
+.nvk-quem small { display:block; color:#64748b; }
+.nvk-gav-pe { border-top:1px solid #eef2f0; padding:12px 22px; display:flex; gap:8px; flex-wrap:wrap; align-items:center; background:#fff; }
+.nvk-gav-pe .esq { margin-right:auto; display:flex; gap:6px; }
+.nvk-gav-pe .btn { padding:8px 14px; font-size:13px; }
+.nvk-gav-pe .btn.on { background:#0f3d2e; border-color:#0f3d2e; color:#fff; } .nvk-gav-pe .btn.on.duv { background:#b45309; border-color:#b45309; }
 /* cartão de TEMA (nível 1) */
 .nvt { text-decoration:none; color:inherit; display:flex; flex-direction:column; gap:12px; min-width:0; }
-.nvt > *, .nvt .nvc-meta > * { min-width:0; }   /* item de grid/flex não estica a página com texto comprido */
-.nvt-lista { min-width:0; }
-.nvt .nvc-meta-leit .fin-fraco { min-width:0; overflow-wrap:anywhere; }
+.nvt > *, .nvt .nvc-meta > * { min-width:0; }
 .nvt .gc-ava { font-size:17px; flex-direction:column; line-height:1.05; width:52px; height:48px; }
 .nvt .gc-ava small { font-size:8.5px; font-weight:800; letter-spacing:.5px; opacity:.85; text-transform:uppercase; }
-.nvt-lista { list-style:none; margin:0; padding:0; grid-column:1 / -1; display:flex; flex-direction:column; gap:5px; }
+.nvc-doc { display:block; font-size:12px; color:#64748b; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; } .nvc-doc b { color:#0f3d2e; }
+.nvc-meta { display:grid; grid-template-columns:1fr; gap:8px 12px; padding:10px 12px; background:#f8fbf9; border:1px solid #edf3ef; border-radius:11px; }
+.nvc-meta-leit { display:flex; align-items:baseline; justify-content:space-between; gap:10px; padding-bottom:8px; border-bottom:1px dashed #e2e8e4; flex-wrap:wrap; }
+.nvc-num { font-size:22px; font-weight:800; color:#0f3d2e; font-variant-numeric:tabular-nums; line-height:1; } .nvc-num small { font-size:12px; font-weight:600; color:#64748b; margin-left:6px; }
+.nvc-bar { width:110px; height:6px; border-radius:99px; background:#e2e8e4; overflow:hidden; align-self:center; } .nvc-bar i { display:block; height:100%; background:#16a34a; }
+.nvt .nvc-meta-leit .fin-fraco { min-width:0; overflow-wrap:anywhere; }
+.nvt-lista { list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:5px; min-width:0; }
 .nvt-lista li { display:flex; align-items:center; gap:8px; font-size:12.5px; color:#334155; min-width:0; }
 .nvt-lista li i { width:14px; color:#94a3b8; font-size:11px; text-align:center; flex:none; }
 .nvt-lista li span { flex:1; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
@@ -60,99 +80,138 @@
 .nvt-lista li.nova span { font-weight:700; color:#0f172a; } .nvt-lista li.nova i { color:#16a34a; }
 .nvt-novo { flex:none; font-style:normal; font-size:9px; font-weight:800; letter-spacing:.06em; color:#fff; background:#16a34a; border-radius:99px; padding:2px 6px; line-height:1; }
 .nvt-lista li.mais { color:#94a3b8; font-size:12px; padding-left:22px; }
-.nvt .nvc-meta { grid-template-columns:1fr; }
-.nvt .nvc-meta-leit { border-bottom:1px dashed #e2e8e4; }
-/* aviso pós-publicação com o texto do WhatsApp */
-.nv-zap-banner { background:#f0fdf4; border:1.5px solid #86efac; border-radius:12px; padding:12px 16px; margin:0 0 12px; font-size:13px; color:#14532d;
-                 display:flex; gap:10px 14px; align-items:center; justify-content:space-between; flex-wrap:wrap; }
-.nv-zap-banner > span:first-child i { color:#16a34a; font-size:16px; margin-right:4px; }
-.nv-zap-banner .nv-zap { border-color:#16a34a; background:#16a34a; color:#fff; } .nv-zap-banner .nv-zap:hover { background:#15803d; color:#fff; }
-.nv-zap-quem { flex-basis:100%; font-size:12.5px; color:#166534; background:#fff; border:1px solid #bbf7d0; border-radius:10px; padding:8px 12px; line-height:1.5; }
-.nv-zap-quem i { color:#16a34a; margin-right:4px; }
-.nv-zap-prev { flex-basis:100%; margin:4px 0 0; background:#fff; border:1px solid #d1fae5; border-radius:10px; padding:12px 14px; white-space:pre-wrap;
-               font:13px/1.55 inherit; font-family:inherit; color:#1f2937; max-width:70ch; }
-.fin-btn-tag.copiado { border-color:#16a34a; background:#dcfce7; color:#15803d; }
+.nvt .cli-selo { min-width:200px; }
+/* página (hero + tiles da home) */
+.ef-car-card.clic { border:0; font:inherit; text-align:left; cursor:pointer; color:inherit; }
+.ef-car-card.clic.on { outline:3px solid #86efac; }
+.ef-hero-badges.nv-abas { margin-top:12px; } .nv-abas .ef-btn { font-size:12px; padding:6px 12px; }
+.nv-ass-rot { font-size:11px; font-weight:800; letter-spacing:.06em; text-transform:uppercase; color:#7d968a; display:inline-flex; align-items:center; gap:6px; padding:7px 4px; }
+#nvAss a { cursor:pointer; } #nvAss a b { margin-left:4px; color:#94a3b8; font-weight:700; } #nvAss a.on b { color:#86efac; }
+.ef-card.nvt { position:relative; }
+.nvt-pill { position:absolute; top:12px; right:12px; font-size:9.5px; font-weight:800; letter-spacing:.06em; border-radius:99px; padding:3px 8px; }
+.nvt-pill-nova { background:#16a34a; color:#fff; } .nvt-pill-duv { background:#fef3c7; color:#b45309; }
+.ef-card-num small { font-size:11px; font-weight:600; color:#7d968a; }
 .nvc-faixa { display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; margin:0 0 12px; font-size:13px; color:#64748b; }
 .nvc-faixa b { color:#0f3d2e; } .nvc-faixa a { font-weight:700; color:#15803d; cursor:pointer; }
 .nvc-ver { display:flex; gap:6px; margin:0 0 12px; flex-wrap:wrap; }
 .nvc-ver a { font-size:13px; font-weight:700; padding:7px 14px; border-radius:99px; border:1.5px solid #d7e3dc; color:#4b6358; text-decoration:none; background:#fff; }
 .nvc-ver a.on { background:#0f3d2e; border-color:#0f3d2e; color:#fff; }
-.fin-kpi.clic { cursor:pointer; border:0; text-align:left; font:inherit; width:100%; }
-.fin-kpi.clic.on { outline:3px solid #fff; outline-offset:-6px; }
+.fin-kpi.clic { cursor:pointer; border:0; text-align:left; font:inherit; width:100%; } .fin-kpi.clic.on { outline:3px solid #fff; outline-offset:-6px; }
 .nv-eq { display:grid; grid-template-columns:repeat(auto-fill, minmax(220px, 1fr)); gap:8px 18px; margin-top:12px; }
 .nv-eq-l { display:grid; grid-template-columns:minmax(0,1fr) 54px; gap:4px 10px; font-size:12.5px; align-items:center; }
-.nv-eq-l span:first-child { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; color:#0f172a; }
-.nv-eq-l small { color:#64748b; font-size:11px; margin-left:4px; }
+.nv-eq-l span:first-child { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; color:#0f172a; } .nv-eq-l small { color:#64748b; font-size:11px; margin-left:4px; }
 .nv-eq-l em { font-style:normal; text-align:right; color:#475569; font-size:12px; font-variant-numeric:tabular-nums; }
 .nv-eq-bar { grid-column:1/-1; height:5px; border-radius:99px; background:#eef2f0; overflow:hidden; }
 .nv-eq-bar i { display:block; height:100%; background:#16a34a; } .nv-eq-bar i.baixa { background:#f59e0b; } .nv-eq-bar i.zero { background:#dc2626; min-width:4px; }
 .nv-luz { position:fixed; inset:0; background:rgba(15,23,42,.88); z-index:1100; display:grid; place-items:center; padding:20px; cursor:zoom-out; }
 .nv-luz[hidden] { display:none !important; } .nv-luz img { max-width:100%; max-height:100%; border-radius:10px; box-shadow:0 20px 60px rgba(0,0,0,.5); }
-/* editor e "quem viu" (janela igual à do Pedir ajuda) */
-.nv-form-lin { display:grid; grid-template-columns:repeat(auto-fit, minmax(170px, 1fr)); gap:12px; }
-.at-modal input[type=text], .at-modal input[type=date], .at-modal select { width:100%; border:1px solid #cbd5e1; border-radius:10px;
-           padding:9px 12px; font:inherit; font-size:13.5px; background:#fff; box-sizing:border-box; }
-.at-modal textarea.nv-texto { min-height:170px; }
-.nv-dica { font-size:12px; color:#64748b; margin-top:4px; line-height:1.5; } .nv-dica code { background:#f1f5f9; border-radius:4px; padding:0 4px; font-size:11.5px; }
-.at-modal.nv-editor { width:min(760px,100%); }
+.nv-zap-banner { background:#f0fdf4; border:1.5px solid #86efac; border-radius:12px; padding:12px 16px; margin:0 0 12px; font-size:13px; color:#14532d; display:flex; gap:10px 14px; align-items:center; justify-content:space-between; flex-wrap:wrap; }
+.nv-zap-banner > span:first-child i { color:#16a34a; font-size:16px; margin-right:4px; }
+.nv-zap-banner .nv-zap { border-color:#16a34a; background:#16a34a; color:#fff; } .nv-zap-banner .nv-zap:hover { background:#15803d; color:#fff; }
+.nv-zap-quem { flex-basis:100%; font-size:12.5px; color:#166534; background:#fff; border:1px solid #bbf7d0; border-radius:10px; padding:8px 12px; line-height:1.5; } .nv-zap-quem i { color:#16a34a; margin-right:4px; }
+.nv-zap-prev { flex-basis:100%; margin:4px 0 0; background:#fff; border:1px solid #d1fae5; border-radius:10px; padding:12px 14px; white-space:pre-wrap; font:13px/1.55 inherit; font-family:inherit; color:#1f2937; max-width:70ch; }
+/* editor em duas colunas */
+.nvk-ed { position:fixed; inset:0; z-index:950; background:rgba(15,23,42,.45); display:grid; place-items:center; padding:16px; }
+.nvk-ed[hidden] { display:none !important; }
+.nvk-ed-box { background:#fff; border-radius:16px; width:min(1180px,100%); max-height:calc(100vh - 32px); display:grid; grid-template-columns:minmax(0,1fr) 440px; grid-template-rows:auto minmax(0,1fr) auto; overflow:hidden; box-shadow:0 30px 80px rgba(0,0,0,.35); }
+.nvk-ed-cab { grid-column:1/-1; background:linear-gradient(135deg,#166534,#15803d); color:#fff; padding:16px 22px; display:flex; align-items:center; gap:12px; }
+.nvk-ed-cab h3 { margin:0; font-size:17px; color:#fff; } .nvk-ed-cab p { margin:2px 0 0; font-size:12.5px; opacity:.85; }
+.nvk-ed-form { padding:18px 22px; overflow:auto; display:flex; flex-direction:column; gap:14px; border-right:1px solid #eef2f0; min-width:0; }
+.nvk-ed-prev { padding:18px 22px; overflow:auto; background:#f3f6f4; min-width:0; }
+.nvk-ed-pe { grid-column:1/-1; border-top:1px solid #eef2f0; padding:12px 22px; display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+.nvk-ed-pe .btn { padding:8px 16px; }
+.nvk-rot { font-size:11.5px; font-weight:800; letter-spacing:.05em; text-transform:uppercase; color:#334155; display:flex; justify-content:space-between; gap:8px; margin-bottom:6px; }
+.nvk-rot small { font-weight:600; color:#94a3b8; text-transform:none; letter-spacing:0; }
+.nvk-in { width:100%; border:1px solid #cbd5e1; border-radius:10px; padding:10px 12px; font:inherit; font-size:14px; box-sizing:border-box; background:#fff; }
+.nvk-tipos { display:flex; gap:6px; flex-wrap:wrap; }
+.nvk-tipos button { display:inline-flex; align-items:center; gap:6px; border:1.5px solid #e2e8f0; border-radius:999px; padding:6px 12px; font:inherit; font-size:12.5px; font-weight:700; color:#475569; background:#fff; cursor:pointer; }
+.nvk-tipos button.on { border-color:#16a34a; background:#dcfce7; color:#15803d; }
+.nvk-bar { display:flex; gap:4px; flex-wrap:wrap; border:1px solid #cbd5e1; border-bottom:0; border-radius:10px 10px 0 0; padding:6px 8px; background:#f8fafc; }
+.nvk-bar button { font:inherit; font-size:12px; font-weight:700; color:#334155; border:1px solid #e2e8f0; border-radius:7px; padding:4px 9px; background:#fff; display:inline-flex; gap:5px; align-items:center; cursor:pointer; }
+.nvk-bar button:hover { border-color:#86efac; color:#15803d; } .nvk-bar .sep { border:0; background:transparent; color:#cbd5e1; padding:4px 2px; }
+.nvk-ta { width:100%; box-sizing:border-box; border:1px solid #cbd5e1; border-radius:0 0 10px 10px; padding:12px; font:inherit; font-size:13.5px; line-height:1.6; color:#334155; min-height:160px; resize:vertical; }
+.nvk-print { display:flex; gap:12px; align-items:center; border:1px dashed #cbd5e1; border-radius:10px; padding:8px 12px; cursor:pointer; min-height:56px; }
+.nvk-print.tem { border-style:solid; } .nvk-print img { width:120px; height:72px; object-fit:cover; object-position:top; border-radius:6px; border:1px solid #e2e8f0; }
+.nvk-print small { color:#64748b; font-size:12px; display:block; } .nvk-print a { font-size:12.5px; font-weight:700; color:#15803d; margin-right:10px; cursor:pointer; }
+.nvk-telas { border:1px solid #cbd5e1; border-radius:10px; padding:10px 12px; max-height:260px; overflow:auto; }
+.nvk-telas .busca { display:flex; align-items:center; gap:8px; border:1px solid #e2e8f0; border-radius:8px; padding:0 10px; margin-bottom:8px; }
+.nvk-telas .busca input { border:0; outline:0; font:inherit; font-size:13px; padding:7px 0; flex:1; background:transparent; }
+.nvk-telas .dep { font-size:10.5px; font-weight:800; letter-spacing:.06em; text-transform:uppercase; color:#94a3b8; margin:8px 0 4px; }
+.nvk-telas .lin { display:flex; gap:6px; flex-wrap:wrap; }
+.nvk-telas .t { font:inherit; font-size:12.5px; border:1px solid #e2e8f0; border-radius:8px; padding:5px 10px; color:#334155; background:#fff; cursor:pointer; }
+.nvk-telas .t.on { border-color:#0284c7; background:#f0f9ff; color:#0369a1; font-weight:700; box-shadow:0 0 0 2px #bae6fd; }
+.nvk-telas .t.geral { border-style:dashed; color:#64748b; } .nvk-telas .t[hidden], .nvk-telas .dep[hidden] { display:none !important; }
+.nvk-tabs { display:flex; gap:6px; margin-bottom:12px; }
+.nvk-tabs button { font:inherit; font-size:12.5px; font-weight:700; padding:6px 12px; border-radius:99px; border:1.5px solid #d7e3dc; color:#4b6358; background:#fff; cursor:pointer; }
+.nvk-tabs button.on { background:#0f3d2e; border-color:#0f3d2e; color:#fff; }
+.nvk-prev-rot { font-size:11px; font-weight:800; letter-spacing:.06em; text-transform:uppercase; color:#7d968a; margin:0 0 8px; }
+.nvk-alvo { display:flex; align-items:center; gap:10px; font-size:13px; color:#14532d; background:#f0fdf4; border:1px solid #bbf7d0; border-radius:10px; padding:8px 12px; margin-right:auto; line-height:1.4; }
+.nvk-alvo i { color:#16a34a; } .nvk-alvo b { font-weight:800; } .nvk-alvo.vazio { background:#fef2f2; border-color:#fecaca; color:#991b1b; } .nvk-alvo.vazio i { color:#dc2626; }
+.nvk-zap { background:#e7f6e9; border-radius:12px; padding:12px 14px; font-size:12.5px; line-height:1.5; color:#1f2937; white-space:pre-wrap; font-family:inherit; margin:0; }
+.nvk-prev .nvc { cursor:default; }
+.nv-erro { font-size:12.5px; color:#b91c1c; }
 .nv-quem { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
 .nv-quem h5 { margin:0 0 8px; font-size:12px; text-transform:uppercase; letter-spacing:.05em; color:#64748b; }
 .nv-quem ul { list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:5px; font-size:13px; }
 .nv-quem li { display:flex; gap:8px; align-items:center; } .nv-quem li small { color:#94a3b8; white-space:nowrap; } .nv-quem li small.q { margin-left:auto; }
-.nv-quem li .r { font-size:11px; border-radius:6px; padding:1px 6px; font-weight:700; }
-.nv-quem li .r-util { background:#dcfce7; color:#15803d; } .nv-quem li .r-duvida { background:#fef3c7; color:#b45309; }
-.nvt .cli-selo { min-width:200px; }
-@media (max-width:600px) { .gc-grid { grid-template-columns:1fr; } .nvc-meta { grid-template-columns:1fr 1fr; }
-  .nvc .cli-selo, .nvt .cli-selo { min-width:0; flex-basis:100%; } .nvc-acoes { width:100%; justify-content:flex-start; } .nv-quem { grid-template-columns:1fr; } }
+.nv-quem li .r { font-size:11px; border-radius:6px; padding:1px 6px; font-weight:700; } .nv-quem li .r-util { background:#dcfce7; color:#15803d; } .nv-quem li .r-duvida { background:#fef3c7; color:#b45309; }
+@media (max-width:980px) { .nvk-ed-box { grid-template-columns:1fr; grid-template-rows:auto minmax(0,1fr) auto; } .nvk-ed-prev { display:none; } .nvk-ed-form { border-right:0; } }
+@media (max-width:600px) { .gc-grid { grid-template-columns:1fr; } .nvt .cli-selo { min-width:0; flex-basis:100%; } .nvc-acoes { width:100%; justify-content:flex-start; } .nv-quem { grid-template-columns:1fr; }
+  .nvk-gav-cab { padding:14px 16px; } .nvk-gav-corpo, .nvk-gav-pe { padding-left:16px; padding-right:16px; } }
 </style>
 
-<div class="page-header">
-    <div>
-        <h1 class="page-title"><i class="fas fa-bullhorn" style="color: var(--primary-green);"></i> Novidades</h1>
-        <p class="page-subtitle">{% if tema_info %}<b>{{ tema_info.nome }}</b>{% if tema_info.area and tema_info.area != tema_info.nome %} · {{ 'Para todos' if tema_info.area == 'Todos' else tema_info.area }}{% endif %} — {{ lista|length }} mudança{{ 's' if lista|length != 1 }}; clique no cartão para ler inteira{% if kpi.novas %} · <b>{{ kpi.novas }}</b> que você ainda não tinha visto{% endif %}
-        {% elif ver == 'rascunhos' %}Rascunhos esperando revisão — cada cartão é uma mudança; Editar ajusta texto, tipo, tela e print
-        {% else %}O que mudou no sistema, explicado para a equipe — cada cartão é um tema; clique para ver as mudanças dele{% if kpi.novas %} · <b>{{ kpi.novas }}</b> que você ainda não tinha visto{% endif %}{% endif %}</p>
+{# ===== HERO verde, igual ao Início do Financeiro (Anderson, 15/11: "igual ao padrão que estamos fazendo") ===== #}
+<div class="ef-hero"><div class="ef-hero-inner">
+    <div class="ef-hero-head">
+        <div>
+            <h1 class="ef-hero-title">Novidades</h1>
+            <p class="ef-hero-sub">{% if tema_info %}<b style="color:#fff">{{ tema_info.nome }}</b>{% if tema_info.area and tema_info.area != tema_info.nome %} · {{ 'Para todos' if tema_info.area == 'Todos' else tema_info.area }}{% endif %} — {{ lista|length }} mudança{{ 's' if lista|length != 1 }}; clique no cartão para ler inteira{% if kpi.novas %} · <b style="color:#fff">{{ kpi.novas }}</b> que você ainda não tinha visto{% endif %}
+            {% elif ver == 'rascunhos' %}Rascunhos esperando revisão — clique no cartão para ler inteiro, ajustar e publicar
+            {% else %}O que mudou no sistema, explicado para a equipe — cada bloco é um tema; clique para ver as mudanças dele{% endif %}</p>
+            {% if eh_admin or tema_info %}
+            <div class="ef-hero-badges nv-abas">
+                {% if tema_info %}
+                <a class="ef-btn" href="{{ url_for('novidades.index') }}"><i class="fas fa-arrow-left"></i> Todos os temas</a>
+                <a class="ef-btn ef-btn-primary" href="{{ url_for('novidades.index', tema=tema_info.chave) }}"><i class="fas {{ tema_info.area_v[2] }}"></i> {{ tema_info.nome }}</a>
+                {% else %}
+                <a class="ef-btn {{ 'ef-btn-primary' if ver == 'publicadas' }}" href="{{ url_for('novidades.index') }}"><i class="fas fa-th-large"></i> Temas</a>
+                {% endif %}
+                {% if eh_admin %}<a class="ef-btn {{ 'ef-btn-primary' if ver == 'rascunhos' }}" href="{{ url_for('novidades.index', ver='rascunhos') }}"><i class="fas fa-pen-ruler"></i> Rascunhos{% if kpi.rascunhos %} ({{ kpi.rascunhos }}){% endif %}</a>{% endif %}
+            </div>
+            {% endif %}
+        </div>
+        <div class="ef-hero-actions">
+            <button type="button" class="ef-btn" data-at-novo="sugestao" data-at-texto="Sugestão de melhoria: "><i class="fas fa-lightbulb"></i> Sugerir melhoria</button>
+            {% if eh_admin %}<button type="button" class="ef-btn ef-btn-primary" data-nv-nova><i class="fas fa-bullhorn"></i> Publicar novidade</button>{% endif %}
+        </div>
     </div>
-    <div class="page-actions">
-        <button type="button" class="btn btn-outline" data-at-novo="sugestao" data-at-texto="Sugestão de melhoria: "><i class="fas fa-lightbulb"></i> Sugerir melhoria</button>
-        {% if eh_admin %}<button type="button" class="btn btn-primary" data-nv-nova><i class="fas fa-bullhorn"></i> Publicar novidade</button>{% endif %}
-    </div>
-</div>
+    {% if modo == 'temas' %}
+    <div class="ef-carousel"><div class="ef-car-track">
+        <button type="button" class="ef-car-card clic" data-kpi="nova"><div class="ef-cc-top"><span class="ef-cc-titulo"><i class="fas fa-bell"></i> Novas para você</span>{% if kpi.novas %}<span class="ef-cc-pill ef-pill-alta">{{ kpi.temas_novos }} tema{{ 's' if kpi.temas_novos != 1 }}</span>{% endif %}</div>
+            <div class="ef-cc-valor">{{ kpi.novas }}</div><div class="ef-cc-apoio">{{ 'mudanças que você ainda não abriu' if kpi.novas else 'você já viu todas' }}</div></button>
+        <button type="button" class="ef-car-card clic" data-kpi="semana"><div class="ef-cc-top"><span class="ef-cc-titulo"><i class="fas fa-calendar-week"></i> Esta semana</span></div>
+            <div class="ef-cc-valor">{{ kpi.semana }}</div><div class="ef-cc-apoio">mudanças publicadas desde segunda</div></button>
+        <button type="button" class="ef-car-card clic" data-kpi="duvida"><div class="ef-cc-top"><span class="ef-cc-titulo"><i class="fas fa-circle-question"></i> {{ 'Com dúvida' if eh_admin else 'Minhas dúvidas' }}</span>{% if kpi.duvidas %}<span class="ef-cc-pill ef-pill-baixa">atenção</span>{% endif %}</div>
+            <div class="ef-cc-valor">{{ kpi.duvidas }}</div><div class="ef-cc-apoio">{{ 'a dúvida vira chamado no Atendimento' if kpi.duvidas else 'nenhuma dúvida aberta' }}</div></button>
+        <button type="button" class="ef-car-card clic" data-kpi=""><div class="ef-cc-top"><span class="ef-cc-titulo"><i class="fas fa-layer-group"></i> Temas</span></div>
+            <div class="ef-cc-valor">{{ kpi.temas }}<small> · {{ kpi.total }} mud.</small></div><div class="ef-cc-apoio">{{ kpi.total }} mudança{{ 's' if kpi.total != 1 }} publicada{{ 's' if kpi.total != 1 }} no total</div></button>
+        {% if eh_admin %}
+        <a class="ef-car-card" href="{{ url_for('novidades.index', ver='rascunhos') }}" style="text-decoration:none"><div class="ef-cc-top"><span class="ef-cc-titulo"><i class="fas fa-pen-ruler"></i> Rascunhos</span>{% if kpi.rascunhos %}<span class="ef-cc-pill ef-pill-neutro">a revisar</span>{% endif %}</div>
+            <div class="ef-cc-valor">{{ kpi.rascunhos }}</div><div class="ef-cc-apoio">nascidos das publicações do sistema</div></a>
+        {% else %}
+        <button type="button" class="ef-car-card clic" data-kpi="mes"><div class="ef-cc-top"><span class="ef-cc-titulo"><i class="fas fa-calendar-days"></i> Este mês</span></div>
+            <div class="ef-cc-valor">{{ kpi.mes }}</div><div class="ef-cc-apoio">mudanças em {{ hoje[5:7] }}/{{ hoje[:4] }}</div></button>
+        {% endif %}
+    </div></div>
+    {% endif %}
+</div></div>
 
+<div class="ef-body">
 {% if lista and not tema_info %}
-<div class="fin-escopo">
-    <span class="fin-escopo-lbl"><i class="fas fa-layer-group"></i> Assunto</span>
-    <div class="fin-chips" id="nvAss">
-        <a class="fin-chip ativo" data-a="">TODOS</a>
-        {% for a, c in areas|dictsort %}<a class="fin-chip" data-a="{{ a }}" title="{{ c }} novidade{{ 's' if c > 1 }}">{{ ('PARA TODOS' if a == 'Todos' else a)|upper }}</a>{% endfor %}
-    </div>
-    <span class="fin-selo" id="nvSelo"><i class="fas fa-globe"></i> Todos os assuntos</span>
-</div>
-{% endif %}
-
-{% if eh_admin or tema_info %}
-<div class="nvc-ver">
-    {% if tema_info %}
-    <a href="{{ url_for('novidades.index') }}"><i class="fas fa-arrow-left"></i> Todos os temas</a>
-    <a class="on" href="{{ url_for('novidades.index', tema=tema_info.chave) }}"><i class="fas {{ tema_info.area_v[2] }}"></i> {{ tema_info.nome }}</a>
-    {% else %}
-    <a class="{{ 'on' if ver == 'publicadas' }}" href="{{ url_for('novidades.index') }}"><i class="fas fa-th-large"></i> Temas</a>
-    {% endif %}
-    {% if eh_admin %}<a class="{{ 'on' if ver == 'rascunhos' }}" href="{{ url_for('novidades.index', ver='rascunhos') }}"><i class="fas fa-pen-ruler"></i> Rascunhos{% if kpi.rascunhos %} ({{ kpi.rascunhos }}){% endif %}</a>{% endif %}
-</div>
-{% endif %}
-
-{% if modo == 'temas' %}
-<div class="fin-kpis">
-    <button type="button" class="fin-kpi clic" data-kpi="nova"><div class="fin-kpi-lbl">Novas para você</div><div class="fin-kpi-val">{{ kpi.novas }}</div><div class="fin-kpi-pe">{{ 'em ' ~ kpi.temas_novos ~ ' tema' ~ ('s' if kpi.temas_novos != 1) if kpi.novas else 'você já viu todas' }}</div></button>
-    <button type="button" class="fin-kpi clic" data-kpi="semana"><div class="fin-kpi-lbl">Esta semana</div><div class="fin-kpi-val">{{ kpi.semana }}</div><div class="fin-kpi-pe">mudanças desde segunda</div></button>
-    <button type="button" class="fin-kpi clic" data-kpi="duvida"{% if not kpi.duvidas %} style="background:linear-gradient(135deg,#475569,#94a3b8);"{% endif %}><div class="fin-kpi-lbl">{{ 'Com dúvida da equipe' if eh_admin else 'Você ficou com dúvida' }}</div><div class="fin-kpi-val">{{ kpi.duvidas }}</div><div class="fin-kpi-pe">{{ 'a dúvida vira chamado no Atendimento' if kpi.duvidas else 'nenhuma dúvida aberta' }}</div></button>
-    <button type="button" class="fin-kpi clic" data-kpi=""><div class="fin-kpi-lbl">Temas</div><div class="fin-kpi-val">{{ kpi.temas }}</div><div class="fin-kpi-pe">{{ kpi.total }} mudança{{ 's' if kpi.total != 1 }} no total</div></button>
-    {% if eh_admin %}
-    <a class="fin-kpi" href="{{ url_for('novidades.index', ver='rascunhos') }}" style="text-decoration:none;"><div class="fin-kpi-lbl">Rascunhos a revisar</div><div class="fin-kpi-val">{{ kpi.rascunhos }}</div><div class="fin-kpi-pe">nascidos das publicações do sistema</div></a>
-    {% else %}
-    <button type="button" class="fin-kpi clic" data-kpi="mes"><div class="fin-kpi-lbl">Este mês</div><div class="fin-kpi-val">{{ kpi.mes }}</div><div class="fin-kpi-pe">mudanças em {{ hoje[5:7] }}/{{ hoje[:4] }}</div></button>
-    {% endif %}
+<div class="nvc-ver" id="nvAss">
+    <span class="nv-ass-rot"><i class="fas fa-layer-group"></i> Assunto</span>
+    <a class="on" data-a="">Todos</a>
+    {% for a, c in areas|dictsort %}<a data-a="{{ a }}" title="{{ c }} novidade{{ 's' if c > 1 }}">{{ 'Para todos' if a == 'Todos' else a }} <b>{{ c }}</b></a>{% endfor %}
 </div>
 {% endif %}
 
@@ -175,9 +234,7 @@
                 {% else %}<option value="nova">Novas para mim</option><option value="util">Que eu entendi</option><option value="duvida">Que fiquei com dúvida</option>{% endif %}</select></div>
             <div><label>{{ 'Título ou texto' if modo == 'lista' else 'Tema ou mudança' }}</label><input type="text" id="nvBusca" placeholder="boleto, NIRE, extrato..."></div>
         </div>
-        <div class="fin-acoes-filtro">
-            <a class="btn btn-outline" id="nvLimpar">Limpar</a>
-        </div>
+        <div class="fin-acoes-filtro"><a class="btn btn-outline" id="nvLimpar">Limpar</a></div>
     </div>
 </div>
 {% endif %}
@@ -217,115 +274,69 @@
 
 {% if lista %}
 <div class="nvc-faixa">
-    <span id="nvFaixa">{% if ver == 'rascunhos' %}<b>{{ lista|length }}</b> rascunho{{ 's' if lista|length > 1 }} esperando revisão. <b>Editar</b> ajusta texto, tipo, tela e print; <b>Publicar</b> solta como está.
+    <span id="nvFaixa">{% if ver == 'rascunhos' %}<b>{{ lista|length }}</b> rascunho{{ 's' if lista|length > 1 }} esperando revisão.
     {% elif modo == 'temas' %}<b>{{ temas|length }}</b> tema{{ 's' if temas|length != 1 }} com mudanças{% if kpi.temas_novos %} · <b>{{ kpi.temas_novos }}</b> com novidade para você{% endif %}.
     {% else %}Mostrando <b>{{ lista|length }}</b> mudança{{ 's' if lista|length != 1 }} de <b>{{ tema_info.nome }}</b>.{% endif %}</span>
-    <span class="fin-fraco">{{ 'Clique no tema para ver as mudanças.' if modo == 'temas' else 'Clique no cartão para ler inteira.' }}</span>
+    <span class="fin-fraco">{{ 'Clique no tema para ver as mudanças.' if modo == 'temas' else 'Clique no cartão para ler inteiro.' }}</span>
 </div>
 
 {% if modo == 'temas' %}
-<div class="gc-grid">
-{% for t in temas %}
-    <a class="gc-card nvt" href="{{ url_for('novidades.index', tema=t.chave) }}" title="Ver as mudanças de {{ t.nome }}"
-       data-area="{{ t.area }}" data-tipo="" data-nova="{{ 1 if t.novas else 0 }}" data-semana="{{ 1 if t.semana else 0 }}" data-mes="1"
-       data-rea="" data-ninguem="{{ 1 if eh_admin and not t.viram else 0 }}" data-duvida="{{ 1 if t.duvidas else 0 }}" data-busca="{{ t.busca }}">
-        <header class="gc-head">
-            <span class="gc-ava nvt-ava" style="background:linear-gradient(135deg,{{ t.area_v[1] }},#0f3d2e)"><i class="fas {{ t.area_v[2] }}"></i><small>{{ t.n }} mud.</small></span>
-            <div class="gc-tit">
-                <h3 title="{{ t.nome }}">{{ t.nome }}</h3>
-                <span class="nvc-doc">{{ 'Para todos' if t.area == 'Todos' else t.area }} · última em <b>{{ t.ultima.strftime('%d/%m') }}</b></span>
-            </div>
-            {% if t.novas %}<span class="nf-pill nf-pill-novo">{{ t.novas }} NOVA{{ 'S' if t.novas > 1 }}</span>{% else %}<span class="nf-pill nf-pill-rascunho">EM DIA</span>{% endif %}
-        </header>
-        <div class="nvc-meta">
-            <div class="nvc-meta-leit">
-                <span class="nvc-num">{{ t.n }}<small>mudança{{ 's' if t.n != 1 }}</small></span>
-                {% if eh_admin and t.podem %}<span class="nvc-bar"><i style="width:{{ t.pct }}%"></i></span><span class="fin-fraco" style="font-size:12px;">{{ t.pct }}% de leitura{% if t.duvidas %} · <b style="color:#b45309;">{{ t.duvidas }} com dúvida</b>{% endif %}</span>
-                {% else %}<span class="fin-fraco" style="font-size:12px;">{{ t.tipos_txt }}</span>{% endif %}
-            </div>
-            <ul class="nvt-lista">
-                {% for x in t.titulos %}<li class="{{ 'nova' if x.nova }}"><i class="fas {{ x.tipo_v[1] }}"></i><span>{{ x.titulo }}</span>{% if x.nova %}<em class="nvt-novo">NOVO</em>{% endif %}<small>{{ x.data.strftime('%d/%m') }}</small></li>{% endfor %}
-                {% if t.n > 3 %}<li class="mais">e mais {{ t.n - 3 }}…</li>{% endif %}
-            </ul>
-        </div>
-        <footer class="cli-pe">
-            {% if eh_admin and t.podem %}
-                {% if not t.viram %}<span class="cli-selo cli-selo-bad"><i class="fas fa-eye-slash"></i><span class="cli-selo-t"><b>Ninguém viu ainda</b><small>nenhuma mudança deste tema foi aberta</small></span></span>
-                {% elif t.duvidas %}<span class="cli-selo cli-selo-warn"><i class="fas fa-circle-question"></i><span class="cli-selo-t"><b>{{ t.duvidas }} com dúvida</b><small>veja o chamado no Atendimento</small></span></span>
-                {% elif t.pct >= 70 %}<span class="cli-selo cli-selo-ok"><i class="fas fa-circle-check"></i><span class="cli-selo-t"><b>Quase todos viram</b><small>{{ t.util }} marcaram Entendi</small></span></span>
-                {% else %}<span class="cli-selo cli-selo-info"><i class="fas fa-eye"></i><span class="cli-selo-t"><b>Em leitura</b><small>{{ t.pct }}% das leituras feitas</small></span></span>{% endif %}
-            {% elif t.duvidas %}<span class="cli-selo cli-selo-warn"><i class="fas fa-circle-question"></i><span class="cli-selo-t"><b>Você ficou com dúvida</b><small>o suporte responde no Atendimento</small></span></span>
-            {% elif t.novas %}<span class="cli-selo cli-selo-info"><i class="fas fa-bell"></i><span class="cli-selo-t"><b>{{ t.novas }} nova{{ 's' if t.novas > 1 }} para você</b><small>abra para ver o que mudou</small></span></span>
-            {% else %}<span class="cli-selo cli-selo-sem"><i class="fas fa-circle-check"></i><span class="cli-selo-t"><b>Você já viu tudo</b><small>nada novo neste tema</small></span></span>{% endif %}
-            <div class="nvc-acoes">
-                {% if t.atalho %}<span class="fin-btn-tag" data-ir="{{ t.atalho.url }}" title="Abrir a tela"><i class="fas fa-arrow-up-right-from-square"></i> Abrir tela</span>{% endif %}
-                <span class="fin-btn-tag pri"><i class="fas fa-list"></i> Ver mudanças</span>
-            </div>
-        </footer>
-    </a>
-{% endfor %}
+{# blocos brancos iguais ao "Dia a dia" do Início do Financeiro: ícone, nome, número grande, uma linha #}
+{% set _novos = temas|selectattr('novas')|list %}
+{% if _novos %}
+<div class="ef-section-label ef-line">Com novidade para você</div>
+<div class="ef-grid">
+{% for t in _novos %}{% include 'novidades/_tema_tile.html' %}{% endfor %}
 </div>
+{% endif %}
+{% set _resto = temas|rejectattr('novas')|list %}
+{% if _resto %}
+<div class="ef-section-label ef-line">{{ 'Em dia' if _novos else 'Temas' }}</div>
+<div class="ef-grid">
+{% for t in _resto %}{% include 'novidades/_tema_tile.html' %}{% endfor %}
+</div>
+{% endif %}
 {% else %}
 <div class="gc-grid">
 {% for n in lista %}
-    <article class="gc-card nvc {{ 'nova' if n.nova }}" tabindex="0" role="button" title="Ler inteira"
-             data-area="{{ n.area }}" data-tipo="{{ n.tipo }}" data-nova="{{ 1 if n.nova else 0 }}" data-semana="{{ 1 if n.periodo[0] == 0 else 0 }}"
+    <article class="gc-card nvc {{ 'nova' if n.nova }}" tabindex="0" role="button" title="Ler inteiro" id="nv{{ n.id }}"
+             data-id="{{ n.id }}" data-area="{{ n.area }}" data-tipo="{{ n.tipo }}" data-nova="{{ 1 if n.nova else 0 }}" data-semana="{{ 1 if n.periodo[0] == 0 else 0 }}"
              data-mes="{{ 1 if n.periodo[0] <= 2 else 0 }}" data-rea="{{ n.minha_reacao or '' }}"
              data-ninguem="{{ 1 if n.leitura and not n.leitura.viram else 0 }}" data-duvida="{{ 1 if (n.leitura and n.leitura.duvida) or n.minha_reacao == 'duvida' else 0 }}"
-             data-busca="{{ (n.titulo ~ ' ' ~ n.texto ~ ' ' ~ n.area)|lower }}">
+             data-busca="{{ (n.titulo ~ ' ' ~ n.texto ~ ' ' ~ n.area)|lower }}"
+             data-info='{{ {"id": n.id, "titulo": n.titulo, "texto": n.texto, "tipo": n.tipo, "tipo_rotulo": n.tipo_v[0], "area": n.area, "tela_id": n.tela_id or "", "tela_nome": n.tela_nome or "", "data": n.data.isoformat(), "data_br": n.data.strftime("%d/%m/%Y"), "dia": n.dia, "mes": n.mes, "situacao": n.situacao, "img": n.tem_imagem, "por": n.por_nome or "", "commit": n.commit_hash or "", "atalho": n.atalho, "zap": n.zap, "quando": n.periodo[1], "leitura": (n.leitura if n.leitura is defined else none), "rea": n.minha_reacao or "", "icone": n.area_v[2], "cor": n.area_v[1]}|tojson|forceescape }}'>
         <header class="gc-head">
             <span class="gc-ava nv-ava-{{ n.tipo }}" title="{{ n.tipo_v[0] }}">{{ n.dia }}<small>{{ n.mes }}</small></span>
             <div class="gc-tit">
                 <h3 title="{{ n.titulo }}">{{ n.titulo }}</h3>
-                <span class="nvc-doc"><i class="fas {{ n.area_v[2] }}" style="color:{{ n.area_v[1] }}"></i> {{ 'Para todos' if n.area == 'Todos' else n.area }}{% if n.tela_nome %} › {{ n.tela_nome }}{% endif %}{% if n.por_nome %} · por <b>{{ n.por_nome }}</b>{% endif %}</span>
+                <span class="nvk-onde"><i class="fas {{ n.area_v[2] }}" style="color:{{ n.area_v[1] }}"></i><span><b>{{ 'Para todos' if n.area == 'Todos' else n.area }}{% if n.tela_nome %} › {{ n.tela_nome }}{% endif %}</b></span></span>
             </div>
             <span class="nf-pill nf-pill-{{ n.tipo }}">{{ n.tipo_v[0]|upper }}</span>
         </header>
-
-        <div class="nvc-meta">
-            {% if eh_admin and n.leitura %}
-            <div class="nvc-meta-leit">
-                <span class="nvc-num">{{ n.leitura.viram }}<small>de {{ n.leitura.podem }} viram</small></span>
-                <span class="nvc-bar"><i style="width:{{ (100 * n.leitura.viram / n.leitura.podem)|round|int if n.leitura.podem else 0 }}%"></i></span>
-                <span class="fin-fraco" style="font-size:12px;">{{ n.leitura.util }} entenderam{% if n.leitura.duvida %} · <b style="color:#b45309;">{{ n.leitura.duvida }} com dúvida</b>{% endif %}</span>
-            </div>
-            {% endif %}
-            <div class="cli-campo"><span class="cli-rot">{{ 'Publicada' if n.situacao == 'publicada' else 'Data' }}</span><b class="cli-val">{{ n.data.strftime('%d/%m/%Y') }}</b></div>
-            <div class="cli-campo"><span class="cli-rot">Quando</span><b class="cli-val">{{ n.periodo[1] }}</b></div>
-            <div class="cli-campo"><span class="cli-rot">Para quem</span><b class="cli-val">{{ ('quem usa ' ~ n.tela_nome) if n.tela_nome else (('quem usa alguma tela de ' ~ n.area) if n.area != 'Todos' else 'toda a equipe') }}</b></div>
-        </div>
-
-        <p class="nvc-desc">{{ n.resumo }} <span class="nvc-mais">ler mais</span></p>
+        <p class="nvk-res">{{ n.resumo }}</p>
         <div class="nvc-full">
             {% for tipo, c in n.blocos %}{% if tipo == 'p' %}<p>{{ c }}</p>{% elif tipo == 'ul' %}<ul>{% for i in c %}<li>{{ i }}</li>{% endfor %}</ul>{% else %}<ol>{% for i in c %}<li>{{ i }}</li>{% endfor %}</ol>{% endif %}{% endfor %}
             {% if n.tem_imagem %}<div class="nvc-img" data-luz="{{ url_for('novidades.imagem', nid=n.id) }}"><img src="{{ url_for('novidades.imagem', nid=n.id) }}" alt="Print da tela" loading="lazy"></div><p class="nvc-img-rot">clique no print para ampliar</p>{% endif %}
         </div>
-
         <footer class="cli-pe">
             {% if ver == 'rascunhos' %}
-            <span class="cli-selo cli-selo-warn"><i class="fas fa-pen-ruler"></i><span class="cli-selo-t"><b>Rascunho</b><small>{{ 'veio da publicação #' ~ n.commit_hash if n.commit_hash else 'escrito à mão' }}</small></span></span>
+            <span class="cli-selo cli-selo-warn"><i class="fas fa-pen-ruler"></i><span class="cli-selo-t"><b>Rascunho{{ ' · com print' if n.tem_imagem }}</b><small>{{ ('#' ~ n.commit_hash ~ ' · ') if n.commit_hash }}{{ ('quem usa ' ~ n.tela_nome) if n.tela_nome else (('quem usa ' ~ n.area) if n.area != 'Todos' else 'toda a equipe') }}</small></span></span>
             {% elif eh_admin and n.leitura %}
                 {% if not n.leitura.viram %}<span class="cli-selo cli-selo-bad"><i class="fas fa-eye-slash"></i><span class="cli-selo-t"><b>Ninguém viu ainda</b><small>{{ n.leitura.podem }} pessoas podem ver</small></span></span>
-                {% elif n.leitura.duvida %}<span class="cli-selo cli-selo-warn"><i class="fas fa-circle-question"></i><span class="cli-selo-t"><b>{{ n.leitura.duvida }} com dúvida</b><small>veja o chamado no Atendimento</small></span></span>
-                {% elif n.leitura.viram * 10 >= n.leitura.podem * 7 %}<span class="cli-selo cli-selo-ok"><i class="fas fa-circle-check"></i><span class="cli-selo-t"><b>Quase todos viram</b><small>{{ n.leitura.util }} marcaram Entendi</small></span></span>
-                {% else %}<span class="cli-selo cli-selo-info"><i class="fas fa-eye"></i><span class="cli-selo-t"><b>Em leitura</b><small>{{ n.leitura.podem - n.leitura.viram }} ainda não viram</small></span></span>{% endif %}
+                {% elif n.leitura.duvida %}<span class="cli-selo cli-selo-warn"><i class="fas fa-circle-question"></i><span class="cli-selo-t"><b>{{ n.leitura.duvida }} com dúvida</b><small>{{ n.leitura.viram }} de {{ n.leitura.podem }} viram</small></span></span>
+                {% elif n.leitura.viram * 10 >= n.leitura.podem * 7 %}<span class="cli-selo cli-selo-ok"><i class="fas fa-circle-check"></i><span class="cli-selo-t"><b>{{ n.leitura.viram }} de {{ n.leitura.podem }} viram</b><small>{{ n.leitura.util }} marcaram Entendi</small></span></span>
+                {% else %}<span class="cli-selo cli-selo-info"><i class="fas fa-eye"></i><span class="cli-selo-t"><b>{{ n.leitura.viram }} de {{ n.leitura.podem }} viram</b><small>{{ n.leitura.podem - n.leitura.viram }} ainda não</small></span></span>{% endif %}
             {% elif n.minha_reacao == 'util' %}<span class="cli-selo cli-selo-ok"><i class="fas fa-circle-check"></i><span class="cli-selo-t"><b>Você entendeu</b><small>obrigado por avisar</small></span></span>
             {% elif n.minha_reacao == 'duvida' %}<span class="cli-selo cli-selo-warn"><i class="fas fa-circle-question"></i><span class="cli-selo-t"><b>Você ficou com dúvida</b><small>o suporte responde no Atendimento</small></span></span>
             {% elif n.nova %}<span class="cli-selo cli-selo-info"><i class="fas fa-bell"></i><span class="cli-selo-t"><b>Novo para você</b><small>primeira vez que aparece</small></span></span>
             {% else %}<span class="cli-selo cli-selo-sem"><i class="fas fa-eye"></i><span class="cli-selo-t"><b>Já visto</b><small>marque Entendi ou Dúvida</small></span></span>{% endif %}
             <div class="nvc-acoes">
-                {% if n.atalho %}<a class="fin-btn-tag" href="{{ n.atalho.url }}" title="Abrir a tela"><i class="fas fa-arrow-up-right-from-square"></i> Abrir {{ n.atalho.rotulo }}</a>{% endif %}
-                {% if ver != 'rascunhos' %}
+                {% if ver == 'rascunhos' %}
+                <button type="button" class="fin-btn-tag" data-nv-editar="{{ n.id }}"><i class="fas fa-pen"></i> Editar</button>
+                <button type="button" class="fin-btn-tag pri" data-nv-sit="publicada" data-id="{{ n.id }}" data-confirma="Publicar?"><i class="fas fa-bullhorn"></i> Publicar</button>
+                {% else %}
                 <button type="button" class="fin-btn-tag nv-rea {{ 'on' if n.minha_reacao == 'util' }}" data-rea="util" data-id="{{ n.id }}"><i class="fas fa-thumbs-up"></i> Entendi</button>
                 <button type="button" class="fin-btn-tag nv-rea duv {{ 'on' if n.minha_reacao == 'duvida' }}" data-rea="duvida" data-id="{{ n.id }}" data-at-novo="duvida" data-at-texto="Sobre a novidade «{{ n.titulo }}»: "><i class="fas fa-circle-question"></i> Dúvida</button>
-                {% if eh_admin and n.leitura %}<button type="button" class="fin-btn-tag" data-quem="{{ n.id }}"><i class="fas fa-users"></i> Quem viu</button>{% endif %}
-                {% endif %}
-                {% if eh_admin %}
-                <button type="button" class="fin-btn-tag nv-zap" title="Copiar o texto pronto para mandar no WhatsApp" data-zap='{{ n.zap|tojson|forceescape }}'><i class="fab fa-whatsapp"></i> WhatsApp</button>
-                <button type="button" class="fin-btn-tag" data-nv-editar='{{ {"id": n.id, "titulo": n.titulo, "texto": n.texto, "tipo": n.tipo, "area": n.area, "tela_id": n.tela_id or "", "data": n.data.isoformat(), "situacao": n.situacao, "img": n.tem_imagem}|tojson|forceescape }}'><i class="fas fa-pen"></i> Editar</button>
-                {% if n.situacao == 'publicada' %}<button type="button" class="fin-btn-tag" data-nv-sit="rascunho" data-id="{{ n.id }}" data-confirma="Tirar do ar?"><i class="fas fa-eye-slash"></i> Tirar do ar</button>
-                {% else %}<button type="button" class="fin-btn-tag" data-nv-sit="descartada" data-id="{{ n.id }}" data-confirma="Descartar?"><i class="fas fa-trash"></i> Descartar</button>
-                <button type="button" class="fin-btn-tag pri" data-nv-sit="publicada" data-id="{{ n.id }}" data-confirma="Publicar como está?"><i class="fas fa-bullhorn"></i> Publicar</button>{% endif %}
                 {% endif %}
             </div>
         </footer>
@@ -339,46 +350,91 @@
     {% if ver == 'rascunhos' %}Nenhum rascunho esperando revisão.{% else %}Ainda não há novidades publicadas. Quando algo mudar no sistema, o aviso aparece aqui e no número verde do menu.{% endif %}</div></div>
 {% endif %}
 
+</div>{# /ef-body #}
+
+{# ===== gaveta de leitura ===== #}
+<div class="nvk-fundo" id="nvGavFundo" hidden></div>
+<aside class="nvk-gav" id="nvGav" hidden role="dialog" aria-modal="true" aria-labelledby="nvGavT">
+    <div class="nvk-gav-cab"><span class="gc-ava" id="nvGavAva"></span>
+        <div style="min-width:0"><h2 id="nvGavT"></h2><p id="nvGavSub"></p></div>
+        <button type="button" class="nvk-gav-x" id="nvGavX" aria-label="Fechar">&times;</button></div>
+    <div class="nvk-gav-corpo">
+        <div class="nvk-gav-meta" id="nvGavMeta"></div>
+        <div id="nvGavTexto"></div>
+        <div class="nvk-quem" id="nvGavQuem" hidden><i class="fas fa-users"></i><span></span></div>
+    </div>
+    <div class="nvk-gav-pe" id="nvGavPe"></div>
+</aside>
 <div class="nv-luz" id="nvLuz" hidden><img alt="Print ampliado"></div>
 
 {% if eh_admin %}
-<div class="at-fundo" id="nvEditor" hidden>
-  <form class="at-modal nv-editor" role="dialog" aria-modal="true" aria-labelledby="nvEdT" id="nvForm">
-    <div class="at-modal-cab"><div><h3 id="nvEdT">Publicar novidade</h3><p>Escreva para toda a equipe: o que mudou, onde fica e o que a pessoa faz agora</p></div>
-      <button type="button" data-fechar aria-label="Fechar"><i class="fas fa-xmark"></i></button></div>
-    <div class="at-modal-corpo">
-      <input type="hidden" name="id"><input type="hidden" name="tipo" value="melhoria"><input type="hidden" name="tirar_imagem" value="0">
-      <div><span class="at-rot">Que tipo de novidade é?</span>
-        <div class="at-chips" id="nvTipos">
-          {% for k, t in TIPOS.items() %}<button type="button" class="at-chip {{ 'on' if k == 'melhoria' }}" data-tipo="{{ k }}"><i class="fas {{ t[1] }}"></i> {{ t[0] }}</button>{% endfor %}
+{# ===== editor em duas colunas, com prévia ao vivo ===== #}
+<div class="nvk-ed" id="nvEditor" hidden>
+  <form class="nvk-ed-box" id="nvForm" role="dialog" aria-modal="true" aria-labelledby="nvEdT">
+    <div class="nvk-ed-cab"><div><h3 id="nvEdT">Publicar novidade</h3><p>Escreva para a equipe: o que mudou, onde fica e o que a pessoa faz agora. À direita, como vai ficar.</p></div>
+      <button type="button" class="nvk-gav-x" data-fechar aria-label="Fechar">&times;</button></div>
+    <div class="nvk-ed-form">
+      <input type="hidden" name="id"><input type="hidden" name="tipo" value="melhoria"><input type="hidden" name="area" value="Todos"><input type="hidden" name="tela_id" value=""><input type="hidden" name="tirar_imagem" value="0">
+      <div><div class="nvk-rot">Que tipo de novidade é?</div>
+        <div class="nvk-tipos" id="nvTipos">{% for k, t in TIPOS.items() %}<button type="button" class="{{ 'on' if k == 'melhoria' }}" data-tipo="{{ k }}"><i class="fas {{ t[1] }}"></i> {{ t[0] }}</button>{% endfor %}</div></div>
+      <div><div class="nvk-rot">Título <small><span id="nvTitN">0</span> / 160</small></div><input type="text" class="nvk-in" name="titulo" maxlength="160" required placeholder="Ex.: O extrato da Efí entra sozinho todo dia"></div>
+      <div><div class="nvk-rot">Texto <small>o primeiro parágrafo aparece no cartão fechado</small></div>
+        <div class="nvk-bar">
+          <button type="button" data-fmt="neg" title="Negrito no trecho selecionado"><b>N</b> Negrito</button>
+          <button type="button" data-fmt="lista" title="Vira lista com marcador"><i class="fas fa-list-ul"></i> Lista</button>
+          <button type="button" data-fmt="passos" title="Vira passo a passo numerado"><i class="fas fa-list-ol"></i> Passo a passo</button>
+          <span class="sep">|</span>
+          <button type="button" data-fmt="print" title="Colar ou escolher o print"><i class="fas fa-image"></i> Colar print</button>
+        </div>
+        <textarea class="nvk-ta" name="texto" required placeholder="O que mudou, onde fica e o que a pessoa faz agora. Linha em branco separa parágrafos."></textarea></div>
+      <div><div class="nvk-rot">Print da tela <small>opcional · Ctrl+V no texto também cola</small></div>
+        <div class="nvk-print" id="nvPrint" tabindex="0"><i class="fas fa-image" style="color:#94a3b8"></i><div><small>Clique aqui e aperte <b>Ctrl+V</b>, arraste a imagem ou <a id="nvPrintEscolher">escolha o arquivo</a></small></div>
+          <input type="file" accept="image/*" id="nvArq" hidden></div></div>
+      <div><div class="nvk-rot">Onde essa mudança está? <small>escolher a tela já define o assunto e quem vê</small></div>
+        <div class="nvk-telas" id="nvTelas">
+          <div class="busca"><i class="fas fa-magnifying-glass" style="color:#94a3b8"></i><input type="text" id="nvTelaBusca" placeholder="Procurar tela (ex.: extrato, boleto, clientes)" autocomplete="off"></div>
+          <div class="lin"><button type="button" class="t on" data-area="Todos" data-tela="" data-busca="para todos sistema inteiro"><i class="fas fa-users"></i> Para todos — o sistema inteiro</button></div>
+          {% for g, ts in telas_por_grupo.items() %}
+          <div class="dep" data-dep="{{ g }}">{{ g }}</div>
+          <div class="lin" data-dep="{{ g }}">
+            <button type="button" class="t geral" data-area="{{ g }}" data-tela="" data-busca="{{ g|lower }} geral qualquer tela">Qualquer tela de {{ g }}</button>
+            {% for t in ts %}<button type="button" class="t" data-area="{{ g }}" data-tela="{{ t.id }}" data-busca="{{ (g ~ ' ' ~ t.nome)|lower }}">{{ t.nome }}</button>{% endfor %}
+          </div>
+          {% endfor %}
         </div></div>
-      <div><span class="at-rot">Título</span><input type="text" name="titulo" maxlength="160" required placeholder="Ex.: O extrato da Efí entra sozinho todo dia"></div>
-      <div><span class="at-rot">Texto</span><textarea name="texto" class="nv-texto" required placeholder="O que mudou, onde fica e o que a pessoa faz agora."></textarea>
-        <div class="nv-dica">O primeiro parágrafo aparece no cartão fechado · linha em branco separa parágrafos · linhas com <code>- </code> viram lista · linhas com <code>1. </code> viram passo a passo · <code>**assim**</code> fica em negrito.</div></div>
-      <div><span class="at-rot">Print da tela (opcional)</span>
-        <div class="at-colar" id="nvColar" tabindex="0"><i class="fas fa-image"></i> Clique aqui e aperte <b>Ctrl+V</b> para colar o print,
-          arraste a imagem ou <label>escolha o arquivo<input type="file" accept="image/*" id="nvArq" hidden></label></div></div>
-      <div class="nv-form-lin">
-        <div><span class="at-rot">Assunto</span><select name="area" id="nvArea">
-          <option value="Todos">Para todos</option>
-          {% for g in grupos %}<option value="{{ g }}">{{ g }}</option>{% endfor %}</select></div>
-        <div><span class="at-rot">Tela (opcional)</span><select name="tela_id" id="nvTela"><option value="">— nenhuma —</option></select></div>
-        <div><span class="at-rot">Data</span><input type="date" name="data" value="{{ hoje }}"></div>
-      </div>
-      <div class="nv-dica"><b>Quem vê:</b> com tela escolhida, só quem tem acesso àquela tela (e ganha o atalho "Abrir"). Só com o assunto, quem tem acesso a alguma tela do assunto. "Para todos", toda a equipe. Vale a tela, não o departamento da pessoa.</div>
-      <div class="nv-dica" id="nvErro" style="color:#b91c1c" hidden></div>
+      <div style="display:flex;gap:12px;flex-wrap:wrap"><div style="flex:0 0 200px"><div class="nvk-rot">Data</div><input type="date" class="nvk-in" name="data" value="{{ hoje }}"></div></div>
+      <div class="nv-erro" id="nvErro" hidden></div>
     </div>
-    <div class="at-modal-pe">
-      <button type="button" class="at-bt" data-fechar>Cancelar</button>
-      <button type="submit" class="at-bt" data-acao="rascunho" id="nvBtRasc"><i class="fas fa-floppy-disk"></i> Guardar rascunho</button>
-      <button type="submit" class="at-bt at-bt-pri" data-acao="publicar" id="nvBtPub"><i class="fas fa-bullhorn"></i> Publicar</button>
+    <div class="nvk-ed-prev nvk-prev">
+      <div class="nvk-tabs"><button type="button" class="on" data-aba="cartao"><i class="fas fa-id-card"></i> Como a equipe vê</button><button type="button" data-aba="zap"><i class="fab fa-whatsapp"></i> Texto do WhatsApp</button></div>
+      <div id="nvAbaCartao">
+        <p class="nvk-prev-rot">Cartão fechado</p>
+        <article class="gc-card nvc" id="nvPrevCard">
+          <header class="gc-head"><span class="gc-ava nv-ava-melhoria" id="nvPvAva">{{ hoje[8:10]|int }}<small>{{ ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'][hoje[5:7]|int - 1] }}</small></span>
+            <div class="gc-tit"><h3 id="nvPvTit">Título da novidade</h3><span class="nvk-onde"><i class="fas fa-bullhorn" id="nvPvIco" style="color:#c2410c"></i><span><b id="nvPvOnde">Para todos</b></span></span></div>
+            <span class="nf-pill nf-pill-melhoria" id="nvPvPill">MELHORIA</span></header>
+          <p class="nvk-res" id="nvPvRes">O primeiro parágrafo do texto aparece aqui.</p>
+          <footer class="cli-pe"><span class="cli-selo cli-selo-info"><i class="fas fa-bell"></i><span class="cli-selo-t"><b>Novo para você</b><small>primeira vez que aparece</small></span></span>
+            <div class="nvc-acoes"><span class="fin-btn-tag"><i class="fas fa-thumbs-up"></i> Entendi</span><span class="fin-btn-tag"><i class="fas fa-circle-question"></i> Dúvida</span></div></footer>
+        </article>
+        <p class="nvk-prev-rot" style="margin-top:16px">Texto inteiro (na gaveta)</p>
+        <div class="gc-card" style="padding:14px 16px;"><div class="nvk-gav-corpo" style="padding:0" id="nvPvTexto"></div><div id="nvPvImg"></div></div>
+      </div>
+      <div id="nvAbaZap" hidden><p class="nvk-prev-rot">Como vai para o WhatsApp</p><pre class="nvk-zap" id="nvPvZap"></pre></div>
+    </div>
+    <div class="nvk-ed-pe">
+      <span class="nvk-alvo" id="nvAlvo"><i class="fas fa-users"></i><span><b>Vai aparecer para toda a equipe</b></span></span>
+      <button type="button" class="btn btn-outline" data-fechar>Cancelar</button>
+      <button type="submit" class="btn btn-outline" data-acao="rascunho" id="nvBtRasc"><i class="fas fa-floppy-disk"></i> Guardar rascunho</button>
+      <button type="submit" class="btn btn-primary" data-acao="publicar" id="nvBtPub"><i class="fas fa-bullhorn"></i> Publicar</button>
     </div>
   </form>
 </div>
-<div class="at-fundo" id="nvQuem" hidden>
-  <div class="at-modal" role="dialog" aria-modal="true">
-    <div class="at-modal-cab"><div><h3>Quem viu</h3><p id="nvQuemS"></p></div><button type="button" data-fechar aria-label="Fechar"><i class="fas fa-xmark"></i></button></div>
-    <div class="at-modal-corpo"><div class="nv-quem"><div><h5>Já viram</h5><ul id="nvViram"></ul></div><div><h5>Ainda não viram</h5><ul id="nvFaltam"></ul></div></div></div>
+<div class="nvk-ed" id="nvQuem" hidden>
+  <div class="nvk-ed-box" style="grid-template-columns:1fr;width:min(640px,100%)">
+    <div class="nvk-ed-cab"><div><h3>Quem viu</h3><p id="nvQuemS"></p></div><button type="button" class="nvk-gav-x" data-fechar aria-label="Fechar">&times;</button></div>
+    <div class="nvk-ed-form" style="border:0"><div class="nv-quem"><div><h5>Já viram</h5><ul id="nvViram"></ul></div><div><h5>Ainda não viram</h5><ul id="nvFaltam"></ul></div></div></div>
+    <div class="nvk-ed-pe"><span style="margin-right:auto"></span><button type="button" class="btn btn-outline" data-fechar>Fechar</button></div>
   </div>
 </div>
 {% endif %}
@@ -389,13 +445,14 @@ function nvToggle(corpo, chev) {
     var c = document.getElementById(corpo), ch = document.getElementById(chev);
     var aberto = c.style.display !== 'none';
     c.style.display = aberto ? 'none' : '';
-    ch.style.transform = aberto ? '' : 'rotate(180deg)';
+    if (ch) ch.style.transform = aberto ? '' : 'rotate(180deg)';
 }
 (function () {
-  var cards = [].slice.call(document.querySelectorAll('.nvc, .nvt'));
-  // "Abrir tela" dentro do cartão de tema (o cartão inteiro é o link para as mudanças)
-  document.querySelectorAll('.nvt [data-ir]').forEach(function (b) { b.addEventListener('click', function (ev) { ev.preventDefault(); ev.stopPropagation(); location.href = b.dataset.ir; }); });
   var $ = function (id) { return document.getElementById(id); };
+  var ADMIN = {{ 'true' if eh_admin else 'false' }}, RASC = {{ 'true' if ver == 'rascunhos' else 'false' }};
+  var cards = [].slice.call(document.querySelectorAll('.nvc[data-id], .nvt'));
+
+  // ---- filtros (temas e mudanças)
   var F = { area: '', tipo: '', quando: '', vista: '', kpi: '', q: '' };
   function filtra() {
     var n = 0;
@@ -414,11 +471,12 @@ function nvToggle(corpo, chev) {
     var v = $('nvVazio'); if (v) v.hidden = n > 0;
     var ativos = [F.tipo, F.quando, F.vista, F.q].filter(Boolean).length;
     var fn = $('nvFiltroN'); if (fn) { fn.hidden = !ativos; fn.textContent = ativos + ' ativo(s)'; }
-    var fx = $('nvFaixa'); if (fx && cards.length && (ativos || F.area || F.kpi)) fx.innerHTML = '<b>' + n + '</b> de ' + cards.length + ' {{ 'temas' if modo == 'temas' else 'mudanças' }} com os filtros. <a id="nvLimpar3">Limpar</a>';
+    var fx = $('nvFaixa');
+    if (fx && cards.length && (ativos || F.area || F.kpi)) fx.innerHTML = '<b>' + n + '</b> de ' + cards.length + ' {{ 'temas' if modo == 'temas' else 'mudanças' }} com os filtros. <a id="nvLimpar3">Limpar</a>';
     else if (fx && cards.length && fx.dataset.orig) fx.innerHTML = fx.dataset.orig;
-    document.querySelectorAll('#nvAss .fin-chip').forEach(function (b) { b.classList.toggle('ativo', b.dataset.a === F.area); });
-    var selo = $('nvSelo'); if (selo) selo.innerHTML = F.area ? '<i class="fas fa-check-circle"></i> ' + (F.area === 'Todos' ? 'Para todos' : F.area) : '<i class="fas fa-globe"></i> Todos os assuntos';
-    document.querySelectorAll('.fin-kpi.clic').forEach(function (b) { b.classList.toggle('on', !!F.kpi && b.dataset.kpi === F.kpi); });
+    document.querySelectorAll('#nvAss a').forEach(function (b) { b.classList.toggle('on', b.dataset.a === F.area); });
+    document.querySelectorAll('.ef-car-card.clic').forEach(function (b) { b.classList.toggle('on', !!F.kpi && b.dataset.kpi === F.kpi); });
+    document.querySelectorAll('.ef-section-label.ef-line').forEach(function (l) { var g = l.nextElementSibling; if (g && g.classList.contains('ef-grid')) { var vis = g.querySelector('.nvt:not([hidden])'); l.hidden = !vis; g.hidden = !vis; } });
     var l3 = $('nvLimpar3'); if (l3) l3.addEventListener('click', limpar);
   }
   function limpar() {
@@ -427,30 +485,19 @@ function nvToggle(corpo, chev) {
     filtra();
   }
   var fx0 = $('nvFaixa'); if (fx0) fx0.dataset.orig = fx0.innerHTML;
-  document.querySelectorAll('#nvAss .fin-chip').forEach(function (b) { b.addEventListener('click', function () { F.area = b.dataset.a; filtra(); }); });
-  document.querySelectorAll('.fin-kpi.clic').forEach(function (b) { b.addEventListener('click', function () { F.kpi = (F.kpi === b.dataset.kpi) ? '' : b.dataset.kpi; filtra(); }); });
+  document.querySelectorAll('#nvAss a').forEach(function (b) { b.addEventListener('click', function () { F.area = b.dataset.a; filtra(); }); });
+  document.querySelectorAll('.ef-car-card.clic').forEach(function (b) { b.addEventListener('click', function () { F.kpi = (F.kpi === b.dataset.kpi) ? '' : b.dataset.kpi; filtra(); }); });
   [['nvFTipo', 'tipo'], ['nvFQuando', 'quando'], ['nvFVista', 'vista']].forEach(function (p) { var e = $(p[0]); if (e) e.addEventListener('change', function () { F[p[1]] = e.value; filtra(); }); });
   var busca = $('nvBusca'); if (busca) busca.addEventListener('input', function () { F.q = busca.value.toLowerCase().trim(); filtra(); });
   ['nvLimpar', 'nvLimpar2'].forEach(function (id) { var e = $(id); if (e) e.addEventListener('click', limpar); });
 
-  // o cartão abre/fecha o texto inteiro; botões e links seguem o próprio caminho
-  cards.forEach(function (card) {
-    function alterna(ev) { if (ev.target.closest('a, button, form, .nvc-img')) return; card.classList.toggle('aberto'); }
-    card.addEventListener('click', alterna);
-    card.addEventListener('keydown', function (ev) { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); alterna(ev); } });
-  });
-  var luz = $('nvLuz');
-  document.querySelectorAll('[data-luz]').forEach(function (b) { b.addEventListener('click', function (ev) { ev.stopPropagation(); luz.querySelector('img').src = b.dataset.luz; luz.hidden = false; }); });
-  luz.addEventListener('click', function () { luz.hidden = true; });
-  document.addEventListener('keydown', function (e) { if (e.key === 'Escape') luz.hidden = true; });
-
+  // ---- utilidades
   function post(url, fd, botao) {
     if (botao) botao.disabled = true;
     return fetch(url, { method: 'POST', body: fd, headers: { 'X-Requested-With': 'XMLHttpRequest' } })
       .then(function (r) { return r.json().catch(function () { return { ok: false, erro: 'Não foi possível (' + r.status + ').' }; }); })
       .finally(function () { if (botao) botao.disabled = false; });
   }
-  // Copiar o texto do WhatsApp (navegador novo copia direto; o antigo cai no selecionar+copiar)
   function copiar(txt) {
     if (navigator.clipboard && window.isSecureContext) return navigator.clipboard.writeText(txt);
     return new Promise(function (ok, erro) {
@@ -459,61 +506,226 @@ function nvToggle(corpo, chev) {
       try { document.execCommand('copy') ? ok() : erro(); } catch (e) { erro(e); } finally { document.body.removeChild(ta); }
     });
   }
-  document.querySelectorAll('.nv-zap').forEach(function (b) {
-    b.addEventListener('click', function (ev) {
-      ev.stopPropagation();
-      var txt = JSON.parse(b.getAttribute('data-zap')), antes = b.innerHTML;
-      copiar(txt).then(function () { b.classList.add('copiado'); b.innerHTML = '<i class="fas fa-check"></i> Copiado! É só colar no WhatsApp'; },
-                       function () { b.innerHTML = '<i class="fas fa-triangle-exclamation"></i> Não copiou — selecione o texto em "Ver o texto"'; });
-      setTimeout(function () { b.classList.remove('copiado'); b.innerHTML = antes; }, 3000);
-    });
-  });
-  document.querySelectorAll('.nv-rea').forEach(function (b) {
-    b.addEventListener('click', function () {
-      var ligar = !b.classList.contains('on'), rea = ligar ? b.dataset.rea : '';
-      var fd = new FormData(); if (rea) fd.append('reacao', rea);
-      post('/novidades/' + b.dataset.id + '/reagir', fd).then(function (j) {
-        if (!j.ok) return;
-        b.parentNode.querySelectorAll('.nv-rea').forEach(function (x) { x.classList.toggle('on', x === b && ligar); });
-        b.closest('.nvc').dataset.rea = rea;
+  function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+  var luz = $('nvLuz');
+  luz.addEventListener('click', function () { luz.hidden = true; });
+
+  // ---- gaveta de leitura
+  var gav = $('nvGav'), gavFundo = $('nvGavFundo'), atual = null;
+  function infoDe(card) { return JSON.parse(card.getAttribute('data-info')); }
+  function abrirGaveta(card) {
+    var n = infoDe(card); atual = { card: card, n: n };
+    document.querySelectorAll('.nvc.sel').forEach(function (c) { c.classList.remove('sel'); }); card.classList.add('sel');
+    var ava = $('nvGavAva'); ava.className = 'gc-ava nv-ava-' + n.tipo; ava.innerHTML = n.dia + '<small>' + esc(n.mes) + '</small>';
+    $('nvGavT').textContent = n.titulo;
+    var onde = (n.area === 'Todos' ? 'Para todos' : n.area) + (n.tela_nome ? ' › ' + n.tela_nome : '');
+    $('nvGavSub').innerHTML = '<i class="fas ' + n.icone + '"></i> ' + esc(onde) + ' · ' + esc(n.tipo_rotulo) + (n.situacao === 'rascunho' ? ' · rascunho' + (n.commit ? ' vindo da publicação #' + esc(n.commit) : '') : (n.por ? ' · publicada por ' + esc(n.por) : ''));
+    var quem = n.tela_nome ? 'quem usa ' + n.tela_nome : (n.area !== 'Todos' ? 'quem usa ' + n.area : 'toda a equipe');
+    $('nvGavMeta').innerHTML = '<span>Data <b>' + n.data_br + '</b></span><span>Quando <b>' + esc(n.quando) + '</b></span><span>Para quem <b>' + esc(quem) + '</b></span><span>Print <b>' + (n.img ? 'sim' : 'não') + '</b></span>'
+      + (n.leitura ? '<span>Leitura <b>' + n.leitura.viram + ' de ' + n.leitura.podem + '</b></span>' : '');
+    $('nvGavTexto').innerHTML = card.querySelector('.nvc-full').innerHTML;
+    var q = $('nvGavQuem'); q.hidden = true;
+    if (ADMIN) {
+      fetch('/novidades/' + n.id + '/quem-viu', { headers: { 'X-Requested-With': 'XMLHttpRequest' } }).then(function (r) { return r.json(); }).then(function (j) {
+        if (!j.ok || !atual || atual.n.id !== n.id) return;
+        var todos = j.viram.concat(j.faltam).filter(function (u) { return !/^(Administrador|Anderson Vieira)$/.test(u.nome); });
+        var nomes = todos.map(function (u) { return u.nome; });
+        var paraTodos = !n.tela_id && n.area === 'Todos';
+        q.classList.toggle('vazio', !nomes.length && !paraTodos);
+        var s = q.querySelector('span');
+        if (paraTodos) s.innerHTML = '<b>' + (n.situacao === 'publicada' ? 'Aparece' : 'Vai aparecer') + ' para toda a equipe (' + nomes.length + ' pessoas).</b> O texto do WhatsApp pode ir no grupo geral.';
+        else if (nomes.length) s.innerHTML = '<b>' + (n.situacao === 'publicada' ? 'Aparece' : 'Vai aparecer') + ' para ' + nomes.length + (nomes.length === 1 ? ' pessoa' : ' pessoas') + ':</b> ' + esc(nomes.join(', ')) + '.' + (n.situacao === 'publicada' ? '<small>Já viram: ' + (j.viram.length ? esc(j.viram.map(function (u) { return u.nome; }).join(', ')) : 'ninguém ainda') + '.</small>' : '<small>Mande o WhatsApp só para essas pessoas ou no grupo do setor.</small>');
+        else s.innerHTML = '<b>Ninguém além dos admins vê esta novidade hoje:</b> nenhuma pessoa tem acesso a essa tela.';
+        q.hidden = false;
       });
+    }
+    var pe = $('nvGavPe'), h = '';
+    if (n.situacao === 'rascunho') {
+      h += '<span class="esq"><button type="button" class="btn btn-outline" data-nv-sit="descartada" data-id="' + n.id + '" data-confirma="Descartar? Não volta mais."><i class="fas fa-trash"></i> Descartar</button></span>';
+      h += '<button type="button" class="btn btn-outline nv-zap"><i class="fab fa-whatsapp"></i> WhatsApp</button>';
+      h += '<button type="button" class="btn btn-outline" data-nv-editar="' + n.id + '"><i class="fas fa-pen"></i> Editar</button>';
+      h += '<button type="button" class="btn btn-primary" data-nv-sit="publicada" data-id="' + n.id + '" data-confirma="Publicar agora?"><i class="fas fa-bullhorn"></i> Publicar agora</button>';
+    } else {
+      h += '<span class="esq">' + (n.atalho ? '<a class="btn btn-outline" href="' + n.atalho.url + '"><i class="fas fa-arrow-up-right-from-square"></i> Abrir ' + esc(n.atalho.rotulo) + '</a>' : '') + '</span>';
+      h += '<button type="button" class="btn btn-outline nv-rea' + (n.rea === 'util' ? ' on' : '') + '" data-rea="util" data-id="' + n.id + '"><i class="fas fa-thumbs-up"></i> Entendi</button>';
+      h += '<button type="button" class="btn btn-outline nv-rea duv' + (n.rea === 'duvida' ? ' on' : '') + '" data-rea="duvida" data-id="' + n.id + '" data-at-novo="duvida" data-at-texto="Sobre a novidade «' + esc(n.titulo) + '»: "><i class="fas fa-circle-question"></i> Tenho dúvida</button>';
+      if (ADMIN) {
+        h += '<button type="button" class="btn btn-outline" data-quem="' + n.id + '"><i class="fas fa-users"></i> Quem viu</button>';
+        h += '<button type="button" class="btn btn-outline nv-zap"><i class="fab fa-whatsapp"></i> WhatsApp</button>';
+        h += '<button type="button" class="btn btn-outline" data-nv-editar="' + n.id + '"><i class="fas fa-pen"></i> Editar</button>';
+        h += '<button type="button" class="btn btn-outline" data-nv-sit="rascunho" data-id="' + n.id + '" data-confirma="Tirar do ar?"><i class="fas fa-eye-slash"></i> Tirar do ar</button>';
+      }
+    }
+    pe.innerHTML = h;
+    gavFundo.hidden = false; gav.hidden = false; gav.querySelector('.nvk-gav-corpo').scrollTop = 0;
+    try { history.replaceState(null, '', location.pathname + location.search + '#n=' + n.id); } catch (e) {}
+  }
+  function fecharGaveta() {
+    gav.hidden = true; gavFundo.hidden = true; atual = null;
+    document.querySelectorAll('.nvc.sel').forEach(function (c) { c.classList.remove('sel'); });
+    try { history.replaceState(null, '', location.pathname + location.search); } catch (e) {}
+  }
+  document.querySelectorAll('.nvc[data-id]').forEach(function (card) {
+    function abre(ev) { if (ev.target.closest('a, button, form')) return; abrirGaveta(card); }
+    card.addEventListener('click', abre);
+    card.addEventListener('keydown', function (ev) { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); abre(ev); } });
+  });
+  $('nvGavX').addEventListener('click', fecharGaveta); gavFundo.addEventListener('click', fecharGaveta);
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape') { if (!luz.hidden) luz.hidden = true; else if (!gav.hidden) fecharGaveta(); } });
+  var m = location.hash.match(/^#n=(\d+)$/); if (m && $('nv' + m[1])) abrirGaveta($('nv' + m[1]));
+
+  // ---- ações (delegadas: valem no cartão, na gaveta e no aviso verde)
+  document.addEventListener('click', function (e) {
+    var b;
+    if ((b = e.target.closest('[data-luz]'))) { e.stopPropagation(); luz.querySelector('img').src = b.dataset.luz; luz.hidden = false; return; }
+    if ((b = e.target.closest('.nv-zap'))) {
+      e.stopPropagation();
+      var txt = b.getAttribute('data-zap') ? JSON.parse(b.getAttribute('data-zap')) : (atual ? atual.n.zap : ''), antes = b.innerHTML;
+      copiar(txt).then(function () { b.classList.add('copiado'); b.innerHTML = '<i class="fas fa-check"></i> Copiado! É só colar no WhatsApp'; },
+                       function () { b.innerHTML = '<i class="fas fa-triangle-exclamation"></i> Não copiou'; });
+      setTimeout(function () { b.classList.remove('copiado'); b.innerHTML = antes; }, 3000);
+      return;
+    }
+    if ((b = e.target.closest('.nv-rea'))) {
+      e.stopPropagation();
+      var ligar = !b.classList.contains('on'), rea = ligar ? b.dataset.rea : '', id = b.dataset.id;
+      var fd = new FormData(); if (rea) fd.append('reacao', rea);
+      post('/novidades/' + id + '/reagir', fd).then(function (j) {
+        if (!j.ok) return;
+        document.querySelectorAll('.nv-rea[data-id="' + id + '"]').forEach(function (x) { x.classList.toggle('on', x.dataset.rea === rea); });
+        var c = $('nv' + id); if (c) { c.dataset.rea = rea; }
+        if (atual && atual.n.id == id) atual.n.rea = rea;
+      });
+      return;
+    }
+    if ((b = e.target.closest('[data-nv-sit]'))) {
+      e.stopPropagation();
+      if (!b.dataset.armado) { b.dataset.armado = '1'; b.dataset.antes = b.innerHTML; b.innerHTML = '<i class="fas fa-circle-question"></i> ' + b.dataset.confirma + ' Clique de novo';
+        setTimeout(function () { delete b.dataset.armado; b.innerHTML = b.dataset.antes; }, 4000); return; }
+      var fd2 = new FormData(); fd2.append('situacao', b.dataset.nvSit);
+      post('/novidades/' + b.dataset.id + '/situacao', fd2, b).then(function (j) {
+        if (!j.ok) return;
+        location.href = b.dataset.nvSit === 'publicada' ? '/novidades/?zap=' + b.dataset.id : location.pathname + location.search;
+      });
+      return;
+    }
+{% if eh_admin %}
+    if ((b = e.target.closest('[data-quem]'))) {
+      e.stopPropagation();
+      fetch('/novidades/' + b.dataset.quem + '/quem-viu', { headers: { 'X-Requested-With': 'XMLHttpRequest' } }).then(function (r) { return r.json(); }).then(function (j) {
+        if (!j.ok) return;
+        $('nvQuemS').textContent = j.titulo;
+        function li(u) { return '<li>' + esc(u.nome) + (u.departamento ? ' <small>' + esc(u.departamento) + '</small>' : '')
+          + (u.reacao ? ' <span class="r r-' + u.reacao + '">' + (u.reacao === 'util' ? 'entendeu' : 'dúvida') + '</span>' : '') + (u.quando ? '<small class="q">' + u.quando + '</small>' : '') + '</li>'; }
+        $('nvViram').innerHTML = j.viram.map(li).join('') || '<li style="color:#94a3b8">Ninguém ainda</li>';
+        $('nvFaltam').innerHTML = j.faltam.map(li).join('') || '<li style="color:#94a3b8">Todos já viram</li>';
+        $('nvQuem').hidden = false;
+      });
+      return;
+    }
+    if ((b = e.target.closest('[data-nv-editar]'))) { e.stopPropagation(); var c2 = $('nv' + b.dataset.nvEditar); abre(c2 ? infoDe(c2) : {}); return; }
+    if ((b = e.target.closest('[data-nv-nova]'))) { abre({}); return; }
+    if ((b = e.target.closest('#nvEditor [data-fechar], #nvQuem [data-fechar]'))) { b.closest('.nvk-ed').hidden = true; return; }
+{% endif %}
+  });
+
+{% if eh_admin %}
+  // ---- editor em duas colunas
+  var fundo = $('nvEditor'), form = $('nvForm'), erro = $('nvErro'), ta = form.texto, tit = form.titulo;
+  var printBox = $('nvPrint'), PRINT_HTML = printBox.innerHTML, imgB64 = null, acao = 'publicar', timer = null, telaBtnOn = null;
+  function tipo(k) { form.tipo.value = k; document.querySelectorAll('#nvTipos button').forEach(function (c) { c.classList.toggle('on', c.dataset.tipo === k); }); previa(); }
+  document.querySelectorAll('#nvTipos button').forEach(function (c) { c.addEventListener('click', function () { tipo(c.dataset.tipo); }); });
+  // barra de formatação: escreve a marcação pela pessoa
+  function linhasSel(prefixo) {
+    var v = ta.value, a = ta.selectionStart, b = ta.selectionEnd;
+    var ini = v.lastIndexOf('\n', a - 1) + 1, fim = v.indexOf('\n', b); if (fim < 0) fim = v.length;
+    var trecho = v.slice(ini, fim), linhas = trecho.split('\n'), n = 0;
+    var novo = linhas.map(function (l) { if (!l.trim()) return l; n++; var limpo = l.replace(/^\s*(?:[-•*]|\d+[.)])\s+/, ''); return (prefixo === '1. ' ? (n + '. ') : prefixo) + limpo; }).join('\n');
+    var antes = v.slice(0, ini), depois = v.slice(fim);
+    if (antes && !/\n\n$/.test(antes)) antes = antes.replace(/\n?$/, '\n\n');
+    if (depois && !/^\n\n/.test(depois)) depois = '\n\n' + depois.replace(/^\n+/, '');
+    ta.value = antes + novo + depois; ta.focus(); previa();
+  }
+  document.querySelectorAll('.nvk-bar [data-fmt]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var f = b.dataset.fmt;
+      if (f === 'print') { printBox.focus(); if (!imgB64) $('nvArq').click(); return; }
+      if (f === 'lista') return linhasSel('- ');
+      if (f === 'passos') return linhasSel('1. ');
+      var a = ta.selectionStart, c = ta.selectionEnd, v = ta.value;
+      if (a === c) { ta.value = v.slice(0, a) + '**negrito**' + v.slice(c); ta.setSelectionRange(a + 2, a + 9); }
+      else { ta.value = v.slice(0, a) + '**' + v.slice(a, c) + '**' + v.slice(c); ta.setSelectionRange(a, c + 4); }
+      ta.focus(); previa();
     });
   });
-{% if eh_admin %}
-  var TELAS = {{ telas_por_grupo|tojson }};
-  var fundo = $('nvEditor'), form = $('nvForm'), area = $('nvArea'), tela = $('nvTela'), erro = $('nvErro');
-  var colar = $('nvColar'), COLAR_HTML = colar.innerHTML, imgB64 = null, acao = 'publicar';
-  function enche(sel) {
-    tela.innerHTML = '<option value="">— nenhuma —</option>';
-    (TELAS[area.value] || []).forEach(function (t) { var o = document.createElement('option'); o.value = t.id; o.textContent = t.nome; tela.appendChild(o); });
-    tela.value = sel || '';
-  }
-  area.addEventListener('change', function () { enche(''); });
-  function tipo(k) { form.tipo.value = k; document.querySelectorAll('#nvTipos .at-chip').forEach(function (c) { c.classList.toggle('on', c.dataset.tipo === k); }); }
-  document.querySelectorAll('#nvTipos .at-chip').forEach(function (c) { c.addEventListener('click', function () { tipo(c.dataset.tipo); }); });
-  function mostraImg(src) { imgB64 = src; colar.classList.add('tem'); colar.innerHTML = '<img alt="print" src="' + src + '"><a href="#" id="nvTiraImg">tirar o print</a>'; }
-  function limpaImg() { imgB64 = null; colar.classList.remove('tem'); colar.innerHTML = COLAR_HTML; }
-  function usarArquivo(f) { if (!f || f.type.indexOf('image') !== 0) return; var r = new FileReader(); r.onload = function () { mostraImg(r.result); form.tirar_imagem.value = '0'; }; r.readAsDataURL(f); }
+  tit.addEventListener('input', function () { $('nvTitN').textContent = tit.value.length; previa(); });
+  ta.addEventListener('input', previa);
+  // print
+  function mostraImg(src, rotulo) { imgB64 = src; printBox.classList.add('tem'); printBox.innerHTML = '<img alt="print" src="' + src + '"><div><small>' + (rotulo || 'print colado') + '</small><a id="nvPrintTrocar">trocar</a><a id="nvPrintTirar">tirar</a></div><input type="file" accept="image/*" id="nvArq" hidden>'; ligaArq(); previaImg(); }
+  function limpaImg() { imgB64 = null; printBox.classList.remove('tem'); printBox.innerHTML = PRINT_HTML; ligaArq(); previaImg(); }
+  function ligaArq() { var i = $('nvArq'); if (i) i.addEventListener('change', function () { usarArquivo(i.files[0]); }); }
+  function usarArquivo(f) { if (!f || f.type.indexOf('image') !== 0) return; var r = new FileReader(); r.onload = function () { mostraImg(r.result, f.name ? f.name + ' · ' + Math.round(f.size / 1024) + ' KB' : 'print colado'); form.tirar_imagem.value = '0'; }; r.readAsDataURL(f); }
   function pegaImg(e) { var it = [].slice.call((e.clipboardData || {}).items || []).filter(function (i) { return i.type.indexOf('image') === 0; })[0]; if (it) { e.preventDefault(); usarArquivo(it.getAsFile()); } }
-  colar.addEventListener('paste', pegaImg); form.texto.addEventListener('paste', pegaImg);
-  colar.addEventListener('dragover', function (e) { e.preventDefault(); });
-  colar.addEventListener('drop', function (e) { e.preventDefault(); usarArquivo(e.dataTransfer.files[0]); });
-  colar.addEventListener('change', function (e) { if (e.target.id === 'nvArq') usarArquivo(e.target.files[0]); });
-  colar.addEventListener('click', function (e) { if (e.target.id === 'nvTiraImg') { e.preventDefault(); limpaImg(); form.tirar_imagem.value = '1'; } });
+  printBox.addEventListener('paste', pegaImg); ta.addEventListener('paste', pegaImg);
+  printBox.addEventListener('dragover', function (e) { e.preventDefault(); });
+  printBox.addEventListener('drop', function (e) { e.preventDefault(); usarArquivo(e.dataTransfer.files[0]); });
+  printBox.addEventListener('click', function (e) {
+    if (e.target.id === 'nvPrintTirar') { e.preventDefault(); limpaImg(); form.tirar_imagem.value = '1'; return; }
+    if (e.target.id === 'nvPrintTrocar' || e.target.id === 'nvPrintEscolher' || !imgB64) { e.preventDefault(); $('nvArq').click(); }
+  });
+  ligaArq();
+  function previaImg() { $('nvPvImg').innerHTML = imgB64 ? '<div class="nvc-img" style="margin-top:8px"><img src="' + imgB64 + '" alt="print" style="width:100%;display:block;border-radius:8px"></div>' : ''; }
+  // telas
+  function marcaTela(btn) {
+    document.querySelectorAll('#nvTelas .t').forEach(function (x) { x.classList.toggle('on', x === btn); });
+    form.area.value = btn.dataset.area; form.tela_id.value = btn.dataset.tela; telaBtnOn = btn; previa();
+  }
+  document.querySelectorAll('#nvTelas .t').forEach(function (b) { b.addEventListener('click', function () { marcaTela(b); }); });
+  $('nvTelaBusca').addEventListener('input', function () {
+    var q = this.value.toLowerCase().trim();
+    document.querySelectorAll('#nvTelas .t').forEach(function (b) { b.hidden = !!q && b.dataset.busca.indexOf(q) < 0; });
+    document.querySelectorAll('#nvTelas .dep').forEach(function (d) { d.hidden = !!q && !document.querySelector('#nvTelas .lin[data-dep="' + d.dataset.dep + '"] .t:not([hidden])'); });
+  });
+  // prévia ao vivo (o servidor monta: mesma regra da publicação)
+  function previa() {
+    clearTimeout(timer);
+    timer = setTimeout(function () {
+      var fd = new FormData(); ['titulo', 'texto', 'tipo', 'area', 'tela_id'].forEach(function (k) { fd.append(k, form[k].value); });
+      post('{{ url_for("novidades.previa") }}', fd).then(function (j) {
+        if (!j.ok) return;
+        $('nvPvTit').textContent = tit.value.trim() || 'Título da novidade';
+        $('nvPvRes').textContent = j.resumo || 'O primeiro parágrafo do texto aparece aqui.';
+        var pill = $('nvPvPill'); pill.className = 'nf-pill nf-pill-' + form.tipo.value; pill.textContent = j.tipo_rotulo.toUpperCase();
+        $('nvPvAva').className = 'gc-ava nv-ava-' + form.tipo.value;
+        $('nvPvOnde').textContent = (j.area === 'Todos' ? 'Para todos' : j.area) + (j.tela_nome ? ' › ' + j.tela_nome : '');
+        var ic = telaBtnOn ? telaBtnOn.closest('.lin').dataset.dep : ''; $('nvPvIco').className = 'fas ' + (AREAS[j.area] ? AREAS[j.area][2] : 'fa-bullhorn'); $('nvPvIco').style.color = AREAS[j.area] ? AREAS[j.area][1] : '#c2410c';
+        $('nvPvTexto').innerHTML = j.html || '<p style="color:#94a3b8">O texto inteiro aparece aqui.</p>';
+        $('nvPvZap').textContent = j.zap;
+        var alvo = $('nvAlvo'), s = alvo.querySelector('span');
+        alvo.classList.toggle('vazio', !j.para_todos && !j.quem.length);
+        if (j.para_todos) s.innerHTML = '<b>Vai aparecer para toda a equipe</b>';
+        else if (j.quem.length) s.innerHTML = '<b>Vai aparecer para ' + j.quem.length + (j.quem.length === 1 ? ' pessoa' : ' pessoas') + ':</b> ' + esc(j.quem.join(', '));
+        else s.innerHTML = '<b>Ninguém além dos admins vai ver:</b> nenhuma pessoa tem acesso a ' + esc(j.tela_nome || j.area) + '. Escolha outra tela ou "Para todos".';
+      });
+    }, 350);
+  }
+  var AREAS = {{ AREAS_VISUAL|tojson }};
+  document.querySelectorAll('.nvk-tabs button').forEach(function (b) { b.addEventListener('click', function () {
+    document.querySelectorAll('.nvk-tabs button').forEach(function (x) { x.classList.toggle('on', x === b); });
+    $('nvAbaCartao').hidden = b.dataset.aba !== 'cartao'; $('nvAbaZap').hidden = b.dataset.aba !== 'zap'; }); });
   function abre(d) {
     d = d || {};
-    form.id.value = d.id || ''; form.titulo.value = d.titulo || ''; form.texto.value = d.texto || '';
-    tipo(d.tipo || 'melhoria'); area.value = d.area || 'Todos'; enche(d.tela_id || '');
-    form.data.value = d.data || '{{ hoje }}'; form.tirar_imagem.value = '0';
-    if (d.img) mostraImg('/novidades/' + d.id + '/imagem'); else limpaImg();
+    form.id.value = d.id || ''; tit.value = d.titulo || ''; ta.value = d.texto || ''; $('nvTitN').textContent = tit.value.length;
+    form.tirar_imagem.value = '0'; $('nvTelaBusca').value = ''; document.querySelectorAll('#nvTelas .t, #nvTelas .dep').forEach(function (x) { x.hidden = false; });
+    var alvoBtn = document.querySelector('#nvTelas .t[data-area="' + (d.area || 'Todos') + '"][data-tela="' + (d.tela_id || '') + '"]') || document.querySelector('#nvTelas .t');
+    marcaTela(alvoBtn); tipo(d.tipo || 'melhoria');
+    form.data.value = d.data || '{{ hoje }}';
+    if (d.img) mostraImg('/novidades/' + d.id + '/imagem', 'print atual'); else limpaImg();
     $('nvEdT').textContent = d.id ? 'Editar novidade' : 'Publicar novidade';
     $('nvBtRasc').hidden = d.situacao === 'publicada';
     $('nvBtPub').innerHTML = d.situacao === 'publicada' ? '<i class="fas fa-check"></i> Salvar' : '<i class="fas fa-bullhorn"></i> Publicar';
-    erro.hidden = true; fundo.hidden = false; form.titulo.focus();
+    erro.hidden = true; fundo.hidden = false; fecharGaveta(); tit.focus(); previa();
   }
-  document.querySelectorAll('[data-nv-nova]').forEach(function (b) { b.addEventListener('click', function () { abre(); }); });
-  document.querySelectorAll('[data-nv-editar]').forEach(function (b) { b.addEventListener('click', function () { abre(JSON.parse(b.getAttribute('data-nv-editar'))); }); });
-  document.querySelectorAll('#nvEditor [data-fechar], #nvQuem [data-fechar]').forEach(function (b) { b.addEventListener('click', function () { b.closest('.at-fundo').hidden = true; }); });
   form.querySelectorAll('button[type=submit]').forEach(function (b) { b.addEventListener('click', function () { acao = b.dataset.acao; }); });
   form.addEventListener('submit', function (ev) {
     ev.preventDefault();
@@ -521,32 +733,6 @@ function nvToggle(corpo, chev) {
     if (imgB64 && imgB64.indexOf('data:') === 0) fd.append('print_b64', imgB64);
     post('{{ url_for("novidades.salvar") }}', fd, form.querySelector('[data-acao="' + acao + '"]')).then(function (j) {
       if (j.ok) { location.href = j.ir; } else { erro.textContent = j.erro || 'Não foi possível salvar.'; erro.hidden = false; }
-    });
-  });
-  document.querySelectorAll('[data-nv-sit]').forEach(function (b) {
-    var armado = false;
-    b.addEventListener('click', function () {
-      if (!armado) { armado = true; b.dataset.antes = b.innerHTML; b.textContent = b.dataset.confirma + ' Clique de novo'; b.classList.add('destaque');
-        setTimeout(function () { armado = false; b.innerHTML = b.dataset.antes; b.classList.remove('destaque'); }, 4000); return; }
-      var fd = new FormData(); fd.append('situacao', b.dataset.nvSit);
-      post('/novidades/' + b.dataset.id + '/situacao', fd, b).then(function (j) {
-        if (!j.ok) return;
-        // publicou um rascunho: volta para os temas já com o texto do WhatsApp pronto
-        location.href = b.dataset.nvSit === 'publicada' ? '/novidades/?zap=' + b.dataset.id : location.pathname + location.search;
-      });
-    });
-  });
-  document.querySelectorAll('[data-quem]').forEach(function (b) {
-    b.addEventListener('click', function () {
-      fetch('/novidades/' + b.dataset.quem + '/quem-viu', { headers: { 'X-Requested-With': 'XMLHttpRequest' } }).then(function (r) { return r.json(); }).then(function (j) {
-        if (!j.ok) return;
-        $('nvQuemS').textContent = j.titulo;
-        function li(u) { return '<li>' + u.nome + (u.departamento ? ' <small>' + u.departamento + '</small>' : '')
-          + (u.reacao ? ' <span class="r r-' + u.reacao + '">' + (u.reacao === 'util' ? 'entendeu' : 'dúvida') + '</span>' : '') + (u.quando ? '<small class="q">' + u.quando + '</small>' : '') + '</li>'; }
-        $('nvViram').innerHTML = j.viram.map(li).join('') || '<li style="color:#94a3b8">Ninguém ainda</li>';
-        $('nvFaltam').innerHTML = j.faltam.map(li).join('') || '<li style="color:#94a3b8">Todos já viram</li>';
-        $('nvQuem').hidden = false;
-      });
     });
   });
 {% endif %}

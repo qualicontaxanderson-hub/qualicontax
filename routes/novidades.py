@@ -162,11 +162,17 @@ def _blocos(texto):
 
 def _resumo(texto):
     """O primeiro parágrafo, em texto puro, para o cartão fechado."""
-    for bloco in (texto or '').replace('\r', '').split('\n\n'):
-        t = ' '.join(l.strip() for l in bloco.split('\n') if l.strip())
-        if t:
-            return re.sub(r'^\s*(?:[-•*]|\d+[.)])\s+', '', t.replace('**', ''))
-    return ''
+    blocos = [[l.strip() for l in b.split('\n') if l.strip()]
+              for b in (texto or '').replace('\r', '').split('\n\n')]
+    blocos = [b for b in blocos if b]
+    if not blocos:
+        return ''
+    limpa = lambda s: re.sub(r'^\s*(?:[-•*]|\d+[.)])\s+', '', s.replace('**', ''))  # noqa: E731
+    t = ' '.join(limpa(l) for l in blocos[0])
+    # Primeiro parágrafo curto que termina em ":" e é seguido de lista: o resumo leva os itens.
+    if len(blocos) > 1 and (len(t) < 90 or t.endswith(':')) and re.match(r'^\s*(?:[-•*]|\d+[.)])\s+', blocos[1][0]):
+        t = t.rstrip(':') + ': ' + '; '.join(limpa(l).rstrip('.;') for l in blocos[1]) + '.'
+    return t
 
 _SEL = """SELECT n.*, COALESCE(NULLIF(u.nick, ''), u.nome) AS por_nome
             FROM novidades n LEFT JOIN usuarios u ON u.id = COALESCE(n.publicada_por, n.criado_por)"""
@@ -511,6 +517,33 @@ def imagem(nid):
 # ---------------------------------------------------------------------------
 # Admin: escrever, publicar, tirar do ar
 # ---------------------------------------------------------------------------
+@novidades.route('/previa', methods=['POST'])
+@admin_required
+def previa():
+    """Prévia ao vivo do editor: o cartão como a equipe vê, o texto do WhatsApp e PARA QUEM vai
+    aparecer (nomes), calculados pelo servidor — uma regra só, a mesma da publicação."""
+    f = request.form
+    telas, grupos = _catalogo()
+    tela_id = (f.get('tela_id') or '').strip() or None
+    if tela_id and tela_id not in telas:
+        tela_id = None
+    area = telas[tela_id][0] if tela_id else (f.get('area') if f.get('area') in grupos else 'Todos')
+    n = {'id': 0, 'titulo': (f.get('titulo') or '').strip() or 'Título da novidade',
+         'texto': (f.get('texto') or '').strip(), 'tipo': f.get('tipo') if f.get('tipo') in TIPOS else 'melhoria',
+         'area': area, 'tela_id': tela_id, 'tela_nome': telas.get(tela_id or '', (None, None))[1]}
+    n['tema'] = _tema_de(n, telas)
+    quem = [u['nome'] for u in _equipe() if not u['admin'] and _pode_ver(n, telas, u['perms'], u['admin'])]
+    blocos = _blocos(n['texto'])
+    html = ''.join(
+        f'<p>{c}</p>' if t == 'p' else
+        ('<ul>' if t == 'ul' else '<ol>') + ''.join(f'<li>{i}</li>' for i in c) + ('</ul>' if t == 'ul' else '</ol>')
+        for t, c in blocos)
+    return jsonify(ok=True, resumo=_resumo(n['texto']), html=html, zap=_texto_zap(n), quem=quem,
+                   para_todos=not tela_id and area == 'Todos', area=area, tela_nome=n['tela_nome'],
+                   tipo_rotulo=TIPOS[n['tipo']][0], tema=n['tema'][1])
+
+
+
 @novidades.route('/salvar', methods=['POST'])
 @admin_required
 def salvar():

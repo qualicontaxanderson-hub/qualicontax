@@ -70,6 +70,28 @@
 .at-dep { font-size:11px; font-weight:700; color:#64748b; text-transform:uppercase; letter-spacing:.06em; grid-column:1/-1; margin-top:6px; }
 .at-busca { width:100%; box-sizing:border-box; border:1px solid #cbd5e1; border-radius:10px; padding:8px 12px; font:inherit; font-size:13px; margin-bottom:8px; }
 .at-dica { font-size:11.5px; color:#64748b; margin:6px 0 0; }
+/* janela "Pedir ajuda" repaginada (15/11/2026): tipos em blocos com explicação, passos, textos por tipo */
+.at-modal-l { width:min(700px,100%); }
+.at-modal-cab .at-cab-ico { width:40px; height:40px; border-radius:12px; background:rgba(255,255,255,.16); display:grid; place-items:center; font-size:18px; flex:none; }
+.at-modal-cab .at-cab-t { display:flex; align-items:center; gap:12px; min-width:0; }
+.at-passos { display:flex; align-items:center; gap:8px; padding:10px 20px; background:#f0fdf4; border-bottom:1px solid #dcfce7; font-size:12px; color:#166534; flex-wrap:wrap; }
+.at-passos span { display:inline-flex; align-items:center; gap:7px; }
+.at-passos b { width:20px; height:20px; border-radius:50%; background:#16a34a; color:#fff; font-size:11px; display:grid; place-items:center; }
+.at-passos i { color:#86efac; font-size:10px; }
+.at-tiles { display:grid; grid-template-columns:repeat(auto-fit, minmax(190px, 1fr)); gap:8px; }
+.at-tile { border:1.5px solid #e2e8f0; background:#fff; border-radius:12px; padding:10px 12px; font:inherit; cursor:pointer; text-align:left;
+           display:grid; grid-template-columns:34px 1fr; grid-template-rows:auto auto; column-gap:10px; align-items:center; color:#0f172a; }
+.at-tile i { grid-row:1 / span 2; width:34px; height:34px; border-radius:10px; background:#f1f5f9; color:#475569; display:grid; place-items:center; font-size:14px; }
+.at-tile b { font-size:13px; font-weight:700; line-height:1.2; } .at-tile small { font-size:11px; color:#64748b; line-height:1.3; }
+.at-tile:hover { border-color:#86efac; }
+.at-tile.on { border-color:#16a34a; background:#f0fdf4; box-shadow:0 0 0 2px #bbf7d0; } .at-tile.on i { background:#16a34a; color:#fff; }
+.at-tile[data-tipo="erro"].on i { background:#dc2626; } .at-tile[data-tipo="duvida"].on i { background:#0284c7; } .at-tile[data-tipo="sugestao"].on i { background:#d97706; }
+.at-rot small { font-weight:600; color:#94a3b8; text-transform:none; letter-spacing:0; margin-left:6px; }
+.at-urg { align-items:center; } .at-urg > span { display:flex; flex-direction:column; } .at-urg small { font-weight:400; color:#b91c1c; opacity:.8; font-size:11.5px; }
+.at-urg input { width:16px; height:16px; accent-color:#dc2626; flex:none; }
+.at-modal .at-onde .at-onde-tag { margin-left:auto; font-size:11px; color:#94a3b8; white-space:nowrap; flex:none; }
+.at-modal-pe .at-pe-nota { margin-right:auto; font-size:12px; color:#64748b; display:flex; align-items:center; gap:6px; }
+@media (max-width:600px) { .at-tiles { grid-template-columns:1fr 1fr; } .at-tile small { display:none; } .at-passos { display:none; } }
 </style>
 
 {% if not (request.endpoint or '').startswith('atendimento.chamado') %}
@@ -77,28 +99,31 @@
 {% endif %}
 
 <div class="at-fundo" id="atNovo" hidden>
-  <div class="at-modal" role="dialog" aria-modal="true" aria-labelledby="atNovoT">
-    <div class="at-modal-cab"><div><h3 id="atNovoT">Pedir ajuda ao suporte</h3><p>Você acompanha a resposta em Atendimento</p></div>
+  <div class="at-modal at-modal-l" role="dialog" aria-modal="true" aria-labelledby="atNovoT">
+    <div class="at-modal-cab"><div class="at-cab-t"><span class="at-cab-ico"><i class="fas fa-headset"></i></span>
+        <div><h3 id="atNovoT">Pedir ajuda ao suporte</h3><p>O chamado chega na hora. Você acompanha a resposta em <b>Atendimento</b>, no menu.</p></div></div>
       <button type="button" data-at-fechar aria-label="Fechar"><i class="fas fa-xmark"></i></button></div>
+    <div class="at-passos"><span><b>1</b> Você conta o que precisa</span><i class="fas fa-chevron-right"></i><span><b>2</b> O suporte responde em Atendimento</span><i class="fas fa-chevron-right"></i><span><b>3</b> Você marca se resolveu</span></div>
     <div class="at-modal-corpo">
       <div><span class="at-rot">O que você precisa?</span>
-        <div class="at-chips" id="atTipos">
-          <button type="button" class="at-chip on" data-tipo="alterar"><i class="fas fa-pen"></i> Alterar ou corrigir algo</button>
-          <button type="button" class="at-chip" data-tipo="erro"><i class="fas fa-bug"></i> Erro na tela</button>
-          <button type="button" class="at-chip" data-at-acesso><i class="fas fa-key"></i> Pedir acesso</button>
-          <button type="button" class="at-chip" data-tipo="duvida"><i class="fas fa-circle-question"></i> Dúvida</button>
-          <button type="button" class="at-chip" data-tipo="sugestao"><i class="fas fa-lightbulb"></i> Sugestão</button>
+        <div class="at-tiles" id="atTipos">
+          <button type="button" class="at-tile on" data-tipo="alterar"><i class="fas fa-pen"></i><b>Alterar ou corrigir</b><small>um dado errado, um cadastro para mudar</small></button>
+          <button type="button" class="at-tile" data-tipo="erro"><i class="fas fa-bug"></i><b>Erro na tela</b><small>algo não funcionou, travou ou sumiu</small></button>
+          <button type="button" class="at-tile" data-at-acesso><i class="fas fa-key"></i><b>Pedir acesso</b><small>uma tela que você ainda não tem</small></button>
+          <button type="button" class="at-tile" data-tipo="duvida"><i class="fas fa-circle-question"></i><b>Dúvida</b><small>como fazer alguma coisa</small></button>
+          <button type="button" class="at-tile" data-tipo="sugestao"><i class="fas fa-lightbulb"></i><b>Sugestão</b><small>uma ideia para melhorar o sistema</small></button>
         </div></div>
       <div id="atOndeBox"><span class="at-rot">Onde você estava</span>
-        <div class="at-onde"><i class="fas fa-location-dot"></i><span id="atOnde"></span></div></div>
-      <div><span class="at-rot">Conte o que aconteceu</span>
-        <textarea id="atTexto" maxlength="5000" placeholder="Ex.: a nota 1234 do fornecedor Ipiranga não aparece na lista de outubro"></textarea></div>
-      <div><span class="at-rot">Print (opcional)</span>
+        <div class="at-onde"><i class="fas fa-location-dot"></i><span id="atOnde"></span><span class="at-onde-tag">preenchido sozinho · vai junto no chamado</span></div></div>
+      <div><span class="at-rot" id="atTextoRot">Conte o que aconteceu</span>
+        <textarea id="atTexto" maxlength="5000" placeholder="Ex.: a nota 1234 do fornecedor Ipiranga não aparece na lista de outubro"></textarea>
+        <p class="at-dica" id="atTextoDica">Quanto mais detalhe, mais rápido resolve: qual empresa, qual nota ou cliente, o que você esperava que acontecesse.</p></div>
+      <div><span class="at-rot">Print <small>opcional, mas ajuda muito</small></span>
         <div class="at-colar" id="atColar" tabindex="0"><i class="fas fa-image"></i> Clique aqui e aperte <b>Ctrl+V</b> para colar o print,
           arraste a imagem ou <label>escolha o arquivo<input type="file" accept="image/*" id="atArq" hidden></label></div></div>
-      <label class="at-urg"><input type="checkbox" id="atUrg"> Isso está me impedindo de trabalhar</label>
+      <label class="at-urg"><input type="checkbox" id="atUrg"><span><b>Isso está me impedindo de trabalhar</b><small>o chamado sobe na fila do suporte</small></span></label>
     </div>
-    <div class="at-modal-pe"><span class="at-erro" id="atNovoErro"></span>
+    <div class="at-modal-pe"><span class="at-erro" id="atNovoErro"></span><span class="at-pe-nota"><i class="fas fa-lock" style="color:#94a3b8"></i> Só você e o suporte veem este chamado</span>
       <button type="button" class="at-bt" data-at-fechar>Cancelar</button>
       <button type="button" class="at-bt at-bt-pri" id="atEnviar"><i class="fas fa-paper-plane"></i> Enviar chamado</button></div>
   </div>
@@ -142,7 +167,7 @@
   function fechar() { document.querySelectorAll('.at-fundo').forEach(function (f) { f.hidden = true; }); }
   window.atAbrirChamado = function (opts) {
     opts = opts || {};
-    if (opts.tipo) { var ch = document.querySelector('#atTipos .at-chip[data-tipo="' + opts.tipo + '"]'); if (ch) ch.click(); }
+    if (opts.tipo) { var ch = document.querySelector('#atTipos [data-tipo="' + opts.tipo + '"]'); if (ch) ch.click(); }
     if (opts.texto !== undefined && opts.texto !== null && opts.texto !== '') $('atTexto').value = opts.texto;
     $('atOnde').textContent = onde(); $('atNovoErro').textContent = '';
     $('atOndeBox').hidden = location.pathname.indexOf('/atendimento') === 0;
@@ -155,10 +180,21 @@
     if (nv) { e.preventDefault(); window.atAbrirChamado({ tipo: nv.getAttribute('data-at-novo'), texto: nv.getAttribute('data-at-texto') }); return; }
     if (e.target.closest('[data-at-acesso]')) { e.preventDefault(); window.atAbrirAcesso(); return; }
     if (e.target.closest('[data-at-fechar]') || e.target.classList.contains('at-fundo')) { fechar(); return; }
-    var c = e.target.closest('#atTipos .at-chip[data-tipo]');
-    if (c) { document.querySelectorAll('#atTipos .at-chip').forEach(function (x) { x.classList.remove('on'); });
-             c.classList.add('on'); tipo = c.getAttribute('data-tipo'); }
+    var c = e.target.closest('#atTipos [data-tipo]');
+    if (c) { document.querySelectorAll('#atTipos .at-tile').forEach(function (x) { x.classList.remove('on'); });
+             c.classList.add('on'); tipo = c.getAttribute('data-tipo'); aplicaTipo(tipo); }
   });
+  // O rótulo, o exemplo e a dica mudam com o tipo: a pessoa entende o que escrever.
+  var TEXTOS = {
+    alterar:  ['O que precisa mudar?', 'Ex.: o CNPJ do Auto Posto Jaraguá está com um dígito trocado; o certo é 12.345.678/0001-90', 'Diga o que está e como deveria ficar. Qual empresa, qual campo.'],
+    erro:     ['Conte o que aconteceu', 'Ex.: cliquei em Salvar e a tela ficou carregando; a nota 1234 não aparece na lista de outubro', 'O que você fez, o que apareceu e o que esperava. O print ajuda muito.'],
+    duvida:   ['Qual é a sua dúvida?', 'Ex.: como faço para dar baixa num boleto que o cliente pagou por Pix?', 'Pode perguntar do jeito que pensou. A resposta vira passo a passo.'],
+    sugestao: ['Qual é a ideia?', 'Ex.: na lista de clientes, mostrar o celular do contato sem precisar abrir a ficha', 'Diga o problema que ela resolve no seu dia a dia. Boas ideias viram Novidades.']
+  };
+  function aplicaTipo(t) {
+    var x = TEXTOS[t] || TEXTOS.alterar;
+    $('atTextoRot').textContent = x[0]; $('atTexto').placeholder = x[1]; $('atTextoDica').textContent = x[2];
+  }
   document.addEventListener('keydown', function (e) { if (e.key === 'Escape') fechar(); });
 
   // ---- print: colar, arrastar ou escolher
