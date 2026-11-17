@@ -19,7 +19,7 @@ from flask_login import current_user
 from models.nfse_emissao import (CAMPOS_CONFIG, EMISSORES, IND_DEST, IND_FINAL, OP_SIMP_NAC, REG_AP_TRIB_SN,
                                  REG_ESP_TRIB, NfseConfig, NfseEmitida, empresa_da_matriz, faltas_da_matriz,
                                  liberar_matriz, revogar_matriz, situacao_das_matrizes, sugestao_da_matriz,
-                                 REGIMES)
+                                 REGIMES, erro_numero_inicial)
 from routes.escrita_fiscal import _get_empresas, escrita_fiscal
 from utils.atividade import registrar
 from utils.auth_helper import permission_required
@@ -152,29 +152,53 @@ def emissao_nfse_serie(cliente_id):
     if not _csrf_ok():
         flash('Formulário expirado. Abra a empresa de novo.', 'danger')
         return _volta(cliente_id, '#series')
-    if not empresa_da_matriz(cliente_id):
+    emp = empresa_da_matriz(cliente_id)
+    if not emp:
         abort(404)
     acao = request.form.get('acao')
-    if acao == 'abrir':
-        serie = (request.form.get('serie') or '').strip().upper()
+    if acao in ('abrir', 'corrigir'):
+        serie = (request.form.get('serie') or '').strip().upper().lstrip('0') or ''
         ambiente = 1 if request.form.get('ambiente') == '1' else 2
         inicial = (request.form.get('numero_inicial') or '0').strip()
-        if not serie.isdigit():
-            flash('A série do emissor nacional é só de dígitos (ex.: 1).', 'danger')
+        if not serie.isdigit() or len(serie) > 5:
+            flash('A série do emissor nacional é só de dígitos, até 5 (ex.: 1 ou 70000).', 'danger')
+            return _volta(cliente_id, '#series')
+        if not inicial.isdigit():
+            flash('O último número usado tem que ser um número (0 = nunca emitiu nessa série).', 'danger')
+            return _volta(cliente_id, '#series')
+        # rede (17/11/2026): a próxima nota não pode repetir um número que o governo já mostra
+        erro = erro_numero_inicial(emp['documento'], serie, int(inicial)) if ambiente == 1 else None
+        if erro:
+            flash(erro, 'danger')
             return _volta(cliente_id, '#series')
         try:
-            sid = numeracao.abrir_serie(cliente_id, serie, ambiente=ambiente,
-                                        numero_inicial=int(inicial) if inicial.isdigit() else 0,
-                                        observacao=(request.form.get('observacao') or '').strip()[:255] or None)
+            if acao == 'abrir':
+                sid = numeracao.abrir_serie(cliente_id, serie, ambiente=ambiente, numero_inicial=int(inicial),
+                                            observacao=(request.form.get('observacao') or '').strip()[:255] or None)
+                registrar('escrita.abriu_serie_nfse', 'fiscal', tabela='nfse_dps_controle', registro_id=sid,
+                          depois={'empresa_id': cliente_id, 'serie': serie, 'ambiente': ambiente, 'inicial': inicial})
+                serie_antiga = None
+            else:
+                sid = int(request.form.get('serie_id') or 0)
+                antiga = numeracao.corrigir_serie(cliente_id, sid, serie, int(inicial))
+                registrar('escrita.corrigiu_serie_nfse', 'fiscal', tabela='nfse_dps_controle', registro_id=sid,
+                          antes={'serie': antiga['serie'], 'ultimo_numero': antiga['ultimo_numero']},
+                          depois={'empresa_id': cliente_id, 'serie': serie, 'ultimo_numero': inicial})
+                serie_antiga = str(antiga['serie']).upper()
         except ValueError as exc:
             flash(str(exc), 'danger')
             return _volta(cliente_id, '#series')
-        registrar('escrita.abriu_serie_nfse', 'fiscal', tabela='nfse_dps_controle', registro_id=sid,
-                  depois={'empresa_id': cliente_id, 'serie': serie, 'ambiente': ambiente, 'inicial': inicial})
+        # a numeração criada/corrigida é a das notas quando a configuração não aponta para uma
+        # série de produção válida (ou apontava para a série que acabou de ser corrigida)
         cfg_atual = NfseConfig.get(cliente_id) or {}
-        if ambiente == 1 and not cfg_atual.get('serie_nacional'):      # a numeração criada já é a das notas
+        atual = str(cfg_atual.get('serie_nacional') or '').upper()
+        prod = {str(x['serie']).upper() for x in NfseEmitida.series(cliente_id) if int(x['ambiente']) == 1 and x['ativo']}
+        if ambiente == 1 and (not atual or atual not in prod or atual == serie_antiga):
             NfseConfig.salvar(cliente_id, {'serie_nacional': serie}, usuario_id=current_user.id)
-        flash(f"Série {serie} aberta ({'produção' if ambiente == 1 else 'teste'}).", 'success')
+        if acao == 'abrir':
+            flash(f"Série {serie} aberta ({'produção' if ambiente == 1 else 'teste'}).", 'success')
+        else:
+            flash(f'Numeração corrigida: série {serie}, próxima nota nº {int(inicial) + 1}.', 'success')
     elif acao == 'alternar':
         sid = request.form.get('serie_id', '')
         if sid.isdigit():

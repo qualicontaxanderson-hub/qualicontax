@@ -228,20 +228,35 @@ def notas_serie():
         abort(400)
     emp_id = int(emp_id)
     acao = request.form.get('acao')
-    if acao == 'abrir':
+    if acao in ('abrir', 'corrigir'):
         serie = (request.form.get('serie') or '').strip().upper()
         ambiente = int(request.form.get('ambiente') or 2)
         inicial = request.form.get('numero_inicial') or '0'
+        inicial = int(inicial) if inicial.isdigit() else 0
         try:
-            sid = numeracao.abrir_serie(emp_id, serie, ambiente=ambiente,
-                                        numero_inicial=int(inicial) if inicial.isdigit() else 0,
-                                        observacao=(request.form.get('observacao') or '').strip()[:255] or None)
-            registrar('escrita.abriu_serie_nfse', 'financeiro', tabela='nfse_dps_controle', registro_id=sid,
-                      depois={'empresa_id': emp_id, 'serie': serie, 'ambiente': ambiente, 'inicial': inicial})
+            from models.nfse_emissao import empresa_da_matriz, erro_numero_inicial
+            emp = empresa_da_matriz(emp_id) or {}
+            erro = erro_numero_inicial(emp.get('documento', ''), serie, inicial) if ambiente == 1 else None
+            if erro:
+                raise ValueError(erro)
+            if acao == 'abrir':
+                sid = numeracao.abrir_serie(emp_id, serie, ambiente=ambiente, numero_inicial=inicial,
+                                            observacao=(request.form.get('observacao') or '').strip()[:255] or None)
+                registrar('escrita.abriu_serie_nfse', 'financeiro', tabela='nfse_dps_controle', registro_id=sid,
+                          depois={'empresa_id': emp_id, 'serie': serie, 'ambiente': ambiente, 'inicial': inicial})
+                serie_antiga = None
+            else:
+                sid = int(request.form.get('serie_id') or 0)
+                antiga = numeracao.corrigir_serie(emp_id, sid, serie, inicial)
+                registrar('escrita.corrigiu_serie_nfse', 'financeiro', tabela='nfse_dps_controle', registro_id=sid,
+                          antes={'serie': antiga['serie'], 'ultimo_numero': antiga['ultimo_numero']},
+                          depois={'empresa_id': emp_id, 'serie': serie, 'ultimo_numero': inicial})
+                serie_antiga = str(antiga['serie']).upper()
             cfg_atual = NfseConfig.get(emp_id) or {}
-            if ambiente == 1 and not cfg_atual.get('serie_nacional') and serie.isdigit():
+            atual = str(cfg_atual.get('serie_nacional') or '').upper()
+            if ambiente == 1 and serie.isdigit() and (not atual or atual == serie_antiga):
                 NfseConfig.salvar(emp_id, {'serie_nacional': serie}, usuario_id=current_user.id)
-            flash(f'Série {serie} aberta.', 'success')
+            flash(f'Série {serie} aberta.' if acao == 'abrir' else f'Numeração corrigida: série {serie}, próxima nota nº {inicial + 1}.', 'success')
         except ValueError as exc:
             flash(str(exc), 'danger')
     elif acao == 'alternar':

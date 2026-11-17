@@ -652,7 +652,12 @@ def faltas_da_matriz(emp, cfg, series, sugestao=None, aceita=False):
     # --- numeração (série de produção) ---
     serie = (cfg.get('serie_nacional') or '').strip().upper()
     if not serie:
-        trava('serie', 'Falta criar a numeração das notas.')
+        prod = [x for x in series if int(x['ambiente']) == 1 and x['ativo']]
+        if prod:
+            trava('serie', f"A numeração existe (série {prod[0]['serie']}), mas não está marcada como a das notas: "
+                           "salve a configuração de novo.")
+        else:
+            trava('serie', 'Falta criar a numeração das notas.')
     else:
         s = next((x for x in series if str(x['serie']).upper() == serie), None)
         if not s:
@@ -707,6 +712,48 @@ def resumo_das_notas(cliente_id):
             'recusadas': int(r.get('recusadas') or 0), 'ultima': u}
 
 
+def numeracao_capturada(documento):
+    """As séries com que ESTA empresa já emitiu (notas capturadas do governo em que ela é a
+    prestadora): [{serie, ultimo, qtd, data}] da mais recente para a mais antiga. É a sugestão
+    da tela ("Já emitia") e a rede do servidor: a numeração nova não pode repetir número."""
+    d = _dig(documento)
+    if len(d) != 14:
+        return []
+    rows = execute_query(
+        "SELECT serie, COUNT(*) qtd, MAX(CAST(numero_dps AS UNSIGNED)) ultimo_dps, "
+        "       MAX(CAST(numero AS UNSIGNED)) ultimo_nfse, MAX(data_emissao) data "
+        "  FROM nfse_capturadas "
+        " WHERE REPLACE(REPLACE(REPLACE(prestador_doc, '.', ''), '/', ''), '-', '') = %s "
+        "   AND tipo_emitente = 1 AND serie REGEXP '^[0-9]+$' "
+        " GROUP BY serie ORDER BY data DESC", (d,), fetch=True) or []
+    out = []
+    for r in rows:
+        ultimo = max(int(r['ultimo_dps'] or 0), int(r['ultimo_nfse'] or 0))
+        out.append({'serie': str(int(r['serie'])), 'ultimo': ultimo, 'qtd': int(r['qtd']),
+                    'data': r['data'].date() if hasattr(r['data'], 'date') else r['data']})
+    return out
+
+
+def erro_numero_inicial(documento, serie, ultimo):
+    """Texto do erro quando o 'último número usado' informado é menor que o que o governo já
+    mostra nessa série para a empresa (a próxima nota repetiria um número e seria recusada)."""
+    serie = str(serie).strip().upper()
+    for c in numeracao_capturada(documento):
+        if c['serie'] == serie.lstrip('0') or c['serie'] == serie:
+            if int(ultimo) < c['ultimo']:
+                quando = c['data'].strftime('%d/%m/%Y') if c['data'] else ''
+                return (f"Na série {serie} a última nota desta empresa que o governo mostra é a nº {c['ultimo']}"
+                        f"{' (' + quando + ')' if quando else ''}. Informe {c['ultimo']} ou maior.")
+    return None
+
+
+def series_com_nota(cliente_id):
+    """Séries que já emitiram alguma nota por aqui (não se corrigem mais)."""
+    rows = execute_query("SELECT DISTINCT serie FROM nfse_emitidas WHERE empresa_id = %s",
+                         (cliente_id,), fetch=True) or []
+    return {str(r['serie']).upper() for r in rows}
+
+
 def contexto_da_matriz(cliente_id, emp=None):
     """Tudo o que a tela de cartões precisa (08/11/2026) — UM montador para o Fiscal e o
     Financeiro: empresa, configuração (salva ou sugerida), séries, o que falta por cartão,
@@ -740,4 +787,7 @@ def contexto_da_matriz(cliente_id, emp=None):
         'nbs_opcoes': S.nbs_sugeridas(ctrib) if ctrib else [],
         'meta_item': S.meta_do_item(ctrib) if ctrib else {},
         'fmt_nbs': S.fmt_nbs,
+        # numeração (17/11/2026): o que o governo já mostra e o que ainda pode ser corrigido
+        'capturadas_series': numeracao_capturada(emp['documento']),
+        'series_com_nota': series_com_nota(cliente_id),
     }

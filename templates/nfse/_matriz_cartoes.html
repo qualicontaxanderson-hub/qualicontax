@@ -163,6 +163,12 @@
 .mc-series { display:flex; flex-direction:column; gap:8px; }
 .mc-serie { display:flex; align-items:center; gap:10px; background:#f8fafc; border-radius:14px; padding:12px 14px; font-size:13px; flex-wrap:wrap; }
 .mc-serie b { font-size:15px; } .mc-serie .mc-selo { margin-left:auto; }
+.mc-corr { margin-left:auto; font:inherit; font-size:12px; font-weight:600; color:#475569; background:#fff; border:1px solid #e2e8f0; border-radius:8px; padding:4px 9px; cursor:pointer; }
+.mc-corr:hover { border-color:#86efac; color:#15803d; } .mc-serie .mc-selo + .mc-corr { margin-left:8px; }
+.mc-kv2 { display:grid; grid-template-columns:minmax(0, 1fr) minmax(0, 2fr); gap:10px; }
+.mc-kv2 .mc-kv input { margin:0; width:100%; border-color:#e2e8f0; background:#fff; cursor:text; }
+.mc-cap { display:flex; align-items:flex-start; gap:8px; background:#f0f9ff; border:1px solid #bae6fd; color:#0c4a6e; border-radius:12px; padding:10px 12px; font-size:12.5px; line-height:1.4; margin-bottom:10px; }
+.mc-cap i { margin-top:2px; color:#0284c7; }
 .mc-sw { display:flex; align-items:center; gap:12px; padding:9px 0; cursor:pointer; margin:0; }
 .mc-sw > span { flex:1; } .mc-sw small { display:block; font-size:12.5px; color:#64748b; font-weight:500; } .mc-sw b { font-size:15px; font-weight:600; }
 .mc-sw input { display:none; }
@@ -435,11 +441,20 @@
 {% set prod = ns.prod %}
 <section class="mc-b s4" id="mc-numeracao">
     <div class="mc-bh"><span class="mc-ico i-roxo"><i class="fas fa-list-ol"></i></span><h3>Numeração das notas</h3>{{ selo(c) }}</div>
+    {#- 17/11/2026: a série deixa de ser fixa em "1". O governo já mostra com que série a empresa emitia
+        (notas capturadas em que ela é a prestadora): a tela sugere essa série e o último número, e o
+        servidor recusa número menor. Enquanto nenhuma nota saiu por aqui, a numeração se corrige. -#}
+    {% set cap = capturadas_series or [] %}
+    {% set sug = cap[0] if cap else none %}
+    {% if cap %}
+    <div class="mc-cap"><i class="fas fa-landmark"></i><span>O governo mostra notas desta empresa na <b>série {{ sug.serie }}</b> até a <b>nº {{ sug.ultimo }}</b>{% if sug.data %} ({{ sug.data.strftime('%d/%m/%Y') }}){% endif %}{% if cap|length > 1 %}; antes, {% for c in cap[1:] %}série {{ c.serie }} até a nº {{ c.ultimo }}{{ ', ' if not loop.last }}{% endfor %}{% endif %}.</span></div>
+    {% endif %}
     {% if prod %}
     <div class="mc-series">
         {% for s in prod %}
         <div class="mc-serie"><b>Série {{ s.serie }}</b><span>última nº {{ s.ultimo_numero }} · a próxima sai com {{ s.ultimo_numero + 1 }}</span>
-            {% if s.serie|string == (cfg.serie_nacional or '')|string %}<span class="mc-selo ok">usada nas notas</span>{% endif %}</div>
+            {% if s.serie|string == (cfg.serie_nacional or '')|string %}<span class="mc-selo ok">usada nas notas</span>{% endif %}
+            {% if s.serie|string|upper not in (series_com_nota or []) %}<button type="button" class="mc-corr" data-id="{{ s.id }}" data-serie="{{ s.serie }}" data-ultimo="{{ s.ultimo_numero }}" title="Trocar a série ou o último número: só enquanto nenhuma nota saiu por aqui nessa série"><i class="fas fa-pen"></i> Corrigir</button>{% endif %}</div>
         {% endfor %}
     </div>
     {% if prod|length > 1 %}
@@ -449,17 +464,21 @@
     {% else %}
     <input type="hidden" name="serie_nacional" value="{{ cfg.serie_nacional or '' }}">
     <div class="mc-num2">
-        <button type="submit" form="mcSerieForm" class="mc-op" {{ 'disabled title="Salve a configuração primeiro"'|safe if not salva }}><i class="fas fa-play"></i><b>Começar do nº 1</b><small>Primeira nota da empresa por aqui</small></button>
-        <button type="button" class="mc-op" id="mcJaEmitia" {{ 'disabled title="Salve a configuração primeiro"'|safe if not salva }}><i class="fas fa-forward"></i><b>Já emitia</b><small>Informar o último número usado</small></button>
-    </div>
-    <div id="mcUltimo" hidden>
-        <div class="mc-kv"><label>Último número já usado</label>
-            <input type="number" name="numero_inicial" form="mcSerieForm" min="0" value="0"></div>
-        <div class="mc-ajuda">A primeira nota daqui sai com este número + 1.</div>
-        <button type="submit" form="mcSerieForm" class="mc-link"><i class="fas fa-plus"></i> Criar a numeração</button>
+        <button type="button" class="mc-op" id="mcDoUm" {{ 'disabled title="Salve a configuração primeiro"'|safe if not salva }}><i class="fas fa-play"></i><b>Começar do nº 1</b><small>{{ 'Nunca emitiu nota: série 1, a partir do nº 1' if not cap else 'Só se for abrir uma série nova' }}</small></button>
+        <button type="button" class="mc-op {{ 'on' if cap }}" id="mcJaEmitia" {{ 'disabled title="Salve a configuração primeiro"'|safe if not salva }}><i class="fas fa-forward"></i><b>Já emitia</b><small>{{ 'Continuar a série ' ~ sug.serie ~ ' do nº ' ~ (sug.ultimo + 1) if cap else 'Informar a série e o último número usado' }}</small></button>
     </div>
     {% if not salva %}<div class="mc-ajuda">Salve a configuração primeiro; depois a numeração é criada aqui.</div>{% endif %}
     {% endif %}
+    <div id="mcUltimo" {{ '' if (cap and not prod and salva) else 'hidden' }}>
+        <div class="mc-kv2">
+            <div class="mc-kv"><label>Série</label>
+                <input type="text" name="serie" id="mcSerieInp" form="mcSerieForm" inputmode="numeric" pattern="[0-9]{1,5}" maxlength="5" value="{{ sug.serie if sug else '1' }}" required></div>
+            <div class="mc-kv"><label>Último número já usado</label>
+                <input type="number" name="numero_inicial" id="mcUltimoInp" form="mcSerieForm" min="0" value="{{ sug.ultimo if sug else 0 }}" required></div>
+        </div>
+        <div class="mc-ajuda" id="mcUltimoAjuda">A primeira nota daqui sai com este número + 1. Confira na última nota emitida (DANFSe): "Número da DPS" e "Série da DPS".</div>
+        <button type="submit" form="mcSerieForm" class="mc-link" id="mcSerieBtn"><i class="fas fa-plus"></i> Criar a numeração</button>
+    </div>
     {% set teste = series|selectattr('ambiente', 'equalto', 2)|list %}
     {% if teste %}<div class="mc-ajuda">Séries de teste: {% for s in teste %}{{ s.serie }}{{ ', ' if not loop.last }}{% endfor %} (não valem; só para provar a emissão).</div>{% endif %}
     {{ pendencias(c, not prod) }}
@@ -489,7 +508,7 @@
 <form method="POST" action="{{ acao_serie }}" id="mcSerieForm" hidden>
     <input type="hidden" name="csrf_token" value="{{ csrf or '' }}">
     {% for k, v in (serie_campos or {}).items() %}<input type="hidden" name="{{ k }}" value="{{ v }}">{% endfor %}
-    <input type="hidden" name="acao" value="abrir"><input type="hidden" name="serie" value="1"><input type="hidden" name="ambiente" value="1">
+    <input type="hidden" name="acao" value="abrir" id="mcSerieAcao"><input type="hidden" name="serie_id" value="" id="mcSerieId"><input type="hidden" name="ambiente" value="1">
     <input type="hidden" name="observacao" value="Numeração criada pela configuração">
 </form>
 {% if no_fiscal and salva %}
@@ -533,13 +552,41 @@
     }
     form.addEventListener('change', function (e) {
         if (e.target.id === 'mcBuscaServ' || e.target.name === 'mc_servico') return;
+        // campos de OUTRO formulário (a numeração, form="mcSerieForm") não salvam a configuração:
+        // em 17/11/2026 esse salvamento zerava a "série usada nas notas" recém-criada.
+        if (e.target.form && e.target.form !== form) return;
         clearTimeout(timer); timer = setTimeout(salvar, 350);
     });
     form.addEventListener('submit', function (e) { e.preventDefault(); salvar(); });
 
-    // numeração: "Já emitia" abre o último número usado
-    var je = $('mcJaEmitia');
-    if (je) je.addEventListener('click', function () { var d = $('mcUltimo'); d.hidden = !d.hidden; je.classList.toggle('on', !d.hidden); });
+    // numeração: série + último número (17/11/2026). "Começar do nº 1" = série 1 do zero;
+    // "Já emitia" abre o painel sugerindo a série e o número que o governo mostra;
+    // "Corrigir" reabre o painel para uma numeração que ainda não emitiu nada por aqui.
+    var painel = $('mcUltimo'), sf = document.getElementById('mcSerieForm');
+    var SUG = {{ ({'serie': sug.serie, 'ultimo': sug.ultimo} if sug else {'serie': '1', 'ultimo': 0})|tojson }};
+    function abrirPainel(acao, sid, serie, ultimo, botao) {
+        painel.hidden = false;
+        $('mcSerieAcao').value = acao; $('mcSerieId').value = sid || '';
+        $('mcSerieInp').value = serie; $('mcUltimoInp').value = ultimo;
+        $('mcSerieBtn').innerHTML = '<i class="fas fa-' + (acao === 'corrigir' ? 'check' : 'plus') + '"></i> ' + botao;
+        $('mcUltimoAjuda').textContent = acao === 'corrigir'
+            ? 'Vale só enquanto nenhuma nota saiu por aqui nessa série. A próxima nota sai com este número + 1.'
+            : 'A primeira nota daqui sai com este número + 1. Confira na última nota emitida (DANFSe): "Número da DPS" e "Série da DPS".';
+        $('mcUltimoInp').focus();
+    }
+    var je = $('mcJaEmitia'), du = $('mcDoUm');
+    if (je) je.addEventListener('click', function () {
+        if (!painel.hidden && $('mcSerieAcao').value === 'abrir') { painel.hidden = true; je.classList.remove('on'); return; }
+        abrirPainel('abrir', '', SUG.serie, SUG.ultimo, 'Criar a numeração'); je.classList.add('on');
+    });
+    if (du) du.addEventListener('click', function () {
+        if (SUG.ultimo > 0 && !confirm('O governo já mostra notas desta empresa (série ' + SUG.serie + ' até a nº ' + SUG.ultimo + ').\nAbrir a série 1 do zero só vale se for mesmo uma série NOVA. Continuar?')) return;
+        $('mcSerieAcao').value = 'abrir'; $('mcSerieId').value = ''; $('mcSerieInp').value = '1'; $('mcUltimoInp').value = '0';
+        sf.submit();
+    });
+    document.querySelectorAll('.mc-corr').forEach(function (b) {
+        b.addEventListener('click', function () { abrirPainel('corrigir', b.dataset.id, b.dataset.serie, b.dataset.ultimo, 'Salvar correção'); });
+    });
 
     // botões rápidos (caminho da nota)
     document.querySelectorAll('.mc-seg[data-campo="emissor"] button').forEach(function (b) {

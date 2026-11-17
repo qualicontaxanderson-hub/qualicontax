@@ -122,6 +122,31 @@ def abrir_serie(empresa_id, serie, ambiente=2, numero_inicial=0, observacao=None
         (empresa_id, serie, ambiente, int(numero_inicial), observacao))
 
 
+def corrigir_serie(empresa_id, serie_id, nova_serie, ultimo):
+    """Troca a série e/ou o último número de uma numeração que AINDA NÃO EMITIU nada por aqui
+    (17/11/2026: o Fiscal criou a série 1 para uma empresa que já emitia na 70000). Devolve a linha
+    antiga; ValueError quando já há nota ou a série nova colide com outra da empresa."""
+    nova_serie = str(nova_serie).strip().upper()
+    if not nova_serie.isalnum() or len(nova_serie) > 5:
+        raise ValueError(f'Série inválida: {nova_serie!r} (até 5 letras ou dígitos).')
+    linha = execute_query("SELECT * FROM nfse_dps_controle WHERE id = %s AND empresa_id = %s",
+                          (serie_id, empresa_id), fetch=True, fetch_one=True)
+    if not linha:
+        raise ValueError('Numeração não encontrada.')
+    usada = execute_query("SELECT COUNT(*) n FROM nfse_emitidas WHERE empresa_id = %s AND serie = %s",
+                          (empresa_id, linha['serie']), fetch=True, fetch_one=True)
+    if usada and usada['n']:
+        raise ValueError(f"A série {linha['serie']} já tem {usada['n']} nota(s) emitida(s) por aqui: "
+                         "não dá mais para corrigir, abra outra série.")
+    outra = execute_query("SELECT id FROM nfse_dps_controle WHERE empresa_id = %s AND serie = %s AND id <> %s",
+                          (empresa_id, nova_serie, serie_id), fetch=True, fetch_one=True)
+    if outra:
+        raise ValueError(f'A empresa já tem a série {nova_serie}.')
+    execute_query("UPDATE nfse_dps_controle SET serie = %s, ultimo_numero = %s, atualizado_em = NOW() "
+                  " WHERE id = %s AND empresa_id = %s", (nova_serie, int(ultimo), serie_id, empresa_id))
+    return linha
+
+
 def situacao_series(empresa_id=None):
     """Lista as séries (de uma empresa ou de todas) com o último número — para a tela."""
     where, params = '', ()
