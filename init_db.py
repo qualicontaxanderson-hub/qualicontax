@@ -1793,6 +1793,16 @@ def _apply_migrations():
             if _c.get('cnt', 0) == 0:
                 _migrate(f"ALTER TABLE atend_chamados ADD COLUMN {_col_name} {_col_def}")
 
+    # NFS-e: nº do recibo de papel (RPS do talão) que a nota substitui — 17/11/2026
+    _t = execute_query("SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = DATABASE() "
+                       "AND TABLE_NAME = 'nfse_emitidas'", fetch=True, fetch_one=True) or {}
+    if _t.get('cnt', 0):
+        _c = execute_query(
+            "SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() "
+            "AND TABLE_NAME = 'nfse_emitidas' AND COLUMN_NAME = 'recibo_numero'", fetch=True, fetch_one=True) or {}
+        if _c.get('cnt', 0) == 0:
+            _migrate("ALTER TABLE nfse_emitidas ADD COLUMN recibo_numero VARCHAR(20) NULL AFTER descricao")
+
     print("✓ Migrations concluídas")
 
 

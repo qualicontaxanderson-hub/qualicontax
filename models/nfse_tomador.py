@@ -316,6 +316,21 @@ def pedido_do_fiscal(f, empresa_id, cfg, tomador, series_ativas):
     descricao = g('descricao')
     if not descricao:
         raise PedidoInvalido('Informe a descrição do serviço.')
+    recibo = _dig(g('recibo'))[:20].lstrip('0')
+    if g('recibo') and not recibo:
+        raise PedidoInvalido('Nº do recibo inválido: só os números do talão.')
+    if recibo:
+        usada = execute_query(
+            """SELECT serie, numero_dps, numero_nfse FROM nfse_emitidas
+                WHERE empresa_id = %s AND recibo_numero = %s AND situacao NOT IN ('rejeitada', 'erro', 'cancelada')
+                ORDER BY id DESC LIMIT 1""", (int(empresa_id), recibo), fetch=True, fetch_one=True)
+        if usada:
+            raise PedidoInvalido(
+                f'O recibo nº {recibo} já virou a nota {usada["serie"]}/{usada["numero_dps"]}'
+                + (f' (NFS-e nº {usada["numero_nfse"]})' if usada.get('numero_nfse') else '')
+                + '. Confira o talão; se for outro recibo, corrija o número.')
+        if recibo not in descricao:
+            descricao = f'Recibo nº {recibo}. {descricao}'
     local = g('local', 'empresa')
     loc = _dig(cfg.get('municipio_ibge'))
     if anonimo and local == 'tomador':
@@ -345,7 +360,7 @@ def pedido_do_fiscal(f, empresa_id, cfg, tomador, series_ativas):
         tomador_complemento=end('complemento')[:156], tomador_bairro=end('bairro')[:60],
         tomador_uf=(tomador.get('uf') or '')[:2].upper(), tomador_email=(tomador.get('email') or '')[:80],
         tomador_fone=_dig(tomador.get('fone')), tomador_im=_dig(tomador.get('inscricao_municipal')),
-        descricao=descricao[:1000],
+        descricao=descricao[:1000], recibo=recibo,
         cod_trib_nac=_dig(cfg.get('cod_trib_nac')), cod_trib_mun=_dig(cfg.get('cod_trib_mun')),
         cod_nbs=_dig(cfg.get('cod_nbs')), cod_servico_sp='',
         loc_prestacao=loc, valor_servico=valor, trib_issqn=1,

@@ -70,6 +70,7 @@
             <dt>CNPJ/CPF</dt><dd>{{ (n.tomador_doc|format_cnpj if (n.tomador_doc or '')|length == 14 else n.tomador_doc|format_cpf) if n.tomador_doc else '—' }}</dd>
             <dt>E-mail</dt><dd>{{ n.tomador_email or '—' }}</dd>
             <dt>Município</dt><dd>{{ n.tomador_municipio or '—' }}</dd>
+            {% if n.recibo_numero %}<dt>Recibo de papel</dt><dd>nº {{ n.recibo_numero }}</dd>{% endif %}
         </dl>
     </div>
     <div class="nd-box">

@@ -478,7 +478,8 @@ def nfse_nota_pdf(nota_id):
         return ('Não foi possível montar o PDF desta nota. Baixe o XML por enquanto.', 422)
     registrar('leitura.baixou_pdf_nfse', 'fiscal', tabela='nfse_emitidas', registro_id=nota_id)
     inline = request.args.get('inline') in ('1', 'true', 'sim')
-    nome = f"NFSe_{n['serie']}_{n['numero_dps']}_{(n.get('tomador_nome') or '')[:40]}.pdf".replace(' ', '_')
+    quem = n.get('tomador_nome') or (f"recibo_{n['recibo_numero']}" if n.get('recibo_numero') else '')
+    nome = f"NFSe_{n['serie']}_{n['numero_dps']}_{quem[:40]}.pdf".replace(' ', '_')
     return Response(pdf, mimetype='application/pdf',
                     headers={'Content-Disposition': f'{"inline" if inline else "attachment"}; filename="{nome}"'})
 

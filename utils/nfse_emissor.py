@@ -106,6 +106,7 @@ class Pedido:
     itens: list = field(default_factory=list)   # [{servico_id, nome, valor, emite_nota}] — o que foi cobrado
     valor_boleto: Decimal = None    # soma de TODOS os itens (nota + só boleto); o boleto vem na próxima fase
     origem: str = 'manual'
+    recibo: str = ''                # nº do recibo de papel (RPS do talão) que esta nota substitui (17/11/2026)
     extras: dict = field(default_factory=dict)
 
     @property
@@ -289,7 +290,7 @@ def _gravar_rascunho(emitida_id, p: Pedido, cfg, emissor, agora):
                   cod_trib_nac = %s, cod_trib_mun = %s, cod_nbs = %s, descricao = %s,
                   valor_servico = %s, iss_retido = %s, aliquota_iss = %s, total_retencoes = %s,
                   ibscbs_cst = %s, ibscbs_cclasstrib = %s, ibscbs_fin_nfse = %s, ibscbs_cind_op = %s,
-                  ibscbs_ind_dest = %s, atualizado_em = NOW()
+                  ibscbs_ind_dest = %s, recibo_numero = %s, atualizado_em = NOW()
             WHERE id = %s""",
         (emissor, agora.replace(tzinfo=None), p.competencia, _dig(cfg.get('municipio_ibge')) or None,
          p.loc_prestacao or _dig(cfg.get('municipio_ibge')) or None,
@@ -297,7 +298,8 @@ def _gravar_rascunho(emitida_id, p: Pedido, cfg, emissor, agora):
          p.tomador_doc or None, p.tomador_nome or None, p.tomador_ibge or None, p.tomador_email or None,
          p.cod_trib_nac or None, p.cod_trib_mun or None, p.cod_nbs or None, p.descricao,
          p.valor_servico, 1 if p.iss_retido else 0, p.aliquota_iss, p.total_retencoes or None,
-         p.ibscbs_cst, p.ibscbs_cclasstrib, p.fin_nfse, p.ibscbs_cind_op, p.ibscbs_ind_dest, emitida_id))
+         p.ibscbs_cst, p.ibscbs_cclasstrib, p.fin_nfse, p.ibscbs_cind_op, p.ibscbs_ind_dest,
+         (p.recibo or None), emitida_id))
 
 
 # --- nacional ---------------------------------------------------------------
@@ -328,7 +330,8 @@ def montar_dps(numero, p: Pedido, cfg, cert, agora, amb):
                          fone=p.tomador_fone, email=p.tomador_email),
         loc_prestacao=p.loc_prestacao or _dig(cfg['municipio_ibge']),
         c_trib_nac=p.cod_trib_nac, c_trib_mun=p.cod_trib_mun, descricao=p.descricao, c_nbs=p.cod_nbs,
-        c_int_contrib=str(p.fin_titulo_id) if p.fin_titulo_id else '',
+        # código interno do contribuinte: o título do Financeiro ou o nº do recibo de papel
+        c_int_contrib=str(p.fin_titulo_id) if p.fin_titulo_id else (p.recibo or ''),
         valor_servico=p.valor_servico, trib_issqn=p.trib_issqn,
         tp_ret_issqn=2 if p.iss_retido else 1,
         # o Simples não informa alíquota; fora do Simples a alíquota declarada vai

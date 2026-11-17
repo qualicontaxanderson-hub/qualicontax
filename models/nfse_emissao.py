@@ -241,15 +241,15 @@ class NfseEmitida:
         if busca:
             like = f'%{busca}%'
             cond.append('(n.tomador_nome LIKE %s OR n.tomador_doc LIKE %s OR n.descricao LIKE %s '
-                        'OR n.numero_nfse LIKE %s OR n.chave_acesso LIKE %s)')
-            params += [like] * 5
+                        'OR n.numero_nfse LIKE %s OR n.chave_acesso LIKE %s OR n.recibo_numero LIKE %s)')
+            params += [like] * 6
         where = ('WHERE ' + ' AND '.join(cond)) if cond else ''
         return execute_query(
             f"""SELECT n.id, n.empresa_id, n.ambiente, n.emissor, n.serie, n.numero_dps, n.situacao,
                        n.dh_emissao, n.competencia, n.criado_em, n.numero_nfse, n.chave_acesso,
                        n.tomador_doc, n.tomador_nome, n.descricao, n.valor_servico, n.valor_liquido,
                        n.ibs_total, n.cbs_valor, n.erro_ultimo, n.fin_titulo_id, n.xml_nfse_path,
-                       n.cancelada_em,
+                       n.cancelada_em, n.recibo_numero,
                        b.id AS boleto_id, b.situacao AS boleto_situacao, b.vencimento AS boleto_vencimento,
                        b.pago_em AS boleto_pago_em, b.valor_pago AS boleto_valor_pago, b.ambiente AS boleto_ambiente,
                        b.email_enviado_em, b.email_visto_em, b.abriu_boleto_em, b.abriu_nota_em

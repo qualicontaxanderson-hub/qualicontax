@@ -55,7 +55,7 @@
     <div class="nc-rota">
         {% if com_empresa %}<span class="nc-emp">{{ (e.numero_cliente if e else '') or n.empresa_id }}</span>
         <span class="nc-nome">{{ (e.nome_razao_social if e else '')|title }}</span><i class="fas fa-arrow-right"></i>{% endif %}
-        <span class="nc-nome">{{ (n.tomador_nome|title) if n.tomador_nome else ('Sem tomador' if not n.tomador_doc else '—') }}</span>
+        <span class="nc-nome">{{ (n.tomador_nome|title) if n.tomador_nome else (('Recibo nº ' ~ n.recibo_numero) if n.recibo_numero else ('Sem tomador' if not n.tomador_doc else '—')) }}</span>
     </div>
     {% if n.motivo %}<p class="nc-mot" title="{{ ('Código do governo: ' ~ n.motivo_cod) if n.motivo_cod else '' }}">{{ n.motivo }}</p>{% endif %}
     <div class="nc-pe">{{ (n.dh_emissao or n.criado_em).strftime('%d/%m %H:%M') }}

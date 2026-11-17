@@ -139,7 +139,7 @@
     <tr>
         <td><a href="{{ url }}">{{ (n.dh_emissao or n.criado_em).strftime('%d/%m/%Y %H:%M') }}</a></td>
         {% if com_empresa %}<td><a href="{{ url }}">{% set e = nomes.get(n.empresa_id) %}{{ (e.numero_cliente ~ ' - ' ~ e.nome_razao_social) if e else n.empresa_id }}</a></td>{% endif %}
-        <td><a href="{{ url }}">{{ n.tomador_nome or ('Sem tomador' if not n.tomador_doc else '—') }}</a></td>
+        <td><a href="{{ url }}">{{ n.tomador_nome or (('Recibo nº ' ~ n.recibo_numero) if n.recibo_numero else ('Sem tomador' if not n.tomador_doc else '—')) }}</a></td>
         <td><a href="{{ url }}">{{ n.numero_nfse or ('DPS ' ~ n.serie ~ '/' ~ n.numero_dps) }}</a></td>
         <td style="text-align:right; white-space:nowrap;">{{ n.valor_servico|format_currency }}</td>
         <td><span class="nn-pill {{ n.situacao }}">{{ SITUACOES.get(n.situacao, n.situacao)|upper }}</span>
@@ -279,6 +279,11 @@
                 <label>Valor do serviço (R$) *</label>
                 <input type="text" name="valor_servico" id="nnValor" class="form-control" required inputmode="decimal"
                        value="{{ pre.valor_servico or '' }}" placeholder="0,00">
+            </div>
+            <div class="form-group">
+                <label>Nº do recibo de papel <small style="font-weight:400;">(se houver)</small></label>
+                <input type="text" name="recibo" id="nnRecibo" class="form-control" inputmode="numeric" maxlength="20"
+                       value="{{ pre.recibo or '' }}" placeholder="ex.: 36731" title="Vai escrito na nota e fica na lista para achar depois. O número da nota continua automático.">
             </div>
             <div class="form-group">
                 <label>Onde o serviço foi prestado</label>
