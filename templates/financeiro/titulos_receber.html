@@ -566,6 +566,18 @@ a.tx-c { text-decoration:none; color:inherit; }
   .tx-nota { flex-wrap:wrap; } .tx-nota a { margin-left:0; }
   .tx-emp-menu { right:auto; left:0; }
 }
+/* Gerar relatório (17/11/2026) */
+.tx-rel { display:inline-flex; align-items:center; gap:12px; padding:7px 16px 7px 7px; border:0; border-radius:16px; cursor:pointer;
+  background:#fff; color:#0f3d2e; font:inherit; box-shadow:0 10px 26px rgba(0,0,0,.18), inset 0 0 0 1px rgba(255,255,255,.6); transition:transform .15s, box-shadow .15s; }
+.tx-rel:hover { transform:translateY(-1px); box-shadow:0 14px 32px rgba(0,0,0,.24); }
+.tx-rel:disabled { opacity:.7; cursor:wait; transform:none; }
+.tx-rel-logo { width:64px; height:40px; border-radius:11px; background:#f0fdf4; display:inline-flex; align-items:center; justify-content:center; flex-shrink:0; }
+.tx-rel-logo img { max-width:56px; max-height:32px; display:block; }
+.tx-rel-txt { display:flex; flex-direction:column; align-items:flex-start; line-height:1.15; text-align:left; }
+.tx-rel-txt b { font-size:15px; font-weight:800; letter-spacing:-.01em; }
+.tx-rel-txt small { font-size:11.5px; color:#64748b; font-weight:600; margin-top:2px; }
+.tx-rel-ico { font-size:20px; color:#dc2626; margin-left:4px; }
+@media (max-width:760px) { .tx-rel { width:100%; justify-content:flex-start; } .tx-rel-ico { margin-left:auto; } }
 </style>
 
 {% set _q = {'emp': filtros.emp} if filtros.emp else {} %}
@@ -578,22 +590,13 @@ a.tx-c { text-decoration:none; color:inherit; }
       <p class="ef-hero-sub">Honorários e serviços · {{ m.hoje.strftime('%d/%m/%Y') }}</p>
     </div>
     <div class="ef-hero-actions">
-      <div class="tx-emp" id="txEmp">
-        <a class="ef-btn" href="javascript:void(0)" onclick="document.getElementById('txEmp').classList.toggle('on')">
-          <i class="fas fa-building"></i>
-          {% if not sel_empresas %}Todas as empresas{% else %}{% for e in fin_empresas if e.cliente_id in sel_empresas %}{{ e.apelido }}{{ ', ' if not loop.last }}{% endfor %}{% endif %}
-          <i class="fas fa-chevron-down" style="font-size:10px;"></i></a>
-        <div class="tx-emp-menu">
-          <a class="{{ 'on' if not sel_empresas }}" href="{{ url_for('financeiro.titulos', aba=aba, **_p) }}"><i class="fas fa-check"></i> Todas as empresas</a>
-          {% for e in fin_empresas %}
-          <a class="{{ 'on' if sel_empresas == [e.cliente_id] }}" title="{{ e.nome_razao_social }}"
-             href="{{ url_for('financeiro.titulos', emp=e.cliente_id, aba=aba, **_p) }}"><i class="fas fa-check"></i> {{ e.apelido }}</a>
-          {% endfor %}
-        </div>
-      </div>
-      <a class="ef-btn" href="{{ url_for('financeiro.titulos', tipo='R', lista=1, **_q) }}" title="A tabela com todos os filtros (categoria, centro, liquidados, cancelados)"><i class="fas fa-table-list"></i> Lista completa</a>
-      <a class="ef-btn" href="{{ url_for('financeiro.titulos', tipo='P', **_q) }}"><i class="fas fa-arrow-up"></i> A pagar</a>
-      <a class="ef-btn ef-btn-primary" href="javascript:void(0)" onclick="ftAbrirNovo()"><i class="fas fa-plus"></i> Novo título</a>
+      {# 17/11/2026 — Anderson: "no lugar desses 4 botões inuteis... colocar um Gerar Relatório com logotipo da
+         qualicontax e bem desenhado". Sai o que está na tela: a aba aberta com os filtros marcados. #}
+      <button type="button" class="tx-rel" onclick="rlAbrir()" title="Escolha o que entra: situação, período, grupo, cliente, serviço, banco — PDF ou Excel">
+        <span class="tx-rel-logo"><img src="{{ url_for('static', filename='images/logo.png') }}" alt="Qualicontax"></span>
+        <span class="tx-rel-txt"><b>Gerar relatório</b><small id="txRelSub">PDF ou Excel, com os filtros que quiser</small></span>
+        <i class="fas fa-file-pdf tx-rel-ico"></i>
+      </button>
     </div>
   </div>
 </div>
@@ -814,6 +817,7 @@ a.tx-c { text-decoration:none; color:inherit; }
 </form>
 
 {% include 'financeiro/_titulos_modais.html' %}
+{% include 'financeiro/_relatorio_caixa.html' %}
 {% endblock %}
 
 {% block extra_js %}

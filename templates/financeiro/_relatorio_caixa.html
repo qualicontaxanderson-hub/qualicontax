@@ -1,0 +1,391 @@
+{# ═══ Caixa "Gerar relatório" de Títulos a receber (17/11/2026) ═══
+   Anderson: "ao clicar no relatório abra uma caixa e nela escolhemos o que queremos não quero só o que aparece
+   na tela... retirar um extrato de tudo... com muitos filtros e dando a opção de combinar, se for os Pago serão
+   pagos a vencer, vencido"; "consultas por Grupo, por periodo, por clientes ou avulsos... por algum serviço
+   especifico"; "detalhado por serviços"; "Por banco"; "Pensa pensa e tem que ser completo".
+   Dados e desenho: utils/relatorio_titulos.py. Rotas: financeiro.titulos_relatorio(_opcoes|_previa). #}
+<style>
+.rl-fundo { position:fixed; inset:0; z-index:1200; background:rgba(15,23,42,.5); backdrop-filter:blur(2px); display:none; }
+.rl-fundo.on { display:block; animation:rlFade .18s; }
+@keyframes rlFade { from { opacity:0; } to { opacity:1; } }
+.rl { --cor:#16a34a; --esc:#0f3d2e; --linha:#e6eeea; --mudo:#64748b; position:absolute; left:50%; top:3vh; transform:translateX(-50%);
+  width:min(1240px, calc(100vw - 32px)); max-height:94vh; display:flex; flex-direction:column; background:#f6faf7; border-radius:22px;
+  box-shadow:0 30px 80px rgba(2,44,22,.35); overflow:hidden; font-size:14px; color:#0f172a; }
+.rl-cab { display:flex; align-items:center; gap:16px; padding:18px 22px; color:#fff;
+  background:radial-gradient(120% 140% at 0% 0%, #22c55e 0%, #15803d 45%, #0f3d2e 100%); }
+.rl-logo { background:#fff; border-radius:14px; padding:6px 10px; display:inline-flex; box-shadow:0 6px 16px rgba(0,0,0,.18); }
+.rl-logo img { height:38px; display:block; }
+.rl-tit { flex:1; min-width:0; } .rl-tit b { display:block; font-size:21px; font-weight:800; letter-spacing:-.01em; }
+.rl-tit span { font-size:13px; opacity:.85; }
+.rl-prev { text-align:right; } .rl-prev small { display:block; font-size:10.5px; font-weight:800; letter-spacing:.08em; text-transform:uppercase; opacity:.8; }
+.rl-prev b { display:block; font-size:24px; font-weight:800; line-height:1.1; } .rl-prev span { font-size:12.5px; opacity:.9; }
+.rl-prev.carregando b { opacity:.55; }
+.rl-x { width:38px; height:38px; border-radius:99px; border:0; background:rgba(255,255,255,.18); color:#fff; font-size:16px; cursor:pointer; flex-shrink:0; }
+.rl-x:hover { background:rgba(255,255,255,.3); }
+.rl-modelos { display:flex; gap:8px; padding:12px 22px; background:#fff; border-bottom:1px solid var(--linha); overflow-x:auto; align-items:center; }
+.rl-modelos > span { font-size:11px; font-weight:800; letter-spacing:.07em; text-transform:uppercase; color:var(--mudo); white-space:nowrap; margin-right:4px; }
+.rl-mod { flex-shrink:0; display:inline-flex; align-items:center; gap:7px; border:1px solid #d8e6dd; background:#f8fcf9; color:#14532d; font:inherit; font-size:13px;
+  font-weight:700; padding:7px 12px; border-radius:11px; cursor:pointer; white-space:nowrap; }
+.rl-mod i { color:#16a34a; } .rl-mod:hover { border-color:#16a34a; background:#ecfdf3; }
+.rl-corpo { flex:1; min-height:0; display:grid; grid-template-columns:minmax(0,1fr) 360px; }
+.rl-filtros { overflow:auto; padding:16px 18px 18px 22px; display:flex; flex-direction:column; gap:12px; }
+.rl-sai { overflow:auto; padding:16px 22px 18px 16px; border-left:1px solid var(--linha); background:#fff; display:flex; flex-direction:column; gap:12px; }
+.rl-bloco { background:#fff; border:1px solid var(--linha); border-radius:16px; padding:13px 15px; }
+.rl-sai .rl-bloco { border-color:#edf3ef; background:#fbfdfc; }
+.rl-h { display:flex; align-items:center; gap:8px; font-size:11.5px; font-weight:800; letter-spacing:.07em; text-transform:uppercase; color:#0f3d2e; margin-bottom:10px; }
+.rl-h i { color:#16a34a; } .rl-h em { margin-left:auto; font-style:normal; text-transform:none; letter-spacing:0; font-weight:600; color:var(--mudo); font-size:12px; }
+.rl-h .rl-limpa { margin-left:auto; border:0; background:none; color:#b91c1c; font:inherit; font-size:12px; font-weight:700; text-transform:none; letter-spacing:0; cursor:pointer; }
+.rl-sits { display:grid; grid-template-columns:repeat(4, minmax(0,1fr)); gap:9px; }
+.rl-sit { position:relative; text-align:left; font:inherit; cursor:pointer; border:1.5px solid #e2e8f0; border-radius:14px; padding:11px 12px; background:#fff; transition:all .15s; min-width:0; }
+.rl-sit b { display:block; font-size:13.5px; font-weight:800; color:var(--c); } .rl-sit strong { display:block; font-size:16px; font-weight:800; color:#0f172a; margin-top:3px; }
+.rl-sit small { font-size:11.5px; color:var(--mudo); } .rl-sit i.ck { position:absolute; right:10px; top:10px; width:20px; height:20px; border-radius:99px; border:2px solid #cbd5e1;
+  display:inline-flex; align-items:center; justify-content:center; font-size:10px; color:transparent; }
+.rl-sit.on { border-color:var(--c); background:var(--f); box-shadow:0 0 0 3px var(--f); } .rl-sit.on i.ck { background:var(--c); border-color:var(--c); color:#fff; }
+.rl-chips { display:flex; flex-wrap:wrap; gap:6px; }
+.rl-chip { border:1px solid #dbe5df; background:#fff; color:#334155; font:inherit; font-size:12.5px; font-weight:600; padding:6px 11px; border-radius:10px; cursor:pointer; display:inline-flex; gap:6px; align-items:center; }
+.rl-chip b { font-size:11px; color:#94a3b8; font-weight:700; } .rl-chip img { height:15px; }
+.rl-chip:hover { border-color:#86efac; } .rl-chip.on { background:#0f3d2e; border-color:#0f3d2e; color:#fff; } .rl-chip.on b { color:#86efac; }
+.rl-datas { display:flex; gap:8px; align-items:center; margin-top:10px; flex-wrap:wrap; font-size:12.5px; color:var(--mudo); }
+.rl-datas input, .rl-inp { height:36px; border:1.5px solid #d7e3dc; border-radius:10px; padding:0 10px; font:inherit; font-size:13px; background:#fff; color:#0f172a; }
+.rl-datas input:focus, .rl-inp:focus { outline:0; border-color:#22c55e; }
+.rl-seg { display:inline-flex; background:#eef4f0; border-radius:11px; padding:3px; gap:2px; flex-wrap:wrap; }
+.rl-seg button { border:0; background:none; font:inherit; font-size:12.5px; font-weight:700; color:#475569; padding:6px 10px; border-radius:8px; cursor:pointer; }
+.rl-seg button.on { background:#fff; color:#0f3d2e; box-shadow:0 1px 4px rgba(0,0,0,.08); }
+.rl-dois { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:12px; } .rl-dois > * { min-width:0; }
+.rl-lista-b { position:relative; } .rl-lista-b i.fa-search { position:absolute; left:11px; top:11px; color:#94a3b8; font-size:12px; }
+.rl-lista-b input { width:100%; box-sizing:border-box; padding-left:30px; }
+.rl-lista { margin-top:8px; max-height:210px; overflow:auto; border:1px solid #edf2ef; border-radius:11px; background:#fff; }
+.rl-op { display:flex; align-items:center; gap:9px; padding:7px 10px; cursor:pointer; font-size:13px; border-bottom:1px solid #f3f6f4; }
+.rl-op:last-child { border-bottom:0; } .rl-op:hover { background:#f6fbf8; }
+.rl-op .cx { width:17px; height:17px; border-radius:5px; border:2px solid #cbd5e1; flex-shrink:0; display:inline-flex; align-items:center; justify-content:center; font-size:9px; color:transparent; }
+.rl-op.on .cx { background:#16a34a; border-color:#16a34a; color:#fff; } .rl-op.on { background:#f0fdf4; }
+.rl-op > span:not(.cx) { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; } .rl-op span em { font-style:normal; color:#94a3b8; font-weight:700; margin-right:4px; }
+.rl-op small { color:#94a3b8; font-weight:700; font-size:11.5px; } .rl-op .av { font-size:10px; font-weight:800; color:#b45309; background:#fffbeb; border-radius:6px; padding:1px 5px; }
+.rl-sel { display:flex; flex-wrap:wrap; gap:5px; margin-top:7px; } .rl-sel:empty { display:none; }
+.rl-sel span { display:inline-flex; align-items:center; gap:5px; background:#dcfce7; color:#166534; border-radius:99px; padding:3px 4px 3px 10px; font-size:12px; font-weight:700; }
+.rl-sel button { border:0; background:rgba(22,101,52,.12); color:#166534; width:17px; height:17px; border-radius:99px; font-size:9px; cursor:pointer; }
+.rl-vazio { padding:12px; color:#94a3b8; font-size:12.5px; text-align:center; }
+.rl-org { display:grid; grid-template-columns:repeat(2, minmax(0,1fr)); gap:7px; }
+.rl-org button { text-align:left; font:inherit; font-size:13px; font-weight:700; color:#334155; border:1.5px solid #e2e8f0; background:#fff; border-radius:11px; padding:8px 10px; cursor:pointer; display:flex; gap:8px; align-items:center; }
+.rl-org button i { color:#16a34a; width:16px; text-align:center; } .rl-org button.on { border-color:#16a34a; background:#f0fdf4; color:#14532d; box-shadow:0 0 0 3px #dcfce7; }
+.rl-fmt { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+.rl-fmt button { font:inherit; border:1.5px solid #e2e8f0; background:#fff; border-radius:12px; padding:10px; cursor:pointer; text-align:left; display:flex; gap:10px; align-items:center; }
+.rl-fmt button i { font-size:22px; } .rl-fmt button b { display:block; font-size:13.5px; } .rl-fmt button small { color:var(--mudo); font-size:11.5px; }
+.rl-fmt button.on { border-color:#16a34a; background:#f0fdf4; box-shadow:0 0 0 3px #dcfce7; }
+.rl-tog { display:flex; gap:9px; align-items:flex-start; font-size:12.5px; color:#334155; margin-top:10px; cursor:pointer; }
+.rl-tog input { margin-top:2px; accent-color:#16a34a; }
+.rl-resumo div { display:flex; align-items:center; gap:8px; font-size:12.5px; padding:4px 0; }
+.rl-resumo div i { width:9px; height:9px; border-radius:3px; background:var(--c); flex-shrink:0; }
+.rl-resumo div span { flex:1; color:#334155; } .rl-resumo div b { font-weight:800; } .rl-resumo div small { color:var(--mudo); width:46px; text-align:right; }
+.rl-resumo .tot { border-top:1px solid var(--linha); margin-top:4px; padding-top:7px; }
+.rl-pe { display:flex; align-items:center; gap:10px; padding:13px 22px; background:#fff; border-top:1px solid var(--linha); }
+.rl-pe-info { flex:1; font-size:12.5px; color:var(--mudo); min-width:0; } .rl-pe-info b { color:#0f172a; }
+.rl-bt { font:inherit; font-weight:800; border-radius:12px; padding:11px 18px; cursor:pointer; border:1.5px solid #e2e8f0; background:#fff; color:#334155; display:inline-flex; gap:8px; align-items:center; }
+.rl-bt.prim { border:0; background:linear-gradient(135deg, #16a34a, #15803d); color:#fff; box-shadow:0 8px 20px rgba(22,163,74,.3); font-size:15px; padding:12px 22px; }
+.rl-bt.prim:disabled { opacity:.55; cursor:not-allowed; box-shadow:none; }
+@media (max-width:980px) {
+  .rl { top:0; left:0; transform:none; width:100vw; max-height:100vh; height:100vh; border-radius:0; }
+  .rl-corpo { grid-template-columns:minmax(0,1fr); overflow-y:auto; overflow-x:hidden; } .rl-filtros, .rl-sai { overflow:visible; min-width:0; }
+  .rl-bloco { min-width:0; } .rl-datas input[type=date] { flex:1 1 130px; min-width:0; }
+  .rl-sai { border-left:0; border-top:1px solid var(--linha); padding:16px 18px; }
+  .rl-sits { grid-template-columns:repeat(2, minmax(0,1fr)); } .rl-dois { grid-template-columns:minmax(0,1fr); }
+  .rl-cab { flex-wrap:wrap; padding:14px 16px; } .rl-prev { order:3; width:100%; text-align:left; } .rl-tit b { font-size:18px; }
+  .rl-modelos { padding:10px 16px; } .rl-filtros { padding:14px 16px; } .rl-pe { padding:12px 16px; flex-wrap:wrap; } .rl-pe-info { width:100%; flex:none; }
+  .rl-pe .rl-bt.prim { flex:1; justify-content:center; }
+}
+</style>
+
+<div class="rl-fundo" id="rlFundo">
+ <div class="rl" role="dialog" aria-modal="true" aria-label="Gerar relatório">
+  <header class="rl-cab">
+    <span class="rl-logo"><img src="{{ url_for('static', filename='images/logo.png') }}" alt="Qualicontax"></span>
+    <div class="rl-tit"><b>Gerar relatório</b><span>Títulos a receber · escolha o que entra — tudo combina com tudo</span></div>
+    <div class="rl-prev" id="rlPrev"><small>neste relatório</small><b id="rlPrevV">—</b><span id="rlPrevN">calculando…</span></div>
+    <button type="button" class="rl-x" onclick="rlFechar()" title="Fechar (Esc)"><i class="fas fa-xmark"></i></button>
+  </header>
+  <div class="rl-modelos">
+    <span>Prontos</span>
+    <button type="button" class="rl-mod" data-mod="recmes"><i class="fas fa-circle-check"></i> Recebido no mês</button>
+    <button type="button" class="rl-mod" data-mod="aberto"><i class="fas fa-hourglass-half"></i> Tudo em aberto hoje</button>
+    <button type="button" class="rl-mod" data-mod="inad"><i class="fas fa-user-clock"></i> Vencidos por cliente</button>
+    <button type="button" class="rl-mod" data-mod="extrato"><i class="fas fa-list-ul"></i> Extrato completo</button>
+    <button type="button" class="rl-mod" data-mod="servano"><i class="fas fa-briefcase"></i> Serviços no ano</button>
+    <button type="button" class="rl-mod" data-mod="bancomes"><i class="fas fa-building-columns"></i> Por banco no mês</button>
+    <button type="button" class="rl-mod" data-mod="grupo"><i class="fas fa-layer-group"></i> Por grupo</button>
+  </div>
+  <div class="rl-corpo">
+   <div class="rl-filtros">
+    <section class="rl-bloco">
+      <div class="rl-h"><i class="fas fa-traffic-light"></i> Situação <em>marque uma ou várias</em></div>
+      <div class="rl-sits" id="rlSits"></div>
+    </section>
+    <section class="rl-bloco">
+      <div class="rl-h"><i class="fas fa-calendar-week"></i> Período</div>
+      <div class="rl-chips" id="rlPer"></div>
+      <div class="rl-datas"><span>de</span><input type="date" id="rlDe"><span>até</span><input type="date" id="rlAte">
+        <span style="margin-left:6px;">a data que vale:</span>
+        <div class="rl-seg" id="rlRef"><button type="button" data-v="mov" title="Pagos pela data em que o dinheiro entrou; em aberto pelo vencimento">Pagamento / vencimento</button><button type="button" data-v="venc">Vencimento</button><button type="button" data-v="comp">Competência</button></div>
+      </div>
+    </section>
+    <section class="rl-bloco">
+      <div class="rl-h"><i class="fas fa-users"></i> Quem</div>
+      <div class="rl-chips" id="rlCad"></div>
+      <div class="rl-dois" style="margin-top:12px;">
+        <div><div class="rl-h" style="margin-bottom:6px;"><i class="fas fa-layer-group"></i> Grupo <button type="button" class="rl-limpa" data-limpa="grupos">limpar</button></div>
+          <div class="rl-lista-b"><i class="fas fa-search"></i><input class="rl-inp" data-busca="grupos" placeholder="Buscar grupo…"></div>
+          <div class="rl-sel" data-sel="grupos"></div><div class="rl-lista" data-lista="grupos"></div></div>
+        <div><div class="rl-h" style="margin-bottom:6px;"><i class="fas fa-building"></i> Cliente <button type="button" class="rl-limpa" data-limpa="clientes">limpar</button></div>
+          <div class="rl-lista-b"><i class="fas fa-search"></i><input class="rl-inp" data-busca="clientes" placeholder="Nome, número ou CNPJ…"></div>
+          <div class="rl-sel" data-sel="clientes"></div><div class="rl-lista" data-lista="clientes"></div></div>
+      </div>
+    </section>
+    <section class="rl-bloco">
+      <div class="rl-h"><i class="fas fa-briefcase"></i> Serviço <button type="button" class="rl-limpa" data-limpa="servicos">limpar</button></div>
+      <div class="rl-chips" id="rlServ"></div>
+      <label class="rl-tog"><input type="checkbox" id="rlServLinhas" checked> <span><b>Detalhar os serviços</b> — o honorário com o valor do contrato aparece aberto em cada serviço (Honorários contábeis, LMC, Loja de Conveniência…). Escolher um serviço soma só a parte dele.</span></label>
+    </section>
+    <section class="rl-bloco">
+      <div class="rl-h"><i class="fas fa-building-columns"></i> Banco <em>pagos: onde o dinheiro entrou · em aberto: o boleto</em></div>
+      <div class="rl-chips" id="rlBanco"></div>
+    </section>
+    <div class="rl-dois">
+      <section class="rl-bloco">
+        <div class="rl-h"><i class="fas fa-landmark"></i> Empresa do escritório</div>
+        <div class="rl-chips" id="rlEmp"></div>
+      </section>
+      <section class="rl-bloco">
+        <div class="rl-h"><i class="fas fa-coins"></i> Valor</div>
+        <div class="rl-datas" style="margin-top:0;"><span>de R$</span><input class="rl-inp" id="rlVmin" inputmode="decimal" style="width:100px;" placeholder="0,00">
+          <span>até R$</span><input class="rl-inp" id="rlVmax" inputmode="decimal" style="width:100px;" placeholder="sem limite"></div>
+      </section>
+    </div>
+   </div>
+   <aside class="rl-sai">
+    <section class="rl-bloco">
+      <div class="rl-h"><i class="fas fa-heading"></i> Nome do relatório</div>
+      <input class="rl-inp" id="rlTitulo" style="width:100%; box-sizing:border-box;" maxlength="80" placeholder="Relatório de títulos a receber">
+    </section>
+    <section class="rl-bloco">
+      <div class="rl-h"><i class="fas fa-sitemap"></i> Organizar por</div>
+      <div class="rl-org" id="rlOrg">
+        <button type="button" data-v="sit"><i class="fas fa-traffic-light"></i> Situação</button>
+        <button type="button" data-v="cliente"><i class="fas fa-building"></i> Cliente</button>
+        <button type="button" data-v="grupo"><i class="fas fa-layer-group"></i> Grupo</button>
+        <button type="button" data-v="servico"><i class="fas fa-briefcase"></i> Serviço</button>
+        <button type="button" data-v="banco"><i class="fas fa-building-columns"></i> Banco</button>
+        <button type="button" data-v="mes"><i class="fas fa-calendar"></i> Mês</button>
+        <button type="button" data-v="dia"><i class="fas fa-calendar-day"></i> Dia</button>
+        <button type="button" data-v="empresa"><i class="fas fa-landmark"></i> Empresa</button>
+      </div>
+      <div class="rl-seg" id="rlDet" style="margin-top:10px;"><button type="button" data-v="analitico">Analítico — cada lançamento</button><button type="button" data-v="resumo">Resumido — só os totais</button></div>
+    </section>
+    <section class="rl-bloco">
+      <div class="rl-h"><i class="fas fa-file-export"></i> Formato</div>
+      <div class="rl-fmt" id="rlFmt">
+        <button type="button" data-v="pdf"><i class="fas fa-file-pdf" style="color:#dc2626"></i><span><b>PDF</b><small>com o logotipo, para ler e enviar</small></span></button>
+        <button type="button" data-v="xlsx"><i class="fas fa-file-excel" style="color:#15803d"></i><span><b>Excel</b><small>uma linha por serviço, para conferir</small></span></button>
+      </div>
+    </section>
+    <section class="rl-bloco rl-resumo" id="rlResumo"></section>
+   </aside>
+  </div>
+  <footer class="rl-pe">
+    <div class="rl-pe-info" id="rlPeInfo">Combine os filtros: o total no alto acompanha.</div>
+    <button type="button" class="rl-bt" onclick="rlLimpar()"><i class="fas fa-eraser"></i> Limpar</button>
+    <button type="button" class="rl-bt prim" id="rlGerar" onclick="rlGerar()"><i class="fas fa-file-arrow-down"></i> Gerar PDF</button>
+  </footer>
+ </div>
+</div>
+
+<script>
+(function () {
+  var URL_OP = {{ url_for('financeiro.titulos_relatorio_opcoes') | tojson }}, URL_PREV = {{ url_for('financeiro.titulos_relatorio_previa') | tojson }},
+      URL_REL = {{ url_for('financeiro.titulos_relatorio') | tojson }}, LOGOS = {{ (logos_banco() if logos_banco is defined else {}) | tojson }};
+  var SITS = [['pago', 'Pagos', '#15803d', '#ecfdf5'], ['avencer', 'A vencer', '#1d4ed8', '#eff6ff'], ['vencido', 'Vencidos', '#b91c1c', '#fef2f2'], ['perdido', 'Perdidos', '#334155', '#f1f5f9']];
+  var OP = null, S = null, LASTJ = null, prevT = null, prevSeq = 0, fundo = document.getElementById('rlFundo');
+  var $ = function (id) { return document.getElementById(id); };
+  function esc(s) { var d = document.createElement('div'); d.textContent = s == null ? '' : String(s); return d.innerHTML; }
+  function brl(v) { return 'R$ ' + Number(v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+  function iso(d) { return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
+  function semAc(s) { return String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase(); }
+  function novo() { return { sit: {}, per: 'tudo', de: '', ate: '', ref: 'mov', cad: {}, grupos: {}, clientes: {}, servicos: {}, bancos: {}, emp: {},
+                             vmin: '', vmax: '', org: 'sit', det: 'analitico', fmt: 'pdf', titulo: '', servlinhas: true }; }
+  var PERS = [['mes', 'Este mês'], ['ant', 'Mês anterior'], ['ano', 'Este ano'], ['anoant', 'Ano passado'], ['12m', 'Últimos 12 meses'], ['tudo', 'Tudo'], ['datas', 'Escolher datas']];
+  function periodo(p) {
+    var h = new Date(), y = h.getFullYear(), m = h.getMonth();
+    if (p === 'mes') return [iso(new Date(y, m, 1)), iso(new Date(y, m + 1, 0))];
+    if (p === 'ant') return [iso(new Date(y, m - 1, 1)), iso(new Date(y, m, 0))];
+    if (p === 'ano') return [y + '-01-01', y + '-12-31'];
+    if (p === 'anoant') return [(y - 1) + '-01-01', (y - 1) + '-12-31'];
+    if (p === '12m') return [iso(new Date(y, m - 11, 1)), iso(new Date(y, m + 1, 0))];
+    if (p === 'tudo') return ['', ''];
+    return [S.de, S.ate];
+  }
+  var MODELOS = {
+    recmes: { sit: ['pago'], per: 'mes', org: 'dia', det: 'analitico', titulo: 'Recebido no mês' },
+    aberto: { sit: ['avencer', 'vencido'], per: 'tudo', org: 'sit', det: 'analitico', titulo: 'Títulos em aberto' },
+    inad: { sit: ['vencido'], per: 'tudo', org: 'cliente', det: 'analitico', titulo: 'Vencidos por cliente' },
+    extrato: { sit: ['pago', 'avencer', 'vencido', 'perdido'], per: 'tudo', org: 'cliente', det: 'analitico', titulo: 'Extrato completo' },
+    servano: { sit: ['pago'], per: 'ano', org: 'servico', det: 'resumo', titulo: 'Serviços recebidos no ano' },
+    bancomes: { sit: ['pago'], per: 'mes', org: 'banco', det: 'analitico', titulo: 'Recebido por banco no mês' },
+    grupo: { sit: ['pago', 'avencer', 'vencido'], per: 'mes', org: 'grupo', det: 'analitico', titulo: 'Títulos por grupo' }
+  };
+  function aplicarModelo(k) {
+    var md = MODELOS[k], fmt = S.fmt; S = novo(); S.fmt = fmt; limparBuscas();
+    md.sit.forEach(function (s) { S.sit[s] = 1; });
+    S.org = md.org; S.det = md.det; S.titulo = md.titulo; definirPer(md.per); desenhar(); prever();
+  }
+  function definirPer(p) { S.per = p; if (p !== 'datas') { var d = periodo(p); S.de = d[0]; S.ate = d[1]; } }
+
+  // ── desenho ──
+  function chips(el, itens, alvo, multi) {
+    el.innerHTML = itens.map(function (o) {
+      var on = multi ? !!alvo[o[0]] : alvo === o[0];
+      return '<button type="button" class="rl-chip' + (on ? ' on' : '') + '" data-v="' + esc(o[0]) + '">' + (o[3] || '') + esc(o[1]) + (o[2] != null ? ' <b>' + o[2] + '</b>' : '') + '</button>';
+    }).join('');
+  }
+  function lista(nome, itens) {
+    var q = semAc(document.querySelector('[data-busca="' + nome + '"]').value.trim()), sel = S[nome];
+    var vis = itens.filter(function (o) { return !q || semAc(o.busca).indexOf(q) >= 0; });
+    vis.sort(function (a, b) { return (sel[b.v] ? 1 : 0) - (sel[a.v] ? 1 : 0); });
+    var box = document.querySelector('[data-lista="' + nome + '"]');
+    box.innerHTML = vis.slice(0, 250).map(function (o) {
+      return '<div class="rl-op' + (sel[o.v] ? ' on' : '') + '" data-v="' + esc(o.v) + '"><span class="cx"><i class="fas fa-check"></i></span><span>' + o.html + '</span><small>' + o.n + '</small></div>';
+    }).join('') || '<div class="rl-vazio">Nada com essa busca.</div>';
+    var s = document.querySelector('[data-sel="' + nome + '"]');
+    s.innerHTML = Object.keys(sel).map(function (v) {
+      var o = itens.filter(function (x) { return x.v === v; })[0];
+      return '<span>' + esc(o ? o.rot : v) + '<button type="button" data-tira="' + esc(v) + '"><i class="fas fa-xmark"></i></button></span>';
+    }).join('');
+  }
+  function itensGrupo() { return OP.grupos.map(function (g) { return { v: g.id, rot: g.nome, html: esc(g.nome), n: g.n, busca: g.nome }; }); }
+  function itensCli() {
+    var c = S.cad, filtra = Object.keys(c).length;
+    return OP.clientes.filter(function (x) { return !filtra || c[x.av ? 'avulso' : 'cliente']; }).map(function (x) {
+      return { v: x.id, rot: (x.num ? x.num + ' · ' : '') + x.nome, html: (x.num ? '<em>' + esc(x.num) + '</em>' : '') + esc(x.nome) + (x.av ? ' <span class="av">AVULSO</span>' : ''), n: x.n, busca: x.num + ' ' + x.nome };
+    });
+  }
+  function desenhar() {
+    $('rlSits').innerHTML = SITS.map(function (s) {
+      return '<button type="button" class="rl-sit' + (S.sit[s[0]] ? ' on' : '') + '" data-v="' + s[0] + '" style="--c:' + s[2] + ';--f:' + s[3] + '"><i class="ck fas fa-check"></i><b>' + s[1] + '</b><strong data-pv="' + s[0] + '">—</strong><small data-pn="' + s[0] + '"></small></button>';
+    }).join('');
+    chips($('rlPer'), PERS, S.per, false);
+    $('rlDe').value = S.de; $('rlAte').value = S.ate;
+    $('rlRef').querySelectorAll('button').forEach(function (b) { b.classList.toggle('on', b.dataset.v === S.ref); });
+    chips($('rlCad'), [['cliente', 'Clientes', null, '<i class="fas fa-building"></i>'], ['avulso', 'Avulsos', null, '<i class="fas fa-user-tag"></i>'], ['sem', 'Sem cadastro', null, '<i class="fas fa-circle-question"></i>']], S.cad, true);
+    if (OP) {
+      lista('grupos', itensGrupo()); lista('clientes', itensCli());
+      chips($('rlServ'), OP.servicos.map(function (s) { return [s.nome, s.nome, s.n]; }), S.servicos, true);
+      chips($('rlBanco'), OP.bancos.map(function (b) {
+        var cod = /^\d+$/.test(b.k) ? String(+b.k) : '', img = cod && LOGOS[cod] ? '<img src="' + LOGOS[cod] + '" alt="">' : '<i class="fas fa-' + (b.k === 'sem_boleto' ? 'file-circle-xmark' : (b.k === 'manual' ? 'hand' : 'building-columns')) + '"></i>';
+        return [b.k, b.nome, b.n, img];
+      }), S.bancos, true);
+      chips($('rlEmp'), OP.empresas.map(function (e) { return [e.id, e.nome, e.n]; }), S.emp, true);
+    }
+    $('rlServLinhas').checked = S.servlinhas;
+    $('rlVmin').value = S.vmin; $('rlVmax').value = S.vmax; $('rlTitulo').value = S.titulo;
+    $('rlOrg').querySelectorAll('button').forEach(function (b) { b.classList.toggle('on', b.dataset.v === S.org); });
+    $('rlDet').querySelectorAll('button').forEach(function (b) { b.classList.toggle('on', b.dataset.v === S.det); });
+    $('rlFmt').querySelectorAll('button').forEach(function (b) { b.classList.toggle('on', b.dataset.v === S.fmt); });
+    $('rlGerar').innerHTML = '<i class="fas fa-file-arrow-down"></i> Gerar ' + (S.fmt === 'xlsx' ? 'Excel' : 'PDF');
+    if (LASTJ) pintar(LASTJ);   // redesenhar não apaga os números da última prévia
+  }
+  function params() {
+    var p = new URLSearchParams(), ks = function (o) { return Object.keys(o).join(','); };
+    p.set('sit', ks(S.sit)); if (S.de) p.set('de', S.de); if (S.ate) p.set('ate', S.ate); p.set('ref', S.ref);
+    ['cad', 'grupos', 'clientes', 'servicos', 'bancos', 'emp'].forEach(function (k) { if (ks(S[k])) p.set(k, ks(S[k])); });
+    if (S.vmin) p.set('vmin', S.vmin); if (S.vmax) p.set('vmax', S.vmax);
+    p.set('org', S.org); p.set('det', S.det); p.set('servlinhas', S.servlinhas ? '1' : '0');
+    if (S.titulo.trim()) p.set('titulo', S.titulo.trim());
+    return p;
+  }
+  function prever() {
+    clearTimeout(prevT);
+    var semSit = !Object.keys(S.sit).length;
+    $('rlGerar').disabled = semSit;
+    if (semSit) { $('rlPrevV').textContent = '—'; $('rlPrevN').textContent = 'marque ao menos uma situação'; return; }
+    $('rlPrev').classList.add('carregando'); $('rlPrevN').textContent = 'calculando…';
+    prevT = setTimeout(function () {
+      var seq = ++prevSeq;
+      fetch(URL_PREV + '?' + params().toString()).then(function (r) { if (!r.ok) throw 0; return r.json(); }).then(function (j) {
+        if (seq !== prevSeq) return;
+        LASTJ = j; pintar(j);
+      }).catch(function () { if (seq === prevSeq) { $('rlPrev').classList.remove('carregando'); $('rlPrevN').textContent = 'não consegui calcular agora'; } });
+    }, 300);
+  }
+  function pintar(j) {
+        $('rlPrev').classList.remove('carregando');
+        $('rlPrevV').textContent = brl(j.total);
+        $('rlPrevN').textContent = j.n + ' lançamento' + (j.n !== 1 ? 's' : '') + ' · ' + j.clientes + ' cliente' + (j.clientes !== 1 ? 's' : '');
+        SITS.forEach(function (s) {
+          var v = j.por[s[0]], a = document.querySelector('[data-pv="' + s[0] + '"]'), b = document.querySelector('[data-pn="' + s[0] + '"]');
+          if (a) a.textContent = S.sit[s[0]] ? brl(v[1]) : '—'; if (b) b.textContent = S.sit[s[0]] ? v[0] + ' lançamento' + (v[0] !== 1 ? 's' : '') : 'fora do relatório';
+        });
+        $('rlResumo').innerHTML = '<div class="rl-h"><i class="fas fa-eye"></i> Vai sair assim</div>' + SITS.filter(function (s) { return S.sit[s[0]]; }).map(function (s) {
+          return '<div style="--c:' + s[2] + '"><i></i><span>' + s[1] + '</span><b>' + brl(j.por[s[0]][1]) + '</b><small>' + j.por[s[0]][0] + '</small></div>';
+        }).join('') + '<div class="tot" style="--c:#0f3d2e"><i></i><span><b>Total</b></span><b>' + brl(j.total) + '</b><small>' + j.n + '</small></div>';
+        $('rlPeInfo').innerHTML = j.n ? '<b>' + j.n + ' lançamentos</b> de <b>' + j.clientes + ' clientes</b> · organizado por <b>' + $('rlOrg').querySelector('.on').textContent.trim().toLowerCase() + '</b>'
+                                      : 'Nenhum lançamento com esses filtros — tire algum.';
+        $('rlGerar').disabled = !j.n || !Object.keys(S.sit).length;
+  }
+
+  // ── eventos ──
+  function ligar() {
+    $('rlSits').addEventListener('click', function (e) { var b = e.target.closest('.rl-sit'); if (!b) return; if (S.sit[b.dataset.v]) delete S.sit[b.dataset.v]; else S.sit[b.dataset.v] = 1; b.classList.toggle('on'); prever(); });
+    $('rlPer').addEventListener('click', function (e) { var b = e.target.closest('.rl-chip'); if (!b) return; definirPer(b.dataset.v); desenhar(); prever(); if (b.dataset.v === 'datas') $('rlDe').focus(); });
+    ['rlDe', 'rlAte'].forEach(function (id) { $(id).addEventListener('change', function () { S.de = $('rlDe').value; S.ate = $('rlAte').value; S.per = 'datas'; chips($('rlPer'), PERS, S.per, false); prever(); }); });
+    $('rlRef').addEventListener('click', function (e) { var b = e.target.closest('button'); if (!b) return; S.ref = b.dataset.v; desenhar(); prever(); });
+    function multi(id, chave) { $(id).addEventListener('click', function (e) { var b = e.target.closest('.rl-chip'); if (!b) return; if (S[chave][b.dataset.v]) delete S[chave][b.dataset.v]; else S[chave][b.dataset.v] = 1; desenhar(); prever(); }); }
+    multi('rlCad', 'cad'); multi('rlServ', 'servicos'); multi('rlBanco', 'bancos'); multi('rlEmp', 'emp');
+    ['grupos', 'clientes'].forEach(function (nome) {
+      document.querySelector('[data-busca="' + nome + '"]').addEventListener('input', function () { lista(nome, nome === 'grupos' ? itensGrupo() : itensCli()); });
+      document.querySelector('[data-lista="' + nome + '"]').addEventListener('click', function (e) {
+        var o = e.target.closest('.rl-op'); if (!o) return;
+        if (S[nome][o.dataset.v]) delete S[nome][o.dataset.v]; else S[nome][o.dataset.v] = 1;
+        lista(nome, nome === 'grupos' ? itensGrupo() : itensCli()); prever();
+      });
+      document.querySelector('[data-sel="' + nome + '"]').addEventListener('click', function (e) {
+        var b = e.target.closest('[data-tira]'); if (!b) return; delete S[nome][b.dataset.tira]; lista(nome, nome === 'grupos' ? itensGrupo() : itensCli()); prever();
+      });
+    });
+    document.querySelectorAll('.rl-limpa').forEach(function (b) { b.addEventListener('click', function () { S[b.dataset.limpa] = {}; desenhar(); prever(); }); });
+    $('rlServLinhas').addEventListener('change', function () { S.servlinhas = this.checked; });
+    ['rlVmin', 'rlVmax'].forEach(function (id) { $(id).addEventListener('input', function () { S.vmin = $('rlVmin').value.trim(); S.vmax = $('rlVmax').value.trim(); prever(); }); });
+    $('rlTitulo').addEventListener('input', function () { S.titulo = this.value; });
+    $('rlOrg').addEventListener('click', function (e) { var b = e.target.closest('button'); if (!b) return; S.org = b.dataset.v; desenhar(); prever(); });
+    $('rlDet').addEventListener('click', function (e) { var b = e.target.closest('button'); if (!b) return; S.det = b.dataset.v; desenhar(); });
+    $('rlFmt').addEventListener('click', function (e) { var b = e.target.closest('button'); if (!b) return; S.fmt = b.dataset.v; desenhar(); });
+    document.querySelectorAll('.rl-mod').forEach(function (b) { b.addEventListener('click', function () { aplicarModelo(b.dataset.mod); }); });
+    fundo.addEventListener('mousedown', function (e) { if (e.target === fundo) rlFechar(); });
+    document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && fundo.classList.contains('on')) { e.preventDefault(); rlFechar(); } });
+  }
+  var ligado = false;
+  // abre já no jeito da tela: a aba aberta vira a situação; o período da tela, o período
+  window.rlAbrir = function () {
+    if (!S) {
+      S = novo();
+      var aba = (document.querySelector('.tx-painel.on') || {}).dataset ? document.querySelector('.tx-painel.on').dataset.p : 'abe';
+      ({ rec: ['pago'], abe: ['avencer'], atr: ['vencido'], ina: ['vencido'], perd: ['perdido'] }[aba] || ['avencer', 'vencido']).forEach(function (s) { S.sit[s] = 1; });
+      var u = new URL(location.href), per = u.searchParams.get('per'), mes = u.searchParams.get('mes');
+      if (per === 'datas') { S.per = 'datas'; S.de = u.searchParams.get('de') || ''; S.ate = u.searchParams.get('ate') || ''; }
+      else if (per) definirPer({ mes: 'mes', ant: 'ant', ano: 'ano' }[per] || 'tudo');
+      else if (aba === 'rec' && mes) { var y = +mes.slice(0, 4), m = +mes.slice(5, 7); S.per = 'datas'; S.de = iso(new Date(y, m - 1, 1)); S.ate = iso(new Date(y, m, 0)); }
+      else definirPer(aba === 'rec' ? 'mes' : 'tudo');
+      if (aba === 'ina') S.org = 'cliente';
+    }
+    if (!ligado) { ligar(); ligado = true; }
+    fundo.classList.add('on'); document.body.style.overflow = 'hidden';
+    desenhar(); prever();
+    if (!OP) fetch(URL_OP).then(function (r) { return r.json(); }).then(function (j) { OP = j; desenhar(); })
+              .catch(function () { $('rlPeInfo').textContent = 'Não consegui carregar as opções. Feche e abra de novo.'; });
+  };
+  window.rlFechar = function () { fundo.classList.remove('on'); document.body.style.overflow = ''; };
+  function limparBuscas() { document.querySelectorAll('#rlFundo [data-busca]').forEach(function (i) { i.value = ''; }); }
+  window.rlLimpar = function () { limparBuscas(); var fmt = S.fmt; S = novo(); S.fmt = fmt; S.sit = { pago: 1, avencer: 1, vencido: 1 }; desenhar(); prever(); };
+  window.rlGerar = function () {
+    var b = $('rlGerar'); if (b.disabled) return;
+    var p = params(); if (S.fmt === 'xlsx') p.set('fmt', 'xlsx');
+    window.open(URL_REL + '?' + p.toString(), '_blank');
+  };
+})();
+</script>

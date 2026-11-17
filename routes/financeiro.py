@@ -250,6 +250,78 @@ def _titulos_receber(emps, sel):
                      ate=(request.args.get('ate') or '') if per_raw == 'datas' else ''))
 
 
+@financeiro.route('/financeiro/titulos/relatorio')
+@permission_required('financeiro.titulos')
+def titulos_relatorio():
+    """Relatório de títulos a receber em PDF ou Excel (17/11/2026), montado na caixa "Gerar relatório".
+
+    Anderson: "ao clicar no relatório abra uma caixa e nela escolhemos o que queremos... pode ser que eu
+    precise retirar um extrato de tudo... com muitos filtros e dando a opção de combinar"; "consultas por
+    Grupo, por periodo, por clientes ou avulsos... por algum serviço especifico"; "detalhado por serviços";
+    "Por banco". Os filtros e o desenho estão em utils/relatorio_titulos.py."""
+    import os
+    from io import BytesIO
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+    from flask import send_file
+    from utils import relatorio_titulos as RT
+    f = RT.ler_filtros(request.args)
+    fatos, _ = RT.coletar(f, fresco=True)
+    rot = _relatorio_rotulos(f)
+    agora = datetime.now(ZoneInfo('America/Sao_Paulo'))
+    logo = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'static', 'images', 'logo.png')
+    titulo = (request.args.get('titulo') or '').strip()[:80] or 'Relatório de títulos a receber'
+    ctx = {'fatos': fatos, 'f': f, 'filtros': RT.descrever(f, rot), 'titulo': titulo,
+           'gerado_em': agora.strftime('%d/%m/%Y %H:%M'), 'gerado_por': getattr(current_user, 'nome', '') or '',
+           'logo_path': logo if os.path.exists(logo) else None}
+    xlsx = request.args.get('fmt') == 'xlsx'
+    dados = RT.gerar_xlsx(ctx) if xlsx else RT.gerar_pdf(ctx)
+    registrar('leitura.exportou_arquivo', 'financeiro', tabela='fin_titulos',
+              depois={'relatorio': titulo, 'formato': 'xlsx' if xlsx else 'pdf', 'lancamentos': len(fatos),
+                      'filtros': ' · '.join(ctx['filtros'])[:400]})
+    nome = f"titulos-a-receber-{agora.strftime('%Y-%m-%d-%H%M')}." + ('xlsx' if xlsx else 'pdf')
+    mime = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' if xlsx else 'application/pdf'
+    return send_file(BytesIO(dados), as_attachment=xlsx or request.args.get('baixar') == '1',
+                     download_name=nome, mimetype=mime)
+
+
+def _relatorio_rotulos(f):
+    """Nomes para escrever os filtros no cabeçalho do relatório."""
+    from utils import relatorio_titulos as RT
+    rot = {'grupos': {'sem': 'Sem grupo'}, 'clientes': {}, 'empresas': {}, 'bancos': dict(RT.BANCO_ESPECIAL)}
+    rot['bancos'].update(RT.BANCO_NOME)
+    ids = [int(x) for x in f['grupos'] if x.isdigit()]
+    if ids:
+        for r in execute_query(f"SELECT id, nome FROM grupos_clientes WHERE id IN ({','.join(['%s'] * len(ids))})", tuple(ids), fetch=True) or []:
+            rot['grupos'][str(r['id'])] = r['nome']
+    ids = [int(x) for x in f['clientes'] if x.isdigit()]
+    if ids:
+        for r in execute_query(f"SELECT id, numero_cliente, nome_razao_social FROM clientes WHERE id IN ({','.join(['%s'] * len(ids))})", tuple(ids), fetch=True) or []:
+            rot['clientes'][str(r['id'])] = ((str(r['numero_cliente']) + ' · ') if r['numero_cliente'] else '') + (r['nome_razao_social'] or '')
+    for r in execute_query("SELECT cliente_id, apelido FROM fin_empresas", fetch=True) or []:
+        rot['empresas'][str(r['cliente_id'])] = r['apelido']
+    for k in list(f['bancos']):
+        if k.startswith('x:'):
+            rot['bancos'][k] = k[2:].upper()
+    return rot
+
+
+@financeiro.route('/financeiro/titulos/relatorio/opcoes')
+@permission_required('financeiro.titulos')
+def titulos_relatorio_opcoes():
+    """O que a caixa "Gerar relatório" oferece (só o que existe no a receber)."""
+    from utils import relatorio_titulos as RT
+    return jsonify(RT.opcoes())
+
+
+@financeiro.route('/financeiro/titulos/relatorio/previa')
+@permission_required('financeiro.titulos')
+def titulos_relatorio_previa():
+    """Quantos lançamentos e quanto dá, ao vivo, enquanto a pessoa marca os filtros."""
+    from utils import relatorio_titulos as RT
+    return jsonify(RT.previa(RT.ler_filtros(request.args)))
+
+
 @financeiro.route('/financeiro/titulos/novo', methods=['POST'])
 @permission_required('financeiro.titulos')
 def titulo_novo():
