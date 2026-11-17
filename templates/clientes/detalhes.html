@@ -288,28 +288,94 @@
             {% endif %}
 
             {% if not pj %}
-            <!-- DADOS PESSOAIS (PF) -->
+            <!-- DADOS PESSOAIS (PF) — 17/11/2026: cinco quadros (identificação, estado civil e cônjuge, documentos,
+                 trabalho e eSocial, acesso digital), medidor de preenchimento, estado civil mandando no regime e no
+                 cônjuge. Anderson: "está pobre demais os dados pessoais... eu coloco solteiro e abre o regime de casamento". -->
             {% set ps = pessoa or {} %}
-            <section class="qb-b s4" id="dados-pessoais" data-copiar-bloco>
-                <div class="qb-bh"><span class="qb-ico i-roxo"><i class="fas fa-id-card"></i></span><h3>Dados pessoais</h3>{{ selo(['documento']) }}</div>
-                {# 16/11/2026: os dados pessoais se alteram aqui mesmo (antes só pelo editor). Documentos ainda no editor até a etapa A2. #}
-                {{ campo('pf_nascimento', 'Nascimento', ps.data_nascimento.strftime('%Y-%m-%d') if ps.data_nascimento else '', exibe=(ps.data_nascimento|format_date if ps.data_nascimento else ''), tipo='date') }}
-                <div class="qb-kv" id="campo-documento" data-campo="pf_documentos" data-rotulo="Documentos"><small>Documentos</small><b id="dcTxt">{% for d in documentos or [] %}{{ d.tipo }} {{ d.numero }}{% if d.orgao %} · {{ d.orgao }}{% if d.uf %}/{{ d.uf }}{% endif %}{% endif %}{% if not loop.last %}<br>{% endif %}{% else %}—{% endfor %}</b>
-                    {% if pode_rota('clientes.salvar_campos') %}
-                    {# 16/11/2026 (A2): documentos se alteram aqui, no modo Editar (antes iam para o editor antigo) #}
-                    <button type="button" class="qb-add" id="dcAbrir" style="align-self:flex-start;margin-top:6px"><i class="fas fa-pen"></i> Alterar documentos</button>
-                    <div class="dc-ed" id="dcEd" hidden></div>
-                    <script type="application/json" id="dcDados">{{ {'docs': documentos or [], 'tipos': pf_ops.doc_tipos, 'orgaos': pf_ops.rg_orgao | map(attribute=0) | list, 'sug': pf_ops.doc_sugestao, 'ufs': pf_ops.ufs} | tojson }}</script>
-                    {% endif %}</div>
-                {{ campo('pf_estado_civil', 'Estado civil', ps.estado_civil or '', exibe=pessoa_rotulo('estado_civil', ps.estado_civil) or '', tipo='select', ops=pf_ops.civil) }}
-                {{ campo('pf_regime_bens', 'Regime de bens', ps.regime_bens or '', exibe=pessoa_rotulo('regime_bens', ps.regime_bens) or '', tipo='select', ops=pf_ops.regime, ajuda='Só para casado(a) ou união estável.') }}
-                {{ campo('pf_conjuge_nome', 'Cônjuge', ps.conjuge_nome or '', ajuda='Só para casado(a) ou união estável. Opcional.') }}
-                {% if conjuge_cad %}<div class="qb-kv" style="padding-top:0"><small>Cônjuge cadastrado</small><b><a href="{{ url_for('clientes.detalhes', id=conjuge_cad.id) }}">{{ conjuge_cad.nome_razao_social | nome_proprio }}</a></b></div>{% endif %}
-                {{ campo('pf_conjuge_cpf', 'CPF do cônjuge', ps.conjuge_cpf or '', ph='000.000.000-00', mono=True) }}
-                {{ campo('pf_nacionalidade', 'Nacionalidade', ps.nacionalidade or '', tipo='select', ops=pf_ops.nacionalidade) }}
-                {{ campo('pf_profissao', 'Profissão', ps.profissao or '', tipo='select', ops=pf_ops.profissao) }}
-                {{ campo('pf_nome_mae', 'Nome da mãe', ps.nome_mae or '') }}
-                {{ campo('pf_nivel_govbr', 'Conta gov.br', ps.nivel_govbr or '', exibe=pessoa_rotulo('nivel_govbr', ps.nivel_govbr) or '', tipo='select', ops=pf_ops.govbr) }}
+            {% set casado = ps.estado_civil in ['CASADO', 'UNIAO_ESTAVEL'] %}
+            {% set pf_itens = [ps.data_nascimento, ps.sexo, ps.naturalidade_cidade, ps.nacionalidade, ps.nome_mae, ps.nome_pai, (documentos or [])|length, ps.estado_civil, ps.profissao, ps.pis_nit, ps.grau_instrucao, ps.raca_cor, ps.nivel_govbr] %}
+            {% set pf_tot = pf_itens|length + (2 if casado else 0) %}
+            {% set pf_ok = (pf_itens|select|list|length) + ((1 if ps.regime_bens else 0) + (1 if (ps.conjuge_nome or ps.conjuge_cpf) else 0) if casado else 0) %}
+            <section class="qb-b s12 pf-sec" id="dados-pessoais" data-copiar-bloco>
+                <div class="qb-bh"><span class="qb-ico i-roxo"><i class="fas fa-id-card"></i></span><h3>Dados pessoais</h3>{{ selo(['documento']) }}
+                    <div class="qb-bh-dir pf-med" title="Quantos dados da pessoa já estão preenchidos"><span class="pf-medidor"><i style="width:{{ (pf_ok * 100 / pf_tot) | round | int }}%"></i></span><small>{{ pf_ok }} de {{ pf_tot }} preenchidos</small></div>
+                </div>
+                <div class="pf-grid">
+                    {# ── Identificação ── #}
+                    <div class="pf-sub">
+                        <div class="pf-sub-h"><i class="fas fa-user"></i><b>Identificação</b><small>Junta, contrato social e gov.br</small></div>
+                        <div class="pf-2col">
+                            {{ campo('pf_nascimento', 'Nascimento', ps.data_nascimento.strftime('%Y-%m-%d') if ps.data_nascimento else '', exibe=((ps.data_nascimento|format_date) ~ (' · ' ~ pf_ops.idade if pf_ops.idade else '')) if ps.data_nascimento else '', tipo='date') }}
+                            {{ campo('pf_sexo', 'Sexo', ps.sexo or '', exibe=pessoa_rotulo('sexo', ps.sexo) or '', tipo='select', ops=pf_ops.sexo) }}
+                        </div>
+                        <div class="pf-2col pf-2col-uf">
+                            {{ campo('pf_naturalidade_cidade', 'Naturalidade', ps.naturalidade_cidade or '', ph='Cidade onde nasceu') }}
+                            {{ campo('pf_naturalidade_uf', 'UF', ps.naturalidade_uf or '', tipo='select', ops=pf_ops.ufs2) }}
+                        </div>
+                        {{ campo('pf_nacionalidade', 'Nacionalidade', ps.nacionalidade or '', tipo='select', ops=pf_ops.nacionalidade) }}
+                        {{ campo('pf_nome_mae', 'Nome da mãe', ps.nome_mae or '') }}
+                        {{ campo('pf_nome_pai', 'Nome do pai', ps.nome_pai or '') }}
+                        {{ campo('pf_nome_social', 'Nome social', ps.nome_social or '', ajuda='Só quando a pessoa usa um nome diferente do registro. Opcional.') }}
+                    </div>
+
+                    {# ── Estado civil e cônjuge ── #}
+                    <div class="pf-sub">
+                        <div class="pf-sub-h"><i class="fas fa-ring"></i><b>Estado civil e cônjuge</b><small>regime de bens só para casado(a) ou união estável</small></div>
+                        <div class="tu-v{% if pode_rota('clientes.salvar_campos') %} tu-ed{% endif %} qb-opcoes pf-civil-box" data-campo="pf_estado_civil" data-tipo="opcoes" data-rotulo="Estado civil" data-valor="{{ ps.estado_civil or '' }}">
+                            <div class="pf-civil">
+                                {% for v, rot in pf_ops.civil %}
+                                <button type="button" class="qb-op{{ ' on' if ps.estado_civil == v }}" data-v="{{ v }}"{% if not pode_rota('clientes.salvar_campos') %} disabled{% endif %}><i class="fas {{ {'SOLTEIRO': 'fa-user', 'CASADO': 'fa-ring', 'UNIAO_ESTAVEL': 'fa-people-arrows', 'SEPARADO': 'fa-user-minus', 'DIVORCIADO': 'fa-user-slash', 'VIUVO': 'fa-dove'}[v] }}"></i><b>{{ rot }}</b></button>
+                                {% endfor %}
+                            </div>
+                            <span hidden data-copiar="{{ pessoa_rotulo('estado_civil', ps.estado_civil) or '' }}" data-copiar-rotulo="Estado civil"></span>
+                        </div>
+                        <div id="pfCasado"{% if not casado %} hidden{% endif %}>
+                            {{ campo('pf_regime_bens', 'Regime de bens', ps.regime_bens or '', exibe=pessoa_rotulo('regime_bens', ps.regime_bens) or '', tipo='select', ops=pf_ops.regime) }}
+                            <div class="pf-2col pf-2col-cpf">
+                                {{ campo('pf_conjuge_nome', 'Cônjuge', ps.conjuge_nome or '', ajuda='Nome como está no documento. Opcional.') }}
+                                {{ campo('pf_conjuge_cpf', 'CPF do cônjuge', ps.conjuge_cpf or '', ph='000.000.000-00', mono=True) }}
+                            </div>
+                            {% if conjuge_cad %}<div class="pf-cert"><i class="fas fa-link"></i> Cônjuge cadastrado: <b>{{ conjuge_cad.nome_razao_social | nome_proprio }}</b><a href="{{ url_for('clientes.detalhes', id=conjuge_cad.id) }}">abrir ficha <i class="fas fa-arrow-right"></i></a></div>{% endif %}
+                        </div>
+                        <div class="pf-nota" id="pfSolteiroNota"{% if casado %} hidden{% endif %}><i class="fas fa-circle-info"></i> {% if ps.estado_civil %}{{ pessoa_rotulo('estado_civil', ps.estado_civil) }}: não há regime de bens nem cônjuge a informar.{% else %}Escolha o estado civil. Regime de bens e cônjuge aparecem só para casado(a) ou união estável.{% endif %}</div>
+                    </div>
+
+                    {# ── Documentos ── #}
+                    <div class="pf-sub">
+                        <div class="pf-sub-h"><i class="fas fa-id-badge"></i><b>Documentos</b><small>{{ (documentos or [])|length }} cadastrado{{ 's' if (documentos or [])|length != 1 }}</small></div>
+                        <div class="qb-kv pf-docs-kv" id="campo-documento" data-campo="pf_documentos" data-rotulo="Documentos"><small>RG, CNH, CIN, conselho, passaporte, título</small>
+                            <b id="dcTxt" class="pf-docs">{% for d in documentos or [] %}{% set venc = d.validade and d.validade.isoformat() < pf_ops.hoje %}<span class="pf-doc{{ ' venc' if venc }}" data-copiar="{{ d.tipo }} {{ d.numero }}{% if d.orgao %} {{ d.orgao }}{% if d.uf %}/{{ d.uf }}{% endif %}{% endif %}" data-copiar-rotulo="{{ d.tipo }}"><b>{{ d.tipo }}</b><span class="mono">{{ d.numero }}</span>{% if d.orgao %}<small>{{ d.orgao }}{% if d.uf %}/{{ d.uf }}{% endif %}</small>{% endif %}{% if d.contrato %}<em title="vai no contrato social">contrato</em>{% endif %}{% if d.validade %}<i class="val">{{ 'venceu em' if venc else 'válido até' }} {{ d.validade|format_date }}</i>{% endif %}</span>{% else %}<span class="tu-vazio">— nenhum documento</span>{% endfor %}</b>
+                            {% if pode_rota('clientes.salvar_campos') %}
+                            <button type="button" class="qb-add" id="dcAbrir" style="align-self:flex-start;margin-top:6px"><i class="fas fa-pen"></i> Alterar documentos</button>
+                            <div class="dc-ed" id="dcEd" hidden></div>
+                            <script type="application/json" id="dcDados">{{ {'docs': documentos or [], 'tipos': pf_ops.doc_tipos, 'orgaos': pf_ops.rg_orgao | map(attribute=0) | list, 'sug': pf_ops.doc_sugestao, 'ufs': pf_ops.ufs, 'validade': pf_ops.doc_validade, 'hoje': pf_ops.hoje} | tojson }}</script>
+                            {% endif %}</div>
+                    </div>
+
+                    {# ── Trabalho e eSocial ── #}
+                    <div class="pf-sub pf-s6">
+                        <div class="pf-sub-h"><i class="fas fa-briefcase"></i><b>Trabalho e eSocial</b><small>o eSocial pede estes quatro para o sócio com pró-labore</small></div>
+                        <div class="pf-2col">
+                            {{ campo('pf_profissao', 'Profissão', ps.profissao or '', tipo='select', ops=pf_ops.profissao) }}
+                            {{ campo('pf_pis_nit', 'PIS / NIT', ps.pis_nit or '', ph='000.00000.00-0', mono=True, ajuda='11 números; o sistema confere o dígito.') }}
+                            {{ campo('pf_grau_instrucao', 'Grau de instrução', ps.grau_instrucao or '', exibe=pessoa_rotulo('grau_instrucao', ps.grau_instrucao) or '', tipo='select', ops=pf_ops.grau) }}
+                            {{ campo('pf_raca_cor', 'Raça / cor', ps.raca_cor or '', exibe=pessoa_rotulo('raca_cor', ps.raca_cor) or '', tipo='select', ops=pf_ops.raca, ajuda='Como a pessoa se declara (tabela do eSocial).') }}
+                        </div>
+                    </div>
+
+                    {# ── Acesso digital ── #}
+                    <div class="pf-sub pf-s6">
+                        <div class="pf-sub-h"><i class="fas fa-shield-halved"></i><b>Acesso digital</b><small>gov.br, e-CAC e certificado</small></div>
+                        <div class="pf-2col">
+                            {{ campo('pf_nivel_govbr', 'Conta gov.br', ps.nivel_govbr or '', exibe=pessoa_rotulo('nivel_govbr', ps.nivel_govbr) or '', tipo='select', ops=pf_ops.govbr, ajuda='Prata ou ouro para assinar e acessar o e-CAC.') }}
+                            {% set ecac_venc = ps.ecac_procuracao_ate and ps.ecac_procuracao_ate.isoformat() < pf_ops.hoje %}
+                            {{ campo('pf_ecac_procuracao_ate', 'Procuração no e-CAC', ps.ecac_procuracao_ate.strftime('%Y-%m-%d') if ps.ecac_procuracao_ate else '', exibe=(('venceu em ' if ecac_venc else 'vale até ') ~ (ps.ecac_procuracao_ate|format_date)) if ps.ecac_procuracao_ate else '', tipo='date', ajuda='Até quando vale a procuração eletrônica para a Qualicontax. Em branco = não tem.') }}
+                        </div>
+                        <div class="pf-cert{{ ' venc' if certificado and cs and cs.nivel == 'vencido' }}"><i class="fas fa-certificate"></i>
+                            {% if certificado %}Certificado A1 · {{ 'venceu em' if cs and cs.nivel == 'vencido' else 'vence em' }} <b>{{ certificado.validade|format_date if certificado.validade else '—' }}</b>{% else %}Sem certificado digital próprio{% endif %}
+                            <a href="#certificado">ver <i class="fas fa-arrow-right"></i></a></div>
+                    </div>
+                </div>
             </section>
             {% if produtor_rural or ies %}
             <section class="qb-b s4" id="ies-rural" data-copiar-bloco>
@@ -1990,6 +2056,28 @@
     tu.addEventListener('keydown', function (e) {
         if (e.key === 'Enter' && e.target.matches && e.target.matches('.tu-v.tu-ed:not(.qb-opcoes)')) { e.preventDefault(); abrir(e.target); }
     });
+    // 17/11/2026: o estado civil manda no regime de bens e no cônjuge — solteiro/divorciado/separado/viúvo
+    // escondem e limpam os dois; casado/união estável mostram. Anderson: "eu coloco solteiro e abre o regime".
+    function pfCivil() {
+        var box = document.querySelector('.qb-opcoes[data-campo="pf_estado_civil"]'); if (!box) return;
+        var v = pend.pf_estado_civil !== undefined ? pend.pf_estado_civil : (box.dataset.valor || '');
+        var casado = v === 'CASADO' || v === 'UNIAO_ESTAVEL';
+        var area = document.getElementById('pfCasado'), nota = document.getElementById('pfSolteiroNota');
+        if (area) area.hidden = !casado;
+        if (nota) {
+            nota.hidden = casado;
+            var rot = ''; box.querySelectorAll('.qb-op').forEach(function (o) { if (o.dataset.v === v) rot = o.querySelector('b').textContent; });
+            nota.innerHTML = '<i class="fas fa-circle-info"></i> ' + (v ? esc(rot) + ': não há regime de bens nem cônjuge a informar.' : 'Escolha o estado civil. Regime de bens e cônjuge aparecem só para casado(a) ou união estável.');
+        }
+        ['pf_regime_bens', 'pf_conjuge_nome', 'pf_conjuge_cpf'].forEach(function (k) {
+            var el = document.querySelector('.tu-v[data-campo="' + k + '"]'); if (!el) return;
+            if (!casado) { if ((el.dataset.valor || '') !== '') pend[k] = ''; else delete pend[k]; }
+            else if (pend[k] === '') delete pend[k];          // voltou a casado: o que estava gravado volta
+            mostrar(el);
+        });
+        atualizarBotao();
+    }
+    tu.addEventListener('click', function (e) { if (e.target.closest('.qb-opcoes[data-campo="pf_estado_civil"] .qb-op')) pfCivil(); });
     document.addEventListener('mousedown', function (e) {
         document.querySelectorAll('.tu-v.tu-abrindo').forEach(function (o) { if (!o.contains(e.target) && o._confirmar) o._confirmar(); });
     });
@@ -2149,7 +2237,7 @@
     (function () {
         var dd = document.getElementById('dcDados'); if (!dd) return;
         var D = JSON.parse(dd.textContent), box = document.getElementById('dcEd');
-        var norm = function (l) { return l.map(function (d) { return { tipo: d.tipo || '', numero: String(d.numero || '').trim().toUpperCase(), orgao: d.orgao || '', uf: d.uf || '', contrato: !!d.contrato }; }); };
+        var norm = function (l) { return l.map(function (d) { return { tipo: d.tipo || '', numero: String(d.numero || '').trim().toUpperCase(), orgao: d.orgao || '', uf: d.uf || '', contrato: !!d.contrato, validade: String(d.validade || '').slice(0, 10) }; }); };
         var base = JSON.stringify(norm(D.docs)), docs = norm(D.docs);
         var sel = function (lista, v, vazio, rot) {
             var s = document.createElement('select'); s.setAttribute('aria-label', rot);
@@ -2183,13 +2271,22 @@
                 ct.append(ck, document.createTextNode('Contrato'));
                 var del = document.createElement('button'); del.type = 'button'; del.className = 'dc-del'; del.title = 'Tirar este documento'; del.innerHTML = '<i class="fas fa-trash-alt"></i>';
                 del.onclick = function () { docs.splice(i, 1); if (docs.length && !docs.some(function (x) { return x.contrato; })) docs[0].contrato = true; render(); };
-                row.append(tp, nu, og, uf, ct, del); box.appendChild(row);
+                row.append(tp, nu, og, uf, ct, del);
+                // 17/11/2026: "válido até" para o que vence (CNH, passaporte, RNM, CIN) — avisa quando passou
+                if ((D.validade || []).indexOf(d.tipo) >= 0) {
+                    var vl = document.createElement('label'); vl.className = 'dc-val';
+                    var vi = document.createElement('input'); vi.type = 'date'; vi.value = d.validade || ''; vi.setAttribute('aria-label', 'Válido até');
+                    vi.onchange = function () { d.validade = vi.value; sync(); vl.classList.toggle('venc', !!vi.value && vi.value < D.hoje); };
+                    vl.append(document.createTextNode('Válido até'), vi); vl.classList.toggle('venc', !!d.validade && d.validade < D.hoje);
+                    row.appendChild(vl);
+                } else { d.validade = ''; }
+                box.appendChild(row);
             });
             var add = document.createElement('button'); add.type = 'button'; add.className = 'qb-add'; add.style.marginTop = '8px';
             add.innerHTML = '<i class="fas fa-plus"></i> Incluir documento';
             add.onclick = function () {
                 var t = docs.some(function (x) { return x.tipo === 'RG'; }) ? 'CNH' : 'RG';
-                docs.push({ tipo: t, numero: '', orgao: D.sug[t] || '', uf: '', contrato: !docs.length }); render();
+                docs.push({ tipo: t, numero: '', orgao: D.sug[t] || '', uf: '', contrato: !docs.length, validade: '' }); render();
                 var ns = box.querySelectorAll('input[type=text]'); if (ns.length) ns[ns.length - 1].focus();
             };
             box.appendChild(add);

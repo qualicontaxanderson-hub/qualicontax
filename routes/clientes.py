@@ -27,7 +27,7 @@ from utils.qualificacao import qualificacao
 from models.contabilidade import Contabilidade
 from utils.natureza import classificar as natureza_classificar, codigo_formatado, FAMILIAS as NAT_FAMILIAS
 from models.pessoa_dados import cpf_valido, cpf_formatado
-from models.pessoa_dados import (PessoaDados, CAMPOS as PESSOA_CAMPOS, COM_REGIME, ESTADOS_CIVIS,
+from models.pessoa_dados import (COM_VALIDADE, PessoaDados, CAMPOS as PESSOA_CAMPOS, COM_REGIME, ESTADOS_CIVIS, SEXOS, GRAUS_INSTRUCAO, RACAS_COR, pis_valido, pis_formatado,
                                  REGIMES_BENS, NIVEIS_GOVBR, UFS, Opcoes, TIPOS_OPCAO,
                                  Documentos, TIPOS_DOC, ORGAO_SUGERIDO)
 from models.grupo_cliente import GrupoCliente
@@ -576,6 +576,15 @@ def _valor_opcional(v):
     return d.quantize(Decimal('0.01')) if Decimal('0') <= d < Decimal('1e12') else False
 
 
+def _idade(nasc):
+    """'47 anos' a partir da data de nascimento (None sem data)."""
+    if not nasc or not hasattr(nasc, 'year'):
+        return None
+    h = date.today()
+    a = h.year - nasc.year - ((h.month, h.day) < (nasc.month, nasc.day))
+    return f'{a} ano{"s" if a != 1 else ""}' if a >= 0 else None
+
+
 def _ler_pessoa(form, antes=None):
     """Quadro "Dados pessoais" (só PF) -> colunas de clientes_pf_dados. O que
     não é das listas vira vazio; regime de bens só fica para casado(a) e
@@ -606,6 +615,18 @@ def _ler_pessoa(form, antes=None):
         c_cpf, c_nome = antes.get('conjuge_cpf'), antes.get('conjuge_nome')
     if civil not in COM_REGIME:
         c_cpf = c_nome = None
+    # 17/11/2026: identificação, eSocial e e-CAC. Tela que não manda o campo (formulário antigo) mantém o gravado.
+    def opc(nome, lista_ops, col):
+        if nome not in form:
+            return antes.get(col)
+        v = (form.get(nome) or '').strip()
+        return v if v in dict(lista_ops) else None
+
+    def texto(nome, col, n, upper=True):
+        return txt(nome, n, upper) if nome in form else antes.get(col)
+    uf_nat = (form.get('pf_naturalidade_uf') or '').strip().upper() if 'pf_naturalidade_uf' in form else antes.get('naturalidade_uf')
+    pis = (pis_formatado(form.get('pf_pis_nit')) if pis_valido(form.get('pf_pis_nit')) else None) if 'pf_pis_nit' in form else antes.get('pis_nit')
+    ecac = _data_iso(form.get('pf_ecac_procuracao_ate'), ate_hoje=False) if 'pf_ecac_procuracao_ate' in form else antes.get('ecac_procuracao_ate')
     return {
         'conjuge_cpf': c_cpf,
         'conjuge_nome': c_nome,
@@ -616,6 +637,15 @@ def _ler_pessoa(form, antes=None):
         'profissao': lista('profissao'),
         'nome_mae': txt('pf_nome_mae', 255, True),
         'nivel_govbr': nivel if nivel in dict(NIVEIS_GOVBR) else None,
+        'sexo': opc('pf_sexo', SEXOS, 'sexo'),
+        'naturalidade_cidade': texto('pf_naturalidade_cidade', 'naturalidade_cidade', 80),
+        'naturalidade_uf': uf_nat if uf_nat in UFS else None,
+        'nome_pai': texto('pf_nome_pai', 'nome_pai', 255),
+        'nome_social': texto('pf_nome_social', 'nome_social', 255),
+        'pis_nit': pis,
+        'grau_instrucao': opc('pf_grau_instrucao', GRAUS_INSTRUCAO, 'grau_instrucao'),
+        'raca_cor': opc('pf_raca_cor', RACAS_COR, 'raca_cor'),
+        'ecac_procuracao_ate': ecac,
     }
 
 
@@ -645,7 +675,8 @@ def _ler_documentos(form, antes):
         orgao = str(d.get('orgao') or '')
         uf = str(d.get('uf') or '')
         out.append({'tipo': tipo, 'numero': numero, 'orgao': orgao if orgao in orgaos else None,
-                    'uf': uf if uf in UFS else None, 'contrato': bool(d.get('contrato'))})
+                    'uf': uf if uf in UFS else None, 'contrato': bool(d.get('contrato')),
+                    'validade': _data_iso(str(d.get('validade') or ''), ate_hoje=False)})     # 17/11/2026
     # Anderson (11/11/2026): "ter a opção do Contrato utilizarmos mais de um documento de identificação".
     if out and not any(d['contrato'] for d in out):
         out[0]['contrato'] = True
@@ -1800,7 +1831,11 @@ def detalhes(id):
                          pessoa_rotulo=PessoaDados.rotulo,
                          pf_ops=({'civil': ESTADOS_CIVIS, 'regime': REGIMES_BENS, 'govbr': NIVEIS_GOVBR,
                                   **{t: [(n, n) for n in lst] for t, lst in Opcoes.todas().items()},
-                                  'doc_tipos': TIPOS_DOC, 'doc_sugestao': ORGAO_SUGERIDO, 'ufs': list(UFS)}
+                                  'doc_tipos': TIPOS_DOC, 'doc_sugestao': ORGAO_SUGERIDO, 'ufs': list(UFS),
+                                  # 17/11/2026: identificação, eSocial, e-CAC; idade e hoje para a tela
+                                  'sexo': SEXOS, 'grau': GRAUS_INSTRUCAO, 'raca': RACAS_COR, 'ufs2': [(u, u) for u in UFS],
+                                  'doc_validade': list(COM_VALIDADE), 'hoje': date.today().isoformat(),
+                                  'idade': _idade((PessoaDados.get(id) or {}).get('data_nascimento'))}
                                  if cliente.get('tipo_pessoa') == 'PF' else {}),
                          certificado=certificado,
                          contadores=contadores,
@@ -1842,7 +1877,11 @@ _CAMPOS_ID = ('numero_cliente', 'nome_razao_social', 'cpf_cnpj')
 _CAMPOS_PF = {'pf_nascimento': 'data_nascimento', 'pf_estado_civil': 'estado_civil',
               'pf_regime_bens': 'regime_bens', 'pf_nacionalidade': 'nacionalidade',
               'pf_profissao': 'profissao', 'pf_nome_mae': 'nome_mae', 'pf_nivel_govbr': 'nivel_govbr',
-              'pf_conjuge_nome': 'conjuge_nome', 'pf_conjuge_cpf': 'conjuge_cpf'}
+              'pf_conjuge_nome': 'conjuge_nome', 'pf_conjuge_cpf': 'conjuge_cpf',
+              # 17/11/2026: identificação, eSocial e e-CAC
+              'pf_sexo': 'sexo', 'pf_naturalidade_cidade': 'naturalidade_cidade', 'pf_naturalidade_uf': 'naturalidade_uf',
+              'pf_nome_pai': 'nome_pai', 'pf_nome_social': 'nome_social', 'pf_pis_nit': 'pis_nit',
+              'pf_grau_instrucao': 'grau_instrucao', 'pf_raca_cor': 'raca_cor', 'pf_ecac_procuracao_ate': 'ecac_procuracao_ate'}
 _CAMPOS_OPCAO = {'regime_tributario': ('SIMPLES', 'LUCRO_PRESUMIDO', 'LUCRO_REAL', 'MEI'),
                  'porte_empresa': ('MEI', 'ME', 'EPP', 'MEDIO', 'GRANDE'),
                  'cobranca': tuple(v for v, _ in COBRANCAS)}
@@ -1857,7 +1896,10 @@ _ROTULO_CAMPO = {'inscricao_estadual': 'Insc. Estadual', 'inscricao_municipal': 
                  'pf_nascimento': 'Nascimento', 'pf_estado_civil': 'Estado civil', 'pf_regime_bens': 'Regime de bens',
                  'pf_nacionalidade': 'Nacionalidade', 'pf_profissao': 'Profissão', 'pf_nome_mae': 'Nome da mãe',
                  'pf_nivel_govbr': 'Conta gov.br', 'pf_conjuge_nome': 'Cônjuge', 'pf_conjuge_cpf': 'CPF do cônjuge',
-                 'is_contador': 'Marca de contador', 'pf_documentos': 'Documentos'}
+                 'is_contador': 'Marca de contador', 'pf_documentos': 'Documentos',
+                 'pf_sexo': 'Sexo', 'pf_naturalidade_cidade': 'Naturalidade (cidade)', 'pf_naturalidade_uf': 'Naturalidade (UF)',
+                 'pf_nome_pai': 'Nome do pai', 'pf_nome_social': 'Nome social', 'pf_pis_nit': 'PIS/NIT',
+                 'pf_grau_instrucao': 'Grau de instrução', 'pf_raca_cor': 'Raça/cor', 'pf_ecac_procuracao_ate': 'Procuração no e-CAC'}
 
 
 def _cnpj_ok(v):
@@ -1988,6 +2030,8 @@ def _validar_pessoa(cliente_id, campos):
                 erros.append('CPF do cônjuge: confira os números (e o cônjuge é só para casado(a) ou união estável).')
             elif k == 'pf_conjuge_nome':
                 erros.append('Cônjuge: só para casado(a) ou união estável.')
+            elif k == 'pf_pis_nit':
+                erros.append('PIS/NIT: confira os 11 números (o dígito não bate).')
             else:
                 erros.append(f'{_ROTULO_CAMPO[k]}: valor inválido.')
     return antes, depois, erros

@@ -37,6 +37,9 @@ _HIST_LABELS = {
     'data_nascimento': 'Data de nascimento', 'rg': 'RG', 'rg_orgao': 'Órgão emissor do RG', 'rg_uf': 'UF do RG', 'documentos': 'Documentos de identificação',
     'estado_civil': 'Estado civil', 'regime_bens': 'Regime de bens', 'nacionalidade': 'Nacionalidade',
     'profissao': 'Profissão', 'nome_mae': 'Nome da mãe', 'nivel_govbr': 'Conta gov.br',
+    'sexo': 'Sexo', 'naturalidade_cidade': 'Naturalidade (cidade)', 'naturalidade_uf': 'Naturalidade (UF)', 'nome_pai': 'Nome do pai',
+    'nome_social': 'Nome social', 'pis_nit': 'PIS/NIT', 'grau_instrucao': 'Grau de instrução', 'raca_cor': 'Raça/cor',
+    'ecac_procuracao_ate': 'Procuração no e-CAC',
     # certificado
     'cnpj': 'CNPJ', 'tipo_doc': 'Tipo de documento', 'validade': 'Validade',
     'procuracao': 'Procuração', 'senha_cifrada': 'Senha', 'dropbox_path': 'Arquivo',
@@ -209,7 +212,7 @@ def _hist_fmt(k, v):
             return 'R$ ' + f'{n:,.2f}'.replace(',', 'X').replace('.', ',').replace('X', '.')
         except (TypeError, ValueError):
             return v
-    if k in ('estado_civil', 'regime_bens', 'nivel_govbr'):
+    if k in ('estado_civil', 'regime_bens', 'nivel_govbr', 'sexo', 'grau_instrucao', 'raca_cor'):
         from models.pessoa_dados import PessoaDados
         return PessoaDados.rotulo(k, v)
     if k == 'data_nascimento':

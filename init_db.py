@@ -1020,6 +1020,20 @@ def _apply_migrations():
     if _c.get('cnt', 0) == 0:
         _migrate("ALTER TABLE clientes_pf_dados ADD COLUMN conjuge_cpf VARCHAR(14) NULL, "
                  "ADD COLUMN conjuge_nome VARCHAR(255) NULL, ADD KEY idx_pf_conjuge_cpf (conjuge_cpf)")
+    # 17/11/2026: dados pessoais completos (Anderson: "está pobre demais os dados pessoais") — identificação
+    # (sexo, naturalidade, pai, nome social), eSocial do sócio com pró-labore (PIS/NIT, grau de instrução,
+    # raça/cor) e procuração no e-CAC. Tudo opcional. Mesma lista de migrations/clientes_pf_dados_17_11.py.
+    _tem = {r['Field'] for r in (execute_query('SHOW COLUMNS FROM clientes_pf_dados', fetch=True) or [])}
+    for _col_name, _col_def in [
+        ('sexo', "CHAR(1) NULL COMMENT 'M/F'"), ('naturalidade_cidade', 'VARCHAR(80) NULL'), ('naturalidade_uf', 'CHAR(2) NULL'),
+        ('nome_pai', 'VARCHAR(255) NULL'), ('nome_social', 'VARCHAR(255) NULL'),
+        ('pis_nit', "VARCHAR(14) NULL COMMENT 'PIS/PASEP/NIT (eSocial)'"),
+        ('grau_instrucao', "VARCHAR(2) NULL COMMENT 'tabela 1 do eSocial (01-12)'"),
+        ('raca_cor', "CHAR(1) NULL COMMENT 'tabela do eSocial (1-6)'"),
+        ('ecac_procuracao_ate', "DATE NULL COMMENT 'procuracao eletronica no e-CAC vale ate'"),
+    ]:
+        if _col_name not in _tem:
+            _migrate(f"ALTER TABLE clientes_pf_dados ADD COLUMN {_col_name} {_col_def}")
     # Documentos de identificação da pessoa (19/10/2026): vários por pessoa
     # (RG, CIN, CNH, conselho...), um marcado para o contrato.
     _migrate("""
@@ -1036,6 +1050,11 @@ def _apply_migrations():
             KEY idx_pf_docs_cliente (cliente_id)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     """)
+
+    # 17/11/2026: validade do documento (CNH, passaporte, RNM) para avisar quando vence
+    _tem = {r['Field'] for r in (execute_query('SHOW COLUMNS FROM clientes_pf_documentos', fetch=True) or [])}
+    if 'validade' not in _tem:
+        _migrate("ALTER TABLE clientes_pf_documentos ADD COLUMN validade DATE NULL COMMENT 'CNH, passaporte, RNM: valido ate'")
 
     # Fila "Sócios a cadastrar" (12/10/2026): o quadro de sócios da Receita das
     # empresas sem sócio, uma linha por empresa x sócio. A Receita esconde o

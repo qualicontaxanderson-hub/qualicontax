@@ -22,6 +22,15 @@ REGIMES_BENS = [
     ('PARTICIPACAO_AQUESTOS', 'Participação final nos aquestos'),
 ]
 NIVEIS_GOVBR = [('BRONZE', 'Bronze'), ('PRATA', 'Prata'), ('OURO', 'Ouro')]
+# 17/11/2026: identificação e eSocial (Anderson: "está pobre demais os dados pessoais... me traga coisas melhores")
+SEXOS = [('M', 'Masculino'), ('F', 'Feminino')]
+GRAUS_INSTRUCAO = [          # tabela 1 do eSocial
+    ('01', 'Analfabeto'), ('02', 'Até o 5º ano incompleto'), ('03', '5º ano completo'),
+    ('04', '6º ao 9º ano incompleto'), ('05', 'Ensino fundamental completo'), ('06', 'Ensino médio incompleto'),
+    ('07', 'Ensino médio completo'), ('08', 'Superior incompleto'), ('09', 'Superior completo'),
+    ('10', 'Pós-graduação completa'), ('11', 'Mestrado completo'), ('12', 'Doutorado completo'),
+]
+RACAS_COR = [('1', 'Branca'), ('2', 'Preta'), ('3', 'Parda'), ('4', 'Amarela'), ('5', 'Indígena'), ('6', 'Não informada')]
 
 UFS = ('AC', 'AL', 'AM', 'AP', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA', 'MG', 'MS', 'MT', 'PA',
        'PB', 'PE', 'PI', 'PR', 'RJ', 'RN', 'RO', 'RR', 'RS', 'SC', 'SE', 'SP', 'TO')
@@ -30,7 +39,9 @@ UFS = ('AC', 'AL', 'AM', 'AP', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA', 'MG', 'MS', '
 # mora em clientes_pf_documentos — ver Documentos abaixo.
 CAMPOS = ('data_nascimento', 'estado_civil', 'regime_bens',
           'nacionalidade', 'profissao', 'nome_mae', 'nivel_govbr',
-          'conjuge_cpf', 'conjuge_nome')      # cônjuge: 11/11/2026, opcional
+          'conjuge_cpf', 'conjuge_nome',      # cônjuge: 11/11/2026, opcional
+          'sexo', 'naturalidade_cidade', 'naturalidade_uf', 'nome_pai', 'nome_social',   # 17/11/2026
+          'pis_nit', 'grau_instrucao', 'raca_cor', 'ecac_procuracao_ate')
 
 
 def cpf_valido(cpf):
@@ -50,6 +61,23 @@ def cpf_formatado(cpf):
     import re
     d = re.sub(r'\D', '', cpf or '')
     return f'{d[:3]}.{d[3:6]}.{d[6:9]}-{d[9:]}' if len(d) == 11 else None
+
+
+def pis_valido(pis):
+    """PIS/PASEP/NIT: 11 dígitos e o dígito verificador (pesos 3,2,9,8,7,6,5,4,3,2, módulo 11)."""
+    import re
+    d = re.sub(r'\D', '', pis or '')
+    if len(d) != 11 or d == d[0] * 11:
+        return False
+    soma = sum(int(x) * p for x, p in zip(d[:10], (3, 2, 9, 8, 7, 6, 5, 4, 3, 2)))
+    dv = 11 - soma % 11
+    return int(d[10]) == (0 if dv in (10, 11) else dv)
+
+
+def pis_formatado(pis):
+    import re
+    d = re.sub(r'\D', '', pis or '')
+    return f'{d[:3]}.{d[3:8]}.{d[8:10]}-{d[10]}' if len(d) == 11 else None
 
 # ---------------------------------------------------------------------------
 # Listas fechadas (19/10/2026): nacionalidade, profissão e órgão emissor saem
@@ -109,6 +137,9 @@ ROTULOS = {
     'estado_civil': dict(ESTADOS_CIVIS),
     'regime_bens': dict(REGIMES_BENS),
     'nivel_govbr': dict(NIVEIS_GOVBR),
+    'sexo': dict(SEXOS),
+    'grau_instrucao': dict(GRAUS_INSTRUCAO),
+    'raca_cor': dict(RACAS_COR),
 }
 
 
@@ -152,7 +183,10 @@ TIPOS_DOC = [
     ('OAB', 'OAB'), ('CRC', 'CRC'), ('CRM', 'CRM'), ('CREA', 'CREA'), ('CRO', 'CRO'),
     ('CRF', 'CRF'), ('CRBM', 'CRBM'), ('CRA', 'CRA'),
     ('RNM', 'RNM (estrangeiro)'), ('PASSAPORTE', 'Passaporte'),
+    ('TITULO', 'Título de eleitor'), ('CTPS', 'CTPS'),          # 17/11/2026
 ]
+# Documento que vence (17/11/2026): a tela pede "válido até" e avisa quando passou.
+COM_VALIDADE = ('CNH', 'PASSAPORTE', 'RNM', 'CIN')
 # Órgão que já vem escolhido ao trocar o tipo (a pessoa pode mudar).
 ORGAO_SUGERIDO = {'CNH': 'DETRAN', 'RNM': 'DPF', 'PASSAPORTE': 'DPF',
                   **{c: c for c in ('OAB', 'CRC', 'CRM', 'CREA', 'CRO', 'CRF', 'CRBM', 'CRA')}}
@@ -163,7 +197,7 @@ class Documentos:
     @staticmethod
     def listar(cliente_id):
         return execute_query(
-            "SELECT tipo, numero, orgao, uf, contrato FROM clientes_pf_documentos "
+            "SELECT tipo, numero, orgao, uf, contrato, validade FROM clientes_pf_documentos "
             "WHERE cliente_id = %s ORDER BY contrato DESC, id", (cliente_id,), fetch=True) or []
 
     @staticmethod
@@ -172,10 +206,10 @@ class Documentos:
         execute_query("DELETE FROM clientes_pf_documentos WHERE cliente_id = %s", (cliente_id,))
         for d in docs:
             execute_query(
-                "INSERT INTO clientes_pf_documentos (cliente_id, tipo, numero, orgao, uf, contrato, alterado_por) "
-                "VALUES (%s, %s, %s, %s, %s, %s, %s)",
+                "INSERT INTO clientes_pf_documentos (cliente_id, tipo, numero, orgao, uf, contrato, validade, alterado_por) "
+                "VALUES (%s, %s, %s, %s, %s, %s, %s, %s)",
                 (cliente_id, d['tipo'], d['numero'], d.get('orgao'), d.get('uf'),
-                 1 if d.get('contrato') else 0, usuario_id))
+                 1 if d.get('contrato') else 0, d.get('validade') or None, usuario_id))
 
     @staticmethod
     def resumo(docs):
@@ -183,6 +217,8 @@ class Documentos:
         partes = []
         for d in docs:
             org = '/'.join(x for x in (d.get('orgao'), d.get('uf')) if x)
-            partes.append(' '.join(x for x in (d['tipo'], d['numero'], org) if x)
+            val = d.get('validade')
+            val = f" válido até {val.strftime('%d/%m/%Y')}" if hasattr(val, 'strftime') else (f' válido até {val}' if val else '')
+            partes.append(' '.join(x for x in (d['tipo'], d['numero'], org) if x) + val
                           + (' (contrato)' if d.get('contrato') else ''))
         return '; '.join(partes) or None

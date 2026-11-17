@@ -125,7 +125,7 @@ def valor(k, v):
             return ('%g' % float(v)).replace('.', ',') + '%'
         except (TypeError, ValueError):
             return str(v)
-    if k in ('estado_civil', 'regime_bens', 'nivel_govbr'):
+    if k in ('estado_civil', 'regime_bens', 'nivel_govbr', 'sexo', 'grau_instrucao', 'raca_cor'):
         from models.pessoa_dados import PessoaDados
         return PessoaDados.rotulo(k, v)
     s = str(v).strip()
