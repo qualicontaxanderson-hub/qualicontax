@@ -92,7 +92,8 @@ def _baixa_paga(b, valor_pago, pago_em, credito_em):
     if not t or t['status'] == 'cancelado':
         return None
     ref = f"efi:{b['charge_id']}"
-    ja = _q('SELECT id, lancamento_id FROM fin_titulo_baixas WHERE titulo_id = %s AND referencia = %s', (t['id'], ref), one=True)
+    ja = _q('SELECT id, lancamento_id, valor, juros, data_baixa FROM fin_titulo_baixas WHERE titulo_id = %s AND referencia = %s',
+            (t['id'], ref), one=True)
     if not ja:
         if saldo <= 0:
             return None
@@ -106,6 +107,8 @@ def _baixa_paga(b, valor_pago, pago_em, credito_em):
         ja = {'id': r['baixa_id'], 'lancamento_id': None}
         _agente('escrita.baixa_boleto_efi', b, {'valor': str(valor_pago), 'pago_em': str(pago_em),
                                                'status': r.get('status'), 'como': 'boleto pago na Efí'})
+    else:
+        _confirmar_identificada(b, t, ja, valor_pago, pago_em)
     if not ja['lancamento_id']:
         ate = (credito_em or pago_em) + timedelta(days=1)
         lanc = linha_do_extrato(t['empresa_id'], pago_em, ate, valor_pago, b['charge_id'])
@@ -116,6 +119,50 @@ def _baixa_paga(b, valor_pago, pago_em, credito_em):
                 _x('UPDATE extrato_lancamentos SET descricao = %s WHERE id = %s',
                    (f"Recebimento de cobrança: {b['charge_id']} de {t['contraparte_nome']}"[:500], lanc['id']))
     return ja['id']
+
+
+def _baixa_identificada(b, dia):
+    """"Pagamento identificado" na Efí (16/11/2026): o cliente pagou e o banco ainda vai compensar. Anderson:
+    "não pode aparecer como aguardando, mas já sair do atrasado ou a receber e ir pro recebido". Baixa o saldo
+    do título no dia em que o banco recebeu, com a MESMA referência da baixa de pago ('efi:<boleto>'): quando
+    a confirmação chegar, _baixa_paga acha esta baixa, completa data e juros e amarra o extrato — nada duplica."""
+    from utils.financeiro_core import registrar_baixa, BaixaInvalida
+    t, saldo = _saldo(b['titulo_id'])
+    if not t or t['status'] == 'cancelado':
+        return None
+    ref = f"efi:{b['charge_id']}"
+    ja = _q('SELECT id FROM fin_titulo_baixas WHERE titulo_id = %s AND referencia = %s', (t['id'], ref), one=True)
+    if ja:
+        return ja['id']
+    if saldo <= 0:
+        return None
+    try:
+        r = registrar_baixa(t['id'], saldo, dia, 'webhook', referencia=ref)
+    except BaixaInvalida as exc:
+        logger.warning('[efi-boletos] baixa do boleto identificado %s recusada: %s', b['charge_id'], exc)
+        return None
+    _agente('escrita.baixa_boleto_identificado_efi', b, {'valor': str(saldo), 'data': str(dia), 'status': r.get('status'),
+                                                        'como': 'pagamento identificado na Efí (o banco ainda vai compensar)'})
+    return r['baixa_id']
+
+
+def _confirmar_identificada(b, t, ja, valor_pago, pago_em):
+    """A confirmação (paid) chegou para uma baixa feita no "pagamento identificado": acerta a data do pagamento
+    e lança como juros o que veio a mais do que o saldo baixado. Só mexe no que difere."""
+    pago = Decimal(str(valor_pago or 0))
+    valor = Decimal(str(ja.get('valor') or 0))
+    juros = Decimal(str(ja.get('juros') or 0))
+    novos = {}
+    if pago_em and ja.get('data_baixa') != pago_em:
+        novos['data_baixa'] = pago_em
+    if pago > valor and juros == 0:
+        novos['juros'] = pago - valor
+    if not novos:
+        return
+    sets = ', '.join(f'{k} = %s' for k in novos)
+    _x(f'UPDATE fin_titulo_baixas SET {sets} WHERE id = %s', tuple(novos.values()) + (ja['id'],))
+    _agente('escrita.baixa_identificada_confirmada_efi', b, {'baixa_id': ja['id'], **{k: str(v) for k, v in novos.items()},
+                                                           'como': 'a Efí confirmou o pagamento identificado'})
 
 
 def _baixa_no_app(b, quando):
@@ -160,6 +207,8 @@ def aplicar(b, atual, valor_pago=None, pago_em=None, credito_em=None, quando=Non
     if b.get('titulo_id'):
         if atual == 'paid' and valor_pago and pago_em:
             feito = 'baixa' if _baixa_paga(b, valor_pago, pago_em, credito_em) else None
+        elif atual == 'identified':
+            feito = 'baixa' if _baixa_identificada(b, pago_em or quando or date.today()) else None
         elif atual == 'settled' and antes != 'settled':
             feito = 'baixa-app' if _baixa_no_app(b, quando or date.today()) else None
         elif atual == 'canceled' and antes != 'canceled':
@@ -186,6 +235,8 @@ def do_boleto_efi(c):
     """(situação, valor_pago, pago_em, credito_em) de um boleto como a Efí devolve (lista ou consulta)."""
     p = c.get('payment') or {}
     atual = c.get('status')
+    if atual == 'identified':                 # o banco recebeu (received_by_bank_at) e ainda vai compensar
+        return atual, None, _dia(p.get('received_by_bank_at')), None
     if atual != 'paid':
         return atual, None, None, None
     valor = (Decimal(int(p.get('paid_value') or c.get('paid_value') or c.get('total') or 0)) / 100).quantize(Decimal('0.01'))

@@ -974,6 +974,9 @@ def efi(segredo):
             valor_pago = Decimal(str(ev.get('value') or 0)) / 100
             pago_em = date.fromisoformat((ev.get('received_by_bank_at') or ev.get('created_at') or '')[:10]
                                          or date.today().isoformat())
+        elif atual == 'identified':            # pagamento identificado: já baixa (16/11/2026); a confirmação completa
+            pago_em = date.fromisoformat((ev.get('received_by_bank_at') or ev.get('created_at') or '')[:10]
+                                         or date.today().isoformat())
         # pago, baixado no app da Efí ou cancelado no app da Efí: utils/efi_boletos.aplicar (14/11/2026)
         quando = date.fromisoformat((ev.get('created_at') or date.today().isoformat())[:10])
         feito = efi_boletos.aplicar(b, atual, valor_pago, pago_em, None, quando,
