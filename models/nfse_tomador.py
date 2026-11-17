@@ -210,6 +210,18 @@ def como_tomador(row):
     return t
 
 
+def tomador_anonimo():
+    """A nota SEM tomador (17/11/2026): quem não se identificou — balcão, estacionamento,
+    consumidor que não deu CPF. No formato de ``como_tomador``, só que vazio e sem faltas:
+    o leiaute nacional dispensa o bloco do tomador e o XML sai sem ele."""
+    return {
+        'tomador_id': None, 'cliente_id': None, 'tipo_pessoa': '', 'documento': '', 'doc_fmt': '',
+        'nome': '', 'nome_fantasia': '', 'ind_final': 1, 'inscricao_municipal': '', 'email': '', 'fone': '',
+        'cep': '', 'logradouro': '', 'numero': '', 'complemento': '', 'bairro': '', 'cidade': '', 'uf': '',
+        'ibge': '', 'municipio_ibge': '', 'faltas': [], 'anonimo': True,
+    }
+
+
 def _ibge_do_cep(cep):
     try:
         from utils.cep import consultar
@@ -294,10 +306,11 @@ def pedido_do_fiscal(f, empresa_id, cfg, tomador, series_ativas):
         raise PedidoInvalido('Competência inválida.')
     if comp > date.today():
         raise PedidoInvalido('A competência não pode ser depois de hoje.')
+    anonimo = bool(tomador.get('anonimo'))
     obrig = [x['texto'] for x in tomador['faltas'] if x['nivel'] == 'obrigatorio']
     if obrig:
         raise PedidoInvalido('Falta no tomador: ' + ' e '.join(obrig) + '.')
-    endereco_ok = not any(x['nivel'] == 'endereco' for x in tomador['faltas'])
+    endereco_ok = not anonimo and not any(x['nivel'] == 'endereco' for x in tomador['faltas'])
     end = (lambda k: (tomador.get(k) or '')) if endereco_ok else (lambda k: '')
     valor = _dec(g('valor_servico'), 'Valor do serviço', Decimal('0.01'))
     descricao = g('descricao')
@@ -305,6 +318,10 @@ def pedido_do_fiscal(f, empresa_id, cfg, tomador, series_ativas):
         raise PedidoInvalido('Informe a descrição do serviço.')
     local = g('local', 'empresa')
     loc = _dig(cfg.get('municipio_ibge'))
+    if anonimo and local == 'tomador':
+        raise PedidoInvalido('Sem identificar o tomador, o serviço conta como prestado no município da empresa.')
+    if anonimo and g('iss_retido') in ('1', 'on', 'true'):
+        raise PedidoInvalido('Sem identificar o tomador, a nota não pode ter ISS retido (não há quem retenha).')
     if local == 'tomador':
         if len(tomador.get('ibge') or '') != 7:
             raise PedidoInvalido('O município do tomador não está preenchido: complete o endereço ou escolha '
@@ -318,7 +335,7 @@ def pedido_do_fiscal(f, empresa_id, cfg, tomador, series_ativas):
              ('ret_irrf', 'IR retido'), ('ret_csll', 'CSLL retida'))}
     if sum(rets.values()) >= valor:
         raise PedidoInvalido('As retenções somam mais que o valor da nota.')
-    ind_final = g('ind_final', str(tomador.get('ind_final', 0)))
+    ind_final = '1' if anonimo else g('ind_final', str(tomador.get('ind_final', 0)))
     return Pedido(
         empresa_id=int(empresa_id), serie=serie, competencia=comp,
         tomador_doc=tomador['documento'], tomador_nome=tomador['nome'][:150],

@@ -43,6 +43,14 @@
 .nn-origem.er { display:block; background:#fee2e2; color:#991b1b; }
 .nn-doc { display:flex; gap:8px; }
 .nn-doc input { flex:1; min-width:0; }
+.nn-sem { display:flex; align-items:center; gap:8px; font-size:13px; font-weight:600; color:#334155; background:#f8fafc;
+          border:1px solid #e2e8f0; border-radius:10px; padding:8px 12px; margin-bottom:12px; cursor:pointer; }
+.nn-sem input { width:16px; height:16px; margin:0; accent-color:#16a34a; }
+.nn-sem small { font-weight:500; color:#64748b; }
+.nn-sem-txt { display:none; background:#f0fdf4; border:1px solid #bbf7d0; color:#14532d; border-radius:10px; padding:10px 14px; font-size:13px; }
+.nn-sem-on .nn-sem { background:#f0fdf4; border-color:#86efac; color:#14532d; }
+.nn-sem-on .nn-sem-txt { display:block; }
+.nn-sem-on #tCampos { display:none; }
 .nn-ret summary { cursor:pointer; font-size:13px; font-weight:600; color:#0369a1; margin:6px 0 10px; }
 .nn-total { font-size:13px; color:#334155; border-top:1px dashed #e2e8f0; padding-top:10px; margin-top:6px; }
 .nn-total b { font-size:18px; color:#0f172a; }
@@ -131,7 +139,7 @@
     <tr>
         <td><a href="{{ url }}">{{ (n.dh_emissao or n.criado_em).strftime('%d/%m/%Y %H:%M') }}</a></td>
         {% if com_empresa %}<td><a href="{{ url }}">{% set e = nomes.get(n.empresa_id) %}{{ (e.numero_cliente ~ ' - ' ~ e.nome_razao_social) if e else n.empresa_id }}</a></td>{% endif %}
-        <td><a href="{{ url }}">{{ n.tomador_nome or '—' }}</a></td>
+        <td><a href="{{ url }}">{{ n.tomador_nome or ('Sem tomador' if not n.tomador_doc else '—') }}</a></td>
         <td><a href="{{ url }}">{{ n.numero_nfse or ('DPS ' ~ n.serie ~ '/' ~ n.numero_dps) }}</a></td>
         <td style="text-align:right; white-space:nowrap;">{{ n.valor_servico|format_currency }}</td>
         <td><span class="nn-pill {{ n.situacao }}">{{ SITUACOES.get(n.situacao, n.situacao)|upper }}</span>
@@ -181,6 +189,12 @@
         <h3><span class="nn-passo">1</span> Para quem é a nota (tomador)
             <small>{{ n_tomadores }} na lista desta empresa ·
             <a href="{{ url_for('escrita_fiscal.nfse_tomadores', cliente_id=emp.id) }}">ver a lista</a></small></h3>
+        <label class="nn-sem"><input type="checkbox" name="sem_tomador" id="nnSem" value="1" {{ 'checked' if pre.sem_tomador }}>
+            Sem identificar o tomador <small>· a pessoa não deu CPF nem CNPJ (balcão, estacionamento, consumidor que não se identifica)</small></label>
+        <div class="nn-sem-txt">A nota sai <b>sem tomador</b>: só o valor, a descrição e a competência. O governo aceita.
+            Ela conta como prestada no município da empresa, para consumidor final, e não pode ter ISS retido.
+            Se depois a pessoa pedir a nota no nome dela, cancele esta e emita outra com os dados.</div>
+        <div id="tCampos">
         {% if n_tomadores %}
         <div class="nn-busca">
             <input type="text" id="tBusca" class="form-control" placeholder="Procurar na lista: nome, CNPJ/CPF ou e-mail">
@@ -250,6 +264,7 @@
         <input type="hidden" name="t_municipio_ibge" id="t_municipio_ibge" value="{{ pre.t_municipio_ibge or '' }}">
         <input type="hidden" name="t_inscricao_municipal" id="t_inscricao_municipal" value="{{ pre.t_inscricao_municipal or '' }}">
         <span class="nf-ajuda">Endereço incompleto não trava: a nota sai sem o endereço do tomador (o governo só aceita o endereço inteiro). O tomador fica salvo na lista desta empresa.</span>
+        </div>
     </div>
 
     <div class="nn-box">
@@ -364,6 +379,19 @@
         });
         var fin = $('nnFinal'); if (fin) fin.value = dig($('t_documento').value).length === 11 ? '1' : '0';
     }
+
+    // 0) sem identificar o tomador: some com os campos, nada é obrigatório, consumidor final,
+    //    no município da empresa e sem ISS retido (o servidor confere de novo)
+    var sem = $('nnSem'), local = form.querySelector('[name=local]'), retido = form.querySelector('[name=iss_retido]');
+    function semTomador() {
+        var on = sem.checked;
+        form.classList.toggle('nn-sem-on', on);
+        $('t_documento').required = !on; $('t_nome').required = !on;
+        if (local) { if (on) local.value = 'empresa'; local.querySelector('[value=tomador]').disabled = on; }
+        if (retido) { if (on) retido.checked = false; retido.disabled = on; }
+        var fin = $('nnFinal'); if (fin && on) fin.value = '1';
+    }
+    sem.addEventListener('change', semTomador); semTomador();
 
     // 1) digitou o CNPJ/CPF: lista desta empresa -> cadastro do escritório -> Receita
     function buscarDoc() {

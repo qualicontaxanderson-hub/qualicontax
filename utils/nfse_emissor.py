@@ -294,7 +294,7 @@ def _gravar_rascunho(emitida_id, p: Pedido, cfg, emissor, agora):
         (emissor, agora.replace(tzinfo=None), p.competencia, _dig(cfg.get('municipio_ibge')) or None,
          p.loc_prestacao or _dig(cfg.get('municipio_ibge')) or None,
          cfg.get('op_simp_nac'), cfg.get('reg_ap_trib_sn'), cfg.get('reg_esp_trib'),
-         p.tomador_doc, p.tomador_nome, p.tomador_ibge, p.tomador_email or None,
+         p.tomador_doc or None, p.tomador_nome or None, p.tomador_ibge or None, p.tomador_email or None,
          p.cod_trib_nac or None, p.cod_trib_mun or None, p.cod_nbs or None, p.descricao,
          p.valor_servico, 1 if p.iss_retido else 0, p.aliquota_iss, p.total_retencoes or None,
          p.ibscbs_cst, p.ibscbs_cclasstrib, p.fin_nfse, p.ibscbs_cind_op, p.ibscbs_ind_dest, emitida_id))

@@ -18,7 +18,8 @@ from flask_login import current_user
 
 from models.nfse_emissao import (MOTIVOS_RECUSA, OP_SIMP_NAC, SITUACOES, NfseConfig, NfseEmitida, empresa_da_matriz,
                                  faltas_da_matriz, situacao_das_matrizes)
-from models.nfse_tomador import LOCAIS, NfseTomador, como_tomador, pedido_do_fiscal, preencher_por_documento
+from models.nfse_tomador import (LOCAIS, NfseTomador, como_tomador, pedido_do_fiscal, preencher_por_documento,
+                                 tomador_anonimo)
 from routes.escrita_fiscal import _get_empresas, escrita_fiscal
 from routes.fiscal_emissao import _csrf_ok, _do_financeiro
 from utils.acesso import pode_ver_empresa
@@ -274,12 +275,16 @@ def nfse_emitir_post(cliente_id):
     emp, cfg, ativas, travas, motivo = _pode_emitir(cliente_id)
     if motivo:
         return _render_nova(cliente_id, pre, 'Esta empresa não está liberada para emitir agora.')
-    dados_t = {k: request.form.get(f't_{k}', '') for k in CAMPOS_TOMADOR}
-    tid, erro = NfseTomador.salvar(cliente_id, dados_t, usuario_id=current_user.id,
-                                   fonte=(request.form.get('t_fonte') or 'manual'))
-    if erro:
-        return _render_nova(cliente_id, pre, erro)
-    tomador = como_tomador(NfseTomador.get(tid, cliente_id))
+    if request.form.get('sem_tomador') in ('1', 'on'):
+        # quem não se identificou (17/11/2026): nada vai para a lista de tomadores
+        tid, tomador = None, tomador_anonimo()
+    else:
+        dados_t = {k: request.form.get(f't_{k}', '') for k in CAMPOS_TOMADOR}
+        tid, erro = NfseTomador.salvar(cliente_id, dados_t, usuario_id=current_user.id,
+                                       fonte=(request.form.get('t_fonte') or 'manual'))
+        if erro:
+            return _render_nova(cliente_id, pre, erro)
+        tomador = como_tomador(NfseTomador.get(tid, cliente_id))
     try:
         pedido = pedido_do_fiscal(request.form, cliente_id, cfg, tomador, ativas)
         linha = nfse_emissor.emitir(pedido, cfg, usuario_id=current_user.id)
@@ -294,11 +299,13 @@ def nfse_emitir_post(cliente_id):
         return _render_nova(cliente_id, pre, 'A nota não foi gravada. Tente de novo.')
     registrar('escrita.emitiu_nfse', 'fiscal', tabela='nfse_emitidas', registro_id=linha['id'],
               depois={'empresa_id': cliente_id, 'serie': linha['serie'], 'numero_dps': linha['numero_dps'],
-                      'situacao': linha['situacao'], 'tomador': linha.get('tomador_nome'), 'tomador_id': tid,
+                      'situacao': linha['situacao'], 'tomador': linha.get('tomador_nome') or 'sem tomador',
+                      'tomador_id': tid,
                       'valor': str(linha.get('valor_servico')), 'emissor': linha.get('emissor'),
                       'ambiente': linha.get('ambiente'), 'chave': linha.get('chave_acesso')})
     if linha['situacao'] == 'autorizada':
-        NfseTomador.marcar_nota(tid)
+        if tid:
+            NfseTomador.marcar_nota(tid)
         flash(f"Nota autorizada: série {linha['serie']} nº {linha['numero_dps']}"
               + (f", NFS-e nº {linha['numero_nfse']}" if linha.get('numero_nfse') else '')
               + (' (ambiente de TESTE)' if linha['ambiente'] == 2 else '') + '.', 'success')

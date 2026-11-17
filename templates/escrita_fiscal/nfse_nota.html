@@ -66,7 +66,7 @@
     <div class="nd-box">
         <h3>Tomador</h3>
         <dl class="nd-dados">
-            <dt>Nome</dt><dd>{{ n.tomador_nome or '—' }}</dd>
+            <dt>Nome</dt><dd>{{ n.tomador_nome or ('Não identificado (nota sem tomador)' if not n.tomador_doc else '—') }}</dd>
             <dt>CNPJ/CPF</dt><dd>{{ (n.tomador_doc|format_cnpj if (n.tomador_doc or '')|length == 14 else n.tomador_doc|format_cpf) if n.tomador_doc else '—' }}</dd>
             <dt>E-mail</dt><dd>{{ n.tomador_email or '—' }}</dd>
             <dt>Município</dt><dd>{{ n.tomador_municipio or '—' }}</dd>
