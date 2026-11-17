@@ -151,6 +151,7 @@ MAPA = {
     'clientes.socios_da_raiz':         ('clientes.create', 'clientes.edit'),   # quadro da raiz (matriz/filiais)
     'clientes.proximo_numero_pf':      ('clientes.create', 'clientes.edit'),
     'clientes.ramo_rapido':            ('clientes.create', 'clientes.edit'),
+    'clientes.caixa_opcoes':           'clientes.index',   # cartões da caixa de Grupo/Ramo da ficha (17/11/2026)
     'clientes.grupo_rapido':           ('clientes.create', 'clientes.edit', 'grupos.index'),
     'contabilidades.rapido':           ('clientes.create', 'clientes.edit'),  # "Novo escritório" no cadastro
     'adicionais.index':                'clientes.index',

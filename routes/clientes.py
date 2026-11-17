@@ -31,7 +31,7 @@ from models.pessoa_dados import (PessoaDados, CAMPOS as PESSOA_CAMPOS, COM_REGIM
                                  REGIMES_BENS, NIVEIS_GOVBR, UFS, Opcoes, TIPOS_OPCAO,
                                  Documentos, TIPOS_DOC, ORGAO_SUGERIDO)
 from models.grupo_cliente import GrupoCliente
-from models.ramo_atividade import RamoAtividade, SEGMENTO_NOME
+from models.ramo_atividade import RamoAtividade, SEGMENTO_NOME, segmento_do_cnae
 from models.cadastro_anp import CadastroAnp
 from models.dfe_certificado import DfeCertificado
 from models.cliente_contador import ClienteContador
@@ -1784,7 +1784,9 @@ def detalhes(id):
                          ramos_todos=[r for r in RamoAtividade.get_all(situacao='ATIVO')
                                       if (r.get('tipo_pessoa') or 'PJ') == ('PF' if cliente.get('tipo_pessoa') == 'PF' else 'PJ')],
                          contabilidades=_contab_combo(cliente.get('contabilidade_anterior_id')),
-                         grupos_todos=GrupoCliente.get_all(situacao='ATIVO'))
+                         grupos_todos=GrupoCliente.get_all(situacao='ATIVO'),
+                         ramo_segmentos=(list(SEGMENTO_NOME.items()) if cliente.get('tipo_pessoa') != 'PF' else []),
+                         ramo_sugestao=(segmento_do_cnae(cliente.get('cnae_fiscal')) if cliente.get('tipo_pessoa') != 'PF' else None))
 
 
 # ── Tela única (Modelo C, 08/11/2026) ─────────────────────────────────────────────────────────
@@ -3902,6 +3904,33 @@ def grupo_rapido():
     registrar('escrita.criou_grupo', 'cadastros', tabela='grupos_clientes', registro_id=gid,
               depois={'nome': nome, 'situacao': 'ATIVO', 'origem': 'formulario_cliente'})
     return jsonify(success=True, id=gid, nome=nome, ja_existia=False)
+
+
+@clientes.route('/clientes/api/caixa-opcoes')
+@login_required
+def caixa_opcoes():
+    """Cartões da caixa de Grupo e de Ramo da ficha (17/11/2026): o que ajuda a escolher — quantas empresas,
+    cidades e algumas empresas do grupo; segmento e quantas empresas usam o ramo."""
+    if request.args.get('qual') == 'grupo':
+        from routes.grupos import _grupos_com_empresas
+        out = []
+        for g in _grupos_com_empresas():
+            if g['situacao'] != 'ATIVO':
+                continue
+            emps = g['empresas']
+            out.append({'id': str(g['id']), 'nome': g['nome'], 'sigla': g['sigla'], 'n': len(emps),
+                        'cidades': [c['nome'] for c in g['cidades']][:3], 'mais_cid': max(0, len(g['cidades']) - 3),
+                        'empresas': [{'num': str(e['numero'] or ''), 'nome': e['nome']} for e in emps[:4]],
+                        'mais_emp': max(0, len(emps) - 4),
+                        'busca': ' '.join([g['nome']] + [f"{e['numero'] or ''} {e['nome']}" for e in emps])})
+        return jsonify(out)
+    tipo = 'PF' if request.args.get('tipo') == 'PF' else 'PJ'
+    uso = {x['rid']: x['n'] for x in (execute_query(
+        """SELECT x.ramo_atividade_id AS rid, COUNT(*) AS n FROM cliente_ramo_atividade_relacao x
+             JOIN clientes c ON c.id = x.cliente_id AND COALESCE(c.situacao, 'ATIVO') <> 'INATIVO'
+            GROUP BY x.ramo_atividade_id""", fetch=True) or [])}
+    return jsonify([{'id': str(x['id']), 'nome': x['nome'], 'seg': x.get('segmento') or '', 'n': uso.get(x['id'], 0)}
+                    for x in RamoAtividade.get_all(situacao='ATIVO') if (x.get('tipo_pessoa') or 'PJ') == tipo])
 
 
 @clientes.route('/clientes/api/ramo-rapido', methods=['POST'])
