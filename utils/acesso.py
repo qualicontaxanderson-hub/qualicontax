@@ -153,6 +153,7 @@ MAPA = {
     'clientes.proximo_numero_pf':      ('clientes.create', 'clientes.edit'),
     'clientes.ramo_rapido':            ('clientes.create', 'clientes.edit'),
     'clientes.caixa_opcoes':           'clientes.index',   # cartões da caixa de Grupo/Ramo da ficha (17/11/2026)
+    'clientes.qualif_rapida':          ('clientes.create', 'clientes.edit'),   # nova qualificação do sócio (17/11/2026)
     'clientes.grupo_rapido':           ('clientes.create', 'clientes.edit', 'grupos.index'),
     'contabilidades.rapido':           ('clientes.create', 'clientes.edit'),  # "Novo escritório" no cadastro
     'adicionais.index':                'clientes.index',
@@ -391,6 +392,9 @@ MAPA = {
     'financeiro.boleto_vencimento': 'financeiro.cobranca.alterar',
     'financeiro.boleto_marcar_pago': 'financeiro.cobranca.alterar',
     'financeiro.boleto_reemitir': 'financeiro.cobranca.incluir',
+    # 17/11/2026: cobrança do GRUPO (rede) de uma vez — janela abre com Títulos; e-mail idem; reemitir em lote = incluir boleto
+    'financeiro.grupo_cobranca_email': ('financeiro.titulos', 'financeiro.cobranca.alterar'),
+    'financeiro.grupo_reemitir': 'financeiro.cobranca.incluir',
     'financeiro.vincular_pagamento': 'financeiro.cobranca.vincular',
     'financeiro.vincular_gravar': 'financeiro.cobranca.vincular',
     'financeiro.vincular_achar': 'financeiro.cobranca.vincular',

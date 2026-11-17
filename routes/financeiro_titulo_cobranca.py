@@ -17,6 +17,7 @@ from flask import abort, render_template, request, url_for
 
 from models.fin_empresa import FinEmpresa
 from routes.financeiro import financeiro
+from utils import cobranca_grupo as CG
 from utils import titulos_receber as TR
 from utils.auth_helper import permission_required
 from utils.db_helper import execute_query
@@ -227,10 +228,11 @@ def titulo_cobranca(titulo_id):
     volta = url_for('financeiro.titulos', aba=aba, emp=emp) + f'#cob={titulo_id}'
     cel = whats[0]['cel'] if whats else ''
     nome = TR._nome(t['contraparte_nome'])
+    grupos_n = TR._grupos_dos_clientes([cid]).get(cid, []) if cid else []
     return render_template(
         'financeiro/_titulo_cobranca.html', t=t, aberto=aberto, saldo=saldo, saldo_txt=TR.brl(saldo), valor_txt=TR.brl(t['valor']),
         tag=tag, cls=cls, desc=TR._desc(t), servico=TR._servico(t), comp=TR._comp(t.get('competencia')),
-        grupos=TR._grupos_dos_clientes([cid]).get(cid, []) if cid else [], doc=doc, nome=nome,
+        grupos=grupos_n, grupos_ids=CG.ids_dos_grupos(grupos_n), doc=doc, nome=nome,
         iniciais=''.join(p[0] for p in nome.split()[:2]).upper(),
         boleto=boleto, boletos=boletos, nota=nota, outros=outros, abertos=abertos,
         cli_n=cli_n, cli_tot=TR.brl(cli_tot), regua=regua, eventos=ev, pagtos=pagtos,

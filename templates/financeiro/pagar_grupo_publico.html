@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>{{ empresa }} · Cobranças do grupo {{ g.nome }}</title>
+<style>
+  :root { --verde:#1e4d2b; --verde2:#2f8f3e; --verde-f:#f3f8f4; --tinta:#1f2933; --cinza:#667085; --linha:#e4ebe6; --ambar:#b45309; --verm:#b91c1c; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:#eef3ee; color:var(--tinta); font:16px/1.45 -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; -webkit-text-size-adjust:100%; }
+  .pg { max-width:560px; margin:0 auto; padding:14px 14px 40px; }
+  .topo { display:flex; align-items:center; gap:12px; padding:6px 2px 14px; }
+  .topo img { height:48px; width:auto; }
+  .topo b { display:block; font-size:17px; color:var(--verde); }
+  .topo small { color:var(--cinza); font-size:13px; }
+  .card { background:#fff; border:1px solid var(--linha); border-radius:16px; padding:16px; margin-bottom:12px; box-shadow:0 1px 2px rgba(30,77,43,.05); }
+  .cab { background:var(--verde); color:#fff; border:0; }
+  .cab .cli { font-size:13px; opacity:.85; margin-bottom:2px; }
+  .cab .nome { font-size:21px; font-weight:800; line-height:1.25; }
+  .cab .valor { font-size:38px; font-weight:900; letter-spacing:-.5px; margin:14px 0 6px; font-variant-numeric:tabular-nums; }
+  .cab .venc { font-size:14px; opacity:.9; margin-top:8px; }
+  .pill { display:inline-block; padding:5px 12px; border-radius:999px; font-weight:800; font-size:13.5px; background:#fff; color:var(--verde); }
+  .pill.vencido { background:#fde68a; color:#78350f; }
+  .pill.aberto { background:#dbeafe; color:#1e3a8a; }
+  .emp { border-left:5px solid var(--verde2); }
+  .emp.vencido { border-left-color:#f59e0b; }
+  .emp .quem { font-size:12.5px; text-transform:uppercase; letter-spacing:.5px; color:var(--cinza); font-weight:800; }
+  .emp .nomeemp { font-size:18px; font-weight:800; color:var(--verde); line-height:1.25; margin:2px 0 8px; }
+  .emp .hon { display:flex; justify-content:space-between; gap:12px; align-items:baseline; }
+  .emp .hon b { font-size:15.5px; }
+  .emp .hon .v { font-size:22px; font-weight:900; white-space:nowrap; font-variant-numeric:tabular-nums; }
+  .emp .dt { font-size:14px; color:var(--cinza); margin:4px 0 12px; }
+  .emp .dt .pill { font-size:12px; padding:3px 10px; margin-left:6px; }
+  h2 { margin:0 0 10px; font-size:12.5px; text-transform:uppercase; letter-spacing:.6px; color:var(--cinza); font-weight:800; }
+  .it { display:flex; justify-content:space-between; gap:12px; padding:6px 0; border-bottom:1px dashed var(--linha); font-size:14.5px; }
+  .it span { font-weight:700; }
+  .it b { white-space:nowrap; font-variant-numeric:tabular-nums; }
+  .btn { display:flex; align-items:center; justify-content:center; gap:10px; width:100%; min-height:54px; padding:12px 16px; border-radius:14px; border:2px solid var(--verde2); background:var(--verde2); color:#fff; font-family:inherit; font-weight:800; font-size:16.5px; line-height:1.2; text-decoration:none; cursor:pointer; -webkit-tap-highlight-color:transparent; margin-top:8px; }
+  .btn:active { transform:scale(.99); }
+  .btn.sec { background:#fff; color:var(--verde); border-color:#cfe3d4; font-weight:700; font-size:15px; min-height:48px; }
+  .btn.ok { background:#14532d; border-color:#14532d; }
+  .btn svg { width:22px; height:22px; flex:0 0 auto; }
+  .dois { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  .dois .btn { margin-top:8px; }
+  .cod { margin:10px 0 0; padding:10px 12px; background:var(--verde-f); border:1px solid var(--linha); border-radius:12px; font:13px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; word-break:break-all; color:#334155; }
+  .qr { display:none; width:190px; height:190px; margin:10px auto 0; border:1px solid var(--linha); border-radius:12px; padding:6px; background:#fff; }
+  .qr.on { display:block; }
+  details { margin-top:10px; } summary { cursor:pointer; color:var(--verde); font-weight:700; font-size:14.5px; list-style:none; } summary::-webkit-details-marker { display:none; }
+  .aviso { padding:14px 16px; border-radius:14px; font-size:15px; line-height:1.45; }
+  .aviso.pago { background:#dcfce7; color:#14532d; }
+  .nf { margin-top:10px; font-size:14px; color:var(--cinza); }
+  .indice { display:flex; flex-wrap:wrap; gap:6px; margin-top:12px; }
+  .indice a { font-size:13px; color:#fff; background:rgba(255,255,255,.18); border:1px solid rgba(255,255,255,.3); border-radius:999px; padding:4px 10px; text-decoration:none; }
+  .rod { text-align:center; color:var(--cinza); font-size:13px; margin-top:18px; line-height:1.6; }
+  .rod b { display:block; color:var(--verde); font-size:14.5px; font-weight:800; }
+  .toast { position:fixed; left:50%; bottom:22px; transform:translate(-50%, 16px); background:#111827; color:#fff; padding:11px 18px; border-radius:12px; font-size:14.5px; opacity:0; pointer-events:none; transition:.18s; white-space:nowrap; z-index:9; }
+  .toast.on { opacity:1; transform:translate(-50%, 0); }
+  @media (min-width:600px) { .pg { padding-top:28px; } .cab .valor { font-size:44px; } }
+</style>
+</head>
+<body>
+<div class="pg">
+  <div class="topo">
+    <img src="{{ url_for('static', filename='images/logo.png') }}" alt="{{ empresa }}">
+    <div><b>{{ empresa }}</b><small>Cobrança de honorários</small></div>
+  </div>
+
+  <div class="card cab">
+    <div class="cli">Empresas do grupo</div>
+    <div class="nome">{{ g.nome }}</div>
+    <div class="valor">{{ total }}</div>
+    <span class="pill{{ ' vencido' if n_vencidos }}">{{ n }} cobrança{{ 's' if n != 1 }} em aberto{% if n_vencidos %} · {{ n_vencidos }} vencida{{ 's' if n_vencidos != 1 }}{% endif %}</span>
+    <div class="venc">{{ n_emp }} empresa{{ 's' if n_emp != 1 }}. Cada cobrança abaixo tem o seu Pix e o seu boleto; pague uma a uma.</div>
+    {% if n > 1 %}<div class="indice">{% for b in boletos %}<a href="#b{{ loop.index }}">{{ loop.index }}. {{ b.empresa | truncate(26, True, '…') }}</a>{% endfor %}</div>{% endif %}
+  </div>
+
+  {% if not boletos %}
+  <div class="card aviso pago"><b>Nada em aberto.</b> Obrigado! Não há cobrança pendente para as empresas do grupo.</div>
+  {% endif %}
+
+  {% for b in boletos %}
+  <div class="card emp{{ ' vencido' if b.vencido }}" id="b{{ loop.index }}">
+    <div class="quem">{{ loop.index }} de {{ n }} · {{ b.doc }}</div>
+    <div class="nomeemp">{{ b.empresa }}</div>
+    <div class="hon"><b>{{ b.honorario }}</b><span class="v">{{ b.valor }}</span></div>
+    <div class="dt">{{ 'Venceu em' if b.vencido else 'Vence em' }} {{ b.venc }}<span class="pill {{ 'vencido' if b.vencido else 'aberto' }}">{{ 'vencido · ainda pode pagar' if b.vencido else 'a vencer' }}</span>{% if b.charge_id %} · boleto nº {{ b.charge_id }}{% endif %}</div>
+    {% if b.pix %}
+    <button type="button" class="btn" data-copiar="{{ b.pix }}" data-ok="Código Pix copiado!">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+      <span>Copiar código Pix</span>
+    </button>
+    {% if b.qr %}<details><summary>Ver o QR Code do Pix</summary><img class="qr on" src="data:image/png;base64,{{ b.qr }}" alt="QR Code do Pix"></details>{% endif %}
+    {% endif %}
+    {% if b.linha %}
+    <button type="button" class="btn{% if b.pix %} sec{% endif %}" data-copiar="{{ b.linha }}" data-ok="Linha digitável copiada!">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 5v14M7 5v14M11 5v14M15 5v14M19 5v14M21 5v14"/></svg>
+      <span>Copiar linha digitável</span>
+    </button>
+    <div class="cod">{{ b.linha }}</div>
+    {% endif %}
+    {% if b.tem_pdf and b.urls.boleto %}
+    <div class="dois"><a class="btn sec" href="{{ b.urls.boleto }}" target="_blank" rel="noopener">Abrir boleto</a><a class="btn sec" href="{{ b.urls.boleto_pdf or b.urls.boleto }}">Baixar PDF</a></div>
+    {% endif %}
+    <details><summary>O que está sendo cobrado</summary>
+      {% for i in b.itens %}<div class="it"><span>{{ i.nome }}</span><b>{{ i.valor }}</b></div>{% endfor %}
+      {% if b.nfse_id and b.urls.nota %}<div class="nf">Nota fiscal de serviço: <a href="{{ b.urls.nota }}" target="_blank" rel="noopener">ver</a> · <a href="{{ b.urls.nota_pdf }}">baixar PDF</a></div>{% endif %}
+    </details>
+  </div>
+  {% endfor %}
+
+  <div class="rod"><b>{{ slogan }}</b>Em caso de dúvida, responda a mensagem que você recebeu. {{ empresa }}.</div>
+</div>
+<div class="toast" id="toast"></div>
+<script>
+(function () {
+  var toast = document.getElementById('toast'), tm;
+  function avisa(msg) { toast.textContent = msg; toast.classList.add('on'); clearTimeout(tm); tm = setTimeout(function () { toast.classList.remove('on'); }, 2200); }
+  function velho(txt) {
+    var ta = document.createElement('textarea'); ta.value = txt; ta.setAttribute('readonly', ''); ta.style.position = 'fixed'; ta.style.top = '-1000px';
+    document.body.appendChild(ta); ta.select(); ta.setSelectionRange(0, txt.length);
+    var ok = false; try { ok = document.execCommand('copy'); } catch (e) {} document.body.removeChild(ta); return ok;
+  }
+  document.querySelectorAll('[data-copiar]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var txt = b.getAttribute('data-copiar'), fim = function (ok) {
+        if (ok) { var h = b.innerHTML; b.classList.add('ok'); b.lastChild.textContent = ' Copiado!'; avisa(b.getAttribute('data-ok')); setTimeout(function () { b.classList.remove('ok'); b.innerHTML = h; }, 2500); }
+        else { avisa('Não deu para copiar. Segure sobre o código e escolha Copiar.'); }
+      };
+      if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(txt).then(function () { fim(true); }, function () { fim(velho(txt)); });
+      else fim(velho(txt));
+    });
+  });
+})();
+</script>
+</body>
+</html>

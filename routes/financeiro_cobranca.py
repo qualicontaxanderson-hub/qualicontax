@@ -766,44 +766,45 @@ def boleto_marcar_pago(boleto_id):
     return redirect(volta)
 
 
-@financeiro.route('/financeiro/boletos/<int:boleto_id>/reemitir', methods=['POST'])
-@permission_required(PERM)
-def boleto_reemitir(boleto_id):
+def reemitir_expirado(b, venc, usuario_id):
     """Boleto EXPIRADO (não pode mais ser pago): emite um novo pela nossa conta, para o MESMO título, com o
-    saldo dele. O expirado fica como está, guardado."""
+    saldo dele. O expirado fica como está, guardado. Devolve (ok, msg, novo_id, aviso_email).
+    17/11/2026: separado da rota para a janela do GRUPO reemitir vários de uma vez."""
     import re
-    b, volta = _boleto_e_volta(boleto_id)
     if b['situacao'] != 'expired':
-        flash('Só boleto expirado é reemitido. Vencido ainda pode ser pago: use Mudar vencimento.', 'warning')
-        return redirect(volta)
+        return False, 'Só boleto expirado é reemitido. Vencido ainda pode ser pago: use Mudar vencimento.', None, None
     t = execute_query('SELECT id, empresa_id, cliente_id, descricao, competencia, status, valor, valor_baixado '
                       'FROM fin_titulos WHERE id = %s', (b.get('titulo_id') or 0,), fetch=True, fetch_one=True)
     if not t or t['status'] not in ('aberto', 'parcial'):
-        flash('O título deste boleto não está em aberto — nada a cobrar.', 'warning')
-        return redirect(volta)
+        return False, 'O título deste boleto não está em aberto — nada a cobrar.', None, None
     saldo = Decimal(str(t['valor'])) - Decimal(str(t['valor_baixado'] or 0))
-    venc = _data_do_form('vencimento', _hoje())
     if not venc or saldo <= 0:
-        flash('Informe o vencimento do boleto novo (hoje ou depois).', 'danger')
-        return redirect(volta)
+        return False, 'Informe o vencimento do boleto novo (hoje ou depois).', None, None
     conta = FinCobrancaConta.padrao_da_empresa(t['empresa_id'])
     if not conta:
-        flash('Não há conta de cobrança para emitir o boleto novo.', 'danger')
-        return redirect(volta)
+        return False, 'Não há conta de cobrança para emitir o boleto novo.', None, None
     tom = tomador_do_cliente(t['cliente_id'], consultar_cep=False) if t.get('cliente_id') else None
     if not tom or not tom.get('documento'):
-        flash('O cadastro do cliente não tem CPF/CNPJ para o boleto.', 'danger')
-        return redirect(volta)
+        return False, 'O cadastro do cliente não tem CPF/CNPJ para o boleto.', None, None
     nome = re.sub(r'\s*\(Conexa \d+\)\s*$', '', t['descricao'] or '').strip() or 'Honorários'
     itens = [{'nome': nome[:255], 'valor': saldo, 'emite_nota': False, 'servico_id': None}]
     competencia = t.get('competencia') or _hoje()
     _v, mensagem = sugestao_boleto(conta, competencia)
     novo_id, ok, msg, aviso = emitir_boleto_avulso(t['empresa_id'], conta, _pagador_do_tomador(tom), itens, saldo,
-                                                   competencia, venc, mensagem, t['id'], current_user.id)
-    registrar('escrita.reemitiu_boleto', 'financeiro', tabela='fin_boletos', registro_id=boleto_id,
+                                                   competencia, venc, mensagem, t['id'], usuario_id)
+    registrar('escrita.reemitiu_boleto', 'financeiro', tabela='fin_boletos', registro_id=b['id'],
               depois={'expirado': b['charge_id'], 'novo_boleto_id': novo_id, 'ok': ok, 'titulo_id': t['id'],
                       'valor': str(saldo), 'vencimento': str(venc)})
-    flash(msg, 'success' if ok else 'danger')
+    return ok, msg, novo_id, aviso
+
+
+@financeiro.route('/financeiro/boletos/<int:boleto_id>/reemitir', methods=['POST'])
+@permission_required(PERM)
+def boleto_reemitir(boleto_id):
+    """Boleto EXPIRADO: emite um novo para o mesmo título (ver reemitir_expirado)."""
+    b, volta = _boleto_e_volta(boleto_id)
+    ok, msg, novo_id, aviso = reemitir_expirado(b, _data_do_form('vencimento', _hoje()), current_user.id)
+    flash(msg, 'success' if ok else ('warning' if msg.startswith(('Só boleto', 'O título')) else 'danger'))
     if aviso:
         flash(aviso, 'success' if aviso.startswith('E-mail enviado') else 'warning')
     return redirect(url_for('financeiro.boleto_detalhe', boleto_id=novo_id) if ok and novo_id else volta)

@@ -226,6 +226,8 @@ a.tx-c { text-decoration:none; color:inherit; }
 .tx-ref-resumo.filtrado { background:linear-gradient(135deg, var(--sec, var(--verde)), var(--sec-e, var(--verde))); color:#fff; border-radius:99px; padding:6px 14px; }
 .tx-ref-resumo.filtrado b { color:#fff; }
 .tx-ref-limpar { border:0; background:#fef2f2; color:#b91c1c; border-radius:99px; height:30px; padding:0 12px; font:inherit; font-size:12px; font-weight:700; cursor:pointer; display:none; }
+.tx-ref-grupo { border:0; background:linear-gradient(135deg, var(--sec, var(--verde)), var(--sec-e, var(--verde))); color:#fff; border-radius:99px; height:32px; padding:0 14px; font:inherit; font-size:12.5px; font-weight:800; cursor:pointer; display:inline-flex; align-items:center; gap:7px; box-shadow:0 4px 10px rgba(15,23,42,.12); }
+.tx-ref-grupo[hidden] { display:none; } .tx-ref-grupo:hover { filter:brightness(1.06); } .tx-ref-grupo b { font-weight:800; }
 .tx-ref-chips { display:none; flex-wrap:wrap; gap:6px; width:100%; padding:4px 2px 0; border-top:1px dashed var(--linha); margin-top:2px; }
 .tx-ref-chips.on { display:flex; }
 .tx-chip { display:inline-flex; align-items:center; gap:6px; background:var(--sec-f, #ecfdf3); border:1px solid var(--sec-b, #bbf7d0); color:var(--sec-e, var(--verde)); border-radius:99px; padding:4px 6px 4px 10px; font-size:12px; font-weight:600; }
@@ -258,6 +260,7 @@ a.tx-c { text-decoration:none; color:inherit; }
 .tj.tx-fut  { --cor:#7c3aed; --cor-e:#5b21b6; --cor-f:#f5f3ff; --cor-b:#e2dafd; }
 .tj.tx-venc { --cor:#f97316; --cor-e:#c2410c; --cor-f:#fff4ec; --cor-b:#fddcc0; }
 .tj.tx-perd { --cor:#475569; --cor-e:#1e293b; --cor-f:#f5f7fa; --cor-b:#e2e8f0; }
+.tj.tx-ina  { --cor:#dc2626; --cor-e:#991b1b; --cor-f:#fef1f1; --cor-b:#fecaca; }
 .tj-cab { flex-shrink:0; background:linear-gradient(120deg, var(--cor) 0%, var(--cor-e) 100%); color:#fff; padding:18px 64px 16px 24px; display:flex; justify-content:space-between; gap:20px; align-items:center; }
 .tj-cab-cli { display:flex; gap:14px; align-items:center; min-width:0; }
 .tj-avatar { width:54px; height:54px; border-radius:16px; background:rgba(255,255,255,.18); border:1px solid rgba(255,255,255,.25); display:inline-flex; align-items:center; justify-content:center; font-size:18px; font-weight:800; flex-shrink:0; }
@@ -270,6 +273,7 @@ a.tx-c { text-decoration:none; color:inherit; }
 .tj-quem-l2 code { background:rgba(255,255,255,.18); border-radius:6px; padding:2px 7px; font-size:11.5px; cursor:pointer; }
 .tj-quem-l2 a { color:#fff; font-weight:700; text-decoration:none; border-bottom:1px solid rgba(255,255,255,.5); }
 .tj-chip { display:inline-flex; align-items:center; background:rgba(255,255,255,.18); border-radius:99px; padding:2px 9px; font-weight:700; }
+.tj-chip-bt { border:1px solid rgba(255,255,255,.45); color:#fff; font:inherit; font-size:12px; cursor:pointer; gap:5px; } .tj-chip-bt:hover { background:rgba(255,255,255,.3); } .tj-chip-bt .fa-arrow-right { font-size:10px; margin:0; }
 .tj-regua { display:flex; align-items:center; gap:3px; margin-top:9px; }
 .tj-regua i { width:18px; height:6px; border-radius:2px; background:rgba(255,255,255,.28); display:block; }
 .tj-regua i.p { background:#86efac; } .tj-regua i.v { background:#fecaca; box-shadow:0 0 0 1px rgba(255,255,255,.35) inset; }
@@ -292,7 +296,10 @@ a.tx-c { text-decoration:none; color:inherit; }
 .tj-sec h4 > i { width:24px; height:24px; border-radius:7px; background:var(--cor-f); color:var(--cor); display:inline-flex; align-items:center; justify-content:center; font-size:11px; }
 .tj-sec h4 small { text-transform:none; letter-spacing:0; font-weight:600; color:#94a3b8; }
 .tj-col3 { display:flex; flex-direction:column; gap:12px; min-height:0; }
-.tj-col3 .tj-sec-outros { flex:1; min-height:0; }
+/* 17/11/2026: a lista 'Em aberto deste cliente' mora na coluna 1, embaixo da linha do tempo (na 3 ficava espremida em monitor baixo) */
+.tj-col1 { display:flex; flex-direction:column; gap:12px; min-height:0; }
+.tj-col1 .tj-sec-tl { flex:1 1 0; min-height:140px; }
+.tj-col1 .tj-sec-outros { flex:0 1 auto; max-height:50%; }
 /* linha do tempo */
 .tj-tl { list-style:none; margin:0; padding:0 0 0 4px; position:relative; flex:1; overflow:auto; }
 .tj-tl::before { content:''; position:absolute; left:15px; top:8px; bottom:8px; width:2px; background:linear-gradient(var(--linha), var(--linha)); }
@@ -359,7 +366,8 @@ a.tx-c { text-decoration:none; color:inherit; }
   .tx-gav-pane { height:auto; max-height:94vh; display:block; overflow:auto; }
   .tx-gav-corpo { display:block; }
   .tj { display:block; height:auto; } .tj-corpo { overflow:visible; display:flex; flex-direction:column; padding:10px; }
-  .tj-sec, .tj-col3, .tj-col3 .tj-sec-outros { flex:none; } .tj-tl { flex:none; overflow:visible; }
+  .tj-sec, .tj-col3, .tj-col1, .tj-col1 .tj-sec-outros { flex:none; max-height:none; } .tj-tl { flex:none; overflow:visible; }
+  .tj-col1 { display:flex; flex-direction:column; } .tj-col1 .tj-sec-outros { order:-1; }
   .tj-cab { padding:16px 56px 14px 16px; flex-wrap:wrap; gap:10px; }
   .tj-cab-val { flex-direction:row; align-items:center; gap:8px 10px; width:100%; flex-wrap:wrap; } .tj-cab-val b { font-size:26px; order:-1; white-space:nowrap; }
   .tj-kpis .nf-pill { white-space:normal; line-height:1.3; }
@@ -470,6 +478,37 @@ a.tx-c { text-decoration:none; color:inherit; }
 .tj-bol-top > div:first-child dd { white-space:nowrap; font-size:22px; } .tj-bol-top > div:nth-child(2) dd { white-space:nowrap; } .tj-bol-top > div:last-child dd { font-size:15px; }
 @media (max-width:900px) { .tj-corpo { overflow:visible; } .tj-sec { overflow:visible; } }
 
+
+/* ── janela do GRUPO (17/11/2026) ── */
+.tg-corpo { grid-template-columns:1.3fr 1fr; }
+.tg-kpis { grid-template-columns:1.5fr .8fr 1fr 1fr 1.1fr; }
+.tg-kpis > div.tg-alerta > i { background:#fef2f2; color:#dc2626; } .tg-kpis > div.tg-alerta dd { color:#dc2626; }
+.tj-avatar .fa-layer-group { font-size:22px; }
+.tg-emp { flex-shrink:0; border:1px solid var(--linha); border-radius:12px; margin-bottom:10px; overflow:hidden; --ecor:#2563eb; --ecor-f:#eff4ff; }
+.tg .tj-col3 > .tj-sec { flex-shrink:0; } .tg .tj-col3 > .tj-sec-email { flex:1 1 auto; min-height:160px; }
+.tg-emp.tg-atr { --ecor:#f97316; --ecor-f:#fff4ec; } .tg-emp.tg-ina { --ecor:#dc2626; --ecor-f:#fef1f1; } .tg-emp.tg-perd { --ecor:#475569; --ecor-f:#f1f5f9; }
+.tg-emp-cab { display:flex; align-items:center; gap:9px; padding:8px 12px; background:var(--ecor-f); border-bottom:1px solid var(--linha); border-left:4px solid var(--ecor); }
+.tg-num { background:var(--ecor); color:#fff; border-radius:7px; padding:2px 7px; font-size:11.5px; font-weight:800; font-variant-numeric:tabular-nums; flex-shrink:0; }
+.tg-emp-cab b { flex:1; min-width:0; font-size:14px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; color:var(--tinta); }
+.tg-sit { font-style:normal; font-size:10.5px; font-weight:800; text-transform:uppercase; letter-spacing:.4px; color:var(--ecor); background:#fff; border:1px solid var(--ecor); border-radius:99px; padding:1px 8px; white-space:nowrap; }
+.tg-emp-cab strong { font-size:15px; font-variant-numeric:tabular-nums; color:var(--tinta); white-space:nowrap; }
+.tg-t { display:flex; align-items:center; gap:12px; width:100%; padding:8px 12px 8px 16px; border:0; border-top:1px dashed var(--linha); background:#fff; font:inherit; text-align:left; cursor:pointer; color:var(--tinta); }
+.tg-t:first-of-type { border-top:0; } .tg-t:hover { background:#f8fafc; }
+.tg-t.fora { background:#fffbeb; } .tg-t.fora:hover { background:#fef3c7; }
+.tg-t-desc { flex:1.1; min-width:0; } .tg-t-desc b { display:block; font-size:13.5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.tg-t-desc small { font-size:12px; font-weight:600; color:#64748b; } .tg-t-desc small.tx-venc { color:#c2410c; }
+.tg-t-bol { flex:1.2; min-width:0; font-size:12.5px; color:#475569; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.tg-t-bol i.ok { color:#16a34a; } .tg-t-bol i.alerta { color:#d97706; }
+.tg-t strong { font-size:14.5px; font-variant-numeric:tabular-nums; white-space:nowrap; } .tg-t > i.fa-chevron-right { color:#cbd5e1; font-size:11px; }
+.tg-resolver { border-color:#fcd34d; background:linear-gradient(180deg, #fffbeb, #fff 60%); }
+.tg-resolver h4 > i { background:#fef3c7; color:#b45309; }
+.tg .tj-copias-txt { display:grid; grid-template-columns:1.35fr 1fr; gap:8px; }
+@media (max-width:900px) {
+  .tg-corpo { display:flex; flex-direction:column; } .tg-kpis { grid-template-columns:1fr 1fr; } .tg-kpis > div:last-child { grid-column:auto; }
+  .tg-t { flex-wrap:wrap; gap:4px 10px; } .tg-t-desc, .tg-t-bol { flex:1 1 100%; } .tg-t-bol { white-space:normal; }
+  .tg .tj-copias-txt { grid-template-columns:1fr; }
+}
+
 @media (hover:none) {
   .tx-c-acoes { position:static; opacity:1; padding:0; justify-content:flex-end; }
 }
@@ -573,6 +612,7 @@ a.tx-c { text-decoration:none; color:inherit; }
     <div class="tx-ref" data-dim="b"><button type="button"><i class="fas fa-barcode"></i> Boleto <b></b><i class="fas fa-chevron-down"></i></button><div class="tx-ref-pop"></div></div>
     <div class="tx-ref" data-dim="v"><button type="button"><i class="fas fa-coins"></i> Valor <b></b><i class="fas fa-chevron-down"></i></button><div class="tx-ref-pop"></div></div>
     <button type="button" class="tx-ref-limpar" id="txRefLimpar"><i class="fas fa-xmark"></i> Limpar</button>
+    <button type="button" class="tx-ref-grupo" id="txRefGrupo" hidden title="Cobrança do grupo inteiro, de uma vez: todas as empresas da rede com honorário em aberto"><i class="fas fa-layer-group"></i> Cobrar o grupo <b></b> <i class="fas fa-arrow-right"></i></button>
     <div class="tx-ref-resumo" id="txRefResumo"></div>
     <div class="tx-ref-chips" id="txRefChips"></div>
   </div>
@@ -743,6 +783,7 @@ a.tx-c { text-decoration:none; color:inherit; }
 
   // ── Filtros (grupo, serviço, competência, boleto, valor) — valem em todas as abas ──
   var FIL = {{ m.filtros | tojson }};
+  var GRUPOS_ID = {{ grupos_ids | tojson }};      // 17/11/2026: nome do grupo -> id (botão "Cobrar o grupo")
   var REF = {g: {}, s: {}, k: {}, b: {}, vmin: null, vmax: null};
   var ROT = {p: 'Período', g: 'Grupo', s: 'Serviço', k: 'Competência', b: 'Boleto', v: 'Valor'};
   var ICO = {p: 'fa-calendar-week', g: 'fa-layer-group', s: 'fa-briefcase', k: 'fa-calendar-days', b: 'fa-barcode', v: 'fa-coins'};
@@ -856,6 +897,8 @@ a.tx-c { text-decoration:none; color:inherit; }
   function rotuloOp(d, v) { var o = (OPS[d] || []).filter(function (x) { return x[0] === v; })[0]; return o ? o[1] : v; }
   function desenharChips() {
     var box = document.getElementById('txRefChips'); box.innerHTML = '';
+    var gs = Object.keys(REF.g), bg = document.getElementById('txRefGrupo');
+    if (bg) { var um = gs.length === 1 && GRUPOS_ID[gs[0]]; bg.hidden = !um; if (um) { bg.querySelector('b').textContent = gs[0]; bg.onclick = function () { txAbrirGrupo(GRUPOS_ID[gs[0]]); }; } }
     var tem = false;
     function chip(d, texto, tira) {
       tem = true;
@@ -1000,9 +1043,22 @@ a.tx-c { text-decoration:none; color:inherit; }
       .then(function (html) { gavCorpo.innerHTML = html; gav.querySelector('.tx-gav-pane').scrollTop = 0; })
       .catch(function () { gavCorpo.innerHTML = '<div class="tx-gav-carregando"><i class="fas fa-triangle-exclamation"></i>Não consegui abrir a cobrança agora. Tente de novo.</div>'; });
   };
+  // 17/11/2026: a cobrança do GRUPO inteiro (rede), na mesma janela
+  var URL_GRP = "{{ url_for('financeiro.grupo_cobranca', grupo_id=999999999) }}";
+  window.txAbrirGrupo = function (gid) {
+    if (!gid) return;
+    gav.hidden = false; document.body.style.overflow = 'hidden';
+    gavCorpo.innerHTML = '<div class="tx-gav-carregando"><i class="fas fa-circle-notch fa-spin"></i>Abrindo a cobrança do grupo…</div>';
+    var aba = (painelAtivo() || {dataset: {}}).dataset.p || 'abe';
+    try { history.replaceState(null, '', location.pathname + location.search + '#grupo=' + gid); } catch (e) {}
+    fetch(URL_GRP.replace('999999999', gid) + '?aba=' + aba + (EMP ? '&emp=' + encodeURIComponent(EMP) : ''), {credentials: 'same-origin'})
+      .then(function (r) { if (!r.ok) throw new Error(r.status); return r.text(); })
+      .then(function (html) { gavCorpo.innerHTML = html; gav.querySelector('.tx-gav-pane').scrollTop = 0; })
+      .catch(function () { gavCorpo.innerHTML = '<div class="tx-gav-carregando"><i class="fas fa-triangle-exclamation"></i>Não consegui abrir a cobrança do grupo agora. Tente de novo.</div>'; });
+  };
   window.txGavFechar = function () {
     gav.hidden = true; document.body.style.overflow = '';
-    try { if (location.hash.indexOf('#cob=') === 0) history.replaceState(null, '', location.pathname + location.search); } catch (e) {}
+    try { if (location.hash.indexOf('#cob=') === 0 || location.hash.indexOf('#grupo=') === 0) history.replaceState(null, '', location.pathname + location.search); } catch (e) {}
   };
   document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && !gav.hidden) txGavFechar(); });
   document.querySelectorAll('.tx-c[data-tid]').forEach(function (c) {
@@ -1012,6 +1068,7 @@ a.tx-c { text-decoration:none; color:inherit; }
     });
   });
   if (location.hash.indexOf('#cob=') === 0) txAbrirCob(location.hash.slice(5));
+  if (location.hash.indexOf('#grupo=') === 0) txAbrirGrupo(location.hash.slice(7));
 
   // Inadimplente: lista dos vencidos com o botão de baixa
   window.txVer = function (btn) {

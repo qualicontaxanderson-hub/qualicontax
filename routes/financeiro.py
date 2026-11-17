@@ -237,9 +237,11 @@ def _titulos_receber(emps, sel):
             return None
     per = TR.periodo(per_raw, _d('de'), _d('ate')) if per_raw else None
     m = TR.montar(empresa_ids=sel, mes=mes, per=per)
+    from utils.cobranca_grupo import ids_dos_grupos
+    grupos_ids = ids_dos_grupos(m['filtros']['grupos'])      # 17/11/2026: botão "Cobrar o grupo" quando um grupo está no filtro
     emp = ','.join(map(str, sel))
     return render_template(
-        'financeiro/titulos_receber.html', m=m, aba=aba, per=per_raw if per else '',
+        'financeiro/titulos_receber.html', m=m, aba=aba, per=per_raw if per else '', grupos_ids=grupos_ids,
         pode_perd=current_user.has_permission('financeiro.titulos.excluir'),
         categorias=FinCategoria.listar(), centros=FinCentroCusto.listar(),
         hoje=m['hoje'], fin_empresas=emps, sel_empresas=sel,
@@ -3305,3 +3307,4 @@ from routes import financeiro_lancamentos  # noqa: E402,F401  (lançamentos avul
 from routes import financeiro_lote  # noqa: E402,F401  (lote mensal de honorários, 06/11/2026)
 from routes import financeiro_contratos  # noqa: E402,F401  (contrato de prestação assinado pelo app, 06/11/2026)
 from routes import financeiro_titulo_cobranca  # noqa: E402,F401  (gaveta da cobrança na tela Títulos, 15/11/2026)
+from routes import financeiro_grupo_cobranca  # noqa: E402,F401  (cobrança do grupo de empresas de uma vez, 17/11/2026)
