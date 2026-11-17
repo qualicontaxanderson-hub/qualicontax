@@ -272,14 +272,14 @@ def texto_whatsapp(d, link, empresa_nome):
                 'Se algum pagamento já foi feito, pode desconsiderar. 🙂', '']
     else:
         txt += [f'Seguem as cobranças de honorários das empresas do grupo *{g}*.', '']
-    # 17/11/2026 (Anderson): no coletivo, cada empresa em duas linhas — nome e "📌 Honorários – 10/2026 · 📅 venc · 💰 valor"
+    # 17/11/2026 (Anderson): no coletivo, cada empresa com o nome e as mesmas três linhas do individual (📌 / 📅 / 💰)
     for e in emps:
         txt.append(f"🏢 *{e['nome']}*")
         for t in e['titulos']:
             if t['estado'] != 'na_pagina':
                 continue
             rot = 'Honorários' if t['desc'].lower().startswith('honor') else t['desc']
-            txt.append(f"📌 {rot}" + (f" – {t['comp_num']}" if t['comp_num'] else '') + f" · 📅 {t['venc_txt']} · 💰 {t['valor_txt']}")
+            txt += [f"📌 {rot}" + (f" – {t['comp_num']}" if t['comp_num'] else ''), f"📅 Vencimento: {t['venc_txt']}", f"💰 Valor: {t['valor_txt']}"]
         txt.append('')
     n_e, n_t = len(emps), d['n_pagina']
     txt += [f"💰 *Total: {d['total_pagina_txt']}* · {n_e} empresa{'s' if n_e != 1 else ''} · {n_t} honorário{'s' if n_t != 1 else ''}", '']
