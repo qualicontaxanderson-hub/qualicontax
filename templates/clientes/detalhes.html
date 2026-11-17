@@ -445,6 +445,15 @@
                 {% else %}
                 <div class="qb-vazio"><i class="fas fa-user-tie"></i> Nenhum sócio cadastrado{% if pj %} — toda empresa precisa de ao menos um{% endif %}.</div>
                 {% endif %}
+                {% set cnpj_dig = (cliente.cpf_cnpj or '') | replace('.', '') | replace('/', '') | replace('-', '') %}
+                {% if pj and cnpj_dig | length == 14 %}
+                {# A3 (16/11/2026): o quadro de sócios da Receita aqui mesmo — Incluir quem já tem cadastro, Cadastrar quem não tem #}
+                <div class="sr" id="srBox" data-cnpj="{{ cnpj_dig }}" data-auto="{{ '1' if not socios else '' }}">
+                    <div class="sr-h"><b><i class="fas fa-landmark"></i> Sócios na Receita</b><span id="srResumo"></span>
+                        <button type="button" class="qb-add qb-add-cinza" id="srBtn"><i class="fas fa-magnifying-glass"></i> Ver na Receita</button></div>
+                    <div id="srLista"></div>
+                </div>
+                {% endif %}
                 {% if ex_socios %}
                 <details class="qb-ex"><summary><i class="fas fa-clock-rotate-left"></i> Ex-sócios ({{ ex_socios|length }})</summary>
                     {% for socio in ex_socios %}
@@ -1457,7 +1466,8 @@
                     <div id="socioResultados"></div>
                     <small style="color:#6b7280; display:block; margin-top:6px;">
                         O sócio precisa ter cadastro: pessoa física ou empresa, cliente ou avulso.
-                        Não achou? <a href="{{ url_for('clientes.novo') }}" target="_blank">Cadastre o sócio</a> e busque de novo.
+                        Não achou? <button type="button" class="sr-link" onclick="socioCadastrarNovo()"><i class="fas fa-user-plus"></i> Cadastrar novo sócio</button>
+                        — abre o cadastro numa janela; ao criar, ele volta escolhido aqui.
                     </small>
                 </div>
                 <div id="socioEscolhido" class="socio-escolhido" style="display:none;">
@@ -1468,6 +1478,7 @@
                     <button type="button" class="btn btn-outline" onclick="socioTrocar()">Trocar</button>
                 </div>
                 <input type="hidden" name="pf_cliente_id" id="socio_pf_id">
+                <input type="hidden" name="editar" id="socio_editar" value="">
                 <div class="form-group">
                     <label for="socio_percentual">Participação (%) *</label>
                     <input type="number" id="socio_percentual" name="percentual_participacao" class="form-control" required min="0.01" max="100" step="0.01" placeholder="Ex.: 50.00">
@@ -1926,6 +1937,7 @@
         try { history.replaceState(null, '', location.pathname + '?editar=1' + location.hash); } catch (e) {}
         if (rolar) window.scrollTo({ top: 0, behavior: 'smooth' });
     }
+    window._fichaEditando = function () { return editando; };
     // DOCUMENTOS da pessoa física (A2): tipo, número, órgão, UF e "vai no contrato"; vários por pessoa
     (function () {
         var dd = document.getElementById('dcDados'); if (!dd) return;
@@ -2450,9 +2462,118 @@ function showAddSocioModal() {
     document.getElementById('socio_entrada').value = '';
     document.getElementById('socio_capital').value = '';
     document.getElementById('socio_pro_labore').value = '';
+    document.getElementById('socio_editar').value = window._fichaEditando && window._fichaEditando() ? '1' : '';
     document.getElementById('addSocioModal').style.display = 'block';
     document.getElementById('socio_busca').focus();
 }
+
+// ══ A3 (16/11/2026): sócio pela Receita e "Cadastrar novo sócio" na tela única ══
+// Anderson: "quando tiver cadastrando um CNPJ que eu precisar cadastrar o sócio é para essa tela eu conseguir
+// cadastrar o socio e já utilizar o cadastro dele para finalizar o da empresa".
+var SOC_ATUAIS = {{ socios | map(attribute='pf_cliente_id') | list | tojson }};
+var SR_QSA = null, SR_CTX = null, SR_ITEM = null;
+function srEsc(s) { var d = document.createElement('div'); d.textContent = s == null ? '' : String(s); return d.innerHTML; }
+function srEhSocio(q) {
+    q = String(q || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+    if (/socio|titular|empresario/.test(q)) return true;
+    return !/administrador|diretor|presidente|procurador|conselheiro/.test(q);
+}
+function srData(iso) { var p = String(iso || '').split('-'); return p.length === 3 ? p[2] + '/' + p[1] + '/' + p[0] : ''; }
+function srAbrirJanela(q) {
+    var w = window.open('/clientes/novo?janela=1&' + q, 'qcxCadastroSocio', 'width=1280,height=900,scrollbars=yes');
+    if (!w) alert('O navegador bloqueou a janela. Permita janelas (pop-ups) para este site e clique de novo.');
+}
+// abre o Adicionar sócio já com o cadastro escolhido (e o que a Receita mostra)
+function socioAbrirCom(cad, ctx) {
+    if (String(cad.id) === '{{ cliente.id }}') { alert('A própria empresa não pode ser sócia dela mesma.'); return; }
+    if (SOC_ATUAIS.indexOf(+cad.id) >= 0) { alert((cad.nome || 'Este cadastro') + ' já é sócio desta empresa.'); return; }
+    showAddSocioModal();
+    socioEscolher({ id: cad.id, nome: (cad.numero ? cad.numero + ' · ' : '') + cad.nome, cpf: cad.doc || cad.cpf || '', tipo: cad.tipo || 'PF' });
+    if (ctx) {
+        if (ctx.qual) document.getElementById('socio_qualificacao').value = ctx.qual;
+        if (ctx.entrada) document.getElementById('socio_entrada').value = ctx.entrada;
+        if (ctx.pct) document.getElementById('socio_percentual').value = ctx.pct;
+        if (ctx.capital) document.getElementById('socio_capital').value = ctx.capital;
+        if (ctx.pl) document.getElementById('socio_pro_labore').value = ctx.pl;
+        socioRespRegra();
+    }
+}
+// "Cadastrar novo sócio" dentro do Adicionar sócio: leva o que foi digitado na busca
+function socioCadastrarNovo() {
+    var t = document.getElementById('socio_busca').value.trim(), d = t.replace(/\D/g, '');
+    var soNum = d && !/[A-Za-zÀ-ú]/.test(t);
+    SR_ITEM = null;
+    SR_CTX = { qual: document.getElementById('socio_qualificacao').value, entrada: document.getElementById('socio_entrada').value,
+               pct: document.getElementById('socio_percentual').value, capital: document.getElementById('socio_capital').value,
+               pl: document.getElementById('socio_pro_labore').value };
+    srAbrirJanela('tipo=' + (soNum && d.length > 11 ? 'PJ' : 'PF') + (soNum ? '&doc=' + d : '&nome=' + encodeURIComponent(t)));
+}
+function srPct() {
+    // único sócio de cotas na Receita e ninguém no quadro: 100%
+    var n = (SR_QSA || []).filter(function (x) { return srEhSocio(x.qualificacao); }).length;
+    return n === 1 && !SOC_ATUAIS.length ? '100' : '';
+}
+function srDesenhar() {
+    var box = document.getElementById('srLista'), res = document.getElementById('srResumo');
+    if (!SR_QSA.length) {
+        res.textContent = '';
+        box.innerHTML = '<div class="sr-msg">A Receita não mostra quadro de sócios para este CNPJ (empresário individual e MEI não têm). Use o botão + Sócio.</div>';
+        return;
+    }
+    var ja = 0, falta = 0;
+    box.innerHTML = SR_QSA.map(function (x, i) {
+        var c = x.cadastro, no = c && SOC_ATUAIS.indexOf(+c.id) >= 0, socio = srEhSocio(x.qualificacao), ac;
+        if (no) { ja++; ac = '<span class="sr-tag sr-ok"><i class="fas fa-check"></i> no quadro</span>'; }
+        else if (!socio) ac = '<span class="sr-tag" title="Administrador que não é dono de cotas: fica só de consulta">só administra</span>';
+        else if (c) { falta++; ac = '<button type="button" class="qb-add" data-sr="incluir" data-i="' + i + '"><i class="fas fa-plus"></i> Incluir</button>'; }
+        else { falta++; ac = '<button type="button" class="qb-add sr-cad" data-sr="cadastrar" data-i="' + i + '"><i class="fas fa-user-plus"></i> Cadastrar</button>'; }
+        var info = [x.doc, x.qualificacao, x.entrada ? 'desde ' + srData(x.entrada) : ''].filter(Boolean).join(' · ');
+        var cad = c && !no ? '<small class="sr-achou"><i class="fas fa-link"></i> já tem cadastro: ' + srEsc((c.numero ? c.numero + ' · ' : '') + c.nome) + (c.avulso ? ' (avulso)' : '') + '</small>'
+                : (!c && socio ? '<small class="sr-sem">sem cadastro no sistema</small>' : '');
+        return '<div class="sr-l' + (no ? ' sr-feito' : '') + '"><span class="sr-ic"><i class="fas ' + (x.tipo === 'PJ' ? 'fa-building' : 'fa-user') + '"></i></span>'
+             + '<div><b>' + srEsc(x.nome) + '</b><small>' + srEsc(info) + '</small>' + cad + '</div>' + ac + '</div>';
+    }).join('');
+    res.innerHTML = SR_QSA.length + ' na Receita' + (ja ? ' · <b class="sr-n-ok">' + ja + ' no quadro</b>' : '') + (falta ? ' · <b class="sr-n-f">' + falta + ' a incluir</b>' : '');
+    box.querySelectorAll('[data-sr]').forEach(function (b) {
+        b.addEventListener('click', function () {
+            var x = SR_QSA[+b.dataset.i], ctx = { qual: x.qualificacao, entrada: x.entrada, pct: srPct() };
+            if (b.dataset.sr === 'incluir') { socioAbrirCom(x.cadastro, ctx); return; }
+            SR_ITEM = +b.dataset.i; SR_CTX = ctx;
+            var d = String(x.doc || '').replace(/\D/g, '');
+            srAbrirJanela('tipo=' + x.tipo + '&nome=' + encodeURIComponent(x.nome)
+                          + (x.tipo === 'PF' && d.length === 6 ? '&meio=' + d : '') + (x.tipo === 'PJ' && d.length >= 8 ? '&raiz=' + d.slice(0, 8) : ''));
+        });
+    });
+}
+function srCarregar() {
+    var bx = document.getElementById('srBox'); if (!bx) return;
+    var b = document.getElementById('srBtn'), box = document.getElementById('srLista');
+    b.disabled = true; b.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Buscando…';
+    box.innerHTML = '<div class="sr-msg"><i class="fas fa-spinner fa-spin"></i> Buscando o quadro de sócios na Receita…</div>';
+    var fim = function () { b.disabled = false; b.innerHTML = '<i class="fas fa-rotate"></i> Buscar de novo'; };
+    fetch('/api/consultar-cnpj/' + bx.dataset.cnpj).then(function (r) { return r.json(); }).then(function (j) {
+        if (!j.success) throw { msg: j.message || 'A Receita não respondeu.' };
+        var qsa = (j.data || {}).qsa || [];
+        if (!qsa.length) { SR_QSA = []; srDesenhar(); return; }
+        return fetch({{ url_for('clientes.socios_da_receita') | tojson }}, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ qsa: qsa }) })
+            .then(function (r) { return r.json(); }).then(function (l) { SR_QSA = l || []; srDesenhar(); });
+    }).catch(function (e) {
+        box.innerHTML = '<div class="sr-msg sr-erro"><i class="fas fa-triangle-exclamation"></i> ' + srEsc((e && e.msg) || 'Sem conexão com a Receita agora. Tente de novo daqui a pouco.') + '</div>';
+    }).then(fim);
+}
+(function () {
+    var bx = document.getElementById('srBox'); if (!bx) return;
+    document.getElementById('srBtn').addEventListener('click', srCarregar);
+    if (bx.dataset.auto) srCarregar();          // empresa sem sócio: já mostra quem a Receita lista
+})();
+// a janela do cadastro devolveu o cadastro (criado agora ou que já existia)
+window.addEventListener('message', function (e) {
+    if (e.origin !== window.location.origin || !e.data || e.data.tipo !== 'qcx-cadastro-criado' || !e.data.cadastro) return;
+    var cad = e.data.cadastro;
+    if (SR_ITEM !== null && SR_QSA && SR_QSA[SR_ITEM]) { SR_QSA[SR_ITEM].cadastro = cad; srDesenhar(); }
+    SR_ITEM = null;
+    socioAbrirCom(cad, SR_CTX); SR_CTX = null;
+});
 
 var SAIDA_SOCIO_ID = null;
 function abrirSaidaSocio(btn) {

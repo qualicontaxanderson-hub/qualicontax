@@ -1340,11 +1340,18 @@ def _criar_inicio():
     f = request.form
     pj = f.get('tipo_pessoa') != 'PF'
     avulso = f.get('avulso') == '1'
+    janela = f.get('janela') == '1'           # A3: "Cadastrar sócio" aberto de dentro da empresa
     erros = []
     d = re.sub(r'\D', '', f.get('cpf_cnpj') or '')
     rotdoc = 'CNPJ' if pj else 'CPF'
+    meio = re.sub(r'\D', '', f.get('meio') or '')       # a Receita mostra só o meio do CPF do sócio
+    raiz = re.sub(r'\D', '', f.get('raiz') or '')       # e só a raiz do CNPJ da empresa sócia
     if not (_cnpj_ok(d) if pj else cpf_valido(d)):
         erros.append(f'{rotdoc} inválido: confira os números.')
+    elif not pj and len(meio) == 6 and d[3:9] != meio:
+        erros.append(f'O CPF não bate com o que a Receita mostra para este sócio (***.{meio[:3]}.{meio[3:]}-**).')
+    elif pj and len(raiz) == 8 and d[:8] != raiz:
+        erros.append(f'O CNPJ não é da empresa que a Receita mostra como sócia ({raiz[:2]}.{raiz[2:5]}.{raiz[5:]}/…).')
     elif Cliente.existe_cpf_cnpj(d):
         av = Cliente.avulso_por_documento(_doc_fmt(d, pj)) or Cliente.avulso_por_documento(d)
         if av:
@@ -1394,6 +1401,18 @@ def _criar_inicio():
                                    cidade=e['cidade'], estado=e['estado'], pais='Brasil', principal=True)
         except Exception as ex:
             logger.warning('[novo] endereço da Receita não gravou para %s: %s', cliente_id, ex)
+    if pj:
+        # A3: o quadro de sócios da Receita entra na fila "Sócios a cadastrar" (a ficha mostra e a equipe liga)
+        try:
+            qsa = (json.loads(f.get('receita') or '{}') or {}).get('qsa') or []
+            if isinstance(qsa, list) and qsa:
+                from utils import socios_fila as SF
+                SF.popular(cliente_id, qsa[:60])
+        except Exception as ex:
+            logger.warning('[novo] QSA da Receita não entrou na fila para %s: %s', cliente_id, ex)
+    if janela:
+        return jsonify(ok=True, id=cliente_id, url=url_for('clientes.detalhes', id=cliente_id),
+                       cadastro=_cadastro_resumo([cliente_id]).get(cliente_id) or {'id': cliente_id})
     flash('Cadastro criado. Complete o resto aqui mesmo e clique em Salvar alterações — '
           'o que ficar faltando aparece no A CADASTRAR.', 'success')
     return jsonify(ok=True, id=cliente_id, url=url_for('clientes.detalhes', id=cliente_id, editar=1))
@@ -1403,13 +1422,19 @@ def _criar_inicio():
 @login_required
 def novo():
     """Criar novo cliente. Desde 16/11/2026 (A2) o GET abre o início do cadastro na mesma tela da ficha;
-    o formulário antigo fica só para a janela do sócio (?janela=1) e ?antigo=1."""
+    desde a A3 a janela do sócio (?janela=1) também. O formulário antigo fica só com ?antigo=1."""
     if request.method == 'POST' and request.form.get('inicio') == '1':
         return _criar_inicio()
-    if request.method == 'GET' and not request.args.get('janela') and not request.args.get('antigo'):
+    if request.method == 'GET' and not request.args.get('antigo'):
+        a = request.args
+        meio = re.sub(r'\D', '', a.get('meio') or '')
+        raiz = re.sub(r'\D', '', a.get('raiz') or '')
         return render_template('clientes/novo_inicio.html', proximo_pf=_proximo_numero_pf(),
-                               avulso_pre=request.args.get('avulso') == '1',
-                               doc_pre=re.sub(r'\D', '', request.args.get('doc') or '')[:14])
+                               avulso_pre=a.get('avulso') == '1', janela=a.get('janela') == '1',
+                               tipo_pre='PF' if a.get('tipo') == 'PF' else 'PJ',
+                               nome_pre=' '.join((a.get('nome') or '').split()).upper()[:255],
+                               meio=meio if len(meio) == 6 else '', raiz=raiz if len(raiz) == 8 else '',
+                               doc_pre=re.sub(r'\D', '', a.get('doc') or '')[:14] or (raiz if len(raiz) == 8 else ''))
     if request.method == 'POST':
         # The form has duplicate-named fields (PF + PJ sections both submit
         # 'cpf_cnpj' and 'nome_razao_social'). The hidden section sends an empty
@@ -3507,7 +3532,8 @@ def api_documento_existe():
         return jsonify(existe=True, reservado=True)
     return jsonify(existe=True, id=r['id'], nome=r['nome_razao_social'], numero=r.get('numero_cliente'),
                    avulso=bool(r.get('avulso')), situacao=r.get('situacao'),
-                   url=url_for('clientes.detalhes', id=r['id']))
+                   url=url_for('clientes.detalhes', id=r['id']),
+                   cadastro=_cadastro_resumo([r['id']]).get(r['id']))
 
 
 @clientes.route('/api/enderecos/complemento-tipos/novo', methods=['POST'])
@@ -3656,33 +3682,33 @@ def novo_socio(cliente_id):
     data_entrada = _data_iso(entrada_raw)
     if entrada_raw and not data_entrada:
         flash('Data de entrada inválida (não pode ser no futuro).', 'danger')
-        return redirect(url_for('clientes.detalhes', id=cliente_id))
+        return _volta_socio(cliente_id)
     capital_valor = _valor_opcional(request.form.get('capital_valor'))
     pro_labore = _valor_opcional(request.form.get('pro_labore'))
     if capital_valor is False or pro_labore is False:
         flash('Capital ou pró-labore inválido: use só números (ex.: 10.000,00).', 'danger')
-        return redirect(url_for('clientes.detalhes', id=cliente_id))
+        return _volta_socio(cliente_id)
 
     if not pf_raw.isdigit() or not percentual_raw:
         flash('Escolha um cadastro (pessoa física ou empresa) e informe o percentual.', 'danger')
-        return redirect(url_for('clientes.detalhes', id=cliente_id))
+        return _volta_socio(cliente_id)
 
     pf = Cliente.get_by_id(int(pf_raw))
     if not pf or (pf.get('tipo_pessoa') or '').upper() not in ('PF', 'PJ'):
         flash('O sócio precisa ter cadastro (pessoa física ou empresa). '
               'Cadastre primeiro e escolha na busca.', 'danger')
-        return redirect(url_for('clientes.detalhes', id=cliente_id))
+        return _volta_socio(cliente_id)
     if int(pf_raw) == cliente_id:
         flash('A própria empresa não pode ser sócia dela mesma.', 'danger')
-        return redirect(url_for('clientes.detalhes', id=cliente_id))
+        return _volta_socio(cliente_id)
     if SocioCliente.existe_pf(cliente_id, int(pf_raw)):
         flash(f'{pf.get("nome_razao_social")} já é sócio desta empresa.', 'warning')
-        return redirect(url_for('clientes.detalhes', id=cliente_id))
+        return _volta_socio(cliente_id)
     tipo_socio = (pf.get('tipo_pessoa') or '').upper()
     if tipo_socio == 'PJ' and qual_recusada_pj(qualificacao):
         flash(f'Empresa sócia não pode ser "{qualificacao}". Use "Sócio Pessoa Jurídica Domiciliado no Brasil" '
               '— quem administra é sempre uma pessoa física.', 'danger')
-        return redirect(url_for('clientes.detalhes', id=cliente_id))
+        return _volta_socio(cliente_id)
     if responsavel:
         quadro = [dict(x, tipo=x.get('tipo_pessoa') or 'PF', qual=x.get('qualificacao') or '')
                   for x in SocioCliente.get_by_cliente(cliente_id)]
@@ -3692,7 +3718,7 @@ def novo_socio(cliente_id):
                   + ('empresa sócia nunca é.' if tipo_socio == 'PJ'
                      else f'é "{qualificacao}", e o responsável é quem administra (ex.: Sócio-Administrador).'),
                   'danger')
-            return redirect(url_for('clientes.detalhes', id=cliente_id))
+            return _volta_socio(cliente_id)
 
     nome = pf.get('nome_razao_social') or ''
     cpf = pf.get('cpf_cnpj') or ''
@@ -3703,18 +3729,18 @@ def novo_socio(cliente_id):
         percentual = _parse_decimal_input(percentual_raw)
     except (InvalidOperation, ValueError):
         flash('Percentual inválido. Use um número válido.', 'danger')
-        return redirect(url_for('clientes.detalhes', id=cliente_id))
+        return _volta_socio(cliente_id)
 
     if percentual <= 0 or percentual > 100:
         flash('Percentual deve ser maior que 0 e menor ou igual a 100.', 'danger')
-        return redirect(url_for('clientes.detalhes', id=cliente_id))
+        return _volta_socio(cliente_id)
 
     total_atual = SocioCliente.get_total_percentual(cliente_id)
     novo_total = total_atual + percentual
     if novo_total > Decimal('100'):
         restante = Decimal('100') - total_atual
         flash(f'Total de participação não pode ultrapassar 100%. Restante disponível: {restante:.2f}%.', 'danger')
-        return redirect(url_for('clientes.detalhes', id=cliente_id))
+        return _volta_socio(cliente_id)
 
     socio_id = SocioCliente.create(
         cliente_id=cliente_id,
@@ -3752,7 +3778,13 @@ def novo_socio(cliente_id):
     else:
         flash('Erro ao adicionar sócio!', 'danger')
 
-    return redirect(url_for('clientes.detalhes', id=cliente_id))
+    return _volta_socio(cliente_id)
+
+
+def _volta_socio(cliente_id):
+    """Depois do Adicionar sócio: volta à ficha no bloco Sócios (e ao modo Editar, se vinha dele)."""
+    return redirect(url_for('clientes.detalhes', id=cliente_id, editar=1 if request.form.get('editar') == '1' else None,
+                            _anchor='socios'))
 
 
 @clientes.route('/socios/<int:id>/saida', methods=['POST'])
