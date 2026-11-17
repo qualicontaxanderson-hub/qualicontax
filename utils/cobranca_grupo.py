@@ -120,7 +120,8 @@ def levantar(grupo_id, hoje=None, empresa_ids=None):
         if estado == 'na_pagina':
             tok = garantir_token(b)
             pagina_boleto = f'{APP_URL}/c/{tok}' if tok else ''
-        item = {'id': t['id'], 'desc': TR._desc(t), 'competencia': TR._comp(t.get('competencia')), 'vencimento': venc,
+        cp = t.get('competencia')
+        item = {'id': t['id'], 'desc': TR._desc(t), 'competencia': TR._comp(cp), 'comp_num': f'{cp.month:02d}/{cp.year}' if cp else '', 'vencimento': venc,
                 'venc_txt': venc.strftime('%d/%m/%Y') if venc else '—', 'saldo': saldo, 'valor_txt': TR.brl(saldo),
                 'tag': tag, 'cls': cls, 'vencido': vencido, 'perdido': perdido, 'estado': estado, 'boleto': b,
                 'bol': TR._BOL.get(b['situacao'], 'sem') if b else 'sem', 'pagina': pagina_boleto,
@@ -271,16 +272,17 @@ def texto_whatsapp(d, link, empresa_nome):
                 'Se algum pagamento já foi feito, pode desconsiderar. 🙂', '']
     else:
         txt += [f'Seguem as cobranças de honorários das empresas do grupo *{g}*.', '']
-    txt.append('📋 *O que está em aberto*')
+    # 17/11/2026 (Anderson): no coletivo, cada empresa em duas linhas — nome e "📌 Honorários – 10/2026 · 📅 venc · 💰 valor"
     for e in emps:
         txt.append(f"🏢 *{e['nome']}*")
         for t in e['titulos']:
             if t['estado'] != 'na_pagina':
                 continue
-            quando = f"venceu em {t['venc_txt']}" if t['vencido'] else f"vence {t['venc_txt']}"
-            txt.append(f"• {t['desc']} — {t['valor_txt']} — {quando}")
+            rot = 'Honorários' if t['desc'].lower().startswith('honor') else t['desc']
+            txt.append(f"📌 {rot}" + (f" – {t['comp_num']}" if t['comp_num'] else '') + f" · 📅 {t['venc_txt']} · 💰 {t['valor_txt']}")
+        txt.append('')
     n_e, n_t = len(emps), d['n_pagina']
-    txt += ['', f"💰 Total: *{d['total_pagina_txt']}* · {n_e} empresa{'s' if n_e != 1 else ''} · {n_t} honorário{'s' if n_t != 1 else ''}", '']
+    txt += [f"💰 *Total: {d['total_pagina_txt']}* · {n_e} empresa{'s' if n_e != 1 else ''} · {n_t} honorário{'s' if n_t != 1 else ''}", '']
     txt += [f"👉 Para {'regularizar' if d['n_vencidos'] else 'pagar'}, é só tocar no link. Lá estão todas as cobranças, "
             'cada uma com o *Pix* ou a *linha digitável* para copiar e colar no app do banco, e o PDF do boleto.',
             link, '', 'Qualquer dúvida é só responder por aqui. Obrigado pela parceria! 🙏']

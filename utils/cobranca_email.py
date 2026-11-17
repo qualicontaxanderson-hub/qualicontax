@@ -226,6 +226,10 @@ def pdf_da_nota(nota):
         return None
 
 
+_MES_NUM = {'jan': '01', 'fev': '02', 'mar': '03', 'abr': '04', 'mai': '05', 'jun': '06', 'jul': '07', 'ago': '08',
+            'set': '09', 'out': '10', 'nov': '11', 'dez': '12'}
+
+
 def textos_para_copiar(boleto, nota, empresa_nome, cliente_nome='', cliente_doc='', competencia='', itens=None):
     """UM texto pronto para colar no WhatsApp — Anderson (16/11/2026): "o copia e cola tem que vir com o texto
     belo... informando a cobrança"; "quero que o cliente tenha o boleto, código de barras e o Pix... que ele
@@ -261,12 +265,15 @@ def textos_para_copiar(boleto, nota, empresa_nome, cliente_nome='', cliente_doc=
                 'Se o pagamento já foi feito, pode desconsiderar esta mensagem. 🙂', '']
     else:
         txt += [f'Segue a cobrança dos honorários{de_quem}{ponto}', '']
-    txt.append('📋 *O que está sendo cobrado*')
-    txt += [f'• {n} — {v_}' for n, v_ in linhas]
+    # 17/11/2026 (Anderson): três linhas secas no lugar da lista de itens — "📌 Honorários – 10/2026 /
+    # 📅 Vencimento / 💰 Valor". Honorário vira "Honorários"; outra coisa (certificado, taxa) leva o nome do item.
+    nomes = [n for n, _ in linhas]
+    rotulo = 'Honorários' if any(n.lower().startswith('honor') for n in nomes) else ' + '.join(nomes)
+    comp_num = f'{_MES_NUM[m.group(1)]}/{m.group(2)}' if m and m.group(1) in _MES_NUM else ''
+    txt += [f'📌 {rotulo}' + (f' – {comp_num}' if comp_num else ''), f'📅 Vencimento: {venc}', f'💰 Valor: {total}']
     if tem_nota:
-        txt.append(f"📄 Nota fiscal de serviço nº {nota['numero_nfse']}, emitida em "
-                   f"{_data(nota.get('dh_emissao') or nota.get('data_processamento'))}")
-    txt += ['', f'💰 Total: *{total}*', f'📅 {"Venceu em" if vencido else "Vencimento"}: *{venc}*', '']
+        txt.append(f"📄 Nota fiscal nº {nota['numero_nfse']}")
+    txt.append('')
 
     if pix and (linha or pagina):
         como = 'Lá você escolhe *Pix* ou *boleto*, copia o código e cola no app do banco.'
