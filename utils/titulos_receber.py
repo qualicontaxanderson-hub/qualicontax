@@ -5,7 +5,7 @@ Inadimplentes (cliente com 2 ou mais títulos vencidos). Só leitura: a baixa
 continua indo por registrar_baixa() nas rotas de sempre.
 """
 from collections import defaultdict
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from utils.db_helper import execute_query as q
@@ -180,14 +180,52 @@ class _Catalogo:
                 'bols': [(b, BOLETO_ROTULO[b]) for b in ('aberto', 'vencido', 'expirado', 'identificado', 'pago', 'sem') if b in self.bols]}
 
 
-def montar(empresa_ids=None, mes=None):
+def periodo(per, de=None, ate=None, hoje=None):
+    """O filtro Período da tela (17/11/2026, Anderson: "incluir buscar por mês atual, mês anterior, ano, ou
+    selecionar datas"). Devolve (de, ate, rótulo curto, rótulo com 'em'/'de') ou None quando não há período.
+    No Recebido vale a DATA DA BAIXA; nas outras abas, o VENCIMENTO."""
+    hoje = hoje or hoje_br()
+    if per == 'mes':
+        de, ate = date(hoje.year, hoje.month, 1), date(hoje.year + (hoje.month == 12), hoje.month % 12 + 1, 1) - timedelta(days=1)
+        rot = f'{MES_LONGO[de.month]}/{de.year}'
+        return de, ate, rot, 'em ' + rot.lower()
+    if per == 'ant':
+        fim = date(hoje.year, hoje.month, 1) - timedelta(days=1)
+        de, ate = date(fim.year, fim.month, 1), fim
+        rot = f'{MES_LONGO[de.month]}/{de.year}'
+        return de, ate, rot, 'em ' + rot.lower()
+    if per == 'ano':
+        de, ate = date(hoje.year, 1, 1), date(hoje.year, 12, 31)
+        return de, ate, str(hoje.year), f'em {hoje.year}'
+    if per == 'datas' and (de or ate):
+        if de and ate and de > ate:
+            de, ate = ate, de
+        if not ate:
+            rot = 'a partir de ' + de.strftime('%d/%m/%Y')
+            return de, date(2099, 12, 31), rot, rot
+        if not de:
+            rot = 'até ' + ate.strftime('%d/%m/%Y')
+            return date(2000, 1, 1), ate, rot, rot
+        a, b = de.strftime('%d/%m/%Y'), ate.strftime('%d/%m/%Y')
+        if de.year == ate.year:
+            a = de.strftime('%d/%m')
+        return de, ate, f'{a} a {b}', f'de {a} a {b}'
+    return None
+
+
+def montar(empresa_ids=None, mes=None, per=None):
     hoje = hoje_br()
     if mes is None:
         mes = date(hoje.year, hoje.month, 1)
     prox = date(mes.year + (mes.month == 12), mes.month % 12 + 1, 1)
     ec, ep = _emp_cond(empresa_ids)
+    # período escolhido na barra de filtros: manda no Recebido (baixa) e nas outras abas (vencimento)
+    p_de, p_ate = (per[0], per[1]) if per else (None, None)
 
-    # ── Recebido no mês ─────────────────────────────────────────────
+    def no_periodo(d):
+        return not per or (p_de <= d <= p_ate)
+
+    # ── Recebido no mês (ou no período) ─────────────────────────────
     rec = q(f"""SELECT b.id, b.data_baixa, b.valor + b.juros + b.multa - b.desconto AS v, b.origem, b.referencia,
                        b.lancamento_id, l.banco AS banco_linha,
                        t.id AS titulo_id, t.contraparte_nome, t.descricao, t.competencia, t.cliente_id, c.numero_cliente,
@@ -198,7 +236,7 @@ def montar(empresa_ids=None, mes=None):
                   LEFT JOIN extrato_lancamentos l ON l.id = b.lancamento_id
                  WHERE t.tipo = 'R' AND b.data_baixa >= %s AND b.data_baixa < %s{ec}
                  ORDER BY b.data_baixa DESC, b.id DESC""",
-            (mes, prox, *ep), fetch=True) or []
+            ((p_de, p_ate + timedelta(days=1)) if per else (mes, prox)) + tuple(ep), fetch=True) or []
     cat = _Catalogo()
     rec_grupos = _grupos_dos_clientes([b['cliente_id'] for b in rec])
     rec_bols = _boletos_dos_titulos([b['titulo_id'] for b in rec])
@@ -269,13 +307,15 @@ def montar(empresa_ids=None, mes=None):
         pagos[r['cliente_id'] or _digitos(r['contraparte_doc']) or r['contraparte_nome']].add(
             (r['competencia'].year, r['competencia'].month))
 
+    # A classificação (a vencer / 1 vencido / 2+ vencidos) olha TUDO do cliente; o período só escolhe
+    # o que aparece: título pelo vencimento, inadimplente se algum vencido dele cai no período.
     ina, atr, futuros = [], [], []
     for k, ts in por_cli.items():
         venc = [t for t in ts if t['vencimento'] < hoje]
-        futuros += [t for t in ts if t['vencimento'] >= hoje]
-        if len(venc) == 1:
+        futuros += [t for t in ts if t['vencimento'] >= hoje and no_periodo(t['vencimento'])]
+        if len(venc) == 1 and no_periodo(venc[0]['vencimento']):
             atr.append(venc[0])
-        if len(venc) < 2:
+        if len(venc) < 2 or not any(no_periodo(t['vencimento']) for t in venc):
             continue
         venc.sort(key=lambda t: t['competencia'])
         ab = {(t['competencia'].year, t['competencia'].month) for t in venc}
@@ -304,9 +344,9 @@ def montar(empresa_ids=None, mes=None):
     for v in sorted(por_venc):
         d = date.fromisoformat(v)
         dt, sub = _cab(d, hoje)
-        per = 'sem' if d.toordinal() <= fim_sem else ('mes' if (d.year, d.month) == (hoje.year, hoje.month) else 'dep')
+        faixa = 'sem' if d.toordinal() <= fim_sem else ('mes' if (d.year, d.month) == (hoje.year, hoje.month) else 'dep')
         for i in por_venc[v]:
-            i['per'] = per
+            i['per'] = faixa
         abe_g.append({'data': dt, 'sub': sub, 'n': len(por_venc[v]), 'hoje': d == hoje,
                       'tot': brl(sum(float(i['saldo']) for i in por_venc[v])), 'itens': por_venc[v]})
     abe_f = [('todos', 'Todos', len(itens)),
@@ -339,7 +379,7 @@ def montar(empresa_ids=None, mes=None):
              ('mais', 'Mais de 90 dias', sum(1 for i in atr_i if i['faixa'] == 'mais'))]
 
     # Perdidos: cancelados com motivo (não vão pagar), guardados para o registro
-    perd = perdidos(ec, ep, hoje)
+    perd = perdidos(ec, ep, hoje, per=per)
     for x in perd:
         cat.add(x)
 
@@ -350,9 +390,12 @@ def montar(empresa_ids=None, mes=None):
             (CORTE_EFI,), fetch=True, fetch_one=True) or {'n': 0, 'v': 0}
 
     ant = date(mes.year - (mes.month == 1), (mes.month - 2) % 12 + 1, 1)
+    mes_rot = f'{MES_LONGO[mes.month]}/{mes.year}'
     return dict(
-        hoje=hoje, mes=mes, mes_rot=f'{MES_LONGO[mes.month]}/{mes.year}',
+        hoje=hoje, mes=mes, mes_rot=mes_rot,
         mes_ant=ant.strftime('%Y-%m'), mes_prox=prox.strftime('%Y-%m') if prox <= hoje else '',
+        per_rot=per[2] if per else '', rec_sub=per[3] if per else 'em ' + mes_rot.lower(),
+        per_de=p_de.isoformat() if per else '', per_ate=p_ate.isoformat() if per else '',
         rec=rec_g, rec_tot=brl(sum(b['v'] for b in rec)), rec_n=len(rec),
         rec_auto=sum(1 for b in rec if _auto(b)),
         abe=abe_g, abe_f=abe_f, abe_tot=brl(sum(float(i['saldo']) for i in itens)), abe_n=len(itens),
@@ -373,8 +416,9 @@ def _tem_colunas_perdido():
         return False
 
 
-def perdidos(ec='', ep=(), hoje=None):
-    """Títulos a receber marcados como perdidos (status cancelado + perdido_em)."""
+def perdidos(ec='', ep=(), hoje=None, per=None):
+    """Títulos a receber marcados como perdidos (status cancelado + perdido_em). ``per`` = (de, ate, ...) do
+    filtro Período, pelo vencimento."""
     if not _tem_colunas_perdido():
         return []
     rows = q(f"""SELECT t.id, t.cliente_id, t.contraparte_nome, t.contraparte_doc, t.descricao, t.competencia,
@@ -389,6 +433,11 @@ def perdidos(ec='', ep=(), hoje=None):
     grupos = _grupos_dos_clientes([t['cliente_id'] for t in rows])
     bols = _boletos_dos_titulos([t['id'] for t in rows])
     for t in rows:
+        if per:
+            v = t['vencimento']
+            v = date.fromisoformat(str(v)[:10]) if not isinstance(v, date) else v
+            if not (per[0] <= v <= per[1]):
+                continue
         out.append({'id': t['id'], **_marcas(t, grupos, bols),
                     'num': t['numero_cliente'] or '—', 'nome': _nome(t['contraparte_nome']),
                     'nome_full': t['contraparte_nome'] or '', 'doc': _digitos(t['contraparte_doc']),

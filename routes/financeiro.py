@@ -157,7 +157,7 @@ def _dec_form(raw):
 
 def _filtros_titulos():
     keys = ('tipo', 'status', 'venc_de', 'venc_ate', 'categoria_id', 'busca', 'emp',
-            'lista', 'aba', 'mes')
+            'lista', 'aba', 'mes', 'per', 'de', 'ate')
     return {k: request.form.get(k) or request.args.get(k) or '' for k in keys}
 
 
@@ -228,15 +228,24 @@ def _titulos_receber(emps, sel):
         except ValueError:
             mes = None
     aba = request.args.get('aba') if request.args.get('aba') in ('rec', 'abe', 'atr', 'ina', 'perd') else 'abe'
-    m = TR.montar(empresa_ids=sel, mes=mes)
+    # Período (17/11/2026): per=mes|ant|ano|datas (+ de/ate). Vale a baixa no Recebido e o vencimento nas outras.
+    per_raw = request.args.get('per') if request.args.get('per') in ('mes', 'ant', 'ano', 'datas') else ''
+    def _d(k):
+        try:
+            return date.fromisoformat((request.args.get(k) or '').strip()[:10])
+        except ValueError:
+            return None
+    per = TR.periodo(per_raw, _d('de'), _d('ate')) if per_raw else None
+    m = TR.montar(empresa_ids=sel, mes=mes, per=per)
     emp = ','.join(map(str, sel))
     return render_template(
-        'financeiro/titulos_receber.html', m=m, aba=aba,
+        'financeiro/titulos_receber.html', m=m, aba=aba, per=per_raw if per else '',
         pode_perd=current_user.has_permission('financeiro.titulos.excluir'),
         categorias=FinCategoria.listar(), centros=FinCentroCusto.listar(),
         hoje=m['hoje'], fin_empresas=emps, sel_empresas=sel,
-        filtros=dict(tipo='R', emp=emp, aba=aba,
-                     mes=raw if mes else ''))
+        filtros=dict(tipo='R', emp=emp, aba=aba, mes=raw if mes else '',
+                     per=per_raw if per else '', de=(request.args.get('de') or '') if per_raw == 'datas' else '',
+                     ate=(request.args.get('ate') or '') if per_raw == 'datas' else ''))
 
 
 @financeiro.route('/financeiro/titulos/novo', methods=['POST'])

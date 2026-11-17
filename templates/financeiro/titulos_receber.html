@@ -218,6 +218,9 @@ a.tx-c { text-decoration:none; color:inherit; }
 .tx-ref-pop .minmax { display:grid; grid-template-columns:1fr auto 1fr; gap:6px; align-items:center; padding:0 8px; }
 .tx-ref-pop .minmax input { width:100%; height:34px; border:1px solid var(--linha); border-radius:9px; padding:0 10px; font:inherit; font-size:13px; }
 .tx-ref-pop .minmax span { color:#94a3b8; font-size:12px; }
+.tx-ref-pop .aplicar { padding:8px 8px 0; } .tx-ref-pop .aplicar button { width:100%; height:36px; border:0; border-radius:9px; background:var(--sec, var(--verde)); color:#fff; font:inherit; font-size:13px; font-weight:700; cursor:pointer; }
+.tx-ref-pop .dica { margin:8px 8px 0; font-size:11.5px; color:#94a3b8; line-height:1.35; }
+.tx-mes-per b { padding:0 12px; display:inline-flex; gap:7px; align-items:center; } .tx-mes-per b i { font-size:12px; opacity:.8; }
 .tx-ref-resumo { margin-left:auto; display:inline-flex; align-items:center; gap:8px; font-size:12.5px; color:#64748b; white-space:nowrap; }
 .tx-ref-resumo b { font-size:15px; color:var(--tinta); font-variant-numeric:tabular-nums; letter-spacing:-.01em; }
 .tx-ref-resumo.filtrado { background:linear-gradient(135deg, var(--sec, var(--verde)), var(--sec-e, var(--verde))); color:#fff; border-radius:99px; padding:6px 14px; }
@@ -498,6 +501,7 @@ a.tx-c { text-decoration:none; color:inherit; }
 </style>
 
 {% set _q = {'emp': filtros.emp} if filtros.emp else {} %}
+{% set _p = ({'per': per, 'de': filtros.de, 'ate': filtros.ate} if per == 'datas' else {'per': per}) if per else {} %}
 <div class="tx">
 <div class="ef-hero">
   <div class="ef-hero-inner ef-hero-head">
@@ -512,10 +516,10 @@ a.tx-c { text-decoration:none; color:inherit; }
           {% if not sel_empresas %}Todas as empresas{% else %}{% for e in fin_empresas if e.cliente_id in sel_empresas %}{{ e.apelido }}{{ ', ' if not loop.last }}{% endfor %}{% endif %}
           <i class="fas fa-chevron-down" style="font-size:10px;"></i></a>
         <div class="tx-emp-menu">
-          <a class="{{ 'on' if not sel_empresas }}" href="{{ url_for('financeiro.titulos', aba=aba) }}"><i class="fas fa-check"></i> Todas as empresas</a>
+          <a class="{{ 'on' if not sel_empresas }}" href="{{ url_for('financeiro.titulos', aba=aba, **_p) }}"><i class="fas fa-check"></i> Todas as empresas</a>
           {% for e in fin_empresas %}
           <a class="{{ 'on' if sel_empresas == [e.cliente_id] }}" title="{{ e.nome_razao_social }}"
-             href="{{ url_for('financeiro.titulos', emp=e.cliente_id, aba=aba) }}"><i class="fas fa-check"></i> {{ e.apelido }}</a>
+             href="{{ url_for('financeiro.titulos', emp=e.cliente_id, aba=aba, **_p) }}"><i class="fas fa-check"></i> {{ e.apelido }}</a>
           {% endfor %}
         </div>
       </div>
@@ -542,7 +546,7 @@ a.tx-c { text-decoration:none; color:inherit; }
 {% endmacro %}
   <div class="tx-abas">
     <button type="button" class="tx-aba tx-a-rec{{ ' on' if aba == 'rec' }}" data-p="rec"><span class="tx-aba-ico"><i class="fas fa-circle-check"></i></span>
-      <span class="tx-aba-txt"><span class="tx-aba-lbl">Recebido</span><span class="tx-aba-val">{{ m.rec_tot }}</span><span class="tx-aba-sub">em {{ m.mes_rot | lower }}</span></span><span class="tx-aba-n">{{ m.rec_n }}</span></button>
+      <span class="tx-aba-txt"><span class="tx-aba-lbl">Recebido</span><span class="tx-aba-val">{{ m.rec_tot }}</span><span class="tx-aba-sub">{{ m.rec_sub }}</span></span><span class="tx-aba-n">{{ m.rec_n }}</span></button>
     <button type="button" class="tx-aba tx-a-abe{{ ' on' if aba == 'abe' }}" data-p="abe"><span class="tx-aba-ico"><i class="fas fa-hourglass-half"></i></span>
       <span class="tx-aba-txt"><span class="tx-aba-lbl">A receber</span><span class="tx-aba-val">{{ m.abe_tot }}</span><span class="tx-aba-sub">a vencer · {{ m.abe_cli }} cliente{{ 's' if m.abe_cli != 1 }}</span></span><span class="tx-aba-n">{{ m.abe_n }}</span></button>
     <button type="button" class="tx-aba tx-a-atr{{ ' on' if aba == 'atr' }}" data-p="atr"><span class="tx-aba-ico"><i class="fas fa-clock"></i></span>
@@ -561,6 +565,7 @@ a.tx-c { text-decoration:none; color:inherit; }
 
   <div class="tx-refino" id="txRefino">
     <i class="fas fa-sliders"></i>
+    <div class="tx-ref{{ ' on' if per }}" data-dim="p"><button type="button"><i class="fas fa-calendar-week"></i> Período <b>{{ 1 if per else '' }}</b><i class="fas fa-chevron-down"></i></button><div class="tx-ref-pop"></div></div>
     <div class="tx-ref" data-dim="g"><button type="button"><i class="fas fa-layer-group"></i> Grupo <b></b><i class="fas fa-chevron-down"></i></button><div class="tx-ref-pop"></div></div>
     <div class="tx-ref" data-dim="s"><button type="button"><i class="fas fa-briefcase"></i> Serviço <b></b><i class="fas fa-chevron-down"></i></button><div class="tx-ref-pop"></div></div>
     <div class="tx-ref" data-dim="k"><button type="button"><i class="fas fa-calendar-days"></i> Competência <b></b><i class="fas fa-chevron-down"></i></button><div class="tx-ref-pop"></div></div>
@@ -611,11 +616,15 @@ a.tx-c { text-decoration:none; color:inherit; }
   <div class="tx-painel{{ ' on' if aba == 'rec' }}" data-p="rec">
     <div class="tx-faixa">
       <div class="tx-filtros" data-tipo="auto"><button type="button" class="tx-f on" data-v="todos">Todos <b>{{ m.rec_n }}</b></button><button type="button" class="tx-f" data-v="1">Pelo banco <b>{{ m.rec_auto }}</b></button><button type="button" class="tx-f" data-v="0">Sem extrato <b>{{ m.rec_n - m.rec_auto }}</b></button></div>
+      {% if per %}
+      <div class="tx-mes tx-mes-per" title="Período escolhido na barra de filtros (data em que o pagamento entrou)"><b><i class="fas fa-calendar-week"></i> {{ m.per_rot }}</b></div>
+      {% else %}
       <div class="tx-mes">
         <a href="{{ url_for('financeiro.titulos', aba='rec', mes=m.mes_ant, **_q) }}" title="Mês anterior"><i class="fas fa-chevron-left"></i></a>
         <b>{{ m.mes_rot }}</b>
         {% if m.mes_prox %}<a href="{{ url_for('financeiro.titulos', aba='rec', mes=m.mes_prox, **_q) }}" title="Mês seguinte"><i class="fas fa-chevron-right"></i></a>{% else %}<span class="x"><i class="fas fa-chevron-right"></i></span>{% endif %}
       </div>
+      {% endif %}
       <div class="tx-busca"><i class="fas fa-magnifying-glass"></i><input type="search" placeholder="Cliente, número ou CNPJ"></div>
     </div>
     {% for g in m.rec %}
@@ -734,8 +743,18 @@ a.tx-c { text-decoration:none; color:inherit; }
   // ── Filtros (grupo, serviço, competência, boleto, valor) — valem em todas as abas ──
   var FIL = {{ m.filtros | tojson }};
   var REF = {g: {}, s: {}, k: {}, b: {}, vmin: null, vmax: null};
-  var ROT = {g: 'Grupo', s: 'Serviço', k: 'Competência', b: 'Boleto', v: 'Valor'};
-  var ICO = {g: 'fa-layer-group', s: 'fa-briefcase', k: 'fa-calendar-days', b: 'fa-barcode', v: 'fa-coins'};
+  var ROT = {p: 'Período', g: 'Grupo', s: 'Serviço', k: 'Competência', b: 'Boleto', v: 'Valor'};
+  var ICO = {p: 'fa-calendar-week', g: 'fa-layer-group', s: 'fa-briefcase', k: 'fa-calendar-days', b: 'fa-barcode', v: 'fa-coins'};
+  // Período é filtro do SERVIDOR (o Recebido de outro mês não está na página): escolher recarrega com ?per=
+  var PER = {{ per | tojson }}, PER_ROT = {{ m.per_rot | tojson }}, PER_DE = {{ filtros.de | tojson }}, PER_ATE = {{ filtros.ate | tojson }};
+  var PER_OPS = [['mes', 'Este mês'], ['ant', 'Mês anterior'], ['ano', 'Este ano']];
+  function irPeriodo(p, de, ate) {
+    var u = new URL(location.href); u.hash = '';
+    ['per', 'de', 'ate', 'mes'].forEach(function (k) { u.searchParams.delete(k); });
+    if (p) { u.searchParams.set('per', p); if (p === 'datas') { if (de) u.searchParams.set('de', de); if (ate) u.searchParams.set('ate', ate); } }
+    var pn = painelAtivo(); if (pn) u.searchParams.set('aba', pn.dataset.p);
+    location.href = u.toString();
+  }
   var OPS = {g: FIL.grupos.map(function (x) { return [x, x]; }).concat([['__sem', 'Sem grupo']]),
              s: FIL.servs.map(function (x) { return [x, x]; }), k: FIL.comps, b: FIL.bols};
   var FAIXAS = [['Até R$ 500', 0, 500], ['R$ 500 a 2.000', 500, 2000], ['R$ 2.000 a 5.000', 2000, 5000], ['Acima de R$ 5.000', 5000, null]];
@@ -773,7 +792,29 @@ a.tx-c { text-decoration:none; color:inherit; }
     if (!pn) return;
     pop.innerHTML = '';
     var h = document.createElement('h5'); h.textContent = ROT[d]; pop.appendChild(h);
-    if (d === 'v') {
+    if (d === 'p') {
+      var px = document.createElement('div'); px.className = 'faixas';
+      PER_OPS.forEach(function (o) {
+        var b = document.createElement('button'); b.type = 'button'; b.textContent = o[1];
+        b.classList.toggle('on', PER === o[0]);
+        b.addEventListener('click', function () { irPeriodo(PER === o[0] ? '' : o[0]); });
+        px.appendChild(b);
+      });
+      pop.appendChild(px);
+      var pm = document.createElement('div'); pm.className = 'minmax';
+      pm.innerHTML = '<input type="date"><span>até</span><input type="date">';
+      var pin = pm.querySelectorAll('input');
+      pin[0].value = PER === 'datas' ? PER_DE : ''; pin[1].value = PER === 'datas' ? PER_ATE : '';
+      pop.appendChild(pm);
+      var ap = document.createElement('div'); ap.className = 'aplicar';
+      var apb = document.createElement('button'); apb.type = 'button'; apb.innerHTML = '<i class="fas fa-check"></i> Aplicar datas';
+      apb.addEventListener('click', function () { if (pin[0].value || pin[1].value) irPeriodo('datas', pin[0].value, pin[1].value); });
+      pin.forEach(function (i) { i.addEventListener('keyup', function (e) { if (e.key === 'Enter') apb.click(); }); });
+      ap.appendChild(apb); pop.appendChild(ap);
+      var dica = document.createElement('p'); dica.className = 'dica';
+      dica.textContent = 'No Recebido vale o dia em que o pagamento entrou; nas outras abas, o vencimento.';
+      pop.appendChild(dica);
+    } else if (d === 'v') {
       var fx = document.createElement('div'); fx.className = 'faixas';
       FAIXAS.forEach(function (f) {
         var b = document.createElement('button'); b.type = 'button'; b.textContent = f[0];
@@ -793,7 +834,7 @@ a.tx-c { text-decoration:none; color:inherit; }
       var lista = document.createElement('div'); lista.className = 'lista';
       (OPS[d] || []).forEach(function (o) {
         var ct = contagem(pn, d, o[0]);
-        if (!ct[0] && !REF[d][o[0]]) { if (o[0] === '__sem') return; }
+        if (!ct[0] && !REF[d][o[0]]) return;      // só o que existe na aba aberta (com os outros filtros)
         var op = document.createElement('div'); op.className = 'op' + (REF[d][o[0]] ? ' on' : '') + (ct[0] ? '' : ' zero');
         op.innerHTML = '<span class="cx"><i class="fas fa-check"></i></span><span></span><small class="tot"></small><small></small>';
         op.children[1].textContent = o[1];
@@ -806,7 +847,7 @@ a.tx-c { text-decoration:none; color:inherit; }
     }
     var rod = document.createElement('div'); rod.className = 'rodape';
     var limpa = document.createElement('button'); limpa.type = 'button'; limpa.textContent = 'Limpar ' + ROT[d].toLowerCase();
-    limpa.addEventListener('click', function () { if (d === 'v') { REF.vmin = REF.vmax = null; } else { REF[d] = {}; } refinar(); montarPop(ref); });
+    limpa.addEventListener('click', function () { if (d === 'p') { if (PER) irPeriodo(''); return; } if (d === 'v') { REF.vmin = REF.vmax = null; } else { REF[d] = {}; } refinar(); montarPop(ref); });
     var ok = document.createElement('button'); ok.type = 'button'; ok.textContent = 'Pronto';
     ok.addEventListener('click', fecharPops);
     rod.appendChild(limpa); rod.appendChild(ok); pop.appendChild(rod);
@@ -821,6 +862,7 @@ a.tx-c { text-decoration:none; color:inherit; }
       s.innerHTML = '<i class="fas dim ' + ICO[d] + '"></i><span></span><button type="button" title="Tirar"><i class="fas fa-xmark"></i></button>';
       s.children[1].textContent = texto; s.children[2].addEventListener('click', tira); box.appendChild(s);
     }
+    if (PER) chip('p', PER_ROT, function () { irPeriodo(''); });
     DIMS.forEach(function (d) { Object.keys(REF[d]).forEach(function (v) { chip(d, rotuloOp(d, v), function () { delete REF[d][v]; refinar(); }); }); });
     if (REF.vmin !== null || REF.vmax !== null) {
       var tx = REF.vmin !== null && REF.vmax !== null ? brl(REF.vmin) + ' a ' + brl(REF.vmax) : REF.vmin !== null ? 'a partir de ' + brl(REF.vmin) : 'até ' + brl(REF.vmax);
@@ -829,7 +871,7 @@ a.tx-c { text-decoration:none; color:inherit; }
     box.classList.toggle('on', tem);
     document.getElementById('txRefLimpar').style.display = tem ? 'inline-flex' : 'none';
     document.querySelectorAll('.tx-ref').forEach(function (r) {
-      var d = r.dataset.dim, n = d === 'v' ? ((REF.vmin !== null || REF.vmax !== null) ? 1 : 0) : Object.keys(REF[d]).length;
+      var d = r.dataset.dim, n = d === 'p' ? (PER ? 1 : 0) : d === 'v' ? ((REF.vmin !== null || REF.vmax !== null) ? 1 : 0) : Object.keys(REF[d]).length;
       r.classList.toggle('on', n > 0); r.querySelector('b').textContent = n;
     });
   }
@@ -869,7 +911,7 @@ a.tx-c { text-decoration:none; color:inherit; }
   });
   document.addEventListener('click', fecharPops);
   window.addEventListener('resize', function () { document.querySelectorAll('.tx-ref.aberto').forEach(posicionarPop); });
-  document.getElementById('txRefLimpar').addEventListener('click', function () { REF = {g: {}, s: {}, k: {}, b: {}, vmin: null, vmax: null}; refinar(); });
+  document.getElementById('txRefLimpar').addEventListener('click', function () { REF = {g: {}, s: {}, k: {}, b: {}, vmin: null, vmax: null}; if (PER) { irPeriodo(''); return; } refinar(); });
   // o painel da aba aberta pinta a barra de filtros com a sua cor
   function pintarRefino(p) {
     var r = document.getElementById('txRefino'); if (r) r.setAttribute('data-p', p);
@@ -940,7 +982,7 @@ a.tx-c { text-decoration:none; color:inherit; }
     pn._aplicar = aplicar;
     aplicar();
   });
-  pintarRefino((painelAtivo() || {dataset: {}}).dataset.p || 'abe'); resumo();
+  pintarRefino((painelAtivo() || {dataset: {}}).dataset.p || 'abe'); desenharChips(); resumo();
 
   // ── Gaveta da cobrança: clicar no cartão abre o cliente, o título e o boleto ──
   var URL_COB = "{{ url_for('financeiro.titulo_cobranca', titulo_id=999999999) }}";
