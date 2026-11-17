@@ -3747,6 +3747,31 @@ def socios_buscar_pf(cliente_id):
     return jsonify(filtrar_lista(rows))           # empresa reservada
 
 
+@clientes.route('/clientes/<int:id>/pessoa-por-cpf')
+@login_required
+def pessoa_por_cpf(id):
+    """Cônjuge (17/11/2026): a ficha digita o CPF primeiro e pergunta se já existe cadastro com ele.
+    Anderson: "colocar o CPF primeiro, mas deveria abrir uma busca para saber se não tem o cadastro".
+    Devolve {ok, cadastro: {id, nome, numero, url} | None}; CPF inválido ou o da própria pessoa dá ok=False."""
+    cliente = Cliente.get_by_id(id)
+    if not cliente:
+        return jsonify(ok=False, erro='Cadastro não encontrado.'), 404
+    dig = re.sub(r'\D', '', request.args.get('cpf') or '')
+    if not cpf_valido(dig):
+        return jsonify(ok=False, erro='CPF inválido: confira os números.')
+    if dig == re.sub(r'\D', '', cliente.get('cpf_cnpj') or ''):
+        return jsonify(ok=False, erro='Este é o CPF da própria pessoa.')
+    rows = execute_query("SELECT id, nome_razao_social AS nome, numero_cliente AS numero, tipo_pessoa FROM clientes "
+                         "WHERE REGEXP_REPLACE(cpf_cnpj, '[^0-9]', '') = %s AND COALESCE(situacao, 'ATIVO') <> 'INATIVO' "
+                         "ORDER BY (tipo_pessoa = 'PF') DESC, id LIMIT 1", (dig,), fetch=True) or []
+    rows = filtrar_lista(rows)          # empresa reservada some
+    if not rows:
+        return jsonify(ok=True, cadastro=None)
+    c = rows[0]
+    return jsonify(ok=True, cadastro={'id': c['id'], 'nome': c['nome'], 'numero': c.get('numero'),
+                                      'url': url_for('clientes.detalhes', id=c['id'])})
+
+
 @clientes.route('/clientes/<int:cliente_id>/socios/novo', methods=['POST'])
 @login_required
 def novo_socio(cliente_id):

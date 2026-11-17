@@ -101,6 +101,7 @@ MAPA = {
     'clientes.cnpj_vigia_status':      'clientes.index',
     'clientes.editar':                 'clientes.edit',
     'clientes.salvar_campos':          'clientes.edit',   # tela única: o clique no valor grava (08/11/2026)
+    'clientes.pessoa_por_cpf':         'clientes.edit',   # CPF do cônjuge: já tem cadastro? (17/11/2026)
     'clientes.inativar':               'clientes.inativar',
     'clientes.adicionar_grupo':        'clientes.edit',
     'clientes.remover_grupo':          'clientes.edit',

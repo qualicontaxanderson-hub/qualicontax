@@ -332,10 +332,10 @@
                         <div id="pfCasado"{% if not casado %} hidden{% endif %}>
                             {{ campo('pf_regime_bens', 'Regime de bens', ps.regime_bens or '', exibe=pessoa_rotulo('regime_bens', ps.regime_bens) or '', tipo='select', ops=pf_ops.regime) }}
                             <div class="pf-2col pf-2col-cpf">
+                                {{ campo('pf_conjuge_cpf', 'CPF do cônjuge', ps.conjuge_cpf or '', ph='000.000.000-00', mono=True, ajuda='Digite o CPF primeiro: se a pessoa já tem cadastro, o nome vem de lá.') }}
                                 {{ campo('pf_conjuge_nome', 'Cônjuge', ps.conjuge_nome or '', ajuda='Nome como está no documento. Opcional.') }}
-                                {{ campo('pf_conjuge_cpf', 'CPF do cônjuge', ps.conjuge_cpf or '', ph='000.000.000-00', mono=True) }}
                             </div>
-                            {% if conjuge_cad %}<div class="pf-cert"><i class="fas fa-link"></i> Cônjuge cadastrado: <b>{{ conjuge_cad.nome_razao_social | nome_proprio }}</b><a href="{{ url_for('clientes.detalhes', id=conjuge_cad.id) }}">abrir ficha <i class="fas fa-arrow-right"></i></a></div>{% endif %}
+                            <div class="pf-cert" id="pfConjCad"{% if not conjuge_cad %} hidden{% endif %}>{% if conjuge_cad %}<i class="fas fa-link"></i> Cônjuge cadastrado: <b>{{ conjuge_cad.nome_razao_social | nome_proprio }}</b><a href="{{ url_for('clientes.detalhes', id=conjuge_cad.id) }}">abrir ficha <i class="fas fa-arrow-right"></i></a>{% endif %}</div>
                         </div>
                         <div class="pf-nota" id="pfSolteiroNota"{% if casado %} hidden{% endif %}><i class="fas fa-circle-info"></i> {% if ps.estado_civil %}{{ pessoa_rotulo('estado_civil', ps.estado_civil) }}: não há regime de bens nem cônjuge a informar.{% else %}Escolha o estado civil. Regime de bens e cônjuge aparecem só para casado(a) ou união estável.{% endif %}</div>
                     </div>
@@ -403,11 +403,11 @@
             <!-- CONTATO DA EMPRESA -->
             {% set cel_dig = (cliente.celular or '') | replace('(', '') | replace(')', '') | replace('-', '') | replace(' ', '') %}
             <section class="qb-b s4" id="contato-empresa" data-copiar-bloco>
-                <div class="qb-bh"><span class="qb-ico i-ciano"><i class="fas fa-phone"></i></span><h3>Contato da empresa <span class="qb-h3-sub">(CNPJ)</span></h3>{{ selo(['celular', 'telefone_ruim'] + (['email'] if falta.avulso else [])) }}</div>
+                <div class="qb-bh"><span class="qb-ico i-ciano"><i class="fas fa-phone"></i></span><h3>{% if pj %}Contato da empresa <span class="qb-h3-sub">(CNPJ)</span>{% else %}Contato da pessoa{% endif %}</h3>{{ selo(['celular', 'telefone_ruim'] + (['email'] if falta.avulso else [])) }}</div>
                 {# 15/11/2026: celular obrigatório só na pessoa física; na empresa vale o do CONTATO #}
                 {{ campo('celular', 'Celular', cliente.celular, ancora='campo-celular', chave='celular', ph='(11) 98888-7777', ajuda=('DDD + número.' if pj else 'Obrigatório: DDD + número.'), mono=True) }}
                 {{ campo('telefone', 'Telefone', cliente.telefone, ancora='campo-telefone', chave='telefone_ruim', ph='(11) 3333-4444', mono=True) }}
-                {{ campo('email', 'E-mail', cliente.email, ancora='campo-email', chave=('email' if falta.avulso else ''), ph='nome@empresa.com.br', ajuda=('No PJ é o e-mail do CNPJ; boletos e documentos vão para os e-mails dos CONTATOS.' if pj else '')) }}
+                {{ campo('email', 'E-mail', cliente.email, ancora='campo-email', chave=('email' if falta.avulso else ''), ph=('nome@empresa.com.br' if pj else 'nome@email.com'), ajuda=('No PJ é o e-mail do CNPJ; boletos e documentos vão para os e-mails dos CONTATOS.' if pj else '')) }}
                 {% if cliente.celular or cliente.email %}
                 <div class="qb-acoes-c" data-nocopiar>
                     {% if cel_dig %}<a class="i-verde" href="https://wa.me/55{{ cel_dig }}" target="_blank" rel="noopener"><i class="fab fa-whatsapp"></i>WhatsApp</a>
@@ -2021,6 +2021,7 @@
             // organizado enquanto digita (12/11/2026): celular/telefone e NIRE
             var mk = window.QCMascara && { celular: QCMascara.fone, telefone: QCMascara.fone, nire: QCMascara.nire }[el.dataset.campo];
             if (mk) QCMascara.ligar(ctl, mk);
+            prepararCtl(el, ctl);
             if (el.dataset.ph) ctl.placeholder = el.dataset.ph;
             var bx = document.createElement('button'); bx.type = 'button'; bx.className = 'tu-inp-bt tu-inp-x'; bx.title = 'Desfazer (Esc)'; bx.innerHTML = '<i class="fas fa-xmark"></i>';
             var bo = document.createElement('button'); bo.type = 'button'; bo.className = 'tu-inp-bt tu-inp-ok'; bo.title = 'Confirmar (Enter)'; bo.innerHTML = '<i class="fas fa-check"></i>';
@@ -2154,6 +2155,7 @@
         ctl.setAttribute('aria-label', el.dataset.rotulo || '');
         var mk = window.QCMascara && { celular: QCMascara.fone, telefone: QCMascara.fone, nire: QCMascara.nire }[el.dataset.campo];
         if (mk) QCMascara.ligar(ctl, mk);
+        prepararCtl(el, ctl);
         w.appendChild(ctl);
         var dica = linhaDica(el, '');
         el.querySelector('.tu-txt').style.display = 'none';
@@ -2163,6 +2165,57 @@
         var ler = function () { el.classList.toggle('tu-mudou', marcarPend(el.dataset.campo, (ctl.value || '').trim(), el.dataset.valor || '')); };
         ctl.addEventListener('input', ler); ctl.addEventListener('change', ler); ctl.addEventListener('blur', ler);
     }
+    // 17/11/2026 (Anderson): o navegador oferecia os endereços dele no campo do cônjuge ("nenhuma das formas aparece");
+    // e "colocar o CPF primeiro, mas deveria abrir uma busca para saber se não tem o cadastro".
+    function prepararCtl(el, ctl) {
+        ctl.setAttribute('autocomplete', 'off'); ctl.setAttribute('data-lpignore', 'true');
+        if (el.dataset.campo === 'pf_conjuge_cpf') {
+            ctl.inputMode = 'numeric';
+            ctl.addEventListener('input', function () {
+                var m = mascaraDoc(ctl.value, false); if (m !== ctl.value) ctl.value = m;
+                pfConjugeBuscar(ctl.value);
+            });
+        }
+    }
+    var CONJ_URL = "{{ url_for('clientes.pessoa_por_cpf', id=cliente.id) }}", conjTimer = null, conjUltimo = '';
+    function pfConjugeBuscar(v) {
+        var box = document.getElementById('pfConjCad'); if (!box) return;
+        var d = String(v || '').replace(/\D/g, '');
+        clearTimeout(conjTimer);
+        if (d.length < 11) { if (d !== conjUltimo) { box.hidden = true; box.innerHTML = ''; conjUltimo = ''; } return; }
+        if (d === conjUltimo) return;
+        conjUltimo = d;
+        conjTimer = setTimeout(function () {
+            fetch(CONJ_URL + '?cpf=' + d, { credentials: 'same-origin' }).then(function (r) { return r.json(); }).then(function (j) {
+                if (conjUltimo !== d) return;
+                box.hidden = false; box.classList.remove('venc');
+                if (!j.ok) { box.classList.add('venc'); box.innerHTML = '<i class="fas fa-triangle-exclamation"></i> ' + esc(j.erro || 'CPF inválido.'); return; }
+                var elN = document.querySelector('.tu-v[data-campo="pf_conjuge_nome"]');
+                if (j.cadastro) {
+                    box.innerHTML = '<i class="fas fa-link"></i> Cônjuge cadastrado: <b>' + esc(j.cadastro.nome) + '</b>' + (j.cadastro.numero ? ' <small>nº ' + esc(j.cadastro.numero) + '</small>' : '')
+                        + ' <small>· o nome veio do cadastro</small><a href="' + esc(j.cadastro.url) + '" target="_blank" rel="noopener">abrir ficha <i class="fas fa-arrow-right"></i></a>';
+                    if (elN) {
+                        if (elN._ctl) { elN._ctl.value = j.cadastro.nome; elN._ctl.dispatchEvent(new Event('input', { bubbles: true })); }
+                        else { if (j.cadastro.nome === (elN.dataset.valor || '')) delete pend.pf_conjuge_nome; else pend.pf_conjuge_nome = j.cadastro.nome; fechar(elN); mostrar(elN); atualizarBotao(); }
+                    }
+                } else {
+                    box.innerHTML = '<i class="fas fa-user-plus"></i> Sem cadastro com este CPF. Digite o nome como está no documento' + (elN && !elN._ctl ? ' (clique em Cônjuge)' : '') + '.';
+                }
+            }).catch(function (err) { console.error('cônjuge: busca falhou', err); });
+        }, 350);
+    }
+    // 17/11/2026 (Anderson): "Sempre letras maiúsculas em tudo" — todo texto digitado na ficha vira maiúscula na hora
+    // (menos e-mail, buscas e as listas, que têm a grafia delas). O servidor já grava assim; a tela acompanha.
+    document.addEventListener('input', function (e) {
+        var x = e.target; if (!x || !x.tagName) return;
+        if (x.tagName === 'INPUT' ? x.type !== 'text' : x.tagName !== 'TEXTAREA') return;
+        if (x.matches('[data-mask], .pk-novo-nome, .tu-dd-busca input, #socio_busca, .hc-busca-inp, [data-end-cep]')) return;
+        var campo = x.closest('[data-campo]'), chave = (x.id + ' ' + x.name + ' ' + (campo ? campo.dataset.campo : '')).toLowerCase();
+        if (/email|senha|busca|url|site/.test(chave)) return;
+        var v = x.value, u = v.toUpperCase(); if (u === v) return;
+        var a = x.selectionStart, b = x.selectionEnd; x.value = u;
+        try { x.setSelectionRange(a, b); } catch (err) {}
+    }, true);
     function mascaraDoc(v, pj) {
         var d = String(v || '').replace(/\D/g, '').slice(0, pj ? 14 : 11);
         if (pj) return d.replace(/^(\d{2})(\d)/, '$1.$2').replace(/^(\d{2})\.(\d{3})(\d)/, '$1.$2.$3').replace(/\.(\d{3})(\d)/, '.$1/$2').replace(/(\d{4})(\d)/, '$1-$2');
