@@ -7,10 +7,12 @@
 {# RECEBIMENTOS saiu daqui em 21/08/2026: tabela vazia (0 lançamentos), a
    consulta de empresas quebrada, e o que ele fazia virou TÍTULOS +
    PROGRAMAÇÕES. A rota continua de pé para links antigos. #}
+{# 17/11/2026 — Anderson: "Títulos e Cobranças pra mim não tem diferença eu fico com o TÍTULOS, mas quero que
+   o NOME SEJA COBRANÇAS". A tela de Títulos ganhou o nome; a antiga Cobranças (notas e boletos em cartões)
+   saiu da barra — "Nova cobrança", notas/boletos emitidos e configuração fiscal ficam em LANÇAMENTOS. #}
 {% set _abas = [
     ('financeiro.index',             '/financeiro/',             'INÍCIO'),
-    ('financeiro.titulos',           '/financeiro/titulos',      'TÍTULOS'),
-    ('financeiro.cobrancas',         '/financeiro/cobranca',     'COBRANÇAS'),
+    ('financeiro.titulos',           '/financeiro/titulos',      'COBRANÇAS'),
     ('financeiro.honorarios',        '/financeiro/honorarios',   'HONORÁRIOS'),
     ('financeiro.honorarios_cadastrar', '/financeiro/honorarios/cadastrar', 'CADASTRAR HONORÁRIOS'),
     ('financeiro.lancamentos',       '/financeiro/lancamentos',  'LANÇAMENTOS'),
@@ -30,8 +32,8 @@
         {% set _ativa.pref = _pref %}
     {% endif %}
 {% endfor %}
-{# COBRANÇAS (04/11/2026) junta notas fiscais e boletos: /financeiro/notas/... e /financeiro/boletos/... acendem ela #}
-{% if request.path.startswith('/financeiro/boletos') or request.path.startswith('/financeiro/notas') %}{% set _ativa.pref = '/financeiro/cobranca' %}{% endif %}
+{# Notas e boletos (as telas antigas de Cobranças) acendem COBRANÇAS, que agora é a tela de Títulos #}
+{% if request.path.startswith('/financeiro/boletos') or request.path.startswith('/financeiro/notas') or request.path.startswith('/financeiro/cobranca') %}{% set _ativa.pref = '/financeiro/titulos' %}{% endif %}
 
 <nav class="nav-fiscal" aria-label="Navegação do Financeiro">
     <div class="nav-fiscal-track">

@@ -270,7 +270,7 @@ def titulos_relatorio():
     rot = _relatorio_rotulos(f)
     agora = datetime.now(ZoneInfo('America/Sao_Paulo'))
     logo = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'static', 'images', 'logo.png')
-    titulo = (request.args.get('titulo') or '').strip()[:80] or 'Relatório de títulos a receber'
+    titulo = (request.args.get('titulo') or '').strip()[:80] or 'Relatório de cobranças'
     ctx = {'fatos': fatos, 'f': f, 'filtros': RT.descrever(f, rot), 'titulo': titulo,
            'gerado_em': agora.strftime('%d/%m/%Y %H:%M'), 'gerado_por': getattr(current_user, 'nome', '') or '',
            'logo_path': logo if os.path.exists(logo) else None}

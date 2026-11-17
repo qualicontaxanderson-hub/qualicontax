@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Cobranças - Financeiro - Qualicontax{% endblock %}
+{% block title %}Notas e boletos - Financeiro - Qualicontax{% endblock %}
 
 {% block content %}
 {% include 'financeiro/_nav_financeiro.html' %}
@@ -11,11 +11,12 @@
     <div>
         <h1 class="page-title">
             <i class="fas fa-barcode" style="color: var(--primary-green);"></i>
-            Cobranças
+            Notas e boletos emitidos
         </h1>
         <p class="page-subtitle">Nota fiscal + boleto, só boleto ou só nota — cada cartão é uma cobrança do escritório; o pagamento dá baixa no título sozinho</p>
     </div>
     <div class="page-actions">
+        <a class="btn btn-outline" href="{{ url_for('financeiro.lancamentos') }}"><i class="fas fa-arrow-left"></i> Lançamentos</a>
         <a class="btn btn-outline" href="{{ url_for('financeiro.notas_config', emp=(sel_empresas[0] if sel_empresas|length == 1 else None)) }}">
             <i class="fas fa-sliders-h"></i> Configuração fiscal
         </a>

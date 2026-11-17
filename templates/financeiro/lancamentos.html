@@ -43,6 +43,10 @@
         <p class="page-subtitle">Serviço lançado numa empresa: sai como cobrança avulsa ou entra na mensal{% if not admin %} · você vê só o que é seu{% endif %}</p>
     </div>
     <div class="page-actions">
+        {# 17/11/2026: vieram da antiga aba Cobranças (que virou o nome da tela de Títulos) #}
+        {% if pode_rota('financeiro.notas_config') %}<a class="btn btn-outline" href="{{ url_for('financeiro.notas_config') }}"><i class="fas fa-sliders-h"></i> Configuração fiscal</a>{% endif %}
+        {% if pode_rota('financeiro.cobrancas') %}<a class="btn btn-outline" href="{{ url_for('financeiro.cobrancas') }}"><i class="fas fa-barcode"></i> Notas e boletos emitidos</a>{% endif %}
+        {% if pode_rota('financeiro.nota_nova') %}<a class="btn btn-outline" href="{{ url_for('financeiro.nota_nova') }}"><i class="fas fa-file-invoice-dollar"></i> Nova cobrança</a>{% endif %}
         <button class="btn btn-primary" onclick="laNovo()"><i class="fas fa-plus"></i> Lançar serviço</button>
     </div>
 </div>

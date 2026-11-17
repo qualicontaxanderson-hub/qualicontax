@@ -461,7 +461,7 @@ def gerar_pdf(ctx):
     total = sum(x['valor'] for x in fatos)
     buf = io.BytesIO()
     doc = SimpleDocTemplate(buf, pagesize=landscape(A4), topMargin=8 * mm, bottomMargin=13 * mm,
-                            leftMargin=9 * mm, rightMargin=9 * mm, title=ctx.get('titulo') or 'Relatório de títulos a receber',
+                            leftMargin=9 * mm, rightMargin=9 * mm, title=ctx.get('titulo') or 'Relatório de cobranças',
                             author='Qualicontax')
     L = doc.width
     el = []
@@ -481,7 +481,7 @@ def gerar_pdf(ctx):
     chip.setStyle(TableStyle([('BACKGROUND', (0, 0), (-1, -1), VERDE), ('ROUNDEDCORNERS', [3, 3, 3, 3]),
                               ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'), ('TOPPADDING', (0, 0), (-1, -1), 0),
                               ('BOTTOMPADDING', (0, 0), (-1, -1), 1)]))
-    lt = Table([[_p(escape(ctx.get('titulo') or 'Relatório de títulos a receber'), 17, VERDE_ESC, bold=True, leading=20), chip]],
+    lt = Table([[_p(escape(ctx.get('titulo') or 'Relatório de cobranças'), 17, VERDE_ESC, bold=True, leading=20), chip]],
                colWidths=[L - 34 * mm - 52 * mm - 50 * mm, 50 * mm])
     lt.setStyle(TableStyle([('VALIGN', (0, 0), (-1, -1), 'MIDDLE'), ('LEFTPADDING', (0, 0), (-1, -1), 0)]))
     meio = [lt, _p('Qualicontax Assessoria Contábil — honorários e serviços a receber', 8.3, CINZA)]
@@ -644,7 +644,7 @@ def gerar_pdf(ctx):
         fim.setStyle(TableStyle([('LINEABOVE', (0, 0), (-1, 0), 1.4, VERDE), ('TOPPADDING', (0, 0), (-1, -1), 5)]))
         el.append(fim)
 
-    rodape = 'Qualicontax · ' + (ctx.get('titulo') or 'Títulos a receber') + ' · ' + ctx['gerado_em']
+    rodape = 'Qualicontax · ' + (ctx.get('titulo') or 'Cobranças') + ' · ' + ctx['gerado_em']
     doc.build(el, canvasmaker=lambda *a, **k: _CanvasNumerado(*a, rodape=rodape, **k))
     return buf.getvalue()
 
@@ -660,7 +660,7 @@ def gerar_xlsx(ctx):
     wb = Workbook()
     ws = wb.active; ws.title = 'Lançamentos'
     verde = PatternFill('solid', fgColor='0F3D2E'); branco = Font(bold=True, color='FFFFFF')
-    ws['A1'] = ctx.get('titulo') or 'Relatório de títulos a receber'; ws['A1'].font = Font(bold=True, size=14, color='0F3D2E')
+    ws['A1'] = ctx.get('titulo') or 'Relatório de cobranças'; ws['A1'].font = Font(bold=True, size=14, color='0F3D2E')
     ws['A2'] = 'Gerado em ' + ctx['gerado_em'] + (' por ' + ctx['gerado_por'] if ctx.get('gerado_por') else '')
     ws['A3'] = ' · '.join(ctx['filtros']); ws['A3'].alignment = Alignment(wrap_text=False)
     cab = ['Situação', 'Data', 'Vencimento', 'Pago em', 'Competência', 'Nº', 'Cliente', 'CNPJ/CPF', 'Cadastro', 'Grupo',
