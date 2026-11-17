@@ -37,7 +37,7 @@ TIPOS = {
 SITUACOES = {
     'novo':      ('Novo', 'Enviado', 'novo'),
     'andamento': ('Em atendimento', 'Em atendimento', 'and'),
-    'usuario':   ('Aguardando usuário', 'Aguardando você', 'usu'),
+    'usuario':   ('Aguardando a pessoa', 'Aguardando você', 'usu'),
     'suporte':   ('Aguardando suporte', 'Aguardando suporte', 'sup'),
     'concluido': ('Concluído', 'Resolvido', 'ok'),
 }
@@ -60,12 +60,13 @@ def _admin():
 
 def _chamado_ou_404(cid):
     """O chamado, só para quem pediu ou para o admin. Dos outros: 404 (nem existe)."""
-    c = _q("""SELECT c.*, u.nome AS usuario_nome, d.nome AS departamento,
+    c = _q("""SELECT c.*, u.nome AS usuario_nome, d.nome AS departamento, av.nome AS aval_nome,
                      cl.nome_razao_social AS cliente_nome, cl.numero_cliente AS cliente_numero,
                      TIMESTAMPDIFF(MINUTE, COALESCE(c.ultima_msg_em, c.criado_em), NOW()) AS espera_min
                 FROM atend_chamados c
                 JOIN usuarios u ON u.id = c.usuario_id
                 LEFT JOIN departamentos d ON d.id = u.departamento_id
+                LEFT JOIN usuarios av ON av.id = c.aval_por
                 LEFT JOIN clientes cl ON cl.id = c.cliente_id
                WHERE c.id = %s""", (cid,), one=True)
     if not c or (not _admin() and c['usuario_id'] != current_user.id):
@@ -194,7 +195,7 @@ def index():
     ver = request.args.get('ver', '')
     base = """SELECT c.id, c.usuario_id, c.tipo, c.titulo, c.situacao, c.urgente, c.tela_nome, c.cliente_id,
                      c.avaliacao, c.ultima_msg_de, c.ultima_msg_em, c.visto_usuario_em, c.criado_em, c.concluido_em,
-                     u.nome AS usuario_nome, d.nome AS departamento,
+                     c.concluido_por, c.aval_em, u.nome AS usuario_nome, d.nome AS departamento,
                      cl.nome_razao_social AS cliente_nome, cl.numero_cliente AS cliente_numero,
                      TIMESTAMPDIFF(MINUTE, COALESCE(c.ultima_msg_em, c.criado_em), NOW()) AS espera_min,
                      (SELECT m.texto FROM atend_mensagens m WHERE m.chamado_id = c.id AND m.interna = 0
@@ -222,10 +223,14 @@ def index():
         if ver == 'concluidos':
             chamados = _q(base + " WHERE c.situacao = 'concluido' ORDER BY c.concluido_em DESC LIMIT 200")
         else:
-            chamados = _q(base + " WHERE c.situacao <> 'concluido' ORDER BY c.urgente DESC, espera_min DESC")
+            # no painel entram também os que a pessoa encerrou e ainda esperam o aval do suporte
+            chamados = _q(base + """ WHERE c.situacao <> 'concluido'
+                                        OR (c.concluido_por = c.usuario_id AND c.aval_em IS NULL)
+                                     ORDER BY c.urgente DESC, espera_min DESC""")
         kpi = _q("""SELECT SUM(situacao='novo') novo, SUM(situacao='suporte') suporte,
                            SUM(situacao='andamento') andamento, SUM(situacao='usuario') usuario,
                            SUM(situacao='concluido' AND DATE(concluido_em) = CURDATE()) hoje,
+                           SUM(situacao='concluido' AND concluido_por = usuario_id AND aval_em IS NULL) aval,
                            SUM(situacao <> 'concluido') abertos
                       FROM atend_chamados""", one=True) or {}
         return render_template('atendimento/painel.html', ver=ver or 'painel', chamados=chamados,
@@ -354,47 +359,116 @@ def responder(cid):
     admin_aqui = _admin() and c['usuario_id'] != current_user.id
     if not texto and not pdados and not (admin_aqui and acao == 'concluir'):
         return jsonify({'ok': False, 'erro': 'Escreva a resposta.'}), 400
+    eu, pessoa = _nome_curto(current_user.nome), _nome_curto(c.get('usuario_nome'))
     if admin_aqui:
+        # 17/11/2026 (Anderson: "um monte de responder... sem lógica"): a AÇÃO diz a situação.
+        # Nota interna não muda nada; Responder devolve a bola para a pessoa; Concluir marca resolvido.
         if acao == 'interna':
             _mensagem(cid, 'suporte', texto, 1, ptipo, pdados, current_user.id)
             return jsonify({'ok': True})
         if texto or pdados:
             _mensagem(cid, 'suporte', texto or None, 0, ptipo, pdados, current_user.id)
-        nova = {'aguardar': 'usuario', 'concluir': 'concluido'}.get(acao, 'andamento')
-        _situacao(c, nova)
+        if acao == 'concluir':
+            _situacao(c, 'concluido', f'{eu} marcou como resolvido')
+        else:
+            _situacao(c, 'usuario', f'{eu} respondeu · aguardando {pessoa}' if c['situacao'] != 'concluido'
+                      else f'{eu} reabriu o chamado · aguardando {pessoa}')
     else:
         _mensagem(cid, 'usuario', texto or None, 0, ptipo, pdados, current_user.id)
         if c['situacao'] != 'novo':
-            _situacao(c, 'suporte', aviso=c['situacao'] == 'concluido')
+            _situacao(c, 'suporte', f'{pessoa} reabriu o chamado' if c['situacao'] == 'concluido'
+                      else f'{pessoa} respondeu · aguardando o suporte')
         _w("UPDATE atend_chamados SET visto_usuario_em = NOW() WHERE id = %s", (cid,))
     return jsonify({'ok': True})
 
 
-def _situacao(c, nova, aviso=True):
+def _situacao(c, nova, texto=None):
+    """Muda a situação e registra o evento na conversa com ``texto`` (em palavras de gente:
+    "respondeu · aguardando Graziella", "marcou como resolvido", "reabriu o chamado")."""
     if c['situacao'] == nova:
         return
     if nova == 'concluido':
         _w("""UPDATE atend_chamados SET situacao = 'concluido', concluido_em = NOW(), concluido_por = %s,
-                     avaliacao = NULL WHERE id = %s""", (current_user.id, c['id']))
+                     avaliacao = NULL, aval_por = NULL, aval_em = NULL WHERE id = %s""", (current_user.id, c['id']))
     else:
-        _w("UPDATE atend_chamados SET situacao = %s, concluido_em = NULL WHERE id = %s", (nova, c['id']))
-    if aviso:
-        if c['situacao'] == 'concluido':
-            txt = f'{_nome_curto(current_user.nome)} reabriu o chamado'
-        else:
-            txt = f'{_nome_curto(current_user.nome)} mudou para {SITUACOES[nova][0]}'
-        _mensagem(c['id'], 'sistema', txt)
+        _w("""UPDATE atend_chamados SET situacao = %s, concluido_em = NULL, aval_por = NULL, aval_em = NULL
+               WHERE id = %s""", (nova, c['id']))
+    if texto:
+        _mensagem(c['id'], 'sistema', texto)
     _registrar('escrita.chamado_situacao', c['id'], {'situacao': nova}, {'situacao': c['situacao']})
 
 
 @atendimento.route('/<int:cid>/situacao', methods=['POST'])
 @admin_required
 def situacao(cid):
+    """Só o que não passa por uma resposta: reabrir (volta para Em atendimento) e concluir sem texto."""
     c = _chamado_ou_404(cid)
     nova = request.form.get('situacao', '')
-    if nova not in SITUACOES or nova == 'novo':
+    if nova not in ('andamento', 'concluido'):
         return jsonify({'ok': False, 'erro': 'Situação inválida.'}), 400
-    _situacao(c, nova)
+    eu = _nome_curto(current_user.nome)
+    _situacao(c, nova, f'{eu} marcou como resolvido' if nova == 'concluido'
+              else (f'{eu} reabriu o chamado' if c['situacao'] == 'concluido' else f'{eu} voltou a atender'))
+    return jsonify({'ok': True})
+
+
+@atendimento.route('/<int:cid>/encerrar', methods=['POST'])
+@login_required
+def encerrar(cid):
+    """Quem pediu encerra sem esperar o suporte (Anderson, 17/11/2026: "a opção do usuário fechar
+    informando que foi resolvido... resolvido pelo Suporte ou de outra maneira"). ``como``:
+    'suporte' (avaliacao 1, o mesmo que confirmar) ou 'outro' (avaliacao 2: resolveu de outro
+    jeito ou não precisa mais). O texto, se vier, entra na conversa antes do encerramento."""
+    c = _chamado_ou_404(cid)
+    if c['usuario_id'] != current_user.id:
+        return jsonify({'ok': False, 'erro': 'Só quem pediu encerra por aqui.'}), 400
+    if c['situacao'] == 'concluido':
+        return jsonify({'ok': False, 'erro': 'Este chamado já está resolvido.'}), 400
+    como = request.form.get('como', '')
+    if como not in ('suporte', 'outro'):
+        return jsonify({'ok': False, 'erro': 'Diga como foi resolvido.'}), 400
+    texto = (request.form.get('texto') or '').strip()
+    try:
+        ptipo, pdados = _ler_print()
+    except ValueError as e:
+        return jsonify({'ok': False, 'erro': str(e)}), 400
+    if texto or pdados:
+        _mensagem(cid, 'usuario', texto or None, 0, ptipo, pdados, current_user.id)
+    eu = _nome_curto(current_user.nome)
+    _situacao(c, 'concluido', f'{eu} encerrou: o suporte resolveu' if como == 'suporte'
+              else f'{eu} encerrou: resolveu de outro jeito')
+    _w("UPDATE atend_chamados SET avaliacao = %s, visto_usuario_em = NOW() WHERE id = %s",
+       (1 if como == 'suporte' else 2, cid))
+    _registrar('escrita.chamado_encerrado', cid, {'como': como})
+    return jsonify({'ok': True})
+
+
+COMO_RESOLVEU = {1: 'o suporte resolveu', 2: 'resolveu de outro jeito'}
+
+
+@atendimento.route('/<int:cid>/aval', methods=['POST'])
+@admin_required
+def aval(cid):
+    """O suporte dá o aval ao encerramento feito pela pessoa (Anderson, 17/11/2026: "tem que deixar
+    para eu dar o AVAL, pode ser que eu tenha resolvido e selecionaram errado"). ``como``: 'suporte'
+    ou 'outro' confirma (corrigindo a forma se for diferente da marcada); 'nao' reabre."""
+    c = _chamado_ou_404(cid)
+    if c['situacao'] != 'concluido' or c['concluido_por'] != c['usuario_id']:
+        return jsonify({'ok': False, 'erro': 'Este chamado não está esperando aval.'}), 400
+    como = request.form.get('como', '')
+    if como not in ('suporte', 'outro', 'nao'):
+        return jsonify({'ok': False, 'erro': 'Escolha uma opção.'}), 400
+    eu = _nome_curto(current_user.nome)
+    if como == 'nao':
+        _situacao(c, 'andamento', f'{eu} reabriu: ainda não está resolvido')
+        _w("UPDATE atend_chamados SET avaliacao = NULL WHERE id = %s", (cid,))
+    else:
+        nova = 1 if como == 'suporte' else 2
+        _w("UPDATE atend_chamados SET avaliacao = %s, aval_por = %s, aval_em = NOW() WHERE id = %s",
+           (nova, current_user.id, cid))
+        _mensagem(cid, 'sistema', f'{eu} confirmou: {COMO_RESOLVEU[nova]}' if nova == c['avaliacao']
+                  else f'{eu} corrigiu: {COMO_RESOLVEU[nova]} (estava marcado "{COMO_RESOLVEU.get(c["avaliacao"], "?")}")')
+    _registrar('escrita.chamado_aval', cid, {'como': como}, {'avaliacao': c['avaliacao']})
     return jsonify({'ok': True})
 
 
@@ -447,7 +521,7 @@ def liberar(cid):
     _mensagem(cid, 'suporte', texto or f'Acesso liberado: {c["acesso_rotulo"]}. Já aparece no seu menu.',
               0, None, None, current_user.id)
     _mensagem(cid, 'sistema', f'{_nome_curto(current_user.nome)} liberou o acesso {como}')
-    _situacao(c, 'concluido', aviso=False)
+    _situacao(c, 'concluido')
     try:
         from utils.atividade import registrar
         registrar('escrita.acesso_liberado', 'acesso', tabela='usuarios', registro_id=c['usuario_id'],

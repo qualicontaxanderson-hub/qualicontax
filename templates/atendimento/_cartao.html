@@ -37,7 +37,7 @@
   <footer class="at-pe">
     {% if c.situacao == 'concluido' %}
       <span>resolvido {{ c.concluido_em.strftime('%d/%m %H:%M') if c.concluido_em else '' }}</span>
-      <span>{% if c.avaliacao == 1 %}<i class="fas fa-thumbs-up" style="color:#16a34a"></i> resolveu{% elif c.avaliacao == 0 %}<i class="fas fa-thumbs-down" style="color:#b91c1c"></i> não resolveu{% endif %}</span>
+      <span>{% if visao == 'admin' and c.concluido_por == c.usuario_id and not c.aval_em %}<i class="fas fa-stamp" style="color:#be185d"></i> {{ nome_curto(c.usuario_nome) }} encerrou · falta o seu aval{% elif c.avaliacao == 1 %}<i class="fas fa-thumbs-up" style="color:#16a34a"></i> resolveu{% elif c.avaliacao == 2 %}<i class="fas fa-flag-checkered" style="color:#64748b"></i> resolveu de outro jeito{% elif c.avaliacao == 0 %}<i class="fas fa-thumbs-down" style="color:#b91c1c"></i> não resolveu{% endif %}</span>
     {% elif c.situacao in ('novo', 'suporte') %}
       <span class="{{ 'at-espera-alta' if c.espera_min >= 240 else '' }}"><i class="fas fa-clock"></i> esperando há {{ espera(c.espera_min) }}</span>
       <span>{% if c.prints %}<i class="fas fa-image"></i> {{ c.prints }} print{{ 's' if c.prints > 1 }}{% endif %}</span>

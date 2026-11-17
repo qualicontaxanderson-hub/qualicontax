@@ -12,7 +12,7 @@
   <p class="ef-hero-sub">
     {% if ver == 'extras' %}Telas liberadas só para uma pessoa, sem mexer no perfil
     {% elif ver == 'concluidos' %}Os últimos chamados resolvidos
-    {% else %}{{ kpi.abertos or 0 }} chamado{{ 's' if (kpi.abertos or 0) != 1 }} em aberto{% set _esp = chamados|selectattr('situacao', 'in', ['novo','suporte'])|map(attribute='espera_min')|list %}{% if _esp %} · o mais antigo espera há {{ espera(_esp|max) }}{% endif %}{% endif %}</p></div>
+    {% else %}{{ kpi.abertos or 0 }} chamado{{ 's' if (kpi.abertos or 0) != 1 }} em aberto{% if kpi.aval %} · {{ kpi.aval }} esperando o seu aval{% endif %}{% set _esp = chamados|selectattr('situacao', 'in', ['novo','suporte'])|map(attribute='espera_min')|list %}{% if _esp %} · o mais antigo espera há {{ espera(_esp|max) }}{% endif %}{% endif %}</p></div>
 </div></div>
 <div class="ef-body">
 {% if ver == 'extras' %}
@@ -40,7 +40,9 @@
     <button type="button" class="cli-kpi" data-sec="andamento"><span class="cli-kpi-ico" style="background:#ede9fe;color:#6d28d9"><i class="fas fa-headset"></i></span>
       <div class="cli-kpi-body"><strong class="cli-kpi-val">{{ kpi.andamento or 0 }}</strong><span class="cli-kpi-lbl">Em atendimento</span></div></button>
     <button type="button" class="cli-kpi" data-sec="usuario"><span class="cli-kpi-ico" style="background:#fef3c7;color:#b45309"><i class="fas fa-reply"></i></span>
-      <div class="cli-kpi-body"><strong class="cli-kpi-val {{ 'cli-warn' if kpi.usuario }}">{{ kpi.usuario or 0 }}</strong><span class="cli-kpi-lbl">Aguardando usuário</span></div></button>
+      <div class="cli-kpi-body"><strong class="cli-kpi-val {{ 'cli-warn' if kpi.usuario }}">{{ kpi.usuario or 0 }}</strong><span class="cli-kpi-lbl">Aguardando a pessoa</span></div></button>
+    <button type="button" class="cli-kpi" data-sec="concluido"><span class="cli-kpi-ico" style="background:#fce7f3;color:#be185d"><i class="fas fa-stamp"></i></span>
+      <div class="cli-kpi-body"><strong class="cli-kpi-val {{ 'cli-warn' if kpi.aval }}">{{ kpi.aval or 0 }}</strong><span class="cli-kpi-lbl">Esperando seu aval</span></div></button>
     <a class="cli-kpi" href="{{ url_for('atendimento.index', ver='concluidos') }}" style="text-decoration:none"><span class="cli-kpi-ico" style="background:#dcfce7;color:#15803d"><i class="fas fa-circle-check"></i></span>
       <div class="cli-kpi-body"><strong class="cli-kpi-val">{{ kpi.hoje or 0 }}</strong><span class="cli-kpi-lbl">Concluídos hoje</span></div></a>
   </div>
@@ -70,6 +72,7 @@
     {% else %}<div class="at-vazio"><i class="fas fa-circle-check"></i>Nenhum chamado concluído ainda.</div>{% endif %}
   {% else %}
     {% set _secs = [
+      ('concluido', 'Dar o aval', 'a pessoa encerrou sozinha; confirme como foi resolvido ou reabra'),
       ('suporte', 'Responder primeiro', 'a pessoa já respondeu e está esperando você'),
       ('novo', 'Ninguém olhou ainda', 'abrir o chamado já muda para Em atendimento'),
       ('andamento', 'Com você', 'você está cuidando'),
@@ -77,7 +80,7 @@
     ] %}
     {% for k, titulo, dica in _secs %}{% set lista = chamados|selectattr('situacao', 'equalto', k)|list %}{% if lista %}
     <section class="at-bloco" id="sec-{{ k }}">
-      <div class="at-sec"><span class="at-st at-st-{{ SITUACOES[k][2] }}">{{ SITUACOES[k][0] }}</span><h2>{{ titulo }}</h2>
+      <div class="at-sec"><span class="at-st at-st-{{ SITUACOES[k][2] }}">{{ 'Esperando seu aval' if k == 'concluido' else SITUACOES[k][0] }}</span><h2>{{ titulo }}</h2>
         <span class="at-sec-n">{{ lista|length }} · {{ dica }}</span></div>
       <div class="gc-grid">{% for c in lista %}{% set visao = 'admin' %}{% include 'atendimento/_cartao.html' %}{% endfor %}</div>
     </section>{% endif %}{% endfor %}

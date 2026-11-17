@@ -1760,6 +1760,20 @@ def _apply_migrations():
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     """, fetch=False)
 
+    # 17/11/2026 (Atendimento): quem pediu encerra o chamado dizendo se o suporte resolveu ou
+    # se foi de outro jeito, e o suporte dá o AVAL (Anderson: "pode ser que eu tenha resolvido
+    # e selecionaram errado"). aval_em vazio com concluido_por = quem pediu = esperando o aval.
+    # A tabela nasce em migrations/atendimento_15_11.py; aqui só as colunas, se ela existir.
+    _t = execute_query("SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = DATABASE() "
+                       "AND TABLE_NAME = 'atend_chamados'", fetch=True, fetch_one=True) or {}
+    if _t.get('cnt', 0):
+        for _col_name, _col_def in [('aval_por', 'INT NULL'), ('aval_em', 'DATETIME NULL')]:
+            _c = execute_query(
+                "SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() "
+                "AND TABLE_NAME = 'atend_chamados' AND COLUMN_NAME = %s", (_col_name,), fetch=True, fetch_one=True) or {}
+            if _c.get('cnt', 0) == 0:
+                _migrate(f"ALTER TABLE atend_chamados ADD COLUMN {_col_name} {_col_def}")
+
     print("✓ Migrations concluídas")
 
 

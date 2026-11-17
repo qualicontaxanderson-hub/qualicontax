@@ -39,25 +39,48 @@
         <button type="button" class="at-bt at-bt-pri" data-avaliar="1"><i class="fas fa-thumbs-up"></i> Resolveu</button>
         <button type="button" class="at-bt" data-avaliar="0"><i class="fas fa-thumbs-down"></i> Não resolveu</button></div>
       {% endif %}
+      {% set ela_fechou = c.situacao == 'concluido' and c.concluido_por == c.usuario_id %}
+      {% set pende_aval = ela_fechou and not c.aval_em %}
+      {% if suporte and pende_aval %}
+      {#- 17/11/2026: a pessoa encerrou sozinha; o suporte confirma, corrige a forma ou reabre. -#}
+      <div class="at-avaliar at-aval" style="margin-top:16px"><span><b>{{ nome_curto(c.usuario_nome) }} encerrou: {{ 'o suporte resolveu' if c.avaliacao == 1 else 'resolveu de outro jeito' }}.</b> Foi assim?</span>
+        <button type="button" class="at-bt {{ 'at-bt-pri' if c.avaliacao == 1 }}" data-aval="suporte"><i class="fas fa-headset"></i> {{ 'Sim, o suporte resolveu' if c.avaliacao == 1 else 'Não, foi o suporte' }}</button>
+        <button type="button" class="at-bt {{ 'at-bt-pri' if c.avaliacao == 2 }}" data-aval="outro"><i class="fas fa-flag-checkered"></i> {{ 'Sim, de outro jeito' if c.avaliacao == 2 else 'Não, foi de outro jeito' }}</button>
+        <button type="button" class="at-bt" data-aval="nao"><i class="fas fa-rotate-left"></i> Não está resolvido</button></div>
+      {% endif %}
 
       <div class="at-resp">
         <textarea id="atResp" maxlength="5000" placeholder="{{ 'Escreva a resposta... (Ctrl+V cola um print)' if suporte else ('Escreva aqui para reabrir o chamado... (Ctrl+V cola um print)' if c.situacao == 'concluido' else 'Escreva sua resposta... (Ctrl+V cola um print)') }}"></textarea>
         <div class="at-resp-acoes">
           <span class="at-resp-print" id="atRespPrint"></span>
           <span class="at-erro" id="atRespErro" style="color:#b91c1c;font-size:13px"></span>
-          {% if suporte %}
-            <button type="button" class="at-bt" data-acao="interna" title="Só o suporte vê"><i class="fas fa-lock"></i> Nota interna</button>
-            <button type="button" class="at-bt" data-acao="aguardar"><i class="fas fa-reply"></i> Responder e aguardar a pessoa</button>
-            <button type="button" class="at-bt" data-acao="responder"><i class="fas fa-paper-plane"></i> Responder</button>
-            <button type="button" class="at-bt at-bt-pri" data-acao="concluir"><i class="fas fa-check"></i> Responder e concluir</button>
-          {% else %}
-            <button type="button" class="at-bt at-bt-pri" data-acao="responder"><i class="fas fa-paper-plane"></i> {{ 'Reabrir e enviar' if c.situacao == 'concluido' else 'Enviar' }}</button>
+          {% if not suporte and c.situacao == 'concluido' %}
+            <button type="button" class="at-bt at-bt-pri" data-acao="responder"><i class="fas fa-paper-plane"></i> Reabrir e enviar</button>
           {% endif %}
         </div>
+        {% if not suporte and c.situacao != 'concluido' %}
+        {#- 17/11/2026 (Anderson): quem pediu também encerra, dizendo se foi o suporte ou de outro jeito. -#}
+        <div class="at-acoes">
+          <button type="button" class="at-ac pri" data-acao="responder"><i class="fas fa-paper-plane"></i><b>Enviar</b><small>O suporte recebe e responde. O chamado continua aberto.</small></button>
+          <button type="button" class="at-ac ok" data-encerrar="suporte"><i class="fas fa-check"></i><b>O suporte resolveu</b><small>Encerra o chamado como resolvido pelo suporte. Pode escrever um obrigado acima.</small></button>
+          <button type="button" class="at-ac" data-encerrar="outro"><i class="fas fa-flag-checkered"></i><b>Resolvi de outro jeito</b><small>Resolveu sozinho ou não precisa mais. Se quiser, conte acima como foi.</small></button>
+        </div>
+        {% endif %}
+        {% if suporte %}
+        {#- 17/11/2026: a ação diz o que acontece com o chamado; não há mais "situação" à parte. -#}
+        {% set quem = nome_curto(c.usuario_nome) %}
+        <div class="at-acoes">
+          <button type="button" class="at-ac" data-acao="interna"><i class="fas fa-lock"></i><b>Nota interna</b><small>Só o suporte vê. Nada muda para {{ quem }}.</small></button>
+          <button type="button" class="at-ac pri" data-acao="responder"><i class="fas fa-paper-plane"></i><b>{{ 'Reabrir e responder' if c.situacao == 'concluido' else 'Responder' }}</b><small>{{ quem }} recebe a resposta e o chamado fica aguardando {{ quem }}.</small></button>
+          {% if c.situacao != 'concluido' %}
+          <button type="button" class="at-ac ok" data-acao="concluir"><i class="fas fa-check"></i><b>Concluir</b><small>Marca como resolvido, com ou sem texto. {{ quem }} confirma se resolveu.</small></button>
+          {% endif %}
+        </div>
+        {% endif %}
       </div>
     </div>
 
-    <div style="display:flex;flex-direction:column;gap:14px;min-width:0">
+    <div class="at-lado">
       {% if liberar %}
       <div class="at-box at-lib">
         <h3><i class="fas fa-key"></i> Liberar o acesso</h3>
@@ -74,17 +97,37 @@
       </div>
       {% endif %}
 
-      {% if suporte %}
+      {#- Onde está o chamado: linha do tempo em 4 passos, só leitura; a situação muda pelas ações da resposta.
+          A única ação aqui é Reabrir, para o suporte, quando já está concluído. -#}
+      {% set quem = nome_curto(c.usuario_nome) %}
+      {#- como terminou: avaliacao 1 resolveu (confirmou, ou encerrou dizendo que o suporte resolveu),
+          2 resolveu de outro jeito, 0 não resolveu, vazio ainda não disse. -#}
+      {% set aval_txt = (' Falta o seu aval.' if suporte else ' O suporte ainda confirma.') if pende_aval
+                        else ((' Confirmado por ' ~ nome_curto(c.aval_nome) ~ '.') if suporte else ' O suporte confirmou.') %}
+      {% if ela_fechou %}{% set fim = (quem if suporte else 'Você') ~ ' encerrou: ' ~ ('o suporte resolveu' if c.avaliacao == 1 else 'resolveu de outro jeito') ~ '.' ~ aval_txt %}
+      {% elif c.avaliacao == 1 %}{% set fim = ('Confirmado por ' ~ quem ~ '.') if suporte else 'Você confirmou.' %}
+      {% elif c.avaliacao == 0 %}{% set fim = (quem ~ ' disse que NÃO resolveu.') if suporte else 'Você disse que não resolveu.' %}
+      {% else %}{% set fim = (quem ~ ' ainda não confirmou.') if suporte else 'Falta você confirmar.' %}{% endif %}
+      {% set bola = {'novo': 'Com o suporte: ninguém pegou ainda.',
+                     'andamento': 'Com o suporte: em atendimento.',
+                     'suporte': ('Com o suporte: ' ~ quem ~ ' respondeu e espera.') if suporte else 'Com o suporte: você respondeu e espera.',
+                     'usuario': ('Com ' ~ quem ~ ': esperando a resposta.') if suporte else 'Com você: o suporte espera sua resposta.',
+                     'concluido': 'Resolvido. ' ~ fim} %}
+      {% set ordem = {'novo': 0, 'andamento': 1, 'suporte': 2, 'usuario': 2, 'concluido': 3} %}
+      {% set pos = ordem[c.situacao] %}
       <div class="at-box">
-        <h3>Situação</h3>
-        <div class="at-sits">
-          {% for k in ['andamento', 'suporte', 'usuario', 'concluido'] %}
-          <button type="button" class="at-sit-btn {{ 'on' if c.situacao == k }}" data-sit="{{ k }}"><span class="at-st at-st-{{ SITUACOES[k][2] }}">{{ SITUACOES[k][0] }}</span>
-            {% if k == 'usuario' %}<small>fica parado até a pessoa responder</small>{% elif k == 'suporte' %}<small>a pessoa respondeu</small>{% endif %}</button>
-          {% endfor %}
-        </div>
+        <h3>Onde está</h3>
+        <p class="at-bola {{ 'ok' if c.situacao == 'concluido' }}"><i class="fas {{ 'fa-circle-check' if c.situacao == 'concluido' else 'fa-hand-point-right' }}"></i> {{ bola[c.situacao] }}</p>
+        <ol class="at-linha">
+          <li class="{{ 'feito' if pos > 0 else 'atual' }}"><b>Enviado</b><small>{{ c.criado_em.strftime('%d/%m %H:%M') }}</small></li>
+          <li class="{{ 'feito' if pos > 1 else ('atual' if pos == 1 else '') }}"><b>Em atendimento</b><small>{{ 'o suporte pegou' if pos >= 1 else 'quando o suporte abrir' }}</small></li>
+          <li class="{{ 'feito' if pos > 2 else ('atual' if pos == 2 else '') }}"><b>Conversa</b><small>{% if c.situacao == 'usuario' %}aguardando {{ 'você' if not suporte else quem }}{% elif c.situacao == 'suporte' %}aguardando o suporte{% else %}resposta e retorno{% endif %}</small></li>
+          <li class="{{ 'feito' if pos == 3 else '' }}"><b>Resolvido</b><small>{{ c.concluido_em.strftime('%d/%m %H:%M') if c.concluido_em else ('quando o suporte concluir' if suporte else 'quando o suporte concluir ou você encerrar') }}</small></li>
+        </ol>
+        {% if suporte and c.situacao == 'concluido' %}
+        <button type="button" class="at-bt" data-sit="andamento" style="width:100%;justify-content:center;margin-top:10px"><i class="fas fa-rotate-left"></i> Reabrir o chamado</button>
+        {% endif %}
       </div>
-      {% endif %}
 
       <div class="at-box">
         <h3>Dados</h3>
@@ -97,7 +140,8 @@
           <dt>Aberto</dt><dd>{{ c.criado_em.strftime('%d/%m/%Y %H:%M') }}</dd>
           {% if c.situacao in ('novo', 'suporte') %}<dt>Esperando</dt><dd>{{ espera(c.espera_min) }}</dd>{% endif %}
           {% if c.concluido_em %}<dt>Resolvido</dt><dd>{{ c.concluido_em.strftime('%d/%m/%Y %H:%M') }}</dd>{% endif %}
-          {% if c.avaliacao is not none %}<dt>Avaliação</dt><dd>{{ 'Resolveu' if c.avaliacao == 1 else 'Não resolveu' }}</dd>{% endif %}
+          {% if c.avaliacao is not none %}<dt>Avaliação</dt><dd>{{ {1: 'Resolveu', 2: 'Resolveu de outro jeito', 0: 'Não resolveu'}[c.avaliacao] }}</dd>{% endif %}
+          {% if ela_fechou %}<dt>Aval</dt><dd>{% if c.aval_em %}{{ nome_curto(c.aval_nome) }} · {{ c.aval_em.strftime('%d/%m/%Y %H:%M') }}{% else %}<span style="color:#b45309">falta o aval do suporte</span>{% endif %}</dd>{% endif %}
           {% if suporte and perfis_dela is not none %}<dt>Perfis</dt><dd>{{ perfis_dela|join(', ') or 'nenhum' }}</dd>{% endif %}
         </dl>
       </div>
@@ -136,6 +180,13 @@
     var s = e.target.closest('[data-sit]');
     if (s) { var f2 = new FormData(); f2.append('situacao', s.getAttribute('data-sit'));
       post("{{ url_for('atendimento.situacao', cid=c.id) }}", f2, s); return; }
+    var av = e.target.closest('[data-aval]');
+    if (av) { var f6 = new FormData(); f6.append('como', av.getAttribute('data-aval'));
+      post("{{ url_for('atendimento.aval', cid=c.id) }}", f6, av); return; }
+    var en = e.target.closest('[data-encerrar]');
+    if (en) { var f5 = new FormData(); f5.append('como', en.getAttribute('data-encerrar')); f5.append('texto', ta.value);
+      if (printB64) f5.append('print_b64', printB64);
+      post("{{ url_for('atendimento.encerrar', cid=c.id) }}", f5, en); return; }
     var a = e.target.closest('[data-avaliar]');
     if (a) { var f3 = new FormData(); f3.append('resolveu', a.getAttribute('data-avaliar'));
       post("{{ url_for('atendimento.avaliar', cid=c.id) }}", f3, a); return; }

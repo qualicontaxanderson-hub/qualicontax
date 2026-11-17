@@ -82,6 +82,7 @@ MAPA = {
     'atendimento.novo':                'LOGIN',
     'atendimento.responder':           'LOGIN',
     'atendimento.avaliar':             'LOGIN',
+    'atendimento.encerrar':            'LOGIN',
     'atendimento.print':               'LOGIN',
     'atendimento.telas':               'LOGIN',
     # Novidades (15/11/2026): todo usuário lê; escrever/publicar é @admin_required.
