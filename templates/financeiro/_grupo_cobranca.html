@@ -5,7 +5,7 @@
    (boleto expirado)". O CSS (tj-* e tg-*) mora em titulos_receber.html. Variáveis: routes/financeiro_grupo_cobranca.py. #}
 {% set pode_email = pode_rota('financeiro.grupo_cobranca_email') %}
 {% set pode_reemitir = pode_rota('financeiro.grupo_reemitir') %}
-<div class="tj tg {{ d.cls }}" data-fora="{{ fora | map(attribute='txt') | list | tojson | forceescape }}" data-vai="{{ d.n_pagina }} honorário{{ 's' if d.n_pagina != 1 }} · {{ d.total_pagina_txt }}">
+<div class="tj tg {{ d.cls }}" data-fora="{{ fora | tojson | forceescape }}" data-vai="{{ d.n_pagina }} honorário{{ 's' if d.n_pagina != 1 }} · {{ d.total_pagina_txt }}">
   <header class="tj-cab">
     <div class="tj-cab-cli">
       <span class="tj-avatar"><i class="fas fa-layer-group"></i></span>

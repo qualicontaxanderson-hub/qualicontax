@@ -513,6 +513,30 @@ a.tx-c { text-decoration:none; color:inherit; }
   .tg .tj-copias-txt { grid-template-columns:1fr; }
 }
 
+
+/* ── caixa de confirmação da cobrança do grupo (17/11/2026: no lugar do confirm() do navegador) ── */
+.tgc { position:fixed; inset:0; z-index:1200; display:flex; align-items:center; justify-content:center; padding:16px; }
+.tgc[hidden] { display:none; }
+.tgc-fundo { position:absolute; inset:0; background:rgba(15,23,42,.55); backdrop-filter:blur(2px); animation:txFade .2s; }
+.tgc-caixa { position:relative; width:min(560px, 100%); max-height:92vh; overflow:auto; background:#fff; border-radius:20px; box-shadow:0 30px 80px rgba(15,23,42,.35); color:var(--tinta, #0f172a); animation:txFade .2s; }
+.tgc-cab { display:flex; align-items:center; gap:14px; padding:18px 22px; background:linear-gradient(120deg, #dc2626, #991b1b); color:#fff; }
+.tgc-cab > i { width:46px; height:46px; border-radius:14px; background:rgba(255,255,255,.18); border:1px solid rgba(255,255,255,.3); display:inline-flex; align-items:center; justify-content:center; font-size:20px; flex-shrink:0; }
+.tgc-cab b { display:block; font-size:17px; line-height:1.2; } .tgc-cab small { display:block; font-size:12.5px; opacity:.9; margin-top:3px; }
+.tgc-corpo { padding:16px 22px 6px; }
+.tgc-rot { font-size:11px; font-weight:800; letter-spacing:.6px; text-transform:uppercase; color:#991b1b; margin:0 0 8px; }
+.tgc-lista { list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:6px; max-height:34vh; overflow:auto; }
+.tgc-lista li { display:flex; align-items:center; gap:12px; border:1px solid #fecaca; border-left:4px solid #dc2626; background:#fff5f5; border-radius:10px; padding:9px 12px; }
+.tgc-lista li > span { flex:1; min-width:0; } .tgc-lista li b { display:block; font-size:13.5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.tgc-lista li small { font-size:12px; color:#7f1d1d; font-weight:600; } .tgc-lista li em { font-style:normal; font-weight:800; font-size:14.5px; font-variant-numeric:tabular-nums; white-space:nowrap; }
+.tgc-vai { display:flex; align-items:center; gap:10px; margin:12px 0 0; padding:10px 12px; border-radius:10px; background:#ecfdf3; border:1px solid #bbf7d0; color:#166534; font-size:13px; line-height:1.4; }
+.tgc-vai i { color:#16a34a; font-size:16px; } .tgc-vai b { font-weight:800; }
+.tgc-dica { margin:10px 0 0; font-size:12.5px; color:#64748b; line-height:1.45; } .tgc-dica i { color:#b45309; margin-right:4px; }
+.tgc-pe { display:grid; grid-template-columns:1fr 1fr; gap:10px; padding:14px 22px 20px; }
+.tgc-pe button { height:48px; border-radius:12px; font:inherit; font-size:14px; font-weight:800; cursor:pointer; display:inline-flex; align-items:center; justify-content:center; gap:8px; padding:0 14px; }
+.tgc-volta { border:1px solid #cbd5e1; background:#fff; color:#0f172a; } .tgc-volta:hover { border-color:#94a3b8; background:#f8fafc; }
+.tgc-segue { border:0; background:linear-gradient(135deg, #dc2626, #991b1b); color:#fff; box-shadow:0 8px 18px rgba(220,38,38,.25); } .tgc-segue:hover { filter:brightness(1.06); }
+@media (max-width:600px) { .tgc { align-items:flex-end; padding:0; } .tgc-caixa { border-radius:20px 20px 0 0; max-height:94vh; } .tgc-pe { grid-template-columns:1fr; } .tgc-pe .tgc-segue { order:-1; } }
+
 @media (hover:none) {
   .tx-c-acoes { position:static; opacity:1; padding:0; justify-content:flex-end; }
 }
@@ -749,6 +773,24 @@ a.tx-c { text-decoration:none; color:inherit; }
     {% endif %}
   </div>
 </div>
+</div>
+
+{# caixa de confirmação da cobrança do grupo: o que fica de fora (boleto expirado / sem boleto) — 17/11/2026 #}
+<div class="tgc" id="tgConfirma" hidden>
+  <div class="tgc-fundo"></div>
+  <div class="tgc-caixa" role="alertdialog" aria-modal="true" aria-labelledby="tgcTit">
+    <header class="tgc-cab"><i class="fas fa-triangle-exclamation"></i><div><b id="tgcTit"></b><small>porque não tem boleto ativo. O cliente não vai ver isto na página nem no e-mail.</small></div></header>
+    <div class="tgc-corpo">
+      <p class="tgc-rot">Fica de fora</p>
+      <ul class="tgc-lista" id="tgcLista"></ul>
+      <p class="tgc-vai"><i class="fas fa-circle-check"></i><span>O cliente recebe só o que tem boleto ativo: <b id="tgcVai"></b>.</span></p>
+      <p class="tgc-dica"><i class="fas fa-wrench"></i> Para incluir, volte e use "Resolver antes de enviar" (reemitir o expirado ou emitir a cobrança).</p>
+    </div>
+    <footer class="tgc-pe">
+      <button type="button" class="tgc-volta" id="tgcVolta"><i class="fas fa-arrow-left"></i> Voltar e resolver antes</button>
+      <button type="button" class="tgc-segue" id="tgcSegue"><i class="fas fa-paper-plane"></i> <span>Seguir sem ele</span></button>
+    </footer>
+  </div>
 </div>
 
 <div class="tx-gav" id="txGav" hidden>
@@ -1063,23 +1105,55 @@ a.tx-c { text-decoration:none; color:inherit; }
   // 17/11/2026: cobrança do grupo com honorário FORA (boleto expirado / sem boleto): o sistema ACUSA e PEDE
   // PERMISSÃO antes de copiar o texto, abrir o WhatsApp ou enviar o e-mail — Anderson: "senão o usuário vai
   // falar que mandou o que apareceu e que não viu". Captura antes do copiar.js (que escuta no document).
-  function tgPermissao(el) {
+  // A caixa é nossa (não o confirm() do navegador): lista o que fica de fora e o que o cliente recebe; "Seguir"
+  // repete a ação que a pessoa tinha clicado (copiar, WhatsApp ou enviar), já com a ciência marcada.
+  var tgc = document.getElementById('tgConfirma'), tgcPend = null;
+  function tgcFechar() { tgc.hidden = true; tgcPend = null; }
+  function tgcAbrir(tg, repetir) {
+    var fora = []; try { fora = JSON.parse(tg.dataset.fora || '[]'); } catch (e) {}
+    var n = fora.length;
+    document.getElementById('tgcTit').textContent = n + ' honorário' + (n > 1 ? 's' : '') + ' NÃO ' + (n > 1 ? 'vão' : 'vai') + ' nesta cobrança';
+    var ul = document.getElementById('tgcLista'); ul.innerHTML = '';
+    fora.forEach(function (f) {
+      var li = document.createElement('li');
+      if (typeof f === 'string') { li.innerHTML = '<span><b></b></span>'; li.querySelector('b').textContent = f; }
+      else {
+        li.innerHTML = '<span><b></b><small></small></span><em></em>';
+        li.querySelector('b').textContent = f.empresa; li.querySelector('small').textContent = f.desc + ' · ' + f.motivo; li.querySelector('em').textContent = f.valor;
+      }
+      ul.appendChild(li);
+    });
+    document.getElementById('tgcVai').textContent = tg.dataset.vai || '';
+    document.querySelector('#tgcSegue span').textContent = 'Seguir sem ' + (n > 1 ? 'eles' : 'ele');
+    tgcPend = {tg: tg, repetir: repetir};
+    tgc.hidden = false;
+    document.getElementById('tgcVolta').focus();
+  }
+  document.getElementById('tgcVolta').addEventListener('click', tgcFechar);
+  tgc.querySelector('.tgc-fundo').addEventListener('click', tgcFechar);
+  document.getElementById('tgcSegue').addEventListener('click', function () {
+    var p = tgcPend; tgcFechar();
+    if (!p) return;
+    p.tg._ciente = true;
+    p.tg.querySelectorAll('input[name="ciente"]').forEach(function (i) { i.value = '1'; });
+    p.repetir();
+  });
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && !tgc.hidden) tgcFechar(); });
+  function tgPermissao(el, repetir) {
     var tg = el.closest('.tg'); if (!tg) return true;
     var fora = []; try { fora = JSON.parse(tg.dataset.fora || '[]'); } catch (e) {}
     if (!fora.length || tg._ciente) return true;
-    var ok = confirm('ATENÇÃO: ' + fora.length + ' honorário' + (fora.length > 1 ? 's' : '') + ' NÃO ' + (fora.length > 1 ? 'vão' : 'vai') + ' nesta cobrança, porque não ' + (fora.length > 1 ? 'têm' : 'tem') + ' boleto ativo:\n\n• ' + fora.join('\n• ') +
-                     '\n\nO cliente recebe só o que tem boleto ativo: ' + (tg.dataset.vai || '') + '.\n\nOK = seguir assim mesmo, sem ' + (fora.length > 1 ? 'eles' : 'ele') + '.\nCancelar = voltar e resolver antes (Reemitir).');
-    if (ok) { tg._ciente = true; tg.querySelectorAll('input[name="ciente"]').forEach(function (i) { i.value = '1'; }); }
-    return ok;
+    tgcAbrir(tg, repetir);
+    return false;
   }
   // no window, em captura: alguém no document já para a propagação do clique antes de chegar ao painel
   window.addEventListener('click', function (e) {
     var el = e.target.closest && e.target.closest('#txGavCorpo .tg-pede'); if (!el) return;
-    if (!tgPermissao(el)) { e.preventDefault(); e.stopImmediatePropagation(); }
+    if (!tgPermissao(el, function () { el.click(); })) { e.preventDefault(); e.stopImmediatePropagation(); }
   }, true);
   window.addEventListener('submit', function (e) {
     var f = e.target.closest && e.target.closest('#txGavCorpo .tg-pede-form'); if (!f) return;
-    if (!tgPermissao(f)) { e.preventDefault(); return; }
+    if (!tgPermissao(f, function () { if (f.requestSubmit) f.requestSubmit(); else f.submit(); })) { e.preventDefault(); return; }
     if (f.dataset.reenvio && !confirm(f.dataset.reenvio)) e.preventDefault();
   }, true);
   window.txGavFechar = function () {
