@@ -172,6 +172,7 @@ a.tx-c { text-decoration:none; color:inherit; }
 .tx-ina .tx-c-val { color:#b91c1c !important; }
 .tx-perd .tx-c-val { color:#475569; }
 .tx-c-st { background:var(--cor-f); border:1px solid var(--cor-b); color:var(--cor-e); border-radius:99px; padding:3px 9px; }
+.tx-c-st.tx-c-bco { padding:2px 4px; background:#fff; border-color:#e2e8f0; } .tx-c-bco .bco-logo { border:0; padding:0; border-radius:5px; }
 .tx-c-acoes { background:transparent; top:5px; }
 .tx-c-acoes a[title^="Abrir a ficha"] { color:#2563eb; }
 .tx-c-acoes button[title^="Não vai pagar"] { color:#7c3aed; }
@@ -625,7 +626,8 @@ a.tx-c { text-decoration:none; color:inherit; }
            data-g="{{ t.grupos | join('|') }}" data-s="{{ t.serv }}" data-k="{{ t.comp }}" data-b="{{ t.bol }}" data-v="{{ t.v }}">
         <div class="tx-c-top"><span class="tx-c-num">{{ t.num }}</span><span class="tx-c-nome">{{ t.nome }}</span></div>
         <div class="tx-c-meio"><div><div class="tx-c-val">{{ t.valor }}</div><div class="tx-c-desc">{{ t.desc }}</div></div>
-          {% if t.app %}<span class="tx-c-st" title="Boleto marcado como pago no app da Efí (o dinheiro não passou pela conta da Efí)"><i class="fas fa-mobile-screen-button"></i>app Efí</span>{% else %}<span class="tx-c-st" title="{{ ('Pagamento localizado no extrato do ' ~ t.banco) if t.auto else 'Baixa sem linha do extrato amarrada' }}"><i class="fas {{ 'fa-building-columns' if t.auto else 'fa-hand' }}"></i>{{ t.banco if t.auto else 'manual' }}</span>{% endif %}</div>
+          {# 16/11/2026 — Anderson: "não marcar EFI ou Bradesco e sim o icons": só o logo do banco onde caiu #}
+          {% if t.app %}<span class="tx-c-st tx-c-bco" title="Boleto marcado como pago no app da Efí (o dinheiro não passou pela conta da Efí)">{{ logo_banco('364', '#94a3b8', 22, 'Efí') }}<i class="fas fa-mobile-screen-button"></i></span>{% elif t.auto %}<span class="tx-c-st tx-c-bco" title="Pagamento localizado no extrato do {{ t.banco }}">{{ logo_banco(t.banco, '#94a3b8', 22, t.banco) }}</span>{% else %}<span class="tx-c-st" title="Baixa sem linha do extrato amarrada"><i class="fas fa-hand"></i>manual</span>{% endif %}</div>
       </div>
       {% endfor %}
     </div>
