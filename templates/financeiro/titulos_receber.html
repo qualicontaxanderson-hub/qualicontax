@@ -501,6 +501,10 @@ a.tx-c { text-decoration:none; color:inherit; }
 .tg-t-bol i.ok { color:#16a34a; } .tg-t-bol i.alerta { color:#d97706; }
 .tg-t strong { font-size:14.5px; font-variant-numeric:tabular-nums; white-space:nowrap; } .tg-t > i.fa-chevron-right { color:#cbd5e1; font-size:11px; }
 .tg-resolver { border-color:#fcd34d; background:linear-gradient(180deg, #fffbeb, #fff 60%); }
+.tg-fora { border:2px solid #dc2626; background:#fef2f2; border-radius:12px; padding:10px 12px; margin-bottom:10px; color:#7f1d1d; }
+.tg-fora > b { display:flex; align-items:center; gap:8px; font-size:13.5px; color:#b91c1c; } .tg-fora > b i { font-size:16px; }
+.tg-fora ul { margin:8px 0 6px; padding-left:18px; font-size:13px; } .tg-fora li { margin:2px 0; } .tg-fora li span { font-weight:800; } .tg-fora li em { font-style:normal; font-weight:800; font-variant-numeric:tabular-nums; }
+.tg-fora small { display:block; font-size:12px; line-height:1.45; color:#991b1b; }
 .tg-resolver h4 > i { background:#fef3c7; color:#b45309; }
 .tg .tj-copias-txt { display:grid; grid-template-columns:1.35fr 1fr; gap:8px; }
 @media (max-width:900px) {
@@ -1056,6 +1060,28 @@ a.tx-c { text-decoration:none; color:inherit; }
       .then(function (html) { gavCorpo.innerHTML = html; gav.querySelector('.tx-gav-pane').scrollTop = 0; })
       .catch(function () { gavCorpo.innerHTML = '<div class="tx-gav-carregando"><i class="fas fa-triangle-exclamation"></i>Não consegui abrir a cobrança do grupo agora. Tente de novo.</div>'; });
   };
+  // 17/11/2026: cobrança do grupo com honorário FORA (boleto expirado / sem boleto): o sistema ACUSA e PEDE
+  // PERMISSÃO antes de copiar o texto, abrir o WhatsApp ou enviar o e-mail — Anderson: "senão o usuário vai
+  // falar que mandou o que apareceu e que não viu". Captura antes do copiar.js (que escuta no document).
+  function tgPermissao(el) {
+    var tg = el.closest('.tg'); if (!tg) return true;
+    var fora = []; try { fora = JSON.parse(tg.dataset.fora || '[]'); } catch (e) {}
+    if (!fora.length || tg._ciente) return true;
+    var ok = confirm('ATENÇÃO: ' + fora.length + ' honorário' + (fora.length > 1 ? 's' : '') + ' NÃO ' + (fora.length > 1 ? 'vão' : 'vai') + ' nesta cobrança, porque não ' + (fora.length > 1 ? 'têm' : 'tem') + ' boleto ativo:\n\n• ' + fora.join('\n• ') +
+                     '\n\nO cliente recebe só o que tem boleto ativo: ' + (tg.dataset.vai || '') + '.\n\nOK = seguir assim mesmo, sem ' + (fora.length > 1 ? 'eles' : 'ele') + '.\nCancelar = voltar e resolver antes (Reemitir).');
+    if (ok) { tg._ciente = true; tg.querySelectorAll('input[name="ciente"]').forEach(function (i) { i.value = '1'; }); }
+    return ok;
+  }
+  // no window, em captura: alguém no document já para a propagação do clique antes de chegar ao painel
+  window.addEventListener('click', function (e) {
+    var el = e.target.closest && e.target.closest('#txGavCorpo .tg-pede'); if (!el) return;
+    if (!tgPermissao(el)) { e.preventDefault(); e.stopImmediatePropagation(); }
+  }, true);
+  window.addEventListener('submit', function (e) {
+    var f = e.target.closest && e.target.closest('#txGavCorpo .tg-pede-form'); if (!f) return;
+    if (!tgPermissao(f)) { e.preventDefault(); return; }
+    if (f.dataset.reenvio && !confirm(f.dataset.reenvio)) e.preventDefault();
+  }, true);
   window.txGavFechar = function () {
     gav.hidden = true; document.body.style.overflow = '';
     try { if (location.hash.indexOf('#cob=') === 0 || location.hash.indexOf('#grupo=') === 0) history.replaceState(null, '', location.pathname + location.search); } catch (e) {}

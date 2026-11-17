@@ -322,13 +322,31 @@ def montar_email(d, link, empresa_nome, telefone=''):
     return assunto, html, '\n'.join(t)
 
 
-def enviar_email(grupo_id, para, usuario_id=None):
-    """Manda o e-mail único da rede. Devolve (ok, mensagem para a tela, dados)."""
-    from models.fin_cobranca import FinCobrancaConta
+def fora_da_pagina(d):
+    """O que NÃO vai na cobrança do grupo (boleto expirado / sem boleto), para a tela ACUSAR e pedir permissão —
+    Anderson (17/11/2026): "quando tiver boletos expirados quero que o sistema ACUSE e PEÇA PERMISSÃO, senão o
+    usuário vai falar que mandou o que apareceu e que não viu"."""
+    out = []
+    for e in d['empresas']:
+        for t in e['titulos']:
+            if t['estado'] in ('expirado', 'sem_boleto'):
+                out.append({'empresa': e['nome'], 'desc': t['desc'], 'valor': t['valor_txt'],
+                            'motivo': 'boleto expirado' if t['estado'] == 'expirado' else 'sem boleto',
+                            'txt': f"{e['nome']} · {t['desc']} · {t['valor_txt']} · {'boleto expirado' if t['estado'] == 'expirado' else 'sem boleto'}"})
+    return out
+
+
+def enviar_email(grupo_id, para, usuario_id=None, ciente=False):
+    """Manda o e-mail único da rede. Devolve (ok, mensagem para a tela, dados).
+    ``ciente``: quem envia viu a lista do que fica de fora (boleto expirado / sem boleto) e confirmou."""
     from utils import email_envio
     d = levantar(grupo_id)
     if not d:
         return False, 'Grupo não encontrado.', None
+    fora = fora_da_pagina(d)
+    if fora and not ciente:
+        return False, (f"{len(fora)} honorário{'s' if len(fora) != 1 else ''} ficaria{'m' if len(fora) != 1 else ''} FORA desta cobrança "
+                       f"({'; '.join(f['txt'] for f in fora)}). Confirme na janela que quer enviar sem ele{'s' if len(fora) != 1 else ''}, ou reemita antes."), d
     if not d['n_pagina']:
         return False, 'Nenhum boleto ativo neste grupo: emita ou reemita antes de enviar.', d
     destinos = [p.strip().lower() for p in str(para or '').replace(';', ',').split(',') if p.strip()]
@@ -342,7 +360,8 @@ def enviar_email(grupo_id, para, usuario_id=None):
     link = url_da_pagina(pag)
     primeiro = next(t['boleto'] for e in d['empresas'] for t in e['titulos'] if t['estado'] == 'na_pagina')
     try:
-        rem = FinCobrancaConta.remetente_email(primeiro['conta_cobranca_id'])
+        from utils.cobranca_email import remetente_do_boleto
+        rem = remetente_do_boleto(primeiro)
     except ValueError as exc:
         return False, f'{exc} Preencha o bloco "E-mail de cobrança" na conta de cobrança.', d
     empresa_nome = _empresa(primeiro['empresa_id'])

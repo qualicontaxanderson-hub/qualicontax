@@ -5,7 +5,7 @@
    (boleto expirado)". O CSS (tj-* e tg-*) mora em titulos_receber.html. Variáveis: routes/financeiro_grupo_cobranca.py. #}
 {% set pode_email = pode_rota('financeiro.grupo_cobranca_email') %}
 {% set pode_reemitir = pode_rota('financeiro.grupo_reemitir') %}
-<div class="tj tg {{ d.cls }}">
+<div class="tj tg {{ d.cls }}" data-fora="{{ fora | map(attribute='txt') | list | tojson | forceescape }}" data-vai="{{ d.n_pagina }} honorário{{ 's' if d.n_pagina != 1 }} · {{ d.total_pagina_txt }}">
   <header class="tj-cab">
     <div class="tj-cab-cli">
       <span class="tj-avatar"><i class="fas fa-layer-group"></i></span>
@@ -70,11 +70,18 @@
     <div class="tj-col3">
       <section class="tj-sec tj-sec-acoes">
         <h4><i class="fas fa-mobile-screen-button"></i> Página do grupo <small>· um link só, com todas as cobranças</small></h4>
+        {% if fora %}
+        <div class="tg-fora">
+          <b><i class="fas fa-triangle-exclamation"></i> Atenção: {{ fora|length }} honorário{{ 's' if fora|length != 1 }} NÃO {{ 'vão' if fora|length != 1 else 'vai' }} nesta cobrança</b>
+          <ul>{% for f in fora %}<li><span>{{ f.empresa }}</span> · {{ f.desc }} · <em>{{ f.valor }}</em> · {{ f.motivo }}</li>{% endfor %}</ul>
+          <small>O cliente recebe só o que tem boleto ativo ({{ d.n_pagina }} honorário{{ 's' if d.n_pagina != 1 }} · {{ d.total_pagina_txt }}). Ao copiar, abrir o WhatsApp ou enviar o e-mail, o sistema pede a sua confirmação. Para incluir, resolva em "Resolver antes de enviar".</small>
+        </div>
+        {% endif %}
         {% if d.n_pagina and link %}
         <div class="tj-copias">
           <dt>Texto da cobrança <small>· lista cada empresa com os honorários, o total e o link da página do grupo, onde o cliente copia o Pix ou a linha digitável de cada boleto; cole no WhatsApp</small></dt>
           <div class="tj-copias-txt">
-            <button type="button" class="tj-ib" data-copiar data-copiar-rotulo="Texto da cobrança do grupo" data-copiar-texto="{{ texto }}"><i class="fab fa-whatsapp"></i>Copiar texto da cobrança</button>
+            <button type="button" class="tj-ib tg-pede" data-copiar data-copiar-rotulo="Texto da cobrança do grupo" data-copiar-texto="{{ texto }}"><i class="fab fa-whatsapp"></i>Copiar texto da cobrança</button>
             <a class="tj-ib tj-ib-pix" href="{{ link }}" target="_blank" rel="noopener"><i class="fas fa-mobile-screen-button"></i>Abrir a página do grupo</a>
           </div>
         </div>
@@ -102,8 +109,8 @@
 
       <section class="tj-sec tj-sec-email">
         <h4><i class="fas fa-address-book"></i> Contatos da rede <small>· e-mail e WhatsApp · sem repetir quem aparece em várias empresas</small></h4>
-        {% if pode_email and d.n_pagina %}<form method="POST" action="{{ url_for('financeiro.grupo_cobranca_email', grupo_id=g.id) }}" class="tj-form tj-form-email tj-form-solta"{% if pag and pag.email_enviado_em %} onsubmit="return confirm('Já foi enviado em {{ pag.email_enviado_em.strftime('%d/%m/%Y %H:%M') }}. Enviar de novo?');"{% endif %}>
-        <input type="hidden" name="volta" value="{{ volta }}">{% endif %}
+        {% if pode_email and d.n_pagina %}<form method="POST" action="{{ url_for('financeiro.grupo_cobranca_email', grupo_id=g.id) }}" class="tj-form tj-form-email tj-form-solta tg-pede-form"{% if pag and pag.email_enviado_em %} data-reenvio="Já foi enviado em {{ pag.email_enviado_em.strftime('%d/%m/%Y %H:%M') }}. Enviar de novo?"{% endif %}>
+        <input type="hidden" name="volta" value="{{ volta }}"><input type="hidden" name="ciente" value="0">{% endif %}
         <div class="tj-ctt">
           {% for c in d.contatos %}
             {% set e = c.emails[0] if c.emails else '' %}
@@ -111,7 +118,7 @@
               {% if e and pode_email and d.n_pagina %}<input type="checkbox" name="para_chk" value="{{ e }}"{% if c.padrao %} checked{% endif %}>{% else %}<i class="fas fa-user tj-ctt-ico"></i>{% endif %}
               <b>{{ c.nome }}</b><small>{{ e or 'sem e-mail' }} · {{ c.empresas|length }} empresa{{ 's' if c.empresas|length != 1 }}</small>
               {% if c.financeiro %}<em>Financeiro</em>{% elif c.principal %}<em class="sec">principal</em>{% endif %}
-              {% if c.cel and texto %}<a class="tj-wa" href="https://wa.me/{{ c.cel }}?text={{ texto_url }}" target="_blank" rel="noopener" title="WhatsApp {{ c.celular }} · abre a conversa com o texto do grupo pronto; nada sai sozinho"><i class="fab fa-whatsapp"></i></a>
+              {% if c.cel and texto %}<a class="tj-wa tg-pede" href="https://wa.me/{{ c.cel }}?text={{ texto_url }}" target="_blank" rel="noopener" title="WhatsApp {{ c.celular }} · abre a conversa com o texto do grupo pronto; nada sai sozinho"><i class="fab fa-whatsapp"></i></a>
               {% else %}<span class="tj-wa off" title="{{ 'sem celular no cadastro' if not c.cel else 'sem boleto ativo para cobrar' }}"><i class="fas fa-phone-slash"></i></span>{% endif %}
             </label>
             {% for e2 in c.emails[1:] %}

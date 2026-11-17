@@ -463,6 +463,27 @@ def destinatarios_do_boleto(b):
     return destinatarios_cobranca(cliente_id, email_cad or b.get('pagador_email'))
 
 
+def remetente_do_boleto(b):
+    """A caixa que manda o e-mail deste boleto. 17/11/2026: a conta do boleto pode não ter e-mail (a conta 4,
+    "EFÍ — BOLETOS DO CONEXA", só consulta) e o envio parava com "A conta de cobrança não tem e-mail de cobrança
+    preenchido" — Anderson: "o e-mail não pode falhar". Ordem: a conta do boleto; senão a conta padrão da
+    empresa (a que emite); senão a caixa do departamento Financeiro (8). Levanta ValueError só se nenhuma serve."""
+    from models.fin_cobranca import FinCobrancaConta
+    erro = None
+    for conta_id in (b.get('conta_cobranca_id'), (FinCobrancaConta.padrao_da_empresa(b['empresa_id']) or {}).get('id')):
+        if not conta_id:
+            continue
+        try:
+            return FinCobrancaConta.remetente_email(conta_id)
+        except ValueError as exc:
+            erro = erro or exc
+    try:
+        from utils import email_caixas
+        return email_caixas.remetente_do_departamento(8)
+    except ValueError as exc:
+        raise erro or exc
+
+
 def enviar_boleto(boleto_id, para=None, usuario_id=None, com_nota=True):
     """Manda o e-mail de cobrança do boleto pela caixa da conta. Devolve (ok, mensagem para a tela).
     ``com_nota=False`` manda só o boleto, mesmo quando há nota fiscal (Anderson, 15/11/2026)."""
@@ -487,7 +508,7 @@ def enviar_boleto(boleto_id, para=None, usuario_id=None, com_nota=True):
     if any('@' not in p for p in destinos):
         return False, 'Há um endereço de e-mail inválido.'
     try:
-        rem = FinCobrancaConta.remetente_email(b['conta_cobranca_id'])
+        rem = remetente_do_boleto(b)
     except ValueError as exc:
         return False, f'{exc} Preencha o bloco "E-mail de cobrança" na conta de cobrança.'
     nota = NfseEmitida.get(b['nfse_id']) if (b.get('nfse_id') and com_nota) else None

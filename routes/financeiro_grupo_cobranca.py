@@ -50,7 +50,8 @@ def grupo_cobranca(grupo_id):
     whats = [p for p in d['contatos'] if p['cel']]
     g = d['grupo']['nome']
     iniciais = ''.join(p[0] for p in g.split()[:2]).upper() or 'G'
-    return render_template('financeiro/_grupo_cobranca.html', d=d, g=d['grupo'], pag=pag, link=link, texto=texto,
+    fora = CG.fora_da_pagina(d)
+    return render_template('financeiro/_grupo_cobranca.html', d=d, g=d['grupo'], pag=pag, link=link, texto=texto, fora=fora,
                            texto_url=quote(texto), whats=whats, iniciais=iniciais, volta=_volta(grupo_id),
                            hoje_iso=_hoje().isoformat(), BOLETO_ROTULO=CG.TR.BOLETO_ROTULO)
 
@@ -59,7 +60,7 @@ def grupo_cobranca(grupo_id):
 @permission_required('financeiro.titulos')
 def grupo_cobranca_email(grupo_id):
     para = ', '.join(p for p in request.form.getlist('para_chk') + [request.form.get('para') or ''] if p.strip()) or None
-    ok, msg, d = CG.enviar_email(grupo_id, para, usuario_id=current_user.id)
+    ok, msg, d = CG.enviar_email(grupo_id, para, usuario_id=current_user.id, ciente=request.form.get('ciente') == '1')
     flash(msg, 'success' if ok else 'danger')
     registrar('escrita.enviou_email_cobranca_grupo', 'financeiro', tabela='grupos_clientes', registro_id=grupo_id,
               depois={'ok': ok, 'para': (para or '')[:200], 'msg': msg[:200], 'honorarios': (d or {}).get('n_pagina'),
