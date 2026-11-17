@@ -42,21 +42,21 @@ SITS = OrderedDict([
 ORGANIZAR = OrderedDict([('sit', 'Situação'), ('cliente', 'Cliente'), ('grupo', 'Grupo'), ('servico', 'Serviço'),
                          ('banco', 'Banco'), ('mes', 'Mês'), ('dia', 'Dia'), ('empresa', 'Empresa do escritório')])
 DATA_REF = {'mov': 'pago pela data do pagamento, em aberto pelo vencimento', 'venc': 'pelo vencimento', 'comp': 'pela competência'}
-BANCO_NOME = {'237': 'Bradesco', '336': 'C6 Bank', '403': 'Cora', '364': 'Efí', '748': 'Sicredi', '260': 'Nubank',
-              '348': 'XP', '756': 'Sicoob', '323': 'Mercado Pago', '341': 'Itaú', '033': 'Santander',
-              '104': 'Caixa', '001': 'Banco do Brasil', '077': 'Inter', '208': 'BTG'}
-SEM_EXTRATO, APP_EFI, SEM_BOLETO = 'manual', 'app_efi', 'sem_boleto'
-BANCO_ESPECIAL = {SEM_EXTRATO: 'Baixa manual (sem extrato)', APP_EFI: 'Marcado no app da Efí',
-                  SEM_BOLETO: 'Sem boleto'}
+# 17/11/2026 — Anderson: "Os banco só os que tem cobranças". Banco = conta de cobrança (fin_cobranca_contas):
+# hoje Efí e Bradesco. O pagamento que caiu noutra conta (Pix, depósito) fica como "Outra conta".
+BANCO_COBRANCA = {'364': 'Efí', '237': 'Bradesco'}
+OUTRA, SEM_EXTRATO, APP_EFI, SEM_BOLETO = 'outra', 'manual', 'app_efi', 'sem_boleto'
+BANCO_ESPECIAL = {OUTRA: 'Outra conta (Pix/depósito)', SEM_EXTRATO: 'Baixa manual (sem extrato)',
+                  APP_EFI: 'Marcado no app da Efí', SEM_BOLETO: 'Sem boleto'}
+BANCO_NOME = dict(BANCO_COBRANCA)
 
 
 def _banco(nome_cru):
     from utils.bancos_logo import codigo
     c = codigo(nome_cru)
-    if c:
-        return c, BANCO_NOME.get(c, (nome_cru or '').strip())
-    n = (nome_cru or '').strip()
-    return ('x:' + n.lower(), n) if n else (SEM_EXTRATO, BANCO_ESPECIAL[SEM_EXTRATO])
+    if c in BANCO_COBRANCA:
+        return c, BANCO_COBRANCA[c]
+    return (OUTRA, BANCO_ESPECIAL[OUTRA]) if (nome_cru or '').strip() else (SEM_EXTRATO, BANCO_ESPECIAL[SEM_EXTRATO])
 
 
 def _serv_base(d):
@@ -96,7 +96,10 @@ def _base_ler():
                       c.numero_cliente, c.avulso, cat.nome AS categoria
                  FROM fin_titulos t LEFT JOIN clientes c ON c.id = t.cliente_id
                  LEFT JOIN fin_categorias cat ON cat.id = t.categoria_id
-                WHERE t.tipo = 'R'""", fetch=True) or []
+                WHERE t.tipo = 'R' AND (COALESCE(t.origem, '') <> 'extrato' OR cat.nome LIKE 'Honor%%')""", fetch=True) or []
+    # 17/11/2026 — Anderson: "Deva 11 nunca foi cobrança!!". Só COBRANÇA entra: título de honorário/serviço
+    # (Conexa, nota, boleto, lote, contrato, manual) ou o honorário que chegou pelo extrato. Fica fora o que o
+    # extrato classificou como outra receita (Pró-labore recebido, Cashback, MA Comércio, Pedágios, DEVA11).
     T = {t['id']: t for t in tit}
     bx = q("""SELECT b.id, b.titulo_id, b.data_baixa, b.valor + b.juros + b.multa - b.desconto AS v, b.origem,
                      b.referencia, b.lancamento_id, l.banco AS banco_linha
@@ -139,8 +142,8 @@ def _servicos(t, contratos, valor):
     return [(_serv_base(cat) if re.match(r'(?i)honor[aá]rios?\s+cont', cat) else cat, float(valor))], False
 
 
-def coletar(f, fresco=False):
-    """f: dict de filtros já lidos (ler_filtros). Devolve (fatos, hoje)."""
+def coletar(f, fresco=False, so_base=False):
+    """f: dict de filtros já lidos (ler_filtros). Devolve (fatos, hoje); so_base = só situação e período."""
     hoje, T, bx, contratos, grupos, emp, bol = _base(fresco)
     fatos = []
 
@@ -187,70 +190,127 @@ def coletar(f, fresco=False):
     # data que vale para o período e a ordem
     for x in fatos:
         x['data'] = x['comp'] if f['data_ref'] == 'comp' else (x['venc'] if f['data_ref'] == 'venc' else x['data_mov'])
-    return [x for x in fatos if _passa(x, f)], hoje
+    base = [x for x in fatos if _passa_base(x, f)]
+    return (base, hoje) if so_base else (filtrar(base, f), hoje)
 
 
-def _passa(x, f):
+def _passa_base(x, f):
+    """Situação e período: o que define o universo do relatório."""
     if f['sit'] and x['sit'] not in f['sit']:
         return False
     if f['de'] and (not x['data'] or x['data'] < f['de']):
         return False
     if f['ate'] and (not x['data'] or x['data'] > f['ate']):
         return False
-    if f['tipo_cad'] and x['tipo_cad'] not in f['tipo_cad']:
-        return False
-    if f['grupos'] and not ((set(x['grupo_ids']) & f['grupos']) or ('sem' in f['grupos'] and not x['grupo_ids'])):
-        return False
-    if f['clientes'] and str(x['cliente_id']) not in f['clientes']:
-        return False
-    if f['empresas'] and str(x['empresa_id']) not in f['empresas']:
-        return False
-    if f['bancos'] and x['banco_k'] not in f['bancos']:
-        return False
-    if f['servicos']:
-        x['linhas'] = [(s, v) for s, v in x['linhas'] if s in f['servicos']]
-        if not x['linhas']:
-            return False
-        x['valor'] = round(sum(v for _, v in x['linhas']), 2)
-    if f['vmin'] is not None and x['valor'] < f['vmin']:
-        return False
-    if f['vmax'] is not None and x['valor'] > f['vmax']:
-        return False
-    if f['busca']:
-        alvo = f"{x['num']} {x['nome']} {x['doc']}".lower()
-        if f['busca'] not in alvo and not (f['busca'].isdigit() and f['busca'] in x['doc']):
-            return False
     return True
 
 
-def opcoes():
-    """O que a caixa oferece — só o que existe no a receber, com quantos lançamentos tem cada um."""
-    tudo = ler_filtros({})
-    tudo['sit'] = set(SITS)
-    fatos, hoje = coletar(tudo)
-    gr, cl, sv, bc, em = defaultdict(int), {}, defaultdict(int), {}, {}
-    for x in fatos:
-        for i, n in zip(x['grupo_ids'], x['grupos']):
-            gr[(i, n)] += 1
-        if not x['grupo_ids']:
-            gr[('sem', 'Sem grupo')] += 1
-        if x['cliente_id']:
-            c = cl.setdefault(str(x['cliente_id']), {'id': str(x['cliente_id']), 'num': x['num'], 'nome': x['nome'],
-                                                    'av': x['tipo_cad'] == 'avulso', 'n': 0})
-            c['n'] += 1
-        for s, _ in x['linhas']:
-            sv[s] += 1
-        b = bc.setdefault(x['banco_k'], {'k': x['banco_k'], 'nome': x['banco'], 'n': 0}); b['n'] += 1
-        e = em.setdefault(str(x['empresa_id']), {'id': str(x['empresa_id']), 'nome': x['empresa'], 'n': 0}); e['n'] += 1
-    datas = [x['data_mov'] for x in fatos if x['data_mov']]
-    return {
-        'grupos': sorted([{'id': i, 'nome': n, 'n': c} for (i, n), c in gr.items()], key=lambda g: (g['id'] == 'sem', g['nome'])),
-        'clientes': sorted(cl.values(), key=lambda c: (int(c['num']) if c['num'].isdigit() else 10 ** 9, c['nome'])),
-        'servicos': [{'nome': s, 'n': n} for s, n in sorted(sv.items(), key=lambda z: -z[1])],
-        'bancos': sorted(bc.values(), key=lambda b: (b['k'] in (SEM_EXTRATO, APP_EFI, SEM_BOLETO), -b['n'])),
-        'empresas': sorted(em.values(), key=lambda e: -e['n']),
-        'hoje': hoje.isoformat(), 'mais_antigo': min(datas).isoformat() if datas else '',
-    }
+# Filtros "inteligentes" (17/11/2026 — Anderson: "Os filtros tem que ser os inteligente e ocultos"): cada um
+# mostra só o que existe com os OUTROS marcados, com quantos lançamentos e quanto dá.
+_SEL = {'cad': 'tipo_cad', 'grupos': 'grupos', 'clientes': 'clientes', 'servicos': 'servicos', 'bancos': 'bancos',
+        'emp': 'empresas'}
+
+
+def _chaves_dim(x, d):
+    if d == 'cad':
+        return [x['tipo_cad']]
+    if d == 'grupos':
+        return x['grupo_ids'] or ['sem']
+    if d == 'clientes':
+        return [str(x['cliente_id'])] if x['cliente_id'] else []
+    if d == 'servicos':
+        return [s for s, _ in x['linhas']]
+    if d == 'bancos':
+        return [x['banco_k']]
+    return [str(x['empresa_id'])]
+
+
+def filtrar(base, f, menos=None):
+    """Os fatos da base que passam em todos os filtros (menos ``menos``). Serviço escolhido: o fato fica só com
+    a parte daquele serviço (cópia — a base não muda)."""
+    out = []
+    for x in base:
+        ok = True
+        for d, k in _SEL.items():
+            if d == menos or not f[k]:
+                continue
+            if not (set(_chaves_dim(x, d)) & f[k]):
+                ok = False
+                break
+        if not ok:
+            continue
+        if f['servicos'] and menos != 'servicos':
+            ls = [(s, v) for s, v in x['linhas'] if s in f['servicos']]
+            x = dict(x, linhas=ls, valor=round(sum(v for _, v in ls), 2))
+        if menos != 'valor':
+            if f['vmin'] is not None and x['valor'] < f['vmin']:
+                continue
+            if f['vmax'] is not None and x['valor'] > f['vmax']:
+                continue
+        if f['busca'] and f['busca'] not in f"{x['num']} {x['nome']} {x['doc']}".lower():
+            continue
+        out.append(x)
+    return out
+
+
+def _nome_marcado(d, v):
+    _, T, _, _, grupos, emp, _ = _base()
+    if d == 'grupos':
+        if v == 'sem':
+            return 'Sem grupo'
+        for gs in grupos.values():
+            for i, n in gs:
+                if str(i) == v:
+                    return n
+    if d == 'clientes':
+        for t in T.values():
+            if str(t['cliente_id']) == v:
+                return _nome(t['contraparte_nome'])
+    if d == 'bancos':
+        return BANCO_NOME.get(v) or BANCO_ESPECIAL.get(v, v)
+    if d == 'cad':
+        return {'cliente': 'Clientes', 'avulso': 'Avulsos', 'sem': 'Sem cadastro'}.get(v, v)
+    if d == 'emp':
+        return {str(k): n for k, n in emp.items()}.get(v, v)
+    return v
+
+
+def _facetas(base, f):
+    """{dim: [{v, rot, n, total, ...}]} — só opções com lançamento (as marcadas ficam mesmo zeradas)."""
+    out = {}
+    for d, k in _SEL.items():
+        acc = {}
+        for x in filtrar(base, f, menos=d):
+            for v in _chaves_dim(x, d):
+                o = acc.get(v)
+                if o is None:
+                    o = acc[v] = {'v': v, 'n': 0, 'total': 0.0}
+                    if d == 'cad':
+                        o['rot'] = {'cliente': 'Clientes', 'avulso': 'Avulsos', 'sem': 'Sem cadastro'}[v]
+                    elif d == 'grupos':
+                        o['rot'] = 'Sem grupo' if v == 'sem' else x['grupos'][x['grupo_ids'].index(v)]
+                    elif d == 'clientes':
+                        o['rot'], o['num'], o['av'], o['doc'] = x['nome'], x['num'], x['tipo_cad'] == 'avulso', x['doc']
+                    elif d == 'bancos':
+                        o['rot'] = x['banco']
+                    elif d == 'emp':
+                        o['rot'] = x['empresa']
+                    else:
+                        o['rot'] = v
+                o['n'] += 1
+                o['total'] += (dict(x['linhas']).get(v, 0.0) if d == 'servicos' else x['valor'])
+        for v in f[k]:     # marcado e zerado: continua na lista (com o nome) para poder tirar
+            if v not in acc:
+                acc[v] = {'v': v, 'rot': _nome_marcado(d, v), 'n': 0, 'total': 0.0}
+        lst = sorted(acc.values(), key=lambda o: (-o['n'], str(o['rot'])))
+        if d == 'clientes':
+            lst.sort(key=lambda o: (int(o['num']) if str(o.get('num', '')).isdigit() else 10 ** 9, str(o['rot'])))
+        elif d == 'grupos':
+            lst.sort(key=lambda o: (o['v'] == 'sem', str(o['rot'])))
+        for o in lst:
+            o['total'] = round(o['total'], 2)
+        out[d] = lst
+    return out
 
 
 def ler_filtros(a):
@@ -281,13 +341,16 @@ def ler_filtros(a):
 
 
 def previa(f):
-    fatos, _ = coletar(f)
+    base, _ = coletar(f, so_base=True)
+    fatos = filtrar(base, f)
     por = {k: [0, 0.0] for k in SITS}
     for x in fatos:
-        por[x['sit']][0] += 1; por[x['sit']][1] += x['valor']
+        por[x['sit']][0] += 1
+        por[x['sit']][1] += x['valor']
     return {'n': len(fatos), 'total': round(sum(x['valor'] for x in fatos), 2),
             'clientes': len({x['cliente_id'] or x['nome'] for x in fatos}),
-            'por': {k: [v[0], round(v[1], 2)] for k, v in por.items()}}
+            'por': {k: [v[0], round(v[1], 2)] for k, v in por.items()},
+            'facetas': _facetas(base, f)}
 
 
 def descrever(f, rot):

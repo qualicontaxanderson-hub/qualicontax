@@ -3,7 +3,9 @@
    na tela... retirar um extrato de tudo... com muitos filtros e dando a opção de combinar, se for os Pago serão
    pagos a vencer, vencido"; "consultas por Grupo, por periodo, por clientes ou avulsos... por algum serviço
    especifico"; "detalhado por serviços"; "Por banco"; "Pensa pensa e tem que ser completo".
-   Dados e desenho: utils/relatorio_titulos.py. Rotas: financeiro.titulos_relatorio(_opcoes|_previa). #}
+   Dados e desenho: utils/relatorio_titulos.py. Rotas: financeiro.titulos_relatorio e titulos_relatorio_previa (a prévia traz as opções de cada filtro). #}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/tom-select@2.4.3/dist/css/tom-select.default.min.css">
+<script src="https://cdn.jsdelivr.net/npm/tom-select@2.4.3/dist/js/tom-select.complete.min.js"></script>
 <style>
 .rl-fundo { position:fixed; inset:0; z-index:1200; background:rgba(15,23,42,.5); backdrop-filter:blur(2px); display:none; }
 .rl-fundo.on { display:block; animation:rlFade .18s; }
@@ -83,7 +85,30 @@
 .rl-bt { font:inherit; font-weight:800; border-radius:12px; padding:11px 18px; cursor:pointer; border:1.5px solid #e2e8f0; background:#fff; color:#334155; display:inline-flex; gap:8px; align-items:center; }
 .rl-bt.prim { border:0; background:linear-gradient(135deg, #16a34a, #15803d); color:#fff; box-shadow:0 8px 20px rgba(22,163,74,.3); font-size:15px; padding:12px 22px; }
 .rl-bt.prim:disabled { opacity:.55; cursor:not-allowed; box-shadow:none; }
+.rl-campos { display:grid; grid-template-columns:repeat(2, minmax(0,1fr)); gap:12px 14px; }
+.rl-campo { min-width:0; } .rl-campo[hidden] { display:none; }
+.rl-campo label { display:flex; align-items:center; gap:6px; font-size:11.5px; font-weight:700; color:#0f3d2e; letter-spacing:.3px; text-transform:uppercase; margin-bottom:6px; }
+.rl-campo label i { color:#16a34a; font-size:12px; }
+.rl-campo .ts-wrapper { width:100%; }
+.rl-campo .ts-control { min-height:40px; border:1px solid #d7e3dc; border-radius:10px; padding:5px 10px; font-size:13.5px; background:#fff; box-shadow:none; }
+.rl-campo .ts-wrapper.focus .ts-control { border-color:#22c55e; box-shadow:0 0 0 3px rgba(34,197,94,.14); }
+.rl-campo .ts-wrapper.multi .ts-control > div { background:#dcfce7 !important; color:#166534 !important; border:none !important; background-image:none !important;
+  text-shadow:none !important; box-shadow:none !important; border-radius:6px; font-size:12px; font-weight:700; padding:2px 6px; margin:2px 4px 2px 0; }
+.rl-campo .ts-wrapper.plugin-remove_button .item .remove { border-left:1px solid rgba(0,0,0,.1) !important; padding:0 5px; }
+.rl-valor { display:flex; align-items:center; gap:8px; } .rl-valor input { flex:1; min-width:0; height:40px; } .rl-valor span { color:#94a3b8; font-size:12.5px; }
+.ts-dropdown.rl-dd { z-index:1300; font-size:13px; border:1px solid #d7e3dc; border-radius:10px; box-shadow:0 12px 28px rgba(15,23,42,.18); margin-top:4px; }
+.ts-dropdown.rl-dd .active { background:#ecfdf5; color:#0f3d2e; } .ts-dropdown.rl-dd .no-results { color:#94a3b8; }
+.rl-opt { display:flex; align-items:center; gap:8px; } .rl-opt-t { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.rl-opt-t img { height:15px; vertical-align:-3px; margin-right:6px; } .rl-opt-t .av { font-size:10px; font-weight:800; color:#b45309; background:#fffbeb; border-radius:6px; padding:1px 5px; margin-left:4px; }
+.rl-opt-s { font-size:11.5px; color:#94a3b8; margin-left:4px; }
+.rl-opt-v { font-size:11.5px; color:#64748b; font-weight:600; flex-shrink:0; }
+.rl-opt-n { font-size:11px; font-weight:700; color:#15803d; background:#dcfce7; border-radius:99px; padding:0 7px; flex-shrink:0; }
+.rl-campos-pe { display:flex; align-items:center; gap:12px; margin-top:12px; flex-wrap:wrap; } .rl-campos-pe .rl-tog { flex:1; min-width:220px; }
+.rl-zerar { display:inline-flex; align-items:center; gap:6px; height:32px; padding:0 14px; border-radius:9px; border:1px solid #d7e3dc; background:#fff; color:#475569;
+  font-size:12.5px; font-weight:700; cursor:pointer; font-family:inherit; } .rl-zerar:hover { border-color:#fca5a5; color:#b91c1c; background:#fef2f2; }
+.rl-dica { margin-top:8px; font-size:12px; color:#7d968a; } .rl-dica i { margin-right:4px; }
 @media (max-width:980px) {
+  .rl-campos { grid-template-columns:minmax(0,1fr); }
   .rl { top:0; left:0; transform:none; width:100vw; max-height:100vh; height:100vh; border-radius:0; }
   .rl-corpo { grid-template-columns:minmax(0,1fr); overflow-y:auto; overflow-x:hidden; } .rl-filtros, .rl-sai { overflow:visible; min-width:0; }
   .rl-bloco { min-width:0; } .rl-datas input[type=date] { flex:1 1 130px; min-width:0; }
@@ -127,38 +152,30 @@
         <div class="rl-seg" id="rlRef"><button type="button" data-v="mov" title="Pagos pela data em que o dinheiro entrou; em aberto pelo vencimento">Pagamento / vencimento</button><button type="button" data-v="venc">Vencimento</button><button type="button" data-v="comp">Competência</button></div>
       </div>
     </section>
-    <section class="rl-bloco">
-      <div class="rl-h"><i class="fas fa-users"></i> Quem</div>
-      <div class="rl-chips" id="rlCad"></div>
-      <div class="rl-dois" style="margin-top:12px;">
-        <div><div class="rl-h" style="margin-bottom:6px;"><i class="fas fa-layer-group"></i> Grupo <button type="button" class="rl-limpa" data-limpa="grupos">limpar</button></div>
-          <div class="rl-lista-b"><i class="fas fa-search"></i><input class="rl-inp" data-busca="grupos" placeholder="Buscar grupo…"></div>
-          <div class="rl-sel" data-sel="grupos"></div><div class="rl-lista" data-lista="grupos"></div></div>
-        <div><div class="rl-h" style="margin-bottom:6px;"><i class="fas fa-building"></i> Cliente <button type="button" class="rl-limpa" data-limpa="clientes">limpar</button></div>
-          <div class="rl-lista-b"><i class="fas fa-search"></i><input class="rl-inp" data-busca="clientes" placeholder="Nome, número ou CNPJ…"></div>
-          <div class="rl-sel" data-sel="clientes"></div><div class="rl-lista" data-lista="clientes"></div></div>
+    {# 17/11/2026 — Anderson: "Daqui pra baixo tem que melhorar. Os filtros tem que ser os inteligente e ocultos".
+       Cada botão abre a lista dele só com o que existe com os OUTROS filtros marcados (quantos e quanto dá);
+       filtro sem escolha (uma opção só) nem aparece. #}
+    <section class="rl-bloco rl-refino">
+      {# 17/11/2026 — Anderson mostrou o "Mais filtros" de Clientes: "eu imaginava algo assim!!!". Campo de busca
+         com etiquetas; a lista só mostra o que existe com os OUTROS filtros marcados, com o número de lançamentos;
+         campo sem escolha (uma opção só) some. #}
+      <div class="rl-h"><i class="fas fa-sliders"></i> Filtros</div>
+      <div class="rl-campos">
+        <div class="rl-campo" data-dim="clientes"><label><i class="fas fa-building"></i> Razão social</label><select multiple placeholder="Nome, número ou CNPJ/CPF"></select></div>
+        <div class="rl-campo" data-dim="grupos"><label><i class="fas fa-layer-group"></i> Grupo</label><select multiple placeholder="Todos os grupos"></select></div>
+        <div class="rl-campo" data-dim="servicos"><label><i class="fas fa-briefcase"></i> Serviço</label><select multiple placeholder="Todos os serviços"></select></div>
+        <div class="rl-campo" data-dim="bancos"><label><i class="fas fa-building-columns"></i> Banco</label><select multiple placeholder="Todos os bancos"></select></div>
+        <div class="rl-campo" data-dim="cad"><label><i class="fas fa-users"></i> Cadastro</label><select multiple placeholder="Clientes, avulsos…"></select></div>
+        <div class="rl-campo" data-dim="emp"><label><i class="fas fa-landmark"></i> Empresa do escritório</label><select multiple placeholder="Todas"></select></div>
+        <div class="rl-campo rl-campo-v"><label><i class="fas fa-coins"></i> Valor</label>
+          <div class="rl-valor"><input class="rl-inp" id="rlVmin" inputmode="decimal" placeholder="de R$ 0,00"><span>a</span><input class="rl-inp" id="rlVmax" inputmode="decimal" placeholder="até sem limite"></div></div>
       </div>
+      <div class="rl-campos-pe">
+        <label class="rl-tog" style="margin:0;"><input type="checkbox" id="rlServLinhas"> <span>Mostrar os serviços dentro do honorário (o honorário com o valor do contrato aparece aberto em cada serviço)</span></label>
+        <button type="button" class="rl-zerar" id="rlZerar"><i class="fas fa-eraser"></i> Limpar filtros</button>
+      </div>
+      <div class="rl-dica"><i class="fas fa-circle-info"></i> Cada campo mostra só o que existe com os outros filtros; o número é de lançamentos.</div>
     </section>
-    <section class="rl-bloco">
-      <div class="rl-h"><i class="fas fa-briefcase"></i> Serviço <button type="button" class="rl-limpa" data-limpa="servicos">limpar</button></div>
-      <div class="rl-chips" id="rlServ"></div>
-      <label class="rl-tog"><input type="checkbox" id="rlServLinhas" checked> <span><b>Detalhar os serviços</b> — o honorário com o valor do contrato aparece aberto em cada serviço (Honorários contábeis, LMC, Loja de Conveniência…). Escolher um serviço soma só a parte dele.</span></label>
-    </section>
-    <section class="rl-bloco">
-      <div class="rl-h"><i class="fas fa-building-columns"></i> Banco <em>pagos: onde o dinheiro entrou · em aberto: o boleto</em></div>
-      <div class="rl-chips" id="rlBanco"></div>
-    </section>
-    <div class="rl-dois">
-      <section class="rl-bloco">
-        <div class="rl-h"><i class="fas fa-landmark"></i> Empresa do escritório</div>
-        <div class="rl-chips" id="rlEmp"></div>
-      </section>
-      <section class="rl-bloco">
-        <div class="rl-h"><i class="fas fa-coins"></i> Valor</div>
-        <div class="rl-datas" style="margin-top:0;"><span>de R$</span><input class="rl-inp" id="rlVmin" inputmode="decimal" style="width:100px;" placeholder="0,00">
-          <span>até R$</span><input class="rl-inp" id="rlVmax" inputmode="decimal" style="width:100px;" placeholder="sem limite"></div>
-      </section>
-    </div>
    </div>
    <aside class="rl-sai">
     <section class="rl-bloco">
@@ -199,15 +216,16 @@
 
 <script>
 (function () {
-  var URL_OP = {{ url_for('financeiro.titulos_relatorio_opcoes') | tojson }}, URL_PREV = {{ url_for('financeiro.titulos_relatorio_previa') | tojson }},
-      URL_REL = {{ url_for('financeiro.titulos_relatorio') | tojson }}, LOGOS = {{ (logos_banco() if logos_banco is defined else {}) | tojson }};
+  var URL_PREV = {{ url_for('financeiro.titulos_relatorio_previa') | tojson }}, URL_REL = {{ url_for('financeiro.titulos_relatorio') | tojson }},
+      LOGOS = {{ (logos_banco() if logos_banco is defined else {}) | tojson }};
   var SITS = [['pago', 'Pagos', '#15803d', '#ecfdf5'], ['avencer', 'A vencer', '#1d4ed8', '#eff6ff'], ['vencido', 'Vencidos', '#b91c1c', '#fef2f2'], ['perdido', 'Perdidos', '#334155', '#f1f5f9']];
-  var OP = null, S = null, LASTJ = null, prevT = null, prevSeq = 0, fundo = document.getElementById('rlFundo');
+  var DIMS = ['clientes', 'grupos', 'servicos', 'bancos', 'cad', 'emp'];
+  var S = null, J = null, TS = {}, mexendo = false, prevT = null, prevSeq = 0, fundo = document.getElementById('rlFundo');
   var $ = function (id) { return document.getElementById(id); };
   function esc(s) { var d = document.createElement('div'); d.textContent = s == null ? '' : String(s); return d.innerHTML; }
   function brl(v) { return 'R$ ' + Number(v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
   function iso(d) { return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
-  function semAc(s) { return String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase(); }
+  function doc(d) { d = String(d || ''); return d.length === 14 ? d.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, '$1.$2.$3/$4-$5') : d.length === 11 ? d.replace(/^(\d{3})(\d{3})(\d{3})(\d{2})$/, '$1.$2.$3-$4') : d; }
   function novo() { return { sit: {}, per: 'tudo', de: '', ate: '', ref: 'mov', cad: {}, grupos: {}, clientes: {}, servicos: {}, bancos: {}, emp: {},
                              vmin: '', vmax: '', org: 'sit', det: 'analitico', fmt: 'pdf', titulo: '', servlinhas: true }; }
   var PERS = [['mes', 'Este mês'], ['ant', 'Mês anterior'], ['ano', 'Este ano'], ['anoant', 'Ano passado'], ['12m', 'Últimos 12 meses'], ['tudo', 'Tudo'], ['datas', 'Escolher datas']];
@@ -230,141 +248,148 @@
     bancomes: { sit: ['pago'], per: 'mes', org: 'banco', det: 'analitico', titulo: 'Recebido por banco no mês' },
     grupo: { sit: ['pago', 'avencer', 'vencido'], per: 'mes', org: 'grupo', det: 'analitico', titulo: 'Títulos por grupo' }
   };
-  function aplicarModelo(k) {
-    var md = MODELOS[k], fmt = S.fmt; S = novo(); S.fmt = fmt; limparBuscas();
-    md.sit.forEach(function (s) { S.sit[s] = 1; });
-    S.org = md.org; S.det = md.det; S.titulo = md.titulo; definirPer(md.per); desenhar(); prever();
-  }
   function definirPer(p) { S.per = p; if (p !== 'datas') { var d = periodo(p); S.de = d[0]; S.ate = d[1]; } }
+  function aplicarModelo(k) {
+    var md = MODELOS[k], fmt = S.fmt; S = novo(); S.fmt = fmt;
+    md.sit.forEach(function (s) { S.sit[s] = 1; });
+    S.org = md.org; S.det = md.det; S.titulo = md.titulo; definirPer(md.per); limparCampos(); desenhar(); prever();
+  }
+  function chips(el, itens, alvo) {
+    el.innerHTML = itens.map(function (o) { return '<button type="button" class="rl-chip' + (alvo === o[0] ? ' on' : '') + '" data-v="' + o[0] + '">' + esc(o[1]) + '</button>'; }).join('');
+  }
 
-  // ── desenho ──
-  function chips(el, itens, alvo, multi) {
-    el.innerHTML = itens.map(function (o) {
-      var on = multi ? !!alvo[o[0]] : alvo === o[0];
-      return '<button type="button" class="rl-chip' + (on ? ' on' : '') + '" data-v="' + esc(o[0]) + '">' + (o[3] || '') + esc(o[1]) + (o[2] != null ? ' <b>' + o[2] + '</b>' : '') + '</button>';
-    }).join('');
+  // ── campos de filtro (tom-select, como o "Mais filtros" de Clientes) ──
+  function icoBanco(v) {
+    var cod = /^\d+$/.test(v) ? String(+v) : '';
+    if (cod && LOGOS[cod]) return '<img src="' + LOGOS[cod] + '" alt="">';
+    return '<i class="fas fa-' + ({ sem_boleto: 'file-circle-xmark', manual: 'hand', outra: 'right-left', app_efi: 'mobile-screen-button' }[v] || 'building-columns') + '" style="color:#94a3b8;margin-right:6px"></i>';
   }
-  function lista(nome, itens) {
-    var q = semAc(document.querySelector('[data-busca="' + nome + '"]').value.trim()), sel = S[nome];
-    var vis = itens.filter(function (o) { return !q || semAc(o.busca).indexOf(q) >= 0; });
-    vis.sort(function (a, b) { return (sel[b.v] ? 1 : 0) - (sel[a.v] ? 1 : 0); });
-    var box = document.querySelector('[data-lista="' + nome + '"]');
-    box.innerHTML = vis.slice(0, 250).map(function (o) {
-      return '<div class="rl-op' + (sel[o.v] ? ' on' : '') + '" data-v="' + esc(o.v) + '"><span class="cx"><i class="fas fa-check"></i></span><span>' + o.html + '</span><small>' + o.n + '</small></div>';
-    }).join('') || '<div class="rl-vazio">Nada com essa busca.</div>';
-    var s = document.querySelector('[data-sel="' + nome + '"]');
-    s.innerHTML = Object.keys(sel).map(function (v) {
-      var o = itens.filter(function (x) { return x.v === v; })[0];
-      return '<span>' + esc(o ? o.rot : v) + '<button type="button" data-tira="' + esc(v) + '"><i class="fas fa-xmark"></i></button></span>';
-    }).join('');
-  }
-  function itensGrupo() { return OP.grupos.map(function (g) { return { v: g.id, rot: g.nome, html: esc(g.nome), n: g.n, busca: g.nome }; }); }
-  function itensCli() {
-    var c = S.cad, filtra = Object.keys(c).length;
-    return OP.clientes.filter(function (x) { return !filtra || c[x.av ? 'avulso' : 'cliente']; }).map(function (x) {
-      return { v: x.id, rot: (x.num ? x.num + ' · ' : '') + x.nome, html: (x.num ? '<em>' + esc(x.num) + '</em>' : '') + esc(x.nome) + (x.av ? ' <span class="av">AVULSO</span>' : ''), n: x.n, busca: x.num + ' ' + x.nome };
+  function txt(d, o) { return d === 'clientes' && o.num ? o.num + ' · ' + o.rot : o.rot; }
+  function criarCampos() {
+    DIMS.forEach(function (d) {
+      var sel = document.querySelector('.rl-campo[data-dim="' + d + '"] select');
+      TS[d] = new TomSelect(sel, {
+        plugins: ['remove_button'], maxOptions: 400, hideSelected: true, hidePlaceholder: true, closeAfterSelect: false,
+        valueField: 'v', labelField: 'txt', searchField: ['txt', 'doc'], dropdownParent: 'body', dropdownClass: 'ts-dropdown rl-dd',
+        sortField: [{ field: '$order' }, { field: '$score' }],
+        render: {
+          option: function (o) {
+            return '<div class="rl-opt"><span class="rl-opt-t">' + (d === 'bancos' ? icoBanco(o.v) : '') + esc(o.txt)
+              + (o.av ? '<span class="av">AVULSO</span>' : '') + (o.doc ? '<span class="rl-opt-s">' + esc(doc(o.doc)) + '</span>' : '') + '</span>'
+              + '<span class="rl-opt-v">' + brl(o.total) + '</span><span class="rl-opt-n">' + o.n + '</span></div>';
+          },
+          item: function (o) { return '<div>' + esc(o.txt) + '</div>'; },
+          no_results: function () { return '<div class="no-results">Nada com os filtros escolhidos</div>'; }
+        },
+        onChange: function (vals) {
+          if (mexendo) return;
+          S[d] = {}; (vals || []).forEach(function (v) { S[d][v] = 1; });
+          prever();
+        }
+      });
     });
   }
+  // a cada prévia: cada campo passa a ter só o que existe com os outros filtros (o marcado fica)
+  function atualizarCampos() {
+    var F = (J && J.facetas) || {};
+    mexendo = true;
+    DIMS.forEach(function (d) {
+      var ts = TS[d], ops = (F[d] || []).map(function (o) { return Object.assign({}, o, { txt: txt(d, o) }); });
+      ts.clearOptions();
+      ts.addOptions(ops);
+      Object.keys(S[d]).forEach(function (v) { if (ts.items.indexOf(v) < 0 && ts.options[v]) ts.addItem(v, true); });
+      ts.items.slice().forEach(function (v) { if (!S[d][v]) ts.removeItem(v, true); });
+      if (ts.isOpen) ts.refreshOptions(false);
+      var com = ops.filter(function (o) { return o.n; }).length;
+      document.querySelector('.rl-campo[data-dim="' + d + '"]').hidden = com <= 1 && !Object.keys(S[d]).length;   // sem escolha: some
+    });
+    mexendo = false;
+  }
+  function limparCampos() {
+    mexendo = true; DIMS.forEach(function (d) { if (TS[d]) TS[d].clear(true); }); mexendo = false;
+    $('rlVmin').value = ''; $('rlVmax').value = '';
+  }
+
   function desenhar() {
     $('rlSits').innerHTML = SITS.map(function (s) {
       return '<button type="button" class="rl-sit' + (S.sit[s[0]] ? ' on' : '') + '" data-v="' + s[0] + '" style="--c:' + s[2] + ';--f:' + s[3] + '"><i class="ck fas fa-check"></i><b>' + s[1] + '</b><strong data-pv="' + s[0] + '">—</strong><small data-pn="' + s[0] + '"></small></button>';
     }).join('');
-    chips($('rlPer'), PERS, S.per, false);
+    chips($('rlPer'), PERS, S.per);
     $('rlDe').value = S.de; $('rlAte').value = S.ate;
     $('rlRef').querySelectorAll('button').forEach(function (b) { b.classList.toggle('on', b.dataset.v === S.ref); });
-    chips($('rlCad'), [['cliente', 'Clientes', null, '<i class="fas fa-building"></i>'], ['avulso', 'Avulsos', null, '<i class="fas fa-user-tag"></i>'], ['sem', 'Sem cadastro', null, '<i class="fas fa-circle-question"></i>']], S.cad, true);
-    if (OP) {
-      lista('grupos', itensGrupo()); lista('clientes', itensCli());
-      chips($('rlServ'), OP.servicos.map(function (s) { return [s.nome, s.nome, s.n]; }), S.servicos, true);
-      chips($('rlBanco'), OP.bancos.map(function (b) {
-        var cod = /^\d+$/.test(b.k) ? String(+b.k) : '', img = cod && LOGOS[cod] ? '<img src="' + LOGOS[cod] + '" alt="">' : '<i class="fas fa-' + (b.k === 'sem_boleto' ? 'file-circle-xmark' : (b.k === 'manual' ? 'hand' : 'building-columns')) + '"></i>';
-        return [b.k, b.nome, b.n, img];
-      }), S.bancos, true);
-      chips($('rlEmp'), OP.empresas.map(function (e) { return [e.id, e.nome, e.n]; }), S.emp, true);
-    }
-    $('rlServLinhas').checked = S.servlinhas;
-    $('rlVmin').value = S.vmin; $('rlVmax').value = S.vmax; $('rlTitulo').value = S.titulo;
+    $('rlTitulo').value = S.titulo; $('rlServLinhas').checked = S.servlinhas;
+    $('rlVmin').value = S.vmin; $('rlVmax').value = S.vmax;
     $('rlOrg').querySelectorAll('button').forEach(function (b) { b.classList.toggle('on', b.dataset.v === S.org); });
     $('rlDet').querySelectorAll('button').forEach(function (b) { b.classList.toggle('on', b.dataset.v === S.det); });
     $('rlFmt').querySelectorAll('button').forEach(function (b) { b.classList.toggle('on', b.dataset.v === S.fmt); });
     $('rlGerar').innerHTML = '<i class="fas fa-file-arrow-down"></i> Gerar ' + (S.fmt === 'xlsx' ? 'Excel' : 'PDF');
-    if (LASTJ) pintar(LASTJ);   // redesenhar não apaga os números da última prévia
+    if (J) pintar(J);
   }
   function params() {
     var p = new URLSearchParams(), ks = function (o) { return Object.keys(o).join(','); };
     p.set('sit', ks(S.sit)); if (S.de) p.set('de', S.de); if (S.ate) p.set('ate', S.ate); p.set('ref', S.ref);
-    ['cad', 'grupos', 'clientes', 'servicos', 'bancos', 'emp'].forEach(function (k) { if (ks(S[k])) p.set(k, ks(S[k])); });
+    DIMS.forEach(function (k) { if (ks(S[k])) p.set(k, ks(S[k])); });
     if (S.vmin) p.set('vmin', S.vmin); if (S.vmax) p.set('vmax', S.vmax);
     p.set('org', S.org); p.set('det', S.det); p.set('servlinhas', S.servlinhas ? '1' : '0');
     if (S.titulo.trim()) p.set('titulo', S.titulo.trim());
     return p;
   }
+  function pintar(j) {
+    $('rlPrev').classList.remove('carregando');
+    $('rlPrevV').textContent = brl(j.total);
+    $('rlPrevN').textContent = j.n + ' lançamento' + (j.n !== 1 ? 's' : '') + ' · ' + j.clientes + ' cliente' + (j.clientes !== 1 ? 's' : '');
+    SITS.forEach(function (s) {
+      var v = j.por[s[0]], a = document.querySelector('[data-pv="' + s[0] + '"]'), b = document.querySelector('[data-pn="' + s[0] + '"]');
+      if (a) a.textContent = S.sit[s[0]] ? brl(v[1]) : '—'; if (b) b.textContent = S.sit[s[0]] ? v[0] + ' lançamento' + (v[0] !== 1 ? 's' : '') : 'fora do relatório';
+    });
+    $('rlResumo').innerHTML = '<div class="rl-h"><i class="fas fa-eye"></i> Vai sair assim</div>' + SITS.filter(function (s) { return S.sit[s[0]]; }).map(function (s) {
+      return '<div style="--c:' + s[2] + '"><i></i><span>' + s[1] + '</span><b>' + brl(j.por[s[0]][1]) + '</b><small>' + j.por[s[0]][0] + '</small></div>';
+    }).join('') + '<div class="tot" style="--c:#0f3d2e"><i></i><span><b>Total</b></span><b>' + brl(j.total) + '</b><small>' + j.n + '</small></div>';
+    var org = $('rlOrg').querySelector('.on');
+    $('rlPeInfo').innerHTML = j.n ? '<b>' + j.n + ' lançamentos</b> de <b>' + j.clientes + ' clientes</b> · organizado por <b>' + (org ? org.textContent.trim().toLowerCase() : '') + '</b>'
+                                  : 'Nenhum lançamento com esses filtros — tire algum.';
+    $('rlGerar').disabled = !j.n || !Object.keys(S.sit).length;
+  }
   function prever() {
     clearTimeout(prevT);
-    var semSit = !Object.keys(S.sit).length;
-    $('rlGerar').disabled = semSit;
-    if (semSit) { $('rlPrevV').textContent = '—'; $('rlPrevN').textContent = 'marque ao menos uma situação'; return; }
+    if (!Object.keys(S.sit).length) { $('rlGerar').disabled = true; $('rlPrevV').textContent = '—'; $('rlPrevN').textContent = 'marque ao menos uma situação'; return; }
     $('rlPrev').classList.add('carregando'); $('rlPrevN').textContent = 'calculando…';
     prevT = setTimeout(function () {
       var seq = ++prevSeq;
       fetch(URL_PREV + '?' + params().toString()).then(function (r) { if (!r.ok) throw 0; return r.json(); }).then(function (j) {
         if (seq !== prevSeq) return;
-        LASTJ = j; pintar(j);
+        J = j; pintar(j); atualizarCampos();
       }).catch(function () { if (seq === prevSeq) { $('rlPrev').classList.remove('carregando'); $('rlPrevN').textContent = 'não consegui calcular agora'; } });
-    }, 300);
+    }, 250);
   }
-  function pintar(j) {
-        $('rlPrev').classList.remove('carregando');
-        $('rlPrevV').textContent = brl(j.total);
-        $('rlPrevN').textContent = j.n + ' lançamento' + (j.n !== 1 ? 's' : '') + ' · ' + j.clientes + ' cliente' + (j.clientes !== 1 ? 's' : '');
-        SITS.forEach(function (s) {
-          var v = j.por[s[0]], a = document.querySelector('[data-pv="' + s[0] + '"]'), b = document.querySelector('[data-pn="' + s[0] + '"]');
-          if (a) a.textContent = S.sit[s[0]] ? brl(v[1]) : '—'; if (b) b.textContent = S.sit[s[0]] ? v[0] + ' lançamento' + (v[0] !== 1 ? 's' : '') : 'fora do relatório';
-        });
-        $('rlResumo').innerHTML = '<div class="rl-h"><i class="fas fa-eye"></i> Vai sair assim</div>' + SITS.filter(function (s) { return S.sit[s[0]]; }).map(function (s) {
-          return '<div style="--c:' + s[2] + '"><i></i><span>' + s[1] + '</span><b>' + brl(j.por[s[0]][1]) + '</b><small>' + j.por[s[0]][0] + '</small></div>';
-        }).join('') + '<div class="tot" style="--c:#0f3d2e"><i></i><span><b>Total</b></span><b>' + brl(j.total) + '</b><small>' + j.n + '</small></div>';
-        $('rlPeInfo').innerHTML = j.n ? '<b>' + j.n + ' lançamentos</b> de <b>' + j.clientes + ' clientes</b> · organizado por <b>' + $('rlOrg').querySelector('.on').textContent.trim().toLowerCase() + '</b>'
-                                      : 'Nenhum lançamento com esses filtros — tire algum.';
-        $('rlGerar').disabled = !j.n || !Object.keys(S.sit).length;
-  }
-
-  // ── eventos ──
   function ligar() {
+    criarCampos();
     $('rlSits').addEventListener('click', function (e) { var b = e.target.closest('.rl-sit'); if (!b) return; if (S.sit[b.dataset.v]) delete S.sit[b.dataset.v]; else S.sit[b.dataset.v] = 1; b.classList.toggle('on'); prever(); });
     $('rlPer').addEventListener('click', function (e) { var b = e.target.closest('.rl-chip'); if (!b) return; definirPer(b.dataset.v); desenhar(); prever(); if (b.dataset.v === 'datas') $('rlDe').focus(); });
-    ['rlDe', 'rlAte'].forEach(function (id) { $(id).addEventListener('change', function () { S.de = $('rlDe').value; S.ate = $('rlAte').value; S.per = 'datas'; chips($('rlPer'), PERS, S.per, false); prever(); }); });
+    ['rlDe', 'rlAte'].forEach(function (id) { $(id).addEventListener('change', function () { S.de = $('rlDe').value; S.ate = $('rlAte').value; S.per = 'datas'; chips($('rlPer'), PERS, S.per); prever(); }); });
     $('rlRef').addEventListener('click', function (e) { var b = e.target.closest('button'); if (!b) return; S.ref = b.dataset.v; desenhar(); prever(); });
-    function multi(id, chave) { $(id).addEventListener('click', function (e) { var b = e.target.closest('.rl-chip'); if (!b) return; if (S[chave][b.dataset.v]) delete S[chave][b.dataset.v]; else S[chave][b.dataset.v] = 1; desenhar(); prever(); }); }
-    multi('rlCad', 'cad'); multi('rlServ', 'servicos'); multi('rlBanco', 'bancos'); multi('rlEmp', 'emp');
-    ['grupos', 'clientes'].forEach(function (nome) {
-      document.querySelector('[data-busca="' + nome + '"]').addEventListener('input', function () { lista(nome, nome === 'grupos' ? itensGrupo() : itensCli()); });
-      document.querySelector('[data-lista="' + nome + '"]').addEventListener('click', function (e) {
-        var o = e.target.closest('.rl-op'); if (!o) return;
-        if (S[nome][o.dataset.v]) delete S[nome][o.dataset.v]; else S[nome][o.dataset.v] = 1;
-        lista(nome, nome === 'grupos' ? itensGrupo() : itensCli()); prever();
-      });
-      document.querySelector('[data-sel="' + nome + '"]').addEventListener('click', function (e) {
-        var b = e.target.closest('[data-tira]'); if (!b) return; delete S[nome][b.dataset.tira]; lista(nome, nome === 'grupos' ? itensGrupo() : itensCli()); prever();
-      });
-    });
-    document.querySelectorAll('.rl-limpa').forEach(function (b) { b.addEventListener('click', function () { S[b.dataset.limpa] = {}; desenhar(); prever(); }); });
-    $('rlServLinhas').addEventListener('change', function () { S.servlinhas = this.checked; });
     ['rlVmin', 'rlVmax'].forEach(function (id) { $(id).addEventListener('input', function () { S.vmin = $('rlVmin').value.trim(); S.vmax = $('rlVmax').value.trim(); prever(); }); });
+    $('rlServLinhas').addEventListener('change', function () { S.servlinhas = this.checked; });
+    $('rlZerar').addEventListener('click', function () { DIMS.forEach(function (k) { S[k] = {}; }); S.vmin = S.vmax = ''; limparCampos(); prever(); });
     $('rlTitulo').addEventListener('input', function () { S.titulo = this.value; });
-    $('rlOrg').addEventListener('click', function (e) { var b = e.target.closest('button'); if (!b) return; S.org = b.dataset.v; desenhar(); prever(); });
+    $('rlOrg').addEventListener('click', function (e) { var b = e.target.closest('button'); if (!b) return; S.org = b.dataset.v; desenhar(); });
     $('rlDet').addEventListener('click', function (e) { var b = e.target.closest('button'); if (!b) return; S.det = b.dataset.v; desenhar(); });
     $('rlFmt').addEventListener('click', function (e) { var b = e.target.closest('button'); if (!b) return; S.fmt = b.dataset.v; desenhar(); });
     document.querySelectorAll('.rl-mod').forEach(function (b) { b.addEventListener('click', function () { aplicarModelo(b.dataset.mod); }); });
     fundo.addEventListener('mousedown', function (e) { if (e.target === fundo) rlFechar(); });
-    document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && fundo.classList.contains('on')) { e.preventDefault(); rlFechar(); } });
+    document.addEventListener('keydown', function (e) {
+      if (e.key !== 'Escape' || !fundo.classList.contains('on')) return;
+      if (DIMS.some(function (d) { return TS[d] && TS[d].isOpen; })) return;    // Esc fecha a lista do campo primeiro
+      e.preventDefault(); rlFechar();
+    });
   }
   var ligado = false;
-  // abre já no jeito da tela: a aba aberta vira a situação; o período da tela, o período
+  // abre no jeito da tela: a aba aberta vira a situação; o período da tela, o período
   window.rlAbrir = function () {
+    if (typeof TomSelect === 'undefined') { alert('Não consegui carregar a caixa de filtros. Recarregue a página.'); return; }
     if (!S) {
       S = novo();
-      var aba = (document.querySelector('.tx-painel.on') || {}).dataset ? document.querySelector('.tx-painel.on').dataset.p : 'abe';
+      var pn = document.querySelector('.tx-painel.on'), aba = pn ? pn.dataset.p : 'abe';
       ({ rec: ['pago'], abe: ['avencer'], atr: ['vencido'], ina: ['vencido'], perd: ['perdido'] }[aba] || ['avencer', 'vencido']).forEach(function (s) { S.sit[s] = 1; });
       var u = new URL(location.href), per = u.searchParams.get('per'), mes = u.searchParams.get('mes');
       if (per === 'datas') { S.per = 'datas'; S.de = u.searchParams.get('de') || ''; S.ate = u.searchParams.get('ate') || ''; }
@@ -376,12 +401,9 @@
     if (!ligado) { ligar(); ligado = true; }
     fundo.classList.add('on'); document.body.style.overflow = 'hidden';
     desenhar(); prever();
-    if (!OP) fetch(URL_OP).then(function (r) { return r.json(); }).then(function (j) { OP = j; desenhar(); })
-              .catch(function () { $('rlPeInfo').textContent = 'Não consegui carregar as opções. Feche e abra de novo.'; });
   };
-  window.rlFechar = function () { fundo.classList.remove('on'); document.body.style.overflow = ''; };
-  function limparBuscas() { document.querySelectorAll('#rlFundo [data-busca]').forEach(function (i) { i.value = ''; }); }
-  window.rlLimpar = function () { limparBuscas(); var fmt = S.fmt; S = novo(); S.fmt = fmt; S.sit = { pago: 1, avencer: 1, vencido: 1 }; desenhar(); prever(); };
+  window.rlFechar = function () { DIMS.forEach(function (d) { if (TS[d]) TS[d].close(); }); fundo.classList.remove('on'); document.body.style.overflow = ''; };
+  window.rlLimpar = function () { var fmt = S.fmt; S = novo(); S.fmt = fmt; S.sit = { pago: 1, avencer: 1, vencido: 1 }; limparCampos(); desenhar(); prever(); };
   window.rlGerar = function () {
     var b = $('rlGerar'); if (b.disabled) return;
     var p = params(); if (S.fmt === 'xlsx') p.set('fmt', 'xlsx');

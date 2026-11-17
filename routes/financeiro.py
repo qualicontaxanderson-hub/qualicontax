@@ -306,18 +306,11 @@ def _relatorio_rotulos(f):
     return rot
 
 
-@financeiro.route('/financeiro/titulos/relatorio/opcoes')
-@permission_required('financeiro.titulos')
-def titulos_relatorio_opcoes():
-    """O que a caixa "Gerar relatório" oferece (só o que existe no a receber)."""
-    from utils import relatorio_titulos as RT
-    return jsonify(RT.opcoes())
-
-
 @financeiro.route('/financeiro/titulos/relatorio/previa')
 @permission_required('financeiro.titulos')
 def titulos_relatorio_previa():
-    """Quantos lançamentos e quanto dá, ao vivo, enquanto a pessoa marca os filtros."""
+    """Quantos lançamentos e quanto dá, ao vivo, e as opções de cada filtro (só o que existe com os outros
+    marcados) — a caixa pede a cada clique."""
     from utils import relatorio_titulos as RT
     return jsonify(RT.previa(RT.ler_filtros(request.args)))
 
