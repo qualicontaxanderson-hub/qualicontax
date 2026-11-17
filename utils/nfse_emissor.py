@@ -107,6 +107,7 @@ class Pedido:
     valor_boleto: Decimal = None    # soma de TODOS os itens (nota + só boleto); o boleto vem na próxima fase
     origem: str = 'manual'
     recibo: str = ''                # nº do recibo de papel (RPS do talão) que esta nota substitui (17/11/2026)
+    numero_pedido: int = None       # a DPS sai com este número se for maior que o último da série (o do recibo)
     extras: dict = field(default_factory=dict)
 
     @property
@@ -255,7 +256,8 @@ def emitir(pedido: Pedido, cfg: dict, usuario_id=None) -> dict:
     dps_json = _pedido_json(pedido)
     emitida_id, numero = numeracao.reservar_dps(
         pedido.empresa_id, pedido.serie, cnpj_emitente=cert.cnpj, criado_por=usuario_id,
-        origem=pedido.origem, fin_titulo_id=pedido.fin_titulo_id, dps_json=dps_json)
+        origem=pedido.origem, fin_titulo_id=pedido.fin_titulo_id, dps_json=dps_json,
+        numero_pedido=pedido.numero_pedido)
     agora = datetime.now(FUSO).replace(microsecond=0)
     _gravar_rascunho(emitida_id, pedido, cfg, emissor, agora)
 

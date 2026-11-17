@@ -375,6 +375,7 @@ def pedido_do_fiscal(f, empresa_id, cfg, tomador, series_ativas):
         tomador_uf=(tomador.get('uf') or '')[:2].upper(), tomador_email=(tomador.get('email') or '')[:80],
         tomador_fone=_dig(tomador.get('fone')), tomador_im=_dig(tomador.get('inscricao_municipal')),
         descricao=descricao[:1000], recibo=recibo,
+        numero_pedido=int(recibo) if recibo and len(recibo) <= 15 else None,
         cod_trib_nac=_dig(cfg.get('cod_trib_nac')), cod_trib_mun=_dig(cfg.get('cod_trib_mun')),
         cod_nbs=_dig(cfg.get('cod_nbs')), cod_servico_sp='',
         loc_prestacao=loc, valor_servico=valor, trib_issqn=1,

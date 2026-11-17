@@ -306,7 +306,15 @@ def nfse_emitir_post(cliente_id):
     if linha['situacao'] == 'autorizada':
         if tid:
             NfseTomador.marcar_nota(tid)
-        flash(f"Nota autorizada: série {linha['serie']} nº {linha['numero_dps']}"
+        recibo = (linha.get('recibo_numero') or '').lstrip('0')
+        if recibo and str(linha['numero_dps']) == recibo:
+            nota_num = f"série {linha['serie']} nº {linha['numero_dps']} (o número do recibo)"
+        elif recibo:
+            nota_num = (f"série {linha['serie']} nº {linha['numero_dps']} — o recibo {recibo} é menor que o último número "
+                        f"já usado na série, então ficou só escrito na nota")
+        else:
+            nota_num = f"série {linha['serie']} nº {linha['numero_dps']}"
+        flash(f"Nota autorizada: {nota_num}"
               + (f", NFS-e nº {linha['numero_nfse']}" if linha.get('numero_nfse') else '')
               + (' (ambiente de TESTE)' if linha['ambiente'] == 2 else '') + '.', 'success')
     elif linha['situacao'] == 'rejeitada':

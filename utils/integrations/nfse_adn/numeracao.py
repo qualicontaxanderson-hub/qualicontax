@@ -42,8 +42,13 @@ class SerieInativa(Exception):
     """A série existe mas foi desligada (ativo = 0)."""
 
 
-def proximo_numero_dps(cur, empresa_id, serie):
+def proximo_numero_dps(cur, empresa_id, serie, numero_pedido=None):
     """Reserva e devolve o próximo nDPS de (empresa_id, serie).
+
+    ``numero_pedido`` (17/11/2026): o número que a tela quer para a DPS — o do recibo de
+    papel, como a empresa fazia no portal do governo. Vale quando é MAIOR que o último
+    usado na série (a numeração só anda para a frente; buraco o governo aceita, repetido
+    não); senão sai o automático e quem chamou vê a diferença.
 
     ``cur`` é o cursor de um bloco ``transacao()`` já aberto: a trava do
     FOR UPDATE dura até o commit/rollback desse bloco, e é ISSO que garante que
@@ -63,6 +68,8 @@ def proximo_numero_dps(cur, empresa_id, serie):
     if not linha['ativo']:
         raise SerieInativa(f'Série {serie} da empresa {empresa_id} está inativa.')
     numero = int(linha['ultimo_numero']) + 1
+    if numero_pedido and int(numero_pedido) > int(linha['ultimo_numero']):
+        numero = int(numero_pedido)
     cur.execute(
         "UPDATE nfse_dps_controle SET ultimo_numero = %s, atualizado_em = NOW() "
         " WHERE id = %s AND ultimo_numero = %s",
@@ -75,7 +82,7 @@ def proximo_numero_dps(cur, empresa_id, serie):
 
 
 def reservar_dps(empresa_id, serie, cnpj_emitente, criado_por=None,
-                 origem='manual', fin_titulo_id=None, dps_json=None):
+                 origem='manual', fin_titulo_id=None, dps_json=None, numero_pedido=None):
     """Número + rascunho em ``nfse_emitidas`` numa transação só.
 
     Devolve ``(id_da_emitida, numero_dps)``. ``ambiente`` é copiado da série
@@ -83,7 +90,7 @@ def reservar_dps(empresa_id, serie, cnpj_emitente, criado_por=None,
     """
     serie = str(serie).strip()
     with transacao() as cur:
-        numero = proximo_numero_dps(cur, empresa_id, serie)
+        numero = proximo_numero_dps(cur, empresa_id, serie, numero_pedido=numero_pedido)
         cur.execute(
             "SELECT ambiente FROM nfse_dps_controle WHERE empresa_id = %s AND serie = %s",
             (empresa_id, serie))
