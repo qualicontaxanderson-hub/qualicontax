@@ -19,7 +19,7 @@ from flask_login import current_user
 from models.nfse_emissao import (CAMPOS_CONFIG, EMISSORES, IND_DEST, IND_FINAL, OP_SIMP_NAC, REG_AP_TRIB_SN,
                                  REG_ESP_TRIB, NfseConfig, NfseEmitida, empresa_da_matriz, faltas_da_matriz,
                                  liberar_matriz, revogar_matriz, situacao_das_matrizes, sugestao_da_matriz,
-                                 REGIMES, erro_numero_inicial)
+                                 REGIMES, erro_numero_inicial, erro_serie_canal)
 from routes.escrita_fiscal import _get_empresas, escrita_fiscal
 from utils.atividade import registrar
 from utils.auth_helper import permission_required
@@ -161,13 +161,14 @@ def emissao_nfse_serie(cliente_id):
         ambiente = 1 if request.form.get('ambiente') == '1' else 2
         inicial = (request.form.get('numero_inicial') or '0').strip()
         if not serie.isdigit() or len(serie) > 5:
-            flash('A série do emissor nacional é só de dígitos, até 5 (ex.: 1 ou 70000).', 'danger')
+            flash('A série do emissor nacional é só de dígitos, de 1 a 49999 (ex.: 1).', 'danger')
             return _volta(cliente_id, '#series')
         if not inicial.isdigit():
             flash('O último número usado tem que ser um número (0 = nunca emitiu nessa série).', 'danger')
             return _volta(cliente_id, '#series')
-        # rede (17/11/2026): a próxima nota não pode repetir um número que o governo já mostra
-        erro = erro_numero_inicial(emp['documento'], serie, int(inicial)) if ambiente == 1 else None
+        # redes (17/11/2026): a série tem que ser da faixa do sistema próprio (E0010) e a próxima
+        # nota não pode repetir um número que o governo já mostra
+        erro = erro_serie_canal(serie) or (erro_numero_inicial(emp['documento'], serie, int(inicial)) if ambiente == 1 else None)
         if erro:
             flash(erro, 'danger')
             return _volta(cliente_id, '#series')

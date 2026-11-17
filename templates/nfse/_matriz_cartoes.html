@@ -445,9 +445,11 @@
         (notas capturadas em que ela é a prestadora): a tela sugere essa série e o último número, e o
         servidor recusa número menor. Enquanto nenhuma nota saiu por aqui, a numeração se corrige. -#}
     {% set cap = capturadas_series or [] %}
-    {% set sug = cap[0] if cap else none %}
+    {% set sug = serie_sugerida or {'serie': '1', 'ultimo': 0} %}
     {% if cap %}
-    <div class="mc-cap"><i class="fas fa-landmark"></i><span>O governo mostra notas desta empresa na <b>série {{ sug.serie }}</b> até a <b>nº {{ sug.ultimo }}</b>{% if sug.data %} ({{ sug.data.strftime('%d/%m/%Y') }}){% endif %}{% if cap|length > 1 %}; antes, {% for c in cap[1:] %}série {{ c.serie }} até a nº {{ c.ultimo }}{{ ', ' if not loop.last }}{% endfor %}{% endif %}.</span></div>
+    {#- a série diz o canal (E0010): 70000+ é do Emissor Web do governo e não se continua por aqui -#}
+    <div class="mc-cap"><i class="fas fa-landmark"></i><span>O governo mostra notas desta empresa na <b>série {{ cap[0].serie }}</b>{% if cap[0].canal != 'sistema próprio' %} ({{ cap[0].canal }}){% endif %} até a <b>nº {{ cap[0].ultimo }}</b>{% if cap[0].data %} ({{ cap[0].data.strftime('%d/%m/%Y') }}){% endif %}{% if cap|length > 1 %}; antes, {% for c in cap[1:] %}série {{ c.serie }}{% if c.canal != 'sistema próprio' %} ({{ c.canal }}){% endif %} até a nº {{ c.ultimo }}{{ ', ' if not loop.last }}{% endfor %}{% endif %}.
+      {% if cap|rejectattr('canal', 'equalto', 'sistema próprio')|list %}<b>Pelo sistema a série vai de 1 a 49999</b>: as séries de 70000 em diante são do Emissor Web do governo e ele recusa a nota emitida daqui com elas. Comece a série 1 do nº {{ sug.ultimo + 1 }}.{% endif %}</span></div>
     {% endif %}
     {% if prod %}
     <div class="mc-series">
@@ -464,17 +466,17 @@
     {% else %}
     <input type="hidden" name="serie_nacional" value="{{ cfg.serie_nacional or '' }}">
     <div class="mc-num2">
-        <button type="button" class="mc-op" id="mcDoUm" {{ 'disabled title="Salve a configuração primeiro"'|safe if not salva }}><i class="fas fa-play"></i><b>Começar do nº 1</b><small>{{ 'Nunca emitiu nota: série 1, a partir do nº 1' if not cap else 'Só se for abrir uma série nova' }}</small></button>
-        <button type="button" class="mc-op {{ 'on' if cap }}" id="mcJaEmitia" {{ 'disabled title="Salve a configuração primeiro"'|safe if not salva }}><i class="fas fa-forward"></i><b>Já emitia</b><small>{{ 'Continuar a série ' ~ sug.serie ~ ' do nº ' ~ (sug.ultimo + 1) if cap else 'Informar a série e o último número usado' }}</small></button>
+        <button type="button" class="mc-op" id="mcDoUm" {{ 'disabled title="Salve a configuração primeiro"'|safe if not salva }}><i class="fas fa-play"></i><b>Começar do nº 1</b><small>{{ 'Série 1, a partir do nº 1' if not sug.ultimo else 'Só se for abrir uma série nova' }}</small></button>
+        <button type="button" class="mc-op {{ 'on' if sug.ultimo }}" id="mcJaEmitia" {{ 'disabled title="Salve a configuração primeiro"'|safe if not salva }}><i class="fas fa-forward"></i><b>Já emitia</b><small>{{ 'Continuar a série ' ~ sug.serie ~ ' do nº ' ~ (sug.ultimo + 1) if sug.ultimo else 'Informar a série (1 a 49999) e o último número usado' }}</small></button>
     </div>
     {% if not salva %}<div class="mc-ajuda">Salve a configuração primeiro; depois a numeração é criada aqui.</div>{% endif %}
     {% endif %}
-    <div id="mcUltimo" {{ '' if (cap and not prod and salva) else 'hidden' }}>
+    <div id="mcUltimo" {{ '' if (sug.ultimo and not prod and salva) else 'hidden' }}>
         <div class="mc-kv2">
             <div class="mc-kv"><label>Série</label>
-                <input type="text" name="serie" id="mcSerieInp" form="mcSerieForm" inputmode="numeric" pattern="[0-9]{1,5}" maxlength="5" value="{{ sug.serie if sug else '1' }}" required></div>
+                <input type="text" name="serie" id="mcSerieInp" form="mcSerieForm" inputmode="numeric" pattern="[0-9]{1,5}" maxlength="5" value="{{ sug.serie }}" required title="De 1 a 49999: a faixa do sistema próprio"></div>
             <div class="mc-kv"><label>Último número já usado</label>
-                <input type="number" name="numero_inicial" id="mcUltimoInp" form="mcSerieForm" min="0" value="{{ sug.ultimo if sug else 0 }}" required></div>
+                <input type="number" name="numero_inicial" id="mcUltimoInp" form="mcSerieForm" min="0" value="{{ sug.ultimo }}" required></div>
         </div>
         <div class="mc-ajuda" id="mcUltimoAjuda">A primeira nota daqui sai com este número + 1. Confira na última nota emitida (DANFSe): "Número da DPS" e "Série da DPS".</div>
         <button type="submit" form="mcSerieForm" class="mc-link" id="mcSerieBtn"><i class="fas fa-plus"></i> Criar a numeração</button>
@@ -563,7 +565,7 @@
     // "Já emitia" abre o painel sugerindo a série e o número que o governo mostra;
     // "Corrigir" reabre o painel para uma numeração que ainda não emitiu nada por aqui.
     var painel = $('mcUltimo'), sf = document.getElementById('mcSerieForm');
-    var SUG = {{ ({'serie': sug.serie, 'ultimo': sug.ultimo} if sug else {'serie': '1', 'ultimo': 0})|tojson }};
+    var SUG = {{ {'serie': sug.serie, 'ultimo': sug.ultimo}|tojson }};
     function abrirPainel(acao, sid, serie, ultimo, botao) {
         painel.hidden = false;
         $('mcSerieAcao').value = acao; $('mcSerieId').value = sid || '';
@@ -579,8 +581,7 @@
         if (!painel.hidden && $('mcSerieAcao').value === 'abrir') { painel.hidden = true; je.classList.remove('on'); return; }
         abrirPainel('abrir', '', SUG.serie, SUG.ultimo, 'Criar a numeração'); je.classList.add('on');
     });
-    if (du) du.addEventListener('click', function () {
-        if (SUG.ultimo > 0 && !confirm('O governo já mostra notas desta empresa (série ' + SUG.serie + ' até a nº ' + SUG.ultimo + ').\nAbrir a série 1 do zero só vale se for mesmo uma série NOVA. Continuar?')) return;
+    if (du) du.addEventListener('click', function () {        // o servidor recusa se a série 1 já tiver nota no governo
         $('mcSerieAcao').value = 'abrir'; $('mcSerieId').value = ''; $('mcSerieInp').value = '1'; $('mcUltimoInp').value = '0';
         sf.submit();
     });

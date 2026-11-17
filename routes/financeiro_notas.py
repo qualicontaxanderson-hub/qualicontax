@@ -234,9 +234,9 @@ def notas_serie():
         inicial = request.form.get('numero_inicial') or '0'
         inicial = int(inicial) if inicial.isdigit() else 0
         try:
-            from models.nfse_emissao import empresa_da_matriz, erro_numero_inicial
+            from models.nfse_emissao import empresa_da_matriz, erro_numero_inicial, erro_serie_canal
             emp = empresa_da_matriz(emp_id) or {}
-            erro = erro_numero_inicial(emp.get('documento', ''), serie, inicial) if ambiente == 1 else None
+            erro = erro_serie_canal(serie) or (erro_numero_inicial(emp.get('documento', ''), serie, inicial) if ambiente == 1 else None)
             if erro:
                 raise ValueError(erro)
             if acao == 'abrir':

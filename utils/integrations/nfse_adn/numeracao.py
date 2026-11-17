@@ -133,8 +133,9 @@ def corrigir_serie(empresa_id, serie_id, nova_serie, ultimo):
                           (serie_id, empresa_id), fetch=True, fetch_one=True)
     if not linha:
         raise ValueError('Numeração não encontrada.')
-    usada = execute_query("SELECT COUNT(*) n FROM nfse_emitidas WHERE empresa_id = %s AND serie = %s",
-                          (empresa_id, linha['serie']), fetch=True, fetch_one=True)
+    # nota RECUSADA pelo governo nunca existiu lá: não prende a série (17/11/2026, E0010 na 70000)
+    usada = execute_query("SELECT COUNT(*) n FROM nfse_emitidas WHERE empresa_id = %s AND serie = %s "
+                          "   AND situacao <> 'rejeitada'", (empresa_id, linha['serie']), fetch=True, fetch_one=True)
     if usada and usada['n']:
         raise ValueError(f"A série {linha['serie']} já tem {usada['n']} nota(s) emitida(s) por aqui: "
                          "não dá mais para corrigir, abra outra série.")

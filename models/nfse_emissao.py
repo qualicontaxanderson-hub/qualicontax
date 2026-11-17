@@ -730,8 +730,44 @@ def numeracao_capturada(documento):
     for r in rows:
         ultimo = max(int(r['ultimo_dps'] or 0), int(r['ultimo_nfse'] or 0))
         out.append({'serie': str(int(r['serie'])), 'ultimo': ultimo, 'qtd': int(r['qtd']),
+                    'canal': canal_da_serie(r['serie']),
                     'data': r['data'].date() if hasattr(r['data'], 'date') else r['data']})
     return out
+
+
+def canal_da_serie(serie):
+    """Por onde a nota saiu, pela faixa da série (regra do Sistema Nacional, recusa E0010 em 17/11/2026):
+    1-49999 sistema próprio/API (nós), 50000-69999 app do celular, 70000-79999 Emissor Web do governo,
+    80000-89999 digitação no portal."""
+    s = str(serie).strip()
+    if not s.isdigit():
+        return ''
+    n = int(s)
+    if n <= 49999:
+        return 'sistema próprio'
+    if n <= 69999:
+        return 'app do celular'
+    if n <= 79999:
+        return 'Emissor Web do governo'
+    return 'digitação no portal'
+
+
+def erro_serie_canal(serie):
+    """Texto do erro quando a série não é da faixa do sistema próprio (o governo recusaria com E0010)."""
+    canal = canal_da_serie(serie)
+    if canal and canal != 'sistema próprio':
+        return (f'A série {int(serie)} é do {canal}: o governo recusa a nota emitida por aqui (E0010). '
+                'Pelo sistema a série vai de 1 a 49999. Empresa que emitia pelo Emissor Web começa a série 1 do nº 1.')
+    return None
+
+
+def serie_sugerida(capturadas):
+    """Série para a numeração por aqui: sempre a 1 (faixa do sistema próprio), continuando do último
+    número se a empresa já tiver nota nessa série; as séries do Emissor Web (70000+) não se continuam."""
+    for c in capturadas:
+        if c['serie'] == '1':
+            return {'serie': '1', 'ultimo': c['ultimo']}
+    return {'serie': '1', 'ultimo': 0}
 
 
 def erro_numero_inicial(documento, serie, ultimo):
@@ -788,6 +824,7 @@ def contexto_da_matriz(cliente_id, emp=None):
         'meta_item': S.meta_do_item(ctrib) if ctrib else {},
         'fmt_nbs': S.fmt_nbs,
         # numeração (17/11/2026): o que o governo já mostra e o que ainda pode ser corrigido
-        'capturadas_series': numeracao_capturada(emp['documento']),
+        'capturadas_series': (cap := numeracao_capturada(emp['documento'])),
+        'serie_sugerida': serie_sugerida(cap),
         'series_com_nota': series_com_nota(cliente_id),
     }
