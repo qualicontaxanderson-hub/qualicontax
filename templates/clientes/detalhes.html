@@ -115,7 +115,7 @@
                     <a href="#" id="btnVoltarGrupo" class="qb-btn-v" style="display:none;"><i class="fas fa-arrow-left"></i> Voltar ao grupo</a>
                     <a href="{{ url_for('clientes.avulsos') if cliente.avulso else url_for('clientes.index') }}" id="btnVoltar" class="qb-btn-v"><i class="fas fa-arrow-left"></i> <span>Voltar</span></a>
                     {% if qualif[0] %}<button type="button" class="qb-btn-v" data-copiar-texto="{{ qualif[0] }}" data-copiar-rotulo="Qualificação"
-                            title="Copia o parágrafo de qualificação para contrato{% if qualif[1] %} — falta no cadastro: {{ qualif[1]|join(', ') }}{% endif %}"><i class="fas fa-file-signature"></i> Qualificação{% if qualif[1] %} <i class="fas fa-triangle-exclamation" style="color:#fbbf24;"></i>{% endif %}</button>{% endif %}
+                            title="Copia o parágrafo de qualificação para contrato{% if qualif[1] %} — falta no cadastro: {{ qualif[1]|join(', ') }}{% endif %}"><i class="fas fa-file-signature"></i> Copiar qualificação{% if qualif[1] %} <span style="background:#fbbf24;color:#422006;border-radius:99px;padding:1px 8px;font-size:11px;font-weight:800;">falta{{ 'm' if qualif[1]|length > 1 }} {{ qualif[1]|length }}</span>{% endif %}</button>{% endif %}
                     <button type="button" class="qb-btn-v" data-copiar-ficha="{{ cliente.nome_razao_social }}" title="Copia identificação, contato, dados fiscais e endereços"><i class="far fa-copy"></i> Copiar ficha</button>
                     {% if pode_rota('clientes.salvar_campos') %}<button type="button" id="tuEditar" class="qb-btn-v qb-btn-salvar" title="Abre todos os campos da ficha para alterar, inclusive número, {{ 'razão social e a busca na Receita' if pj else 'nome e CPF' }}"><i class="fas fa-pen"></i> Editar</button>{% endif %}
                     {% if pode_rota('clientes.salvar_campos') %}<button type="button" id="tuSalvar" class="qb-btn-v qb-btn-salvar tu-salvar" disabled title="Grava o que você alterou na página"><i class="fas fa-check"></i> Salvar <b id="tuN"></b></button>{% endif %}
@@ -430,8 +430,10 @@
                                 <small>{% if socio.capital_valor is not none %}capital <span data-copiar data-copiar-rotulo="Capital">{{ socio.capital_valor|format_currency }}</span>{% endif %}{% if socio.pro_labore is not none %}{% if socio.capital_valor is not none %} · {% endif %}pró-labore <span data-copiar data-copiar-rotulo="Pró-labore">{{ socio.pro_labore|format_currency }}</span>/mês{% endif %}{% if socio.email or socio.telefone %}{% if socio.capital_valor is not none or socio.pro_labore is not none %} · {% endif %}{{ socio.email or '' }}{% if socio.email and socio.telefone %} · {% endif %}{{ socio.telefone or '' }}{% endif %}</small>
                                 {% if socio.responsavel %}<span hidden data-copiar="Sim" data-copiar-rotulo="Responsável"></span>{% endif %}
                                 {% if q[0] %}<span hidden data-copiar="{{ q[0] }}" data-copiar-rotulo="Qualificação completa"></span>{% endif %}
+                                {% if q[1] and socio.pf_cliente_id %}<div class="soc-falta"><i class="fas fa-triangle-exclamation"></i> <span>Cadastro {{ 'da empresa sócia' if socio.cpf and socio.cpf|length > 14 else 'do sócio' }} incompleto — falta {{ q[1]|join(', ') }}.</span></div>{% endif %}
                                 <div class="qb-socio-acs">
-                                    {% if q[0] %}<button type="button" class="soc-qualif-btn" data-copiar-texto="{{ q[0] }}" data-copiar-rotulo="Qualificação" title="Copia o parágrafo de qualificação para contrato{% if q[1] %} — falta no cadastro: {{ q[1]|join(', ') }}{% endif %}"><i class="fas fa-file-signature"></i> Qualificação{% if q[1] %} <i class="fas fa-triangle-exclamation" style="color:#d97706;"></i>{% endif %}</button>{% endif %}
+                                    {% if q[1] and socio.pf_cliente_id and pode_rota('clientes.salvar_campos') %}<button type="button" class="soc-completar" data-id="{{ socio.pf_cliente_id }}" onclick="socioCompletar(this)" title="Abre o cadastro em outra janela; ao salvar lá, esta tela se atualiza"><i class="fas fa-user-pen"></i> Completar cadastro</button>{% endif %}
+                                    {% if q[0] %}<button type="button" class="soc-qualif-btn" data-copiar-texto="{{ q[0] }}" data-copiar-rotulo="Qualificação" title="Copia o parágrafo de qualificação para contrato{% if q[1] %} (sem: {{ q[1]|join(', ') }}){% endif %}"><i class="fas fa-file-signature"></i> Copiar qualificação</button>{% endif %}
                                     <button type="button" data-copiar-bloco-btn title="Copiar os dados deste sócio"><i class="far fa-copy"></i> Copiar</button>
                                     <button type="button" class="soc-saida-btn" data-id="{{ socio.id }}" data-nome="{{ socio.nome }}" data-entrada="{{ socio.data_entrada.isoformat() if socio.data_entrada else '' }}" onclick="abrirSaidaSocio(this)" title="Registrar a saída deste sócio"><i class="fas fa-right-from-bracket"></i> Saída</button>
                                 </div>
@@ -2018,6 +2020,8 @@
                     var msg = j.salvos && j.salvos.length ? 'Salvo: ' + j.salvos.join(', ') + '.' : 'Nada mudou.';
                     if (j.virou_cliente) msg += ' O avulso agora é cliente e aparece na lista de Clientes.';
                     try { sessionStorage.setItem('tu_aviso', msg); } catch (e) {}
+                    // aberta pelo "Completar cadastro" da empresa: a empresa se atualiza (17/11/2026)
+                    try { if (window.opener && !window.opener.closed) window.opener.postMessage({ tipo: 'qcx-cadastro-salvo', id: {{ cliente.id }} }, location.origin); } catch (e) {}
                     if (editando) location.replace(location.pathname + location.hash); else location.reload();
                 } else { aviso(j.erro || 'Não foi possível salvar.', true); restaurarBtn(); if (b2) b2.disabled = false; }
             })
@@ -2139,6 +2143,8 @@
         if (rolar) window.scrollTo({ top: 0, behavior: 'smooth' });
     }
     window._fichaEditando = function () { return editando; };
+    window._fichaPendentes = function () { return Object.keys(pend).length; };
+    window._fichaAviso = aviso;
     // DOCUMENTOS da pessoa física (A2): tipo, número, órgão, UF e "vai no contrato"; vários por pessoa
     (function () {
         var dd = document.getElementById('dcDados'); if (!dd) return;
@@ -2775,6 +2781,40 @@ window.addEventListener('message', function (e) {
     SR_ITEM = null;
     socioAbrirCom(cad, SR_CTX); SR_CTX = null;
 });
+
+// ══ 17/11/2026: "Completar cadastro" do sócio em outra janela ══
+// Anderson: "um BOTÃO para ABRIR outra tela para completarmos o cadastro dela e ficar duas telas e posso
+// finalizar o dela e voltar para o da empresa normalmente".
+function socioCompletar(b) {
+    var w = window.open('/clientes/' + b.dataset.id + '?editar=1', 'qcxCompletar_' + b.dataset.id, 'width=1360,height=920,scrollbars=yes');
+    if (!w) { alert('O navegador bloqueou a janela. Permita janelas (pop-ups) para este site e clique de novo.'); return; }
+    w.focus();
+}
+window.addEventListener('message', function (e) {
+    if (e.origin !== window.location.origin || !e.data || e.data.tipo !== 'qcx-cadastro-salvo') return;
+    if (SOC_ATUAIS.indexOf(+e.data.id) < 0 || +e.data.id === {{ cliente.id }}) return;
+    if (window._fichaPendentes && window._fichaPendentes()) {
+        if (window._fichaAviso) window._fichaAviso('O cadastro do sócio foi salvo. Salve as alterações desta empresa para ver o sócio atualizado.');
+        return;
+    }
+    var ed = window._fichaEditando && window._fichaEditando();
+    try { sessionStorage.setItem('tu_aviso', 'Cadastro do sócio atualizado.'); } catch (x) {}
+    location.replace(location.pathname + (ed ? '?editar=1' : '') + '#socios');
+});
+(function () {   // esta ficha está aberta pelo "Completar cadastro" de uma empresa: barra para voltar
+    if (!/^qcxCompletar_/.test(window.name || '') || !window.opener) return;
+    var emp = ''; try { emp = window.opener.document.title.replace(/^Qualicontax - | - Qualicontax$/g, ''); } catch (x) {}
+    var d = document.createElement('div'); d.className = 'soc-janela-barra';
+    d.innerHTML = '<i class="fas fa-window-restore"></i><span>Completando o cadastro do sócio' + (emp ? ' de <b></b>' : '') + '. Salve aqui e volte: a empresa se atualiza sozinha.</span>'
+        + '<button type="button"><i class="fas fa-arrow-left"></i> Voltar para a empresa</button>';
+    if (emp) d.querySelector('b').textContent = emp;
+    d.querySelector('button').addEventListener('click', function () {
+        if (window._fichaPendentes && window._fichaPendentes() && !confirm('Há alterações não salvas neste cadastro. Fechar mesmo assim?')) return;
+        try { window.opener.focus(); } catch (x) {}
+        window.close();
+    });
+    document.body.appendChild(d); document.body.classList.add('com-janela-barra');
+})();
 
 var SAIDA_SOCIO_ID = null;
 function abrirSaidaSocio(btn) {
