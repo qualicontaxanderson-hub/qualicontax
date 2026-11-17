@@ -20,6 +20,9 @@ import re
 import subprocess
 import sys
 
+if hasattr(sys.stdout, 'reconfigure'):
+    sys.stdout.reconfigure(encoding='utf-8')     # emoji no assunto do commit quebrava o console do Windows
+
 RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, RAIZ)
 import config                                       # noqa: E402,F401
@@ -41,7 +44,8 @@ def commits(desde):
     fmt = '%h%x1f%ad%x1f%s%x1e'
     args = ['git', '-C', RAIZ, 'log', '--no-merges', '--date=short', f'--format={fmt}']
     if desde:
-        args.append(f'--since={desde}')
+        # data sem hora o git lê como "esse dia, na hora de agora" e pula o próprio dia (17/11/2026)
+        args.append(f'--since={desde} 00:00')
     saida = subprocess.run(args, capture_output=True, text=True, encoding='utf-8', check=True).stdout
     for bloco in saida.split('\x1e'):
         partes = bloco.strip().split('\x1f')
