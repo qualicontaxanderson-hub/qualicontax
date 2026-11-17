@@ -382,7 +382,9 @@ MAPA = {
     'escrita_fiscal.status_sefaz_empresa_log': 'escrita_fiscal.status_sefaz',
     # financeiro
     'financeiro.boleto_cancelar': 'financeiro.cobranca.excluir',
-    'financeiro.boleto_enviar_email': 'financeiro.cobranca.alterar',
+    # 17/11/2026: quem chega na janela da cobrança (Títulos a receber) pode mandar o e-mail, para os
+    # contatos ou para qualquer outro endereço — Anderson: "quem tiver acesso para chegar até aqui pode enviar"
+    'financeiro.boleto_enviar_email': ('financeiro.titulos', 'financeiro.cobranca.alterar'),
     'financeiro.boleto_sincronizar': 'financeiro.cobranca.alterar',
     'financeiro.boleto_vencimento': 'financeiro.cobranca.alterar',
     'financeiro.boleto_marcar_pago': 'financeiro.cobranca.alterar',

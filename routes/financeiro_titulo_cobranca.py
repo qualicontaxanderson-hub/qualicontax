@@ -165,6 +165,14 @@ def titulo_cobranca(titulo_id):
         tag, cls = 'perdido', 'tx-perd'
     else:
         tag, cls = 'cancelado', 'tx-perd'
+    # 17/11/2026: a lista "Em aberto deste cliente" traz TODOS os honorários em aberto, com o desta janela
+    # marcado — antes era "Outros em aberto" e o aberto na janela ficava de fora (Nuvi Shop: 3 no cartão,
+    # 1 em cima e 2 embaixo, "isso acaba que confunde").
+    abertos = list(outros)
+    if aberto:
+        abertos.append({'id': titulo_id, 'desc': TR._desc(t), 'vencimento': t['vencimento'], 'v': saldo, 'valor': TR.brl(saldo),
+                        'tag': tag, 'cls': cls, 'bol': TR._BOL.get(boleto['situacao'], 'sem') if boleto else 'sem', 'atual': True})
+        abertos.sort(key=lambda o: (o['vencimento'] or date.min, o['id']))
 
     # ── os CONTATOS da empresa mandam no e-mail e no telefone (Anderson, 15/11/2026: "o telefone e e-mail
     #    têm que vir dos contatos... lembre sempre: o e-mail e telefone do CNPJ" são só o último recurso).
@@ -224,7 +232,7 @@ def titulo_cobranca(titulo_id):
         tag=tag, cls=cls, desc=TR._desc(t), servico=TR._servico(t), comp=TR._comp(t.get('competencia')),
         grupos=TR._grupos_dos_clientes([cid]).get(cid, []) if cid else [], doc=doc, nome=nome,
         iniciais=''.join(p[0] for p in nome.split()[:2]).upper(),
-        boleto=boleto, boletos=boletos, nota=nota, outros=outros, outros_tot=TR.brl(sum(float(o['v']) for o in outros)),
+        boleto=boleto, boletos=boletos, nota=nota, outros=outros, abertos=abertos,
         cli_n=cli_n, cli_tot=TR.brl(cli_tot), regua=regua, eventos=ev, pagtos=pagtos,
         destinatarios=destinatarios, contatos=contatos, whats=whats, email_cab=email_cab, fone_cab=fone_cab,
         composicao=composicao, comp_fonte=comp_fonte, comp_soma=TR.brl(comp_soma),

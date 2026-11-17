@@ -186,7 +186,7 @@
           {% if not contatos and not t.email %}<div class="tj-dest tj-dest-falta"><i class="fas fa-triangle-exclamation"></i> A empresa não tem contato com e-mail nem celular{% if t.cliente_id %}: <a href="{{ url_for('clientes.detalhes', id=t.cliente_id) }}#contatos">cadastrar</a>{% endif %}.</div>{% endif %}
         </div>
         {% if pode_email %}
-        <div><input type="text" id="tje_{{ boleto.id }}" name="para" value="" placeholder="outro e-mail (opcional)"><button type="submit" class="tj-prim"><i class="fas fa-paper-plane"></i> {{ 'Reenviar' if boleto.email_enviado_em else 'Enviar' }}</button></div>
+        <div><input type="text" id="tje_{{ boleto.id }}" name="para" value="" placeholder="qualquer outro e-mail (opcional)" title="Vai junto com os contatos marcados; pode ser um endereço que não está no cadastro"><button type="submit" class="tj-prim"><i class="fas fa-paper-plane"></i> {{ 'Reenviar' if boleto.email_enviado_em else 'Enviar' }}</button></div>
         {% if nota %}
         <div class="tj-radios">
           <label><input type="radio" name="so_boleto" value="0" checked> Boleto e nota fiscal</label>
@@ -198,17 +198,23 @@
       </section>
 
       <section class="tj-sec tj-sec-outros">
-        <h4><i class="fas fa-list"></i> Outros em aberto <small>{% if outros %}· {{ outros|length }} · {{ outros_tot }}{% endif %}</small></h4>
-        {% if outros %}
+        <h4><i class="fas fa-list"></i> Em aberto deste cliente <small>{% if abertos %}· {{ cli_n }} · {{ cli_tot }}{% endif %}</small></h4>
+        {% if abertos %}
         <div class="tj-outros">
-          {% for o in outros %}
+          {% for o in abertos %}
+          {% if o.atual %}
+          <div class="tj-o atual {{ o.cls }}" title="É o honorário desta janela">
+            <u class="aqui">nesta janela</u><span><b>{{ o.desc }}</b><small>{{ o.tag }} · {{ BOLETO_ROTULO[o.bol] | lower }}</small></span><em>{{ o.valor }}</em><i class="fas fa-eye"></i>
+          </div>
+          {% else %}
           <button type="button" class="tj-o {{ o.cls }}" onclick="txAbrirCob({{ o.id }})" title="Ver a cobrança deste honorário">
             <span><b>{{ o.desc }}</b><small>{{ o.tag }} · {{ BOLETO_ROTULO[o.bol] | lower }}</small></span><em>{{ o.valor }}</em><i class="fas fa-chevron-right"></i>
           </button>
+          {% endif %}
           {% endfor %}
         </div>
         {% else %}
-        <div class="tj-ok"><i class="fas fa-circle-check"></i> Nada mais em aberto deste cliente.</div>
+        <div class="tj-ok"><i class="fas fa-circle-check"></i> Nada em aberto deste cliente.</div>
         {% endif %}
       </section>
     </div>
