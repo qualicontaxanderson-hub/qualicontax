@@ -500,7 +500,34 @@ QUALIFICACOES_SOCIO = [
     'Sócio-Administrador', 'Sócio', 'Administrador', 'Titular Pessoa Física Residente ou Domiciliado no Brasil',
     'Empresário', 'Sócio Pessoa Jurídica Domiciliado no Brasil', 'Sócio Comanditado', 'Sócio Comanditário',
     'Presidente', 'Diretor', 'Procurador', 'Sócio Menor (Assistido/Representado)',
+    # 17/11/2026: a caixa de qualificação mostra também estas da tabela da Receita
+    'Conselheiro de Administração', 'Sócio-Gerente', 'Sócio Ostensivo', 'Sócio de Indústria', 'Fundador',
+    'Beneficiário Final', 'Produtor Rural', 'Titular Pessoa Jurídica Domiciliada no Brasil',
+    'Sócio Pessoa Física Residente ou Domiciliado no Exterior', 'Sócio Pessoa Jurídica Domiciliado no Exterior',
+    'Administrador Residente ou Domiciliado no Exterior', 'Diretor Residente ou Domiciliado no Exterior',
 ]
+# Qualificação criada pela equipe na caixa do Adicionar sócio fica em cadastro_opcoes com este tipo.
+TIPO_QUAL_SOCIO = 'qual_socio'
+
+
+def _qualificacoes_socio():
+    """Lista da caixa: a da Receita + as criadas pela equipe + as que já estão gravadas em algum sócio,
+    cada uma com quantos sócios (ativos) a usam."""
+    uso = {}
+    for x in execute_query("SELECT qualificacao AS q, COUNT(*) AS n FROM socios_clientes "
+                           "WHERE qualificacao IS NOT NULL AND qualificacao <> '' AND COALESCE(ativo, 1) = 1 "
+                           "GROUP BY qualificacao", fetch=True) or []:
+        uso[x['q']] = uso.get(x['q'], 0) + x['n']
+    criadas = [r['nome'] for r in execute_query("SELECT nome FROM cadastro_opcoes WHERE tipo = %s ORDER BY nome",
+                                                (TIPO_QUAL_SOCIO,), fetch=True) or []]
+    nomes, vistos = [], set()
+    for n in QUALIFICACOES_SOCIO + criadas + sorted(uso):
+        k = _chave_opcao(n)
+        if n and k not in vistos:
+            vistos.add(k)
+            nomes.append(n)
+    return [{'nome': n, 'n': sum(v for q, v in uso.items() if _chave_opcao(q) == _chave_opcao(n)),
+             'criada': n in criadas} for n in nomes]
 
 
 def _data_iso(v, ate_hoje=True):
@@ -519,6 +546,14 @@ def _data_iso(v, ate_hoje=True):
     if d.year < 1900 or (ate_hoje and d > date.today()):
         return None
     return d
+
+
+def _chave_opcao(nome):
+    """'Sócio-Administrador' / 'SOCIO ADMINISTRADOR' -> 'SOCIOADMINISTRADOR' (compara sem acento,
+    maiúscula, hífen ou espaço)."""
+    import unicodedata
+    t = unicodedata.normalize('NFKD', str(nome or '')).encode('ascii', 'ignore').decode().upper()
+    return re.sub(r'[^A-Z0-9]', '', t)
 
 
 def _qualificacao(v):
@@ -3910,7 +3945,10 @@ def grupo_rapido():
 @login_required
 def caixa_opcoes():
     """Cartões da caixa de Grupo e de Ramo da ficha (17/11/2026): o que ajuda a escolher — quantas empresas,
-    cidades e algumas empresas do grupo; segmento e quantas empresas usam o ramo."""
+    cidades e algumas empresas do grupo; segmento e quantas empresas usam o ramo. qual=qualif: qualificações
+    do sócio (caixa do Adicionar sócio)."""
+    if request.args.get('qual') == 'qualif':
+        return jsonify(_qualificacoes_socio())
     if request.args.get('qual') == 'grupo':
         from routes.grupos import _grupos_com_empresas
         out = []
@@ -3931,6 +3969,29 @@ def caixa_opcoes():
             GROUP BY x.ramo_atividade_id""", fetch=True) or [])}
     return jsonify([{'id': str(x['id']), 'nome': x['nome'], 'seg': x.get('segmento') or '', 'n': uso.get(x['id'], 0)}
                     for x in RamoAtividade.get_all(situacao='ATIVO') if (x.get('tipo_pessoa') or 'PJ') == tipo])
+
+
+@clientes.route('/clientes/api/qualificacao-rapida', methods=['POST'])
+@login_required
+def qualif_rapida():
+    """"Nova qualificação" na caixa do Adicionar sócio (17/11/2026). Anderson: "temos diversas outras, como
+    Diretor, Conselheiro, só Administrador... abrir uma caixa e escolher e até criar nova". Quem altera
+    cadastro cria; excluir não existe aqui. Nome igual escrito de outro jeito (acento, maiúscula) devolve o
+    que já existe."""
+    nome = ' '.join(((request.get_json(silent=True) or {}).get('nome') or '').split())
+    nome = _qualificacao(nome)
+    if len(nome) < 3:
+        return jsonify(success=False, message='Digite o nome da qualificação.'), 400
+    if not re.search(r'[A-Za-zÀ-ú]', nome):
+        return jsonify(success=False, message='Use letras no nome da qualificação.'), 400
+    for x in _qualificacoes_socio():
+        if _chave_opcao(x['nome']) == _chave_opcao(nome):
+            return jsonify(success=True, nome=x['nome'], ja_existia=True)
+    execute_query("INSERT IGNORE INTO cadastro_opcoes (tipo, nome, criado_por) VALUES (%s, %s, %s)",
+                  (TIPO_QUAL_SOCIO, nome, current_user.id), fetch=False)
+    registrar('escrita.incluiu_opcao_cadastro', 'cadastros', tabela='cadastro_opcoes',
+              depois={'lista': 'Qualificação do sócio', 'nome': nome})
+    return jsonify(success=True, nome=nome, ja_existia=False)
 
 
 @clientes.route('/clientes/api/ramo-rapido', methods=['POST'])

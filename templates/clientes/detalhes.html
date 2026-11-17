@@ -1450,6 +1450,15 @@
 .socio-escolhido { display: flex; align-items: center; justify-content: space-between;
   gap: 10px; padding: 10px 12px; border: 1px solid #86efac; background: #f0fdf4;
   border-radius: 8px; margin-bottom: 12px; }
+/* Qualificação escolhida numa caixa (17/11/2026) */
+.soc-qual-btn { display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%;
+  text-align: left; cursor: pointer; background: #fff; font: inherit; }
+.soc-qual-btn span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.soc-qual-btn span.vazio { color: #9ca3af; }
+.soc-qual-btn i { color: #16a34a; font-size: 12px; flex-shrink: 0; }
+.pk-fundo.pk-sobre { z-index: 1100; }
+.pk-card.pk-off { opacity: .5; cursor: not-allowed; }
+.pk-card.pk-off:hover { border-color: #e3ece7; box-shadow: none; }
 </style>
 <div id="addSocioModal" class="modal" style="display: none;">
     <div class="modal-content" style="max-width:620px;">
@@ -1485,12 +1494,10 @@
                 </div>
                 <div class="soc-2col">
                     <div class="form-group">
-                        <label for="socio_qualificacao">Qualificação</label>
-                        <input type="text" id="socio_qualificacao" name="qualificacao" class="form-control" maxlength="80"
-                               list="socioQualLista" placeholder="Ex.: Sócio-Administrador">
-                        <datalist id="socioQualLista">
-                            {% for q in qualificacoes_socio %}<option value="{{ q }}">{% endfor %}
-                        </datalist>
+                        <label for="socioQualBtn">Qualificação</label>
+                        <button type="button" id="socioQualBtn" class="form-control soc-qual-btn" onclick="socioQualCaixa()">
+                            <span id="socioQualTxt" class="vazio">Escolher…</span><i class="fas fa-chevron-down"></i></button>
+                        <input type="hidden" id="socio_qualificacao" name="qualificacao">
                     </div>
                     <div class="form-group">
                         <label for="socio_entrada">Entrada na sociedade</label>
@@ -1500,13 +1507,13 @@
                 <div class="soc-2col">
                     <div class="form-group">
                         <label for="socio_capital">Capital na empresa (R$)</label>
-                        <input type="text" id="socio_capital" name="capital_valor" class="form-control" inputmode="decimal"
-                               placeholder="Ex.: 50.000,00">
+                        <input type="text" id="socio_capital" name="capital_valor" class="form-control" inputmode="numeric"
+                               placeholder="0,00" autocomplete="off">
                     </div>
                     <div class="form-group">
                         <label for="socio_pro_labore">Pró-labore por mês (R$)</label>
-                        <input type="text" id="socio_pro_labore" name="pro_labore" class="form-control" inputmode="decimal"
-                               placeholder="Ex.: 1.518,00">
+                        <input type="text" id="socio_pro_labore" name="pro_labore" class="form-control" inputmode="numeric"
+                               placeholder="0,00" autocomplete="off">
                     </div>
                 </div>
                 <div class="form-group">
@@ -2652,7 +2659,7 @@ function showAddSocioModal() {
     socioTrocar();
     document.getElementById('socio_percentual').value = '';
     document.getElementById('socio_responsavel').checked = false;
-    document.getElementById('socio_qualificacao').value = '';
+    socioQualSet('');
     document.getElementById('socio_entrada').value = '';
     document.getElementById('socio_capital').value = '';
     document.getElementById('socio_pro_labore').value = '';
@@ -2684,11 +2691,11 @@ function socioAbrirCom(cad, ctx) {
     showAddSocioModal();
     socioEscolher({ id: cad.id, nome: (cad.numero ? cad.numero + ' · ' : '') + cad.nome, cpf: cad.doc || cad.cpf || '', tipo: cad.tipo || 'PF' });
     if (ctx) {
-        if (ctx.qual) document.getElementById('socio_qualificacao').value = ctx.qual;
+        if (ctx.qual) socioQualSet(ctx.qual);
         if (ctx.entrada) document.getElementById('socio_entrada').value = ctx.entrada;
         if (ctx.pct) document.getElementById('socio_percentual').value = ctx.pct;
-        if (ctx.capital) document.getElementById('socio_capital').value = ctx.capital;
-        if (ctx.pl) document.getElementById('socio_pro_labore').value = ctx.pl;
+        if (ctx.capital) document.getElementById('socio_capital').value = moedaFmt(ctx.capital);
+        if (ctx.pl) document.getElementById('socio_pro_labore').value = moedaFmt(ctx.pl);
         socioRespRegra();
     }
 }
@@ -2829,7 +2836,160 @@ function socioRespRegra() {
     document.getElementById('socio_qualificacao').setCustomValidity(
         SOCIO_TIPO === 'PJ' && /administr|pessoa fisica|empresario|presidente|diretor|menor/.test(q) ? dica : '');
 }
-document.getElementById('socio_qualificacao').addEventListener('input', socioRespRegra);
+
+// ══ 17/11/2026: valor em reais digitado como na maquininha e qualificação numa caixa ══
+// Anderson: "ao digitar o capital ou pro labore, tem que digitar 500000, e aparecer 5000,00"; "a Qualificação
+// tem somente Sócio-Administrador e temos diversas outras... temos que abrir uma caixa e escolher e até criar nova".
+function moedaFmt(v) {   // '5000.00' (banco/Receita), '5.000,00' ou '5.000' -> '5.000,00'
+    v = String(v == null ? '' : v).replace(/R\$|\s/g, '');
+    if (!v) return '';
+    var n = /,\d{0,2}$/.test(v) ? parseFloat(v.replace(/\./g, '').replace(',', '.'))
+          : /^\d{1,3}(\.\d{3})+$/.test(v) ? parseFloat(v.replace(/\./g, '')) : parseFloat(v.replace(/[^\d.]/g, ''));
+    return isNaN(n) ? '' : n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+['socio_capital', 'socio_pro_labore'].forEach(function (id) {
+    var el = document.getElementById(id);
+    el.addEventListener('input', function () {
+        var d = el.value.replace(/\D/g, '').replace(/^0+/, '').slice(0, 13);
+        el.value = d ? (parseInt(d, 10) / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '';
+    });
+});
+
+var QUAL_DADOS = null, PODE_QUAL = {{ 'true' if pode_rota('clientes.qualif_rapida') else 'false' }};
+function qEsc(s) { var d = document.createElement('div'); d.textContent = s == null ? '' : String(s); return d.innerHTML; }
+function qNorm(q) { return String(q || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[-\s]+/g, ' '); }
+function qAdm(q) { return /administr|titular|empresario|presidente|diretor|comanditado/.test(qNorm(q)); }
+function qSoPF(q) { return /administr|pessoa fisica|empresario|presidente|diretor|menor/.test(qNorm(q)); }
+function qCat(q) { return qAdm(q) ? 'adm' : (/socio|cotas/.test(qNorm(q)) ? 'soc' : 'out'); }
+var Q_CAT = { adm: ['fa-user-tie', 'pk-s-ser', 'Administra'], soc: ['fa-user', 'pk-s-com', 'Sócio'], out: ['fa-id-badge', 'pk-s-loc', 'Outras'] };
+function socioQualSet(v) {
+    v = v || '';
+    document.getElementById('socio_qualificacao').value = v;
+    var t = document.getElementById('socioQualTxt');
+    t.textContent = v || 'Escolher…'; t.className = v ? '' : 'vazio';
+    document.getElementById('socioQualBtn').title = v;
+    socioRespRegra();
+}
+function socioQualCaixa() {
+    var btn = document.getElementById('socioQualBtn');
+    var orig = document.getElementById('socio_qualificacao').value, sel = orig, filtro = '', novoAberto = false;
+    var pj = SOCIO_TIPO === 'PJ';
+    var quem = (document.getElementById('socioEscNome').textContent || '').trim();
+    var f = document.createElement('div'); f.className = 'pk-fundo pk-sobre';
+    f.innerHTML = '<div class="pk pk-verde" role="dialog" aria-modal="true" aria-label="Qualificação do sócio">'
+        + '<header class="pk-cab"><span class="pk-av"><i class="fas fa-id-card"></i></span>'
+        + '<div class="pk-quem"><b>Qualificação do sócio</b><span>' + qEsc(quem || 'sócio ainda não escolhido') + '</span></div>'
+        + '<div class="pk-val"><span class="pk-tag">escolhida</span><b class="pk-val-b"></b><small class="pk-val-s"></small></div>'
+        + '<button type="button" class="pk-x" title="Fechar (Esc)"><i class="fas fa-xmark"></i></button></header>'
+        + '<div class="pk-kpis"></div>'
+        + '<div class="pk-barra"><div class="pk-busca"><i class="fas fa-search"></i><input type="search" autocomplete="off" placeholder="Buscar qualificação… (ex.: diretor, conselheiro)"></div>'
+        + '<div class="pk-pills"></div></div>'
+        + '<div class="pk-corpo"><div class="pk-grade"><div class="pk-carregando"><i class="fas fa-spinner fa-spin"></i> Carregando…</div></div></div>'
+        + '<footer class="pk-pe"><div class="pk-pe-info"></div><button type="button" class="pk-canc">Cancelar</button>'
+        + '<button type="button" class="pk-ok"><i class="fas fa-check"></i> Usar esta qualificação</button></footer></div>';
+    document.body.appendChild(f);
+    var $q = function (s) { return f.querySelector(s); };
+    var busca = $q('.pk-busca input'), grade = $q('.pk-grade');
+    function fechar() { document.removeEventListener('keydown', tecla, true); f.remove(); btn.focus(); }
+    function tecla(e) { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); if (novoAberto) { novoAberto = false; desenhar(); } else fechar(); } }
+    document.addEventListener('keydown', tecla, true);
+    function usar() { fechar(); socioQualSet(sel); }
+    function bloqueada(q) { return pj && qSoPF(q); }
+    function cabecalho() {
+        $q('.pk-val-b').textContent = sel || 'nenhuma';
+        $q('.pk-val-s').textContent = !sel ? 'escolha um cartão' : (pj ? 'empresa sócia' : (qAdm(sel) ? 'pode ser responsável' : 'não pode ser responsável'));
+        $q('.pk-pe-info').innerHTML = sel && bloqueada(sel) ? '<i class="fas fa-triangle-exclamation"></i> Empresa sócia não pode ser "' + qEsc(sel) + '": escolha outra.'
+            : sel && sel === orig ? '<i class="fas fa-check"></i> Esta já é a qualificação escolhida.'
+            : (pj ? '<i class="fas fa-circle-info"></i> Empresa sócia: as de pessoa física ficam apagadas.' : '<i class="fas fa-circle-info"></i> Responsável pela empresa só quem administra.');
+        $q('.pk-ok').disabled = !sel || sel === orig;
+    }
+    function kpis() {
+        var mais = (QUAL_DADOS || []).slice().sort(function (a, b) { return b.n - a.n; })[0];
+        $q('.pk-kpis').innerHTML =
+              '<div><i class="fas fa-user"></i><div><dt>Sócio</dt><dd title="' + qEsc(quem) + '">' + qEsc(quem || '—') + '</dd><small>' + (pj ? 'empresa' : 'pessoa física') + '</small></div></div>'
+            + '<div><i class="fas fa-list-check"></i><div><dt>Qualificações</dt><dd>' + (QUAL_DADOS || []).length + '</dd><small>na lista (Receita e criadas)</small></div></div>'
+            + '<div><i class="fas fa-star"></i><div><dt>Mais usada</dt><dd>' + qEsc(mais && mais.n ? mais.nome : '—') + '</dd><small>' + (mais && mais.n ? mais.n + (mais.n === 1 ? ' sócio' : ' sócios') : 'ninguém ainda') + '</small></div></div>';
+    }
+    function pills() {
+        var cont = function (c) { return (QUAL_DADOS || []).filter(function (x) { return !c || qCat(x.nome) === c; }).length; };
+        $q('.pk-pills').innerHTML = [['', 'Todas']].concat(Object.keys(Q_CAT).map(function (c) { return [c, Q_CAT[c][2]]; })).map(function (s) {
+            return '<button type="button" class="pk-pill' + (filtro === s[0] ? ' on' : '') + '" data-s="' + s[0] + '">'
+                 + (s[0] ? '<i class="fas ' + Q_CAT[s[0]][0] + '"></i> ' : '') + s[1] + ' <b>' + cont(s[0]) + '</b></button>';
+        }).join('');
+        $q('.pk-pills').querySelectorAll('.pk-pill').forEach(function (b) { b.addEventListener('click', function () { filtro = b.dataset.s; pills(); desenhar(); }); });
+    }
+    function cartao(x) {
+        var c = Q_CAT[qCat(x.nome)], off = bloqueada(x.nome);
+        var det = off ? 'só pessoa física' : (pj ? 'empresa sócia' : (qAdm(x.nome) ? 'pode ser responsável' : 'não é responsável'));
+        return '<button type="button" class="pk-card pk-card-r' + (sel === x.nome ? ' on' : '') + (off ? ' pk-off' : '') + '" data-nome="' + qEsc(x.nome) + '"' + (off ? ' aria-disabled="true"' : '') + '>'
+            + '<span class="pk-ck"><i class="fas fa-check"></i></span>'
+            + '<span class="pk-ri ' + c[1] + '"><i class="fas ' + c[0] + '"></i></span>'
+            + '<div><b>' + qEsc(x.nome) + '</b><small>' + det + ' · ' + (x.n ? x.n + (x.n === 1 ? ' sócio' : ' sócios') : 'nenhum sócio') + (x.criada ? ' · <em>criada aqui</em>' : '') + (x.nome === orig && orig ? ' · <em>atual</em>' : '') + '</small></div></button>';
+    }
+    function cartaoNovo() {
+        if (!PODE_QUAL) return '';
+        var t = busca.value.trim();
+        if (!novoAberto) return '<button type="button" class="pk-card pk-novo-c"><i class="fas fa-plus"></i><b>Nova qualificação</b><small>' + (t ? 'criar "' + qEsc(t) + '"' : 'não achou? crie aqui') + '</small></button>';
+        return '<div class="pk-card pk-novo-f"><b><i class="fas fa-plus"></i> Nova qualificação</b>'
+            + '<input type="text" class="pk-novo-nome" maxlength="80" placeholder="Ex.: Conselheiro Fiscal" value="' + qEsc(t) + '">'
+            + '<div class="pk-novo-bt"><button type="button" class="pk-canc pk-novo-x">Voltar</button><button type="button" class="pk-ok pk-novo-ok">Criar</button></div><div class="pk-msg"></div></div>';
+    }
+    function desenhar() {
+        if (!QUAL_DADOS) return;
+        var q = qNorm(busca.value.trim());
+        var vis = QUAL_DADOS.filter(function (x) { return (!q || qNorm(x.nome).indexOf(q) >= 0) && (!filtro || qCat(x.nome) === filtro); });
+        vis.sort(function (a, b) {   // a atual primeiro, depois as mais usadas; as que não servem para empresa no fim
+            var pa = a.nome === orig ? 0 : 1, pb = b.nome === orig ? 0 : 1; if (pa !== pb) return pa - pb;
+            var oa = bloqueada(a.nome) ? 1 : 0, ob = bloqueada(b.nome) ? 1 : 0; if (oa !== ob) return oa - ob;
+            return b.n - a.n;
+        });
+        grade.innerHTML = vis.map(cartao).join('') + cartaoNovo() + (!vis.length && !PODE_QUAL ? '<div class="pk-carregando">Nada encontrado.</div>' : '');
+        grade.querySelectorAll('.pk-card[data-nome]').forEach(function (c) {
+            if (c.classList.contains('pk-off')) return;
+            c.addEventListener('click', function () { sel = c.dataset.nome; desenhar(); cabecalho(); });
+            c.addEventListener('dblclick', function () { sel = c.dataset.nome; usar(); });
+        });
+        var nc = grade.querySelector('.pk-novo-c'); if (nc) nc.addEventListener('click', function () { novoAberto = true; desenhar(); });
+        var nf = grade.querySelector('.pk-novo-f');
+        if (nf) {
+            var ni = nf.querySelector('.pk-novo-nome'); ni.focus(); ni.select();
+            ni.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); criar(nf); } });
+            nf.querySelector('.pk-novo-x').addEventListener('click', function () { novoAberto = false; desenhar(); });
+            nf.querySelector('.pk-novo-ok').addEventListener('click', function () { criar(nf); });
+            nf.scrollIntoView({ block: 'nearest' });
+        }
+    }
+    function criar(nf) {
+        var nome = nf.querySelector('.pk-novo-nome').value.trim().replace(/\s+/g, ' '), msg = nf.querySelector('.pk-msg');
+        if (nome.length < 3) { msg.textContent = 'Digite o nome da qualificação.'; return; }
+        var b = nf.querySelector('.pk-novo-ok'); b.disabled = true; b.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+        fetch({{ url_for('clientes.qualif_rapida') | tojson }}, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ nome: nome }) })
+            .then(function (r) { return r.json(); }).then(function (j) {
+                b.disabled = false; b.textContent = 'Criar';
+                if (!j.success) { msg.textContent = j.message || 'Não foi criada.'; return; }
+                if (!QUAL_DADOS.some(function (x) { return x.nome === j.nome; })) QUAL_DADOS.push({ nome: j.nome, n: 0, criada: true });
+                if (bloqueada(j.nome)) { msg.textContent = 'Criada, mas é de pessoa física: empresa sócia não pode ter.'; novoAberto = false; busca.value = ''; pills(); desenhar(); return; }
+                sel = j.nome; novoAberto = false; busca.value = ''; filtro = '';
+                pills(); kpis(); desenhar(); cabecalho();
+            }).catch(function () { b.disabled = false; b.textContent = 'Criar'; msg.textContent = 'Sem conexão. Tente de novo.'; });
+    }
+    busca.addEventListener('input', function () { if (novoAberto) novoAberto = false; desenhar(); });
+    busca.addEventListener('keydown', function (e) {
+        if (e.key !== 'Enter') return; e.preventDefault();
+        var p = grade.querySelectorAll('.pk-card[data-nome]:not(.pk-off)'); if (p.length === 1) p[0].click();
+    });
+    $q('.pk-x').addEventListener('click', fechar);
+    $q('.pk-canc').addEventListener('click', fechar);
+    $q('.pk-ok').addEventListener('click', usar);
+    f.addEventListener('mousedown', function (e) { if (e.target === f) fechar(); });
+    function comecar() { pills(); kpis(); cabecalho(); desenhar(); busca.focus(); }
+    kpis(); cabecalho();
+    if (QUAL_DADOS) { comecar(); return; }
+    fetch({{ url_for('clientes.caixa_opcoes') | tojson }} + '?qual=qualif')
+        .then(function (r) { if (!r.ok) throw 0; return r.json(); })
+        .then(function (l) { QUAL_DADOS = l; comecar(); })
+        .catch(function () { QUAL_DADOS = {{ qualificacoes_socio | tojson }}.map(function (n) { return { nome: n, n: 0 }; }); comecar(); });
+}
 
 function socioEscolher(p) {
     SOCIO_TIPO = p.tipo || 'PF';
