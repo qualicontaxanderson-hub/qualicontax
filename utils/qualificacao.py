@@ -34,6 +34,12 @@ def _endereco(cliente_id):
     return ', '.join(p for p in partes if p and p.strip())
 
 
+# Para onde a ficha leva quem clica no que falta (17/11/2026, Anderson: "se tem pendência tem que aparecer o que é pendente").
+ALVO_FALTA = {'nacionalidade': 'campo-pf-nacionalidade', 'estado civil': 'dados-pessoais', 'regime de bens': 'campo-pf-regime',
+              'profissão': 'campo-pf-profissao', 'nascimento': 'campo-pf-nascimento', 'documento de identidade': 'dados-pessoais',
+              'CPF': 'identificacao', 'CNPJ': 'identificacao', 'endereço': 'enderecos'}
+
+
 def qualificacao(cliente_id):
     """(texto, faltam) do cadastro; ('', []) se o cadastro não existe."""
     c = execute_query("SELECT nome_razao_social, cpf_cnpj, tipo_pessoa FROM clientes WHERE id = %s",

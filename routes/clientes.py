@@ -23,7 +23,7 @@ from models.cliente_responsavel import ClienteResponsavel
 from models.fin_contrato import FinContrato
 from models.cadastro_adicional_cliente import CadastroAdicionalCliente
 from models.socio_cliente import SocioCliente, pode_ser_responsavel, qual_recusada_pj
-from utils.qualificacao import qualificacao
+from utils.qualificacao import qualificacao, ALVO_FALTA as QUAL_ALVO
 from models.contabilidade import Contabilidade
 from utils.natureza import classificar as natureza_classificar, codigo_formatado, FAMILIAS as NAT_FAMILIAS
 from models.pessoa_dados import cpf_valido, cpf_formatado
@@ -1814,7 +1814,7 @@ def detalhes(id):
                          ex_socios=ex_socios,
                          socio_em=(_empresas_do_socio(id) if cliente.get('tipo_pessoa') == 'PF' else []),
                          # "Copiar qualificação" (20/10/2026): o parágrafo do contrato
-                         qualif=qualificacao(id),
+                         qualif=qualificacao(id), qualif_alvo=QUAL_ALVO,
                          qualif_socios=qualif_socios,
                          qualif_todos=(';\n\n'.join(q[0] for q in qualif_socios.values() if q[0]) + '.'
                                        if any(q[0] for q in qualif_socios.values()) else ''),

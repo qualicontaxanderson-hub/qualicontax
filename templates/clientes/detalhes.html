@@ -115,7 +115,7 @@
                     <a href="#" id="btnVoltarGrupo" class="qb-btn-v" style="display:none;"><i class="fas fa-arrow-left"></i> Voltar ao grupo</a>
                     <a href="{{ url_for('clientes.avulsos') if cliente.avulso else url_for('clientes.index') }}" id="btnVoltar" class="qb-btn-v"><i class="fas fa-arrow-left"></i> <span>Voltar</span></a>
                     {% if qualif[0] %}<button type="button" class="qb-btn-v" data-copiar-texto="{{ qualif[0] }}" data-copiar-rotulo="Qualificação"
-                            title="Copia o parágrafo de qualificação para contrato{% if qualif[1] %} — falta no cadastro: {{ qualif[1]|join(', ') }}{% endif %}"><i class="fas fa-file-signature"></i> Copiar qualificação{% if qualif[1] %} <span style="background:#fbbf24;color:#422006;border-radius:99px;padding:1px 8px;font-size:11px;font-weight:800;">falta{{ 'm' if qualif[1]|length > 1 }} {{ qualif[1]|length }}</span>{% endif %}</button>{% endif %}
+                            title="Copia o parágrafo de qualificação para contrato{% if qualif[1] %} — falta no cadastro: {{ qualif[1]|join(', ') }}{% endif %}"><i class="fas fa-file-signature"></i> Copiar qualificação{% if qualif[1] %} <span style="background:#fbbf24;color:#422006;border-radius:99px;padding:1px 8px;font-size:11px;font-weight:800;">falta{{ 'm' if qualif[1]|length > 1 }} {{ qualif[1]|join(' e ') if qualif[1]|length <= 2 else (qualif[1]|length ~ ' · veja em Cadastro') }}</span>{% endif %}</button>{% endif %}
                     <button type="button" class="qb-btn-v" data-copiar-ficha="{{ cliente.nome_razao_social }}" title="Copia identificação, contato, dados fiscais e endereços"><i class="far fa-copy"></i> Copiar ficha</button>
                     {% if pode_rota('clientes.salvar_campos') %}<button type="button" id="tuEditar" class="qb-btn-v qb-btn-salvar" title="Abre todos os campos da ficha para alterar, inclusive número, {{ 'razão social e a busca na Receita' if pj else 'nome e CPF' }}"><i class="fas fa-pen"></i> Editar</button>{% endif %}
                     {% if pode_rota('clientes.salvar_campos') %}<button type="button" id="tuSalvar" class="qb-btn-v qb-btn-salvar tu-salvar" disabled title="Grava o que você alterou na página"><i class="fas fa-check"></i> Salvar <b id="tuN"></b></button>{% endif %}
@@ -238,6 +238,12 @@
                 {% else %}
                 <p class="qb-tudo-ok"><i class="fas fa-circle-check"></i> Cadastro completo.{% if not falta.avulso %} A empresa não aparece no A CADASTRAR.{% endif %}</p>
                 {% endfor %}
+                {% if qualif[0] and qualif[1] %}
+                <div class="qb-qual-falta">
+                    <small><i class="fas fa-file-signature"></i> Para a qualificação do contrato ainda falta{{ 'm' if qualif[1]|length > 1 }}:</small>
+                    {% for f in qualif[1] %}<a class="qb-pend qb-pend-amb" href="#{{ qualif_alvo.get(f, 'dados-pessoais') }}" title="Sem isso o parágrafo de qualificação sai incompleto"><i class="fas fa-circle-exclamation"></i><span>{{ f[0]|upper ~ f[1:] }}</span><em>resolver</em></a>{% endfor %}
+                </div>
+                {% endif %}
                 {% if falta.ok %}
                 <details class="qb-oks"><summary>ver os {{ falta.ok|length }} completos</summary>
                     <ul>{% for o in falta.ok %}<li><i class="fas fa-circle-check"></i><span>{{ o.rotulo }}{% if o.valor and (pode_fin or o.chave != 'cobranca') %} <small>· {{ o.valor }}</small>{% endif %}</span></li>{% endfor %}</ul>
@@ -305,14 +311,14 @@
                     <div class="pf-sub">
                         <div class="pf-sub-h"><i class="fas fa-user"></i><b>Identificação</b><small>Junta, contrato social e gov.br</small></div>
                         <div class="pf-2col">
-                            {{ campo('pf_nascimento', 'Nascimento', ps.data_nascimento.strftime('%Y-%m-%d') if ps.data_nascimento else '', exibe=((ps.data_nascimento|format_date) ~ (' · ' ~ pf_ops.idade if pf_ops.idade else '')) if ps.data_nascimento else '', tipo='date') }}
+                            {{ campo('pf_nascimento', 'Nascimento', ps.data_nascimento.strftime('%Y-%m-%d') if ps.data_nascimento else '', exibe=((ps.data_nascimento|format_date) ~ (' · ' ~ pf_ops.idade if pf_ops.idade else '')) if ps.data_nascimento else '', tipo='date', ancora='campo-pf-nascimento') }}
                             {{ campo('pf_sexo', 'Sexo', ps.sexo or '', exibe=pessoa_rotulo('sexo', ps.sexo) or '', tipo='select', ops=pf_ops.sexo) }}
                         </div>
                         <div class="pf-2col pf-2col-uf">
                             {{ campo('pf_naturalidade_cidade', 'Naturalidade', ps.naturalidade_cidade or '', ph='Cidade onde nasceu') }}
                             {{ campo('pf_naturalidade_uf', 'UF', ps.naturalidade_uf or '', tipo='select', ops=pf_ops.ufs2) }}
                         </div>
-                        {{ campo('pf_nacionalidade', 'Nacionalidade', ps.nacionalidade or '', tipo='select', ops=pf_ops.nacionalidade) }}
+                        {{ campo('pf_nacionalidade', 'Nacionalidade', ps.nacionalidade or '', tipo='select', ops=pf_ops.nacionalidade, ancora='campo-pf-nacionalidade') }}
                         {{ campo('pf_nome_mae', 'Nome da mãe', ps.nome_mae or '') }}
                         {{ campo('pf_nome_pai', 'Nome do pai', ps.nome_pai or '') }}
                         {{ campo('pf_nome_social', 'Nome social', ps.nome_social or '', ajuda='Só quando a pessoa usa um nome diferente do registro. Opcional.') }}
@@ -330,7 +336,7 @@
                             <span hidden data-copiar="{{ pessoa_rotulo('estado_civil', ps.estado_civil) or '' }}" data-copiar-rotulo="Estado civil"></span>
                         </div>
                         <div id="pfCasado"{% if not casado %} hidden{% endif %}>
-                            {{ campo('pf_regime_bens', 'Regime de bens', ps.regime_bens or '', exibe=pessoa_rotulo('regime_bens', ps.regime_bens) or '', tipo='select', ops=pf_ops.regime) }}
+                            {{ campo('pf_regime_bens', 'Regime de bens', ps.regime_bens or '', exibe=pessoa_rotulo('regime_bens', ps.regime_bens) or '', tipo='select', ops=pf_ops.regime, ancora='campo-pf-regime') }}
                             <div class="pf-2col pf-2col-cpf">
                                 {{ campo('pf_conjuge_cpf', 'CPF do cônjuge', ps.conjuge_cpf or '', ph='000.000.000-00', mono=True, ajuda='Digite o CPF primeiro: se a pessoa já tem cadastro, o nome vem de lá.') }}
                                 {{ campo('pf_conjuge_nome', 'Cônjuge', ps.conjuge_nome or '', ajuda='Nome como está no documento. Opcional.') }}
@@ -356,7 +362,7 @@
                     <div class="pf-sub pf-s6">
                         <div class="pf-sub-h"><i class="fas fa-briefcase"></i><b>Trabalho e eSocial</b><small>o eSocial pede estes quatro para o sócio com pró-labore</small></div>
                         <div class="pf-2col">
-                            {{ campo('pf_profissao', 'Profissão', ps.profissao or '', tipo='select', ops=pf_ops.profissao) }}
+                            {{ campo('pf_profissao', 'Profissão', ps.profissao or '', tipo='select', ops=pf_ops.profissao, ancora='campo-pf-profissao') }}
                             {{ campo('pf_pis_nit', 'PIS / NIT', ps.pis_nit or '', ph='000.00000.00-0', mono=True, ajuda='11 números; o sistema confere o dígito.') }}
                             {{ campo('pf_grau_instrucao', 'Grau de instrução', ps.grau_instrucao or '', exibe=pessoa_rotulo('grau_instrucao', ps.grau_instrucao) or '', tipo='select', ops=pf_ops.grau) }}
                             {{ campo('pf_raca_cor', 'Raça / cor', ps.raca_cor or '', exibe=pessoa_rotulo('raca_cor', ps.raca_cor) or '', tipo='select', ops=pf_ops.raca, ajuda='Como a pessoa se declara (tabela do eSocial).') }}
