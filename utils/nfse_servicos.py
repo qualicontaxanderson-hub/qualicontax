@@ -121,6 +121,20 @@ def meta_do_item(ctrib):
     return tabelas()['item_meta'].get(_dig(ctrib).zfill(6)[:4], {}) or {}
 
 
+# Indicadores de operação (cIndOp) com os quais o governo EXIGE o endereço do tomador —
+# regra E0234 do Anexo I (validação da DPS). 100301 "demais serviços onerosos" está aqui:
+# nota sem tomador (ou com endereço incompleto) só sai com um indicador fora desta lista.
+INDOP_EXIGE_ENDERECO = frozenset({
+    '030102', '030103', '050102', '050103', '100101', '100102', '100201',
+    '100301', '100302', '100401', '100501', '100502', '100601'})
+
+
+def indop_sugerido(ctrib, padrao='100301'):
+    """O indicador de operação que o Anexo VIII dá para o item do serviço (ex.: 11.01
+    estacionamento → 050101 "serviço sobre bem móvel no estabelecimento do fornecedor")."""
+    return _dig(meta_do_item(ctrib).get('indop') or '') or padrao
+
+
 def eh_mercadoria(cnae):
     """Comércio e indústria: venda de mercadoria (ICMS), não sai em nota de serviço."""
     c = _dig(cnae)

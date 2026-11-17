@@ -512,7 +512,7 @@ def sugestao_da_matriz(emp):
     """Primeiro preenchimento: o que dá para tirar do cadastro (regime, município, IM,
     e-mail) + o padrão da reforma que domina as notas (CST 000 / 000001 / 100301)."""
     op = REGIME_PARA_OP.get(emp.get('regime') or '')
-    from utils.nfse_servicos import sugerir_servico
+    from utils.nfse_servicos import sugerir_servico, indop_sugerido
     ctrib, nbs = sugerir_servico(emp.get('id'), emp.get('documento'), emp.get('cnae'))
     return {
         'cod_trib_nac': ctrib, 'cod_nbs': nbs,
@@ -525,7 +525,7 @@ def sugestao_da_matriz(emp):
         'piscofins_cst': '01' if op == 1 else None,
         'aliquota_pis': {'LUCRO_PRESUMIDO': '0.65', 'LUCRO_REAL': '1.65'}.get(emp.get('regime') or '', '0'),
         'aliquota_cofins': {'LUCRO_PRESUMIDO': '3.00', 'LUCRO_REAL': '7.60'}.get(emp.get('regime') or '', '0'),
-        'ibscbs_cst': '000', 'ibscbs_cclasstrib': '000001', 'ibscbs_cind_op': '100301',
+        'ibscbs_cst': '000', 'ibscbs_cclasstrib': '000001', 'ibscbs_cind_op': indop_sugerido(ctrib),
         'ibscbs_ind_dest': 0, 'ibscbs_ind_final': 0,
         'descricao_padrao': 'Serviços prestados em {mes} de {ano}',
     }

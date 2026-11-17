@@ -311,6 +311,20 @@ def pedido_do_fiscal(f, empresa_id, cfg, tomador, series_ativas):
     if obrig:
         raise PedidoInvalido('Falta no tomador: ' + ' e '.join(obrig) + '.')
     endereco_ok = not anonimo and not any(x['nivel'] == 'endereco' for x in tomador['faltas'])
+    # Regra E0234 (17/11/2026, Congonhas Park nº 38 recusada): com estes indicadores o governo exige
+    # o endereço do tomador. Sem endereço, melhor barrar aqui do que gastar um número da série.
+    from utils.nfse_servicos import INDOP_EXIGE_ENDERECO, indop_sugerido
+    indop = _dig(cfg.get('ibscbs_cind_op') or '100301').zfill(6)
+    if not endereco_ok and indop in INDOP_EXIGE_ENDERECO:
+        sugerido = indop_sugerido(cfg.get('cod_trib_nac'), padrao='')
+        dica = (f' Para este serviço a tabela oficial indica o {sugerido}, que não exige endereço.'
+                if sugerido and sugerido not in INDOP_EXIGE_ENDERECO else '')
+        if anonimo:
+            raise PedidoInvalido(f'O indicador de operação {indop} da configuração exige o endereço do tomador, '
+                                 f'e esta nota é sem tomador.{dica} Troque em Configuração › Indicador da operação.')
+        raise PedidoInvalido(f'O indicador de operação {indop} da configuração exige o endereço completo do tomador. '
+                             f'Complete o endereço ({", ".join(x["texto"] for x in tomador["faltas"] if x["nivel"] == "endereco")})'
+                             f' ou troque o indicador em Configuração.{dica}')
     end = (lambda k: (tomador.get(k) or '')) if endereco_ok else (lambda k: '')
     valor = _dec(g('valor_servico'), 'Valor do serviço', Decimal('0.01'))
     descricao = g('descricao')
