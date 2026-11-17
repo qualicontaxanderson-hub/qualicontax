@@ -206,8 +206,8 @@ def titulo_cobranca(titulo_id):
     comp_soma = sum(i['valor'] for i in composicao)
     comp_difere = bool(composicao) and abs(comp_soma - float(t['valor'] or 0)) > 0.01
 
-    # ── textos prontos para copiar (Pix / boleto / os dois), com o que está sendo cobrado ──
-    copias = {'pix': '', 'boleto': '', 'ambos': '', 'pix_codigo': '', 'linha': '', 'pagina': ''}
+    # ── texto pronto para copiar (leva à página do cliente), com o que está sendo cobrado ──
+    copias = {'texto': '', 'pix_codigo': '', 'linha': '', 'pagina': ''}
     if boleto and boleto['situacao'] not in ('erro', 'canceled', 'rascunho', 'paid', 'settled', 'identified'):
         from utils.cobranca_email import _doc_fmt, _empresa, textos_para_copiar
         copias = textos_para_copiar(boleto, nota, _empresa(t['empresa_id']), cliente_nome=TR._nome(t['contraparte_nome']),

@@ -95,13 +95,12 @@
       <div class="tj-copia"><dt>Linha digitável</dt><code>{{ boleto.linha_digitavel }}</code><button type="button" class="tj-cp" data-copiar data-copiar-rotulo="Linha digitável" data-copiar-texto="{{ boleto.linha_digitavel }}" title="Copiar"><i class="fas fa-copy"></i></button></div>
       {% endif %}
       {% if boleto.erro %}<div class="tj-aviso tj-aviso-erro"><i class="fas fa-triangle-exclamation"></i> {{ boleto.erro }}</div>{% endif %}
-      {% if copias.pix or copias.boleto %}
+      {% if copias.texto %}
       <div class="tj-copias">
-        <dt>1 · Texto da cobrança <small>· o que está sendo cobrado, valor, vencimento e como pagar; cole no WhatsApp</small></dt>
-        <div>
-          {% if copias.pix %}<button type="button" class="tj-ib tj-ib-pix" data-copiar data-copiar-rotulo="Texto da cobrança (Pix)" data-copiar-texto="{{ copias.pix }}" title="Texto da cobrança falando só do Pix"><i class="fas fa-qrcode"></i>Pix</button>{% endif %}
-          {% if copias.boleto %}<button type="button" class="tj-ib tj-ib-pix" data-copiar data-copiar-rotulo="Texto da cobrança (boleto)" data-copiar-texto="{{ copias.boleto }}" title="Texto da cobrança falando só do boleto"><i class="fas fa-barcode"></i>Boleto</button>{% endif %}
-          {% if copias.ambos %}<button type="button" class="tj-ib tj-ib-pix" data-copiar data-copiar-rotulo="Texto da cobrança (Pix e boleto)" data-copiar-texto="{{ copias.ambos }}" title="Texto da cobrança com as duas formas de pagar"><i class="fas fa-clone"></i>Pix e boleto</button>{% endif %}
+        <dt>1 · Texto da cobrança <small>· o que está sendo cobrado, valor, vencimento e o link da página do cliente, onde ele copia o Pix ou a linha digitável; cole no WhatsApp</small></dt>
+        <div class="tj-copias-txt">
+          <button type="button" class="tj-ib tj-ib-pix" data-copiar data-copiar-rotulo="Texto da cobrança" data-copiar-texto="{{ copias.texto }}" title="Copia o texto pronto para colar no WhatsApp"><i class="fab fa-whatsapp"></i>Copiar texto da cobrança</button>
+          <a class="tj-ib tj-ib-pix" href="{{ copias.pagina }}" target="_blank" rel="noopener" title="Abre a página que o cliente vê ao tocar no link do texto: Copiar código Pix, Copiar linha digitável, boleto e nota"><i class="fas fa-mobile-screen-button"></i>Página do cliente</a>
         </div>
         <dt class="tj-copias-2">2 · Código para pagar <small>· mande cada um numa mensagem só dele: no celular o cliente copia a mensagem inteira e cola no app do banco</small></dt>
         <div class="tj-copias-cod">
@@ -115,8 +114,7 @@
         <a class="tj-ib" href="{{ url_for('financeiro.boleto_pdf', boleto_id=boleto.id) }}" target="_blank" rel="noopener"><i class="fas fa-eye"></i>Ver boleto</a>
         <a class="tj-ib" href="{{ url_for('financeiro.boleto_pdf', boleto_id=boleto.id, baixar=1) }}"><i class="fas fa-download"></i>Baixar PDF</a>
         {% endif %}
-        {% if copias.pagina %}<a class="tj-ib" href="{{ copias.pagina }}" target="_blank" rel="noopener" title="A página que o cliente abre pelo link: Copiar código Pix, Copiar linha digitável, boleto e nota"><i class="fas fa-mobile-screen-button"></i>Página do cliente</a>
-        {% elif boleto.link %}<a class="tj-ib" href="{{ boleto.link }}" target="_blank" rel="noopener"><i class="fas fa-arrow-up-right-from-square"></i>Página</a>{% endif %}
+        {% if boleto.link and not copias.pagina %}<a class="tj-ib" href="{{ boleto.link }}" target="_blank" rel="noopener"><i class="fas fa-arrow-up-right-from-square"></i>Página</a>{% endif %}
         {% if (vivo or boleto.situacao == 'identified') and pode_rota('financeiro.boleto_sincronizar') %}<form method="POST" action="{{ url_for('financeiro.boleto_sincronizar', boleto_id=boleto.id) }}"><input type="hidden" name="volta" value="{{ volta }}"><button class="tj-ib"><i class="fas fa-rotate"></i>Conferir</button></form>{% endif %}
         {% if vivo and pode_rota('financeiro.boleto_cancelar') %}<form method="POST" action="{{ url_for('financeiro.boleto_cancelar', boleto_id=boleto.id) }}" onsubmit="return confirm('Cancelar este boleto no banco? O cliente não vai mais conseguir pagá-lo.');"><input type="hidden" name="volta" value="{{ volta }}"><button class="tj-ib tj-ib-verm"><i class="fas fa-ban"></i>Cancelar</button></form>{% endif %}
       </div>
