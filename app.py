@@ -181,6 +181,8 @@ from routes.atendimento import atendimento as atendimento_bp   # noqa: E402  (ch
 app.register_blueprint(atendimento_bp)
 from routes.novidades import novidades as novidades_bp   # noqa: E402  (o que mudou no sistema; 15/11/2026)
 app.register_blueprint(novidades_bp)
+from routes.meu_cadastro import meu_cadastro as meu_cadastro_bp   # noqa: E402  (cada um altera os próprios dados; 17/11/2026)
+app.register_blueprint(meu_cadastro_bp)
 
 # Gate do Portal do Instalador — DENY BY DEFAULT para a sessão de escopo
 # restrito. Registrado no APP (não no blueprint) de propósito: precisa rodar

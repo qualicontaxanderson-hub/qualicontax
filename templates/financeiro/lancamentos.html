@@ -176,7 +176,6 @@
         {% if pode_rota('financeiro.notas_config') %}<a class="lm-btn lm-btn2" href="{{ url_for('financeiro.notas_config') }}"><i class="fas fa-sliders-h"></i> Configuração fiscal</a>{% endif %}
         {% if pode_rota('financeiro.nota_nova') %}<a class="lm-btn lm-btn2" href="{{ url_for('financeiro.nota_nova') }}" title="Emite agora, sem passar por aprovação"><i class="fas fa-bolt"></i> Emitir direto</a>{% endif %}
       {% endif %}
-      <button type="button" class="lm-btn lm-btn2" onclick="pxAbrir()" title="{{ ('Sua chave: ' ~ pix.pix_chave) if pix.pix_chave else 'Cadastre para receber as comissões por Pix' }}"><i class="fas fa-key"></i> {{ 'Minha chave Pix' if pix.pix_chave else 'Cadastrar chave Pix' }}</button>
       {% if pode_rota('financeiro.lancamento_novo') %}<button type="button" class="lm-btn" onclick="nsAbrir()"><i class="fas fa-plus"></i> Nova solicitação</button>{% endif %}
     </div>
   </div>
@@ -251,7 +250,7 @@
           <div style="margin-top:8px"><span class="lm-tipo {{ 'lm-t-me' if l.destino == 'MENSAL' else 'lm-t-av' }}">{{ l.como }}</span></div>
           <span class="lm-ck"><i class="fas fa-check"></i></span>
         </div>{% endfor %}</div>
-      <div class="lm-barra"><span><b id="lmSoma">R$ 0,00</b> · <span id="lmQtd">nenhuma comissão marcada</span> · {% if pix.pix_chave %}vai para a sua chave Pix ({{ PIX_TIPOS.get(pix.pix_tipo, '') }}){% else %}<a href="javascript:pxAbrir()" style="color:#fde68a; font-weight:800">cadastre a sua chave Pix</a> para o pedido sair com o Pix pronto{% endif %}</span>
+      <div class="lm-barra"><span><b id="lmSoma">R$ 0,00</b> · <span id="lmQtd">nenhuma comissão marcada</span> · {% if pix.pix_chave %}vai para a sua chave Pix ({{ PIX_TIPOS.get(pix.pix_tipo, '') }}){% else %}<a href="{{ url_for('meu_cadastro.index') }}" style="color:#fde68a; font-weight:800">sem chave Pix: preencha em Meu cadastro</a>{% endif %}</span>
         <button type="submit" id="lmPedir" disabled><i class="fas fa-paper-plane"></i> Pedir pagamento</button></div>
     {% else %}<div class="tx-vazio"><i class="fas fa-hand-holding-dollar"></i>Nenhuma comissão liberada agora: ela libera quando o cliente paga.</div>{% endif %}
     </form>
@@ -307,21 +306,6 @@
   </div>
 </div>
 </div>
-
-{# ── caixa: Minha chave Pix ── #}
-<div class="ns-fundo" id="pxFundo"><div class="ns peq" role="dialog" aria-modal="true">
-  <header class="ns-cab" style="background:radial-gradient(120% 140% at 0% 0%, #a78bfa 0%, #7c3aed 45%, #4c1d95 100%)"><div class="ns-tit"><b>Minha chave Pix</b><span>Os seus pedidos de comissão saem com ela (Pix copia e cola e QR)</span></div>
-    <button type="button" class="ns-x" onclick="pxFechar()"><i class="fas fa-xmark"></i></button></header>
-  <form method="POST" action="{{ url_for('financeiro.lancamento_minha_pix') }}" style="display:contents">
-  <div class="ns-g"><div class="ns-f"><section class="ns-b"><div class="ns-campos">
-    <div class="ns-campo"><label>Tipo da chave</label><select class="ns-in" name="pix_tipo">{% for k, v in PIX_TIPOS.items() %}<option value="{{ k }}"{{ ' selected' if pix.pix_tipo == k }}>{{ v }}</option>{% endfor %}</select></div>
-    <div class="ns-campo"><label>Chave</label><input class="ns-in" name="pix_chave" value="{{ pix.pix_chave or '' }}" maxlength="120" placeholder="CPF, celular, e-mail…" required></div>
-  </div></section>
-  <div class="ns-aviso"><i class="fas fa-shield-halved"></i><span>A chave aparece só no seu pedido de comissão, para Anderson ou Alessandra pagarem. A troca fica registrada na Auditoria.</span></div></div></div>
-  <footer class="ns-pe"><div class="ns-pe-info"></div><button type="button" class="ns-bt" onclick="pxFechar()">Cancelar</button>
-    <button type="submit" class="ns-bt prim" style="background:linear-gradient(135deg,#7c3aed,#5b21b6)"><i class="fas fa-check"></i> Salvar chave</button></footer>
-  </form>
-</div></div>
 
 {# ── caixa: Nova solicitação ── #}
 <div class="ns-fundo" id="nsFundo"><div class="ns" role="dialog" aria-modal="true" aria-label="Nova solicitação">
@@ -580,13 +564,9 @@
   document.addEventListener('keydown', function (e) {
     if (e.key !== 'Escape') return;
     if ((tsCli && tsCli.isOpen) || (tsServ && tsServ.isOpen)) return;
-    ['nsFundo', 'apFundo', 'rpFundo', 'pxFundo'].forEach(function (id) { if ($(id).classList.contains('on')) { $(id).classList.remove('on'); document.body.style.overflow = ''; } });
+    ['nsFundo', 'apFundo', 'rpFundo'].forEach(function (id) { if ($(id).classList.contains('on')) { $(id).classList.remove('on'); document.body.style.overflow = ''; } });
   });
   ['nsFundo', 'apFundo', 'rpFundo'].forEach(function (id) { $(id).addEventListener('mousedown', function (e) { if (e.target === $(id)) { $(id).classList.remove('on'); document.body.style.overflow = ''; } }); });
-  window.pxAbrir = function () { $('pxFundo').classList.add('on'); document.body.style.overflow = 'hidden'; $('pxFundo').querySelector('[name=pix_chave]').focus(); };
-  window.pxFechar = function () { $('pxFundo').classList.remove('on'); document.body.style.overflow = ''; };
-  $('pxFundo').addEventListener('mousedown', function (e) { if (e.target === $('pxFundo')) pxFechar(); });
-  if (new URLSearchParams(location.search).get('pix') === '1') pxAbrir();
   var acCli = $('acCli');      // acordo de mensalidade (ex.: Guilherme 25%): escolher a empresa pelo nome
   if (acCli) acCli.insertAdjacentHTML('beforeend', D.clientes.map(function (c) { return '<option value="' + c.id + '">' + esc((c.num ? c.num + ' · ' : '') + c.nome) + '</option>'; }).join(''));
   if (new URLSearchParams(location.search).get('nova') === '1') nsAbrir();

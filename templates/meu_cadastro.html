@@ -1,0 +1,98 @@
+{% extends "base.html" %}
+{% block title %}Meu cadastro - Qualicontax{% endblock %}
+{% block content %}
+{# 17/11/2026 — Anderson: "os usuarios todos eles tem que ter acesso ao seu cadastro... alterar". Cada um vê e altera os
+   PRÓPRIOS dados pessoais, endereço, banco e Pix (a chave Pix é a que sai no pedido de comissão). Nome, login e acesso
+   continuam com o administrador. #}
+{% include 'clientes/_cartao_css.html' %}
+{% include 'configuracoes/_painel_css.html' %}
+<style>
+.mc { }
+.mc-cab { display:flex; align-items:center; gap:16px; min-width:0; }
+.mc-ava { width:56px; height:56px; border-radius:16px; flex:none; display:flex; align-items:center; justify-content:center;
+          background:rgba(255,255,255,.16); border:1.5px solid rgba(255,255,255,.35); color:#fff; font-size:20px; font-weight:800; }
+.mc .ef-hero-sub span + span::before { content:"·"; margin:0 7px; opacity:.6; }
+.mc-bloco { margin-bottom:14px; } .mc-bloco .cli-f-row { display:block; } .mc-bloco .cli-seg-rot { display:block; margin-bottom:10px; }
+.mc-campos { display:grid; grid-template-columns:repeat(3, minmax(0,1fr)); gap:12px 14px; } .mc-campos > * { min-width:0; }
+.mc-campo { display:block; } .mc-campo.l2 { grid-column:span 2; }
+.mc-campo > span { display:block; font-size:11px; font-weight:800; letter-spacing:.5px; text-transform:uppercase; color:#64748b; margin-bottom:5px; }
+.mc-campo input, .mc-campo select { width:100%; border:1px solid #d7e3dc; border-radius:9px; padding:8px 11px; font:inherit; font-size:13.5px;
+  color:#0f172a; background:#fff; box-sizing:border-box; }
+.mc-campo input:focus, .mc-campo select:focus { outline:none; border-color:#16a34a; box-shadow:0 0 0 3px rgba(22,163,74,.15); }
+.mc-campo input[readonly] { background:#f8fafc; color:#475569; }
+.mc-txt { margin:8px 0 0; font-size:12.5px; color:#64748b; line-height:1.5; }
+.mc-pe { display:flex; justify-content:flex-end; gap:8px; }
+@media (max-width:800px) { .mc-campos { grid-template-columns:minmax(0,1fr); } .mc-campo.l2 { grid-column:auto; }
+  .mc .ef-hero-sub span { display:block; } .mc .ef-hero-sub span + span::before { content:none; } }
+</style>
+
+<form method="POST" autocomplete="off" class="mc">
+<div class="ef-hero">
+  <div class="ef-hero-inner ef-hero-head">
+    <div class="mc-cab">
+      {% set pn = (current_user.nome or '').split() %}
+      <span class="mc-ava">{{ pn[0][:1] if pn else '?' }}{{ pn[-1][:1] if pn|length > 1 }}</span>
+      <div style="min-width:0">
+        <h1 class="ef-hero-title">Meu cadastro</h1>
+        <p class="ef-hero-sub"><span>{{ current_user.nome }}</span><span>login <b>{{ current_user.login }}</b></span><span>{{ current_user.email }}</span></p>
+      </div>
+    </div>
+    <div class="ef-hero-actions"><button type="submit" class="ef-btn ef-btn-primary"><i class="fas fa-check"></i> Salvar</button></div>
+  </div>
+</div>
+
+<div class="ef-body">
+  <div class="cli-filtros mc-bloco"><div class="cli-f-row">
+    <span class="cli-seg-rot"><i class="fas fa-id-card"></i> Dados pessoais</span>
+    {% if cad %}
+    <div class="mc-campos">
+      <label class="mc-campo l2"><span>Nome completo</span><input value="{{ cad.nome_completo or current_user.nome }}" readonly title="O nome muda com o administrador"></label>
+      <label class="mc-campo"><span>CPF</span><input name="cpf" value="{{ cad.cpf or '' }}" inputmode="numeric" maxlength="14"></label>
+      <label class="mc-campo"><span>Nascimento</span><input type="date" name="data_nascimento" value="{{ cad.data_nascimento.isoformat() if cad.data_nascimento else '' }}"></label>
+      <label class="mc-campo"><span>E-mail pessoal</span><input type="email" name="email_pessoal" value="{{ cad.email_pessoal or '' }}"></label>
+      <label class="mc-campo"><span>E-mail da empresa</span><input value="{{ current_user.email or cad.email_corporativo or '' }}" readonly title="O e-mail de entrada muda com o administrador"></label>
+      <label class="mc-campo"><span>Celular pessoal</span><input name="celular_pessoal" value="{{ cad.celular_pessoal or '' }}" inputmode="tel"></label>
+      <label class="mc-campo"><span>Celular da empresa</span><input name="celular_corporativo" value="{{ cad.celular_corporativo or '' }}" inputmode="tel"></label>
+    </div>
+    {% else %}
+    <p class="mc-txt"><i class="fas fa-circle-info"></i> Seu usuário não veio pelo link de cadastro, então não há dados pessoais guardados. Peça ao administrador o link de cadastro se precisar. Banco e Pix você preenche aqui embaixo.</p>
+    {% endif %}
+  </div></div>
+
+  {% if cad %}
+  <div class="cli-filtros mc-bloco"><div class="cli-f-row">
+    <span class="cli-seg-rot"><i class="fas fa-location-dot"></i> Endereço</span>
+    <div class="mc-campos">
+      <label class="mc-campo"><span>CEP</span><input name="cep" value="{{ cad.cep or '' }}" inputmode="numeric" maxlength="9"></label>
+      <label class="mc-campo l2"><span>Rua / avenida</span><input name="logradouro" value="{{ cad.logradouro or '' }}"></label>
+      <label class="mc-campo"><span>Número</span><input name="numero" value="{{ cad.numero or '' }}"></label>
+      <label class="mc-campo"><span>Complemento</span><input name="complemento" value="{{ cad.complemento or '' }}"></label>
+      <label class="mc-campo"><span>Bairro</span><input name="bairro" value="{{ cad.bairro or '' }}"></label>
+      <label class="mc-campo l2"><span>Cidade</span><input name="cidade" value="{{ cad.cidade or '' }}"></label>
+      <label class="mc-campo"><span>Estado (UF)</span><input name="estado" value="{{ cad.estado or '' }}" maxlength="2" style="text-transform:uppercase"></label>
+    </div>
+  </div></div>
+  {% endif %}
+
+  <div class="cli-filtros mc-bloco"><div class="cli-f-row">
+    <span class="cli-seg-rot"><i class="fas fa-building-columns"></i> Banco e Pix</span>
+    <div class="mc-campos">
+      <label class="mc-campo"><span>Tipo da chave Pix</span>
+        <select name="pix_tipo"><option value="">—</option>{% for k, v in PIX_TIPOS %}<option value="{{ k }}"{{ ' selected' if banco.pix_tipo == k }}>{{ v }}</option>{% endfor %}</select></label>
+      <label class="mc-campo l2"><span>Chave Pix</span><input name="pix_chave" value="{{ banco.pix_chave or '' }}" maxlength="140"></label>
+      <label class="mc-campo"><span>Banco (código)</span><input name="banco_codigo" value="{{ banco.banco_codigo or '' }}" maxlength="5" placeholder="ex.: 260"></label>
+      <label class="mc-campo"><span>Banco (nome)</span><input name="banco_nome" value="{{ banco.banco_nome or '' }}" placeholder="ex.: Nubank"></label>
+      <label class="mc-campo"><span>Tipo de conta</span>
+        <select name="conta_tipo"><option value="">—</option>{% for k, v in CONTA_TIPOS %}<option value="{{ k }}"{{ ' selected' if banco.conta_tipo == k }}>{{ v }}</option>{% endfor %}</select></label>
+      <label class="mc-campo"><span>Agência</span><input name="agencia" value="{{ banco.agencia or '' }}" maxlength="15"></label>
+      <label class="mc-campo"><span>Conta</span><input name="conta" value="{{ banco.conta or '' }}" maxlength="25"></label>
+      <label class="mc-campo"><span>Titular (CPF)</span><input name="titular_cpf" value="{{ banco.titular_cpf or '' }}" maxlength="14"></label>
+      <label class="mc-campo l2"><span>Titular (nome)</span><input name="titular_nome" value="{{ banco.titular_nome or '' }}"></label>
+    </div>
+    <p class="mc-txt"><i class="fas fa-shield-halved"></i> A chave Pix é a que sai no seu pedido de pagamento de comissão. Estes números só você e o administrador veem; a Auditoria guarda só que mudou, nunca os números.</p>
+  </div></div>
+
+  <div class="mc-pe"><button type="submit" class="ef-btn ef-btn-primary" style="background:#16a34a; color:#fff; border:0"><i class="fas fa-check"></i> Salvar meu cadastro</button></div>
+</div>
+</form>
+{% endblock %}

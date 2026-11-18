@@ -69,6 +69,7 @@ _FISCAL_NOTA = ('escrita_fiscal.conf_compras', 'escrita_fiscal.conf_saidas')
 MAPA = {
     # --- comuns a todo usuário logado ---------------------------------------
     'dashboard.index':                 'LOGIN',
+    'meu_cadastro.index':              'LOGIN',   # cada um só os PRÓPRIOS dados (17/11/2026)
     'dashboard.get_stats':             'LOGIN',
     'api.get_chart_data':              'LOGIN',
     'api.search_municipios':           'LOGIN',

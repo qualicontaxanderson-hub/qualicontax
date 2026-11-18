@@ -87,7 +87,7 @@
           <button type="button" class="cp-bt" onclick="cpCopiar('cpCod', this)"><i class="fas fa-copy"></i> Copiar Pix copia e cola</button>
           <div class="cp-aviso" style="margin-top:10px; text-align:left"><i class="fas fa-bolt"></i> Depois de pagar, não precisa fazer mais nada: quando o extrato do banco puxar a saída de {{ falta | format_currency }} para {{ f.usuario_nome.split()[0] }}, o pedido fica quitado sozinho.</div>
         {% else %}
-          <div class="cp-aviso" style="text-align:left"><i class="fas fa-key"></i> {{ f.usuario_nome.split()[0] }} ainda não cadastrou a chave Pix. {% if f.usuario_id == current_user.id %}Cadastre em <a href="{{ url_for('financeiro.lancamentos', aba='com', pix=1) }}"><b>Minha chave Pix</b></a> e o código aparece aqui.{% else %}Peça para cadastrar em Lançamentos → Minha chave Pix.{% endif %}</div>
+          <div class="cp-aviso" style="text-align:left"><i class="fas fa-key"></i> {{ f.usuario_nome.split()[0] }} não tem chave Pix no cadastro. {% if f.usuario_id == current_user.id %}Preencha em <a href="{{ url_for('meu_cadastro.index') }}"><b>Meu cadastro</b></a> e o código aparece aqui.{% else %}Peça para preencher em Meu cadastro (menu da esquerda).{% endif %}</div>
         {% endif %}
         <button type="button" class="cp-bt cl" onclick="cpLink(this)"><i class="fas fa-link"></i> Copiar link deste pedido</button>
       </div>

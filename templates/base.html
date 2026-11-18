@@ -167,6 +167,11 @@
                 </span>
             </div>
 
+            {# 17/11/2026 — todo usuário vê e altera o próprio cadastro (dados pessoais, endereço, banco e Pix) #}
+            <a href="{{ url_for('meu_cadastro.index') }}" class="rail-link {% if request.endpoint == 'meu_cadastro.index' %}active{% endif %}" title="Meu cadastro">
+                <i class="fas fa-id-card"></i>
+                <span>Meu cadastro</span>
+            </a>
             <a href="{{ url_for('auth.logout') }}" class="rail-link" title="Sair">
                 <i class="fas fa-sign-out-alt"></i>
                 <span>Sair</span>
