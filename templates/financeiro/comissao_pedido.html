@@ -10,6 +10,7 @@
 .cp { max-width:980px; margin:0 auto; padding:8px 0 40px; color:#0f172a; }
 .cp-cab { display:flex; align-items:center; gap:18px; padding:22px 24px; border-radius:22px; color:#fff;
   background:radial-gradient(120% 140% at 0% 0%, #a78bfa 0%, #7c3aed 45%, #4c1d95 100%); box-shadow:0 18px 40px rgba(76,29,149,.28); }
+.cp-cab.canc { background:radial-gradient(120% 140% at 0% 0%, #94a3b8 0%, #475569 45%, #1e293b 100%); box-shadow:0 18px 40px rgba(30,41,59,.25); }
 .cp-cab.pago { background:radial-gradient(120% 140% at 0% 0%, #4ade80 0%, #16a34a 45%, #0f3d2e 100%); box-shadow:0 18px 40px rgba(15,61,46,.25); }
 .cp-logo { background:#fff; border-radius:14px; padding:7px 11px; display:inline-flex; } .cp-logo img { height:40px; display:block; }
 .cp-tit { flex:1; min-width:0; } .cp-tit small { font-size:11px; font-weight:800; letter-spacing:.08em; text-transform:uppercase; opacity:.8; }
@@ -42,6 +43,10 @@
 .cp-tag { display:inline-block; margin-top:3px; font-size:11px; font-weight:800; border-radius:99px; padding:2px 8px; }
 .cp-tag.adi { background:#f5f3ff; color:#5b21b6; border:1px solid #ddd6fe; } .cp-tag.des { background:#fef2f2; color:#b91c1c; border:1px solid #fecaca; }
 .cp-it .v.des { color:#b91c1c; }
+.cp-bt.canc { color:#b91c1c; border-color:#fecaca; } .cp-bt.canc-ok { background:linear-gradient(135deg,#dc2626,#991b1b); margin-top:0; width:auto; padding:11px 18px; }
+.cp-fundo { position:fixed; inset:0; background:rgba(15,23,42,.45); display:none; align-items:center; justify-content:center; z-index:60; padding:16px; } .cp-fundo.on { display:flex; }
+.cp-caixa { background:#fff; border-radius:18px; padding:20px 22px; max-width:440px; width:100%; box-shadow:0 24px 60px rgba(0,0,0,.25); } .cp-caixa h3 { margin:0 0 8px; font-size:17px; color:#991b1b; } .cp-caixa p { margin:0 0 14px; font-size:13.5px; color:#334155; line-height:1.45; }
+.cp-caixa-pe { display:flex; gap:8px; justify-content:flex-end; } .cp-caixa-pe .cp-bt { width:auto; margin-top:0; padding:11px 16px; }
 .cp-volta { display:inline-flex; align-items:center; gap:7px; color:#4c1d95; font-weight:700; text-decoration:none; font-size:13.5px; margin-bottom:12px; }
 @media (max-width:860px) { .cp-g { grid-template-columns:minmax(0,1fr); } .cp-cab { flex-wrap:wrap; } .cp-val { width:100%; text-align:left; } }
 </style>
@@ -51,7 +56,7 @@
 {% include 'financeiro/_nav_financeiro.html' %}
 <div class="cp">
   <a class="cp-volta" href="{{ url_for('financeiro.lancamentos', aba='com') }}"><i class="fas fa-arrow-left"></i> Lançamentos · Comissões</a>
-  <div class="cp-cab{{ ' pago' if f.status == 'PAGO' }}">
+  <div class="cp-cab{{ ' pago' if f.status == 'PAGO' }}{{ ' canc' if f.status == 'CANCELADO' }}">
     <span class="cp-logo"><img src="{{ url_for('static', filename='images/logo.png') }}" alt="Qualicontax"></span>
     <div class="cp-tit"><small>Pedido de pagamento de comissão nº {{ f.id }}</small><b>{{ f.usuario_nome }}</b>
       <span>{{ resumo }} · pedido em {{ f.criado_em.strftime('%d/%m/%Y') if f.criado_em else '' }}</span></div>
@@ -87,6 +92,8 @@
         <div class="cp-h"><i class="fas fa-qrcode"></i> Pagar por Pix</div>
         {% if f.status == 'PAGO' %}
           <div class="cp-ok"><i class="fas fa-circle-check"></i> Pedido quitado. Nada a pagar.</div>
+        {% elif f.status == 'CANCELADO' %}
+          <div class="cp-aviso" style="text-align:left"><i class="fas fa-ban"></i> Pedido cancelado. Nada a pagar: as comissões voltaram para a tela de quem pediu e podem entrar num novo pedido.</div>
         {% elif codigo %}
           <img src="{{ qr }}" alt="QR do Pix">
           <div class="cp-chave">{{ PIX_TIPOS.get(pix.pix_tipo, 'Chave') }}: <b>{{ pix.pix_chave }}</b><br>valor: <b>{{ falta | format_currency }}</b></div>
@@ -97,8 +104,13 @@
           <div class="cp-aviso" style="text-align:left"><i class="fas fa-key"></i> {{ f.usuario_nome.split()[0] }} não tem chave Pix no cadastro. {% if f.usuario_id == current_user.id %}Preencha em <a href="{{ url_for('meu_cadastro.index') }}"><b>Meu cadastro</b></a> e o código aparece aqui.{% else %}Peça para preencher em Meu cadastro (menu da esquerda).{% endif %}</div>
         {% endif %}
         <button type="button" class="cp-bt cl" onclick="cpLink(this)"><i class="fas fa-link"></i> Copiar link deste pedido</button>
+        {% if f.status not in ('PAGO', 'CANCELADO') and (f.valor_pago | float) == 0 and (aprov or f.usuario_id == current_user.id) %}
+        <button type="button" class="cp-bt cl canc" onclick="document.getElementById('cpCanc').classList.add('on')"><i class="fas fa-ban"></i> Cancelar este pedido</button>
+        {% endif %}
       </div>
+      {% if f.status == 'CANCELADO' %}<div class="cp-aviso" style="margin-top:16px"><i class="fas fa-ban"></i> Este pedido foi cancelado. As comissões voltaram para a tela de quem pediu.</div>{% endif %}
       {# 18/11/2026 — Anderson: "no fechamento teremos imagem, pdf e até texto de whatsapp a ser enviado para o financeiro" #}
+      {% if f.status != 'CANCELADO' %}
       <div class="cp-b" style="margin-top:16px">
         <div class="cp-h"><i class="fas fa-paper-plane"></i> Mandar para o financeiro</div>
         <textarea class="cp-cod" id="cpWa" readonly style="height:150px">{{ texto_wa }}</textarea>
@@ -110,6 +122,7 @@
         </div>
         <div style="font-size:12px; color:#64748b; margin-top:8px; line-height:1.45">O texto leva o total, a chave Pix e o link desta página. A imagem abre em outra aba: segure (ou clique com o direito) para copiar e colar na conversa.</div>
       </div>
+      {% endif %}
       {% if aprov and f.status not in ('PAGO', 'CANCELADO') and pode_rota('financeiro.fechamento_pagar') %}
       <div class="cp-b" style="margin-top:16px">
         <div class="cp-h"><i class="fas fa-hand-holding-dollar"></i> Pagou de outro jeito?</div>
@@ -122,6 +135,14 @@
     </div>
   </div>
 </div>
+<div class="cp-fundo" id="cpCanc"><div class="cp-caixa" role="dialog" aria-modal="true">
+  <h3><i class="fas fa-ban"></i> Cancelar o pedido nº {{ f.id }}?</h3>
+  <p>As comissões voltam para "a pedir" e podem entrar num novo pedido. O que foi adiantado volta a esperar o cliente pagar.</p>
+  <form method="POST" action="{{ url_for('financeiro.fechamento_cancelar', fid=f.id) }}" class="cp-caixa-pe">
+    <button type="button" class="cp-bt cl" onclick="document.getElementById('cpCanc').classList.remove('on')">Voltar</button>
+    <button type="submit" class="cp-bt canc-ok"><i class="fas fa-ban"></i> Cancelar pedido</button>
+  </form>
+</div></div>
 {% endblock %}
 
 {% block extra_js %}

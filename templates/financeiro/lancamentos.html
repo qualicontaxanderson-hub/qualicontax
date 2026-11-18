@@ -47,6 +47,7 @@
 .lm-adm { display:inline-flex; align-items:center; gap:6px; margin-top:6px; font-size:11px; font-weight:800; color:#92400e; background:#fef3c7; border-radius:7px; padding:2px 8px; }
 .lm-ac .cob { color:#1d4ed8; border-color:#bfdbfe; background:#eff6ff; }
 .lm-falha { margin-top:8px; padding:7px 9px; border-radius:9px; background:#fffbeb; border:1px solid #fde68a; color:#92400e; font-size:12px; line-height:1.4; }
+.lm-canc { font:inherit; font-size:12.5px; font-weight:800; color:#b91c1c; background:#fff; border:1.5px solid #fecaca; border-radius:10px; padding:7px 11px; cursor:pointer; display:inline-flex; gap:6px; align-items:center; white-space:nowrap; }
 .lm-adi { margin-top:8px; padding:7px 9px; border-radius:9px; background:#f5f3ff; border:1px solid #ddd6fe; color:#5b21b6; font-size:12px; line-height:1.4; } .lm-adi i { margin-right:4px; }
 .tx-c.adi { position:relative; } .tx-c.adi .lm-ck { top:10px; bottom:auto; } .lm-dica { margin-left:10px; font-style:normal; font-weight:600; color:#7c3aed; font-size:12px; text-transform:none; letter-spacing:0; }
 .lm-falha i { margin-right:4px; }
@@ -184,7 +185,7 @@
       {% else %}<i class="fas fa-paper-plane"></i> cobrado{% endif %}</span></div>
   {% if falhou %}{% set mf = motivo_nfse(l.motivo_falha) %}<div class="lm-falha"><i class="fas fa-circle-exclamation"></i> {% if mf.texto %}<b>{{ mf.texto }}</b>{% if mf.cod %} <small>({{ mf.cod }})</small>{% endif %}<br>{{ mf.fazer or 'Corrija o que o governo apontou e emita de novo.' }}{% if mf.bruto and mf.texto != mf.bruto %}<br><small title="{{ mf.bruto }}">Texto do governo: {{ mf.bruto[:160] }}{{ '…' if mf.bruto|length > 160 }}</small>{% endif %}{% else %}A nota ou o boleto não saíram na aprovação.{% endif %}{% if aprov %} {{ 'Depois toque em Cobrar de novo.' if mf.texto else 'Corrija o cadastro e cobre de novo.' }}{% else %} Quem aprova vai cobrar de novo.{% endif %}</div>{% endif %}
   <div style="margin-top:8px"><span class="lm-tipo {{ 'lm-t-me' if l.destino == 'MENSAL' else 'lm-t-av' }}"><i class="fas {{ 'fa-calendar' if l.destino == 'MENSAL' else 'fa-barcode' }}"></i> {{ l.como }}</span></div>
-  {% if adiantavel %}<div class="lm-adi"><i class="fas fa-forward"></i> Cliente em atraso. Marque para pedir a comissão adiantada; se não recebermos, ela é descontada dos próximos pedidos.</div>
+  {% if adiantavel %}<div class="lm-adi"><i class="fas fa-forward"></i> {{ 'Cliente em atraso.' if fase == 'atr' else 'O cliente ainda não pagou.' }} Marque para pedir a comissão adiantada; se não recebermos, ela é descontada dos próximos pedidos.</div>
   {% elif adiantado %}<div class="lm-adi"><i class="fas fa-forward"></i> Comissão adiantada{% if l.fechamento_id %} no pedido nº {{ l.fechamento_id }}{% endif %}. O cliente ainda não pagou: se a cobrança for perdida, o valor é descontado do próximo pedido.</div>{% endif %}
   {% if l.lancado_pelo_admin %}<div class="lm-adm"><i class="fas fa-user-shield"></i> Lançado pelo administrador</div>{% endif %}
   {% if aprov and l.lancado_por != eu.id %}<div class="lm-por"><i class="fas fa-user"></i> {{ l.lancado_por_nome }}</div>{% endif %}
@@ -202,7 +203,10 @@
   {% elif fase == 'apr' and l.lancado_por == eu.id and not l.carteira and pode_rota('financeiro.lancamento_cancelar') %}
     <div class="lm-ac"><button type="button" class="no" onclick="lmCancelar({{ l.id }})"><i class="fas fa-ban"></i> Cancelar pedido</button></div>
   {% elif l.titulo_id and not l.carteira and fase in ('cob', 'atr', 'pag') %}
-    <div class="lm-ac"><button type="button" class="cob" onclick="lmCob({{ l.id }})"><i class="fas fa-barcode"></i> Cobrança</button></div>
+    <div class="lm-ac"><button type="button" class="cob" onclick="event.stopPropagation(); lmCob({{ l.id }})"><i class="fas fa-barcode"></i> Cobrança</button></div>
+  {% elif l.carteira and l.titulo_id and fase in ('cob', 'atr', 'pag') %}
+    {# 18/11/2026 — Anderson: "aqui ele tem que ter a opção de enviar o boleto ao cliente" (mensalidade da carteira) #}
+    <div class="lm-ac"><button type="button" class="cob" onclick="event.stopPropagation(); lmCob({{ l.titulo_id }}, true)"><i class="fas fa-barcode"></i> Cobrança</button></div>
   {% elif falhou and aprov %}
     <div class="lm-ac"><button type="button" class="ok" onclick="lmCobrar({{ l.id }}, this)" data-cli="{{ (l.numero_cliente ~ ' · ' if l.numero_cliente else '') ~ l.nome_razao_social }}" data-v="{{ l.valor_total | float }}" data-como="{{ l.como }}"><i class="fas fa-rotate-right"></i> Cobrar de novo</button></div>
   {% endif %}
@@ -297,6 +301,7 @@
           {% elif f.status == 'PAGO_PARCIAL' %}<span class="lm-st" style="background:#fef3c7;color:#92400e">falta {{ falta | format_currency }}</span>
           {% elif f.status == 'CANCELADO' %}<span class="lm-st" style="background:#f1f5f9;color:#64748b">cancelado</span>
           {% else %}<span class="lm-st" style="background:#fef3c7;color:#92400e">a pagar</span>{% endif %}</div>
+        {% if f.status not in ('PAGO', 'CANCELADO') and (f.valor_pago | float) == 0 %}<button type="button" class="lm-canc" onclick="cnAbrir({{ f.id }}, {{ f.usuario_nome | tojson }}, {{ (f.total | float) | tojson }})"><i class="fas fa-ban"></i> Cancelar</button>{% endif %}
         {% if f.status not in ('PAGO', 'CANCELADO') and pode_rota('financeiro.fechamento_pagar') %}
         <form class="lm-pagar" method="POST" action="{{ url_for('financeiro.fechamento_pagar', fid=f.id) }}" onsubmit="return confirm('Registrar o pagamento a {{ f.usuario_nome }}?')">
           <input type="date" name="data" value="{{ hoje.isoformat() }}"><input name="valor" value="{{ '%.2f'|format(falta) | replace('.', ',') }}" inputmode="decimal">
@@ -325,7 +330,7 @@
       <div class="lm-barra"><span><b id="lmSoma">R$ 0,00</b> · <span id="lmQtd">nenhuma comissão marcada</span> · {% if pix.pix_chave %}vai para a sua chave Pix ({{ PIX_TIPOS.get(pix.pix_tipo, '') }}){% else %}<a href="{{ url_for('meu_cadastro.index') }}" style="color:#fde68a; font-weight:800">sem chave Pix: preencha em Meu cadastro</a>{% endif %}</span>
         <button type="submit" id="lmPedir" disabled><i class="fas fa-paper-plane"></i> Pedir pagamento</button></div>
     {% endif %}
-    {% if aguard %}<div class="lm-sec">Esperando o cliente pagar <small>{{ aguard|length }}</small>{% if tem_adiantavel %} <em class="lm-dica">atrasado pode ser pedido adiantado: é só marcar</em>{% endif %}</div>
+    {% if aguard %}<div class="lm-sec">Esperando o cliente pagar <small>{{ aguard|length }}</small>{% if tem_adiantavel %} <em class="lm-dica">a vencer ou atrasado pode ser pedido adiantado: é só marcar</em>{% endif %}</div>
       <div class="tx-grade">{% for l in aguard %}{{ cartao(l, 'atr' if l.fase == 'atr' else 'cob', pedir=True) }}{% endfor %}</div>{% endif %}
     </form>
     {% if not aprov %}
@@ -333,7 +338,8 @@
       {% for f in pedidos %}<div class="lm-pedido"><span class="ic"><i class="fas fa-receipt"></i></span>
         <div class="tx"><b>Pedido nº {{ f.id }}</b><small>{{ f.qtd_itens }} comiss{{ 'ões' if f.qtd_itens != 1 else 'ão' }} · {{ f.criado_em.strftime('%d/%m/%Y') if f.criado_em else '' }}</small></div>
         <a class="lm-abrir" href="{{ url_for('financeiro.comissao_pedido', fid=f.id) }}"><i class="fas fa-link"></i> Abrir</a>
-        <div class="vl">{{ f.total | float | format_currency }}<br><span class="lm-st" style="{{ 'background:#dcfce7;color:#15803d' if f.status == 'PAGO' else 'background:#fef3c7;color:#92400e' }}">{{ {'PAGO': 'pago', 'PAGO_PARCIAL': 'pago em parte', 'CANCELADO': 'cancelado'}.get(f.status, 'aguardando pagamento') }}</span></div></div>
+        {% if f.status not in ('PAGO', 'CANCELADO') and (f.valor_pago | float) == 0 %}<button type="button" class="lm-canc" onclick="cnAbrir({{ f.id }}, '', {{ (f.total | float) | tojson }})"><i class="fas fa-ban"></i> Cancelar</button>{% endif %}
+        <div class="vl">{{ f.total | float | format_currency }}<br><span class="lm-st" style="{{ 'background:#dcfce7;color:#15803d' if f.status == 'PAGO' else ('background:#f1f5f9;color:#64748b' if f.status == 'CANCELADO' else 'background:#fef3c7;color:#92400e') }}">{{ {'PAGO': 'pago', 'PAGO_PARCIAL': 'pago em parte', 'CANCELADO': 'cancelado'}.get(f.status, 'aguardando pagamento') }}</span></div></div>
       {% else %}<div class="tx-vazio" style="padding:18px"><i class="fas fa-receipt"></i>Nenhum pedido ainda.</div>{% endfor %}
     {% endif %}
   {% endif %}
@@ -451,6 +457,16 @@
 </div></div>
 {% endif %}
 
+<div class="ns-fundo" id="cnFundo"><div class="ns peq" role="dialog" aria-modal="true">
+  <header class="ns-cab"><div class="ns-tit"><b>Cancelar o pedido</b><span id="cnQuem"></span></div>
+    <button type="button" class="ns-x" onclick="cnFechar()"><i class="fas fa-xmark"></i></button></header>
+  <form method="POST" id="cnForm" style="display:contents">
+  <div class="ns-g"><div class="ns-f"><div class="ns-aviso"><i class="fas fa-rotate-left"></i><span>As comissões voltam para "a pedir" e podem entrar num novo pedido. O que foi adiantado volta a esperar o cliente pagar. Pedido já pago não se cancela.</span></div></div></div>
+  <footer class="ns-pe"><div class="ns-pe-info"></div><button type="button" class="ns-bt" onclick="cnFechar()">Voltar</button>
+    <button type="submit" class="ns-bt red"><i class="fas fa-ban"></i> Cancelar pedido</button></footer>
+  </form>
+</div></div>
+
 <script id="lmDados" type="application/json">{{ caixa_json | safe }}</script>
 <script id="lmApr" type="application/json">{{ (grupos.apr | map(attribute='id') | list) | tojson }}</script>
 {% endblock %}
@@ -467,13 +483,13 @@
 /* 18/11/2026: a janela da cobrança do que a pessoa lançou (restrita para quem não aprova) */
 (function () {
   var gav = document.getElementById('txGav'), corpo = document.getElementById('txGavCorpo');
-  var URL = "{{ url_for('financeiro.lancamento_cobranca', lid=999999999) }}";
+  var URL = "{{ url_for('financeiro.lancamento_cobranca', lid=999999999) }}", URL_CART = "{{ url_for('financeiro.carteira_cobranca', tid=999999999) }}";
   window.txGavFechar = function () { gav.hidden = true; document.body.style.overflow = ''; corpo.innerHTML = ''; };
   document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && !gav.hidden) txGavFechar(); });
-  window.lmCob = function (lid) {
+  window.lmCob = function (lid, carteira) {
     gav.hidden = false; document.body.style.overflow = 'hidden';
     corpo.innerHTML = '<div class="tx-gav-carregando"><i class="fas fa-circle-notch fa-spin"></i>Abrindo a cobrança…</div>';
-    fetch(URL.replace('999999999', lid), {credentials: 'same-origin'})
+    fetch((carteira ? URL_CART : URL).replace('999999999', lid), {credentials: 'same-origin'})
       .then(function (r) { if (!r.ok) throw new Error(r.status); return r.text(); })
       .then(function (h) { corpo.innerHTML = h; gav.querySelector('.tx-gav-pane').scrollTop = 0; })
       .catch(function () { corpo.innerHTML = '<div class="tx-gav-carregando"><i class="fas fa-triangle-exclamation"></i>Não consegui abrir a cobrança agora. Tente de novo.</div>'; });
@@ -492,7 +508,8 @@
   };
   var URL_APROVAR = {{ url_for('financeiro.lancamento_aprovar', lid=999999) | tojson }}, URL_REPROVAR = {{ url_for('financeiro.lancamento_reprovar', lid=999999) | tojson }},
       URL_CANCELAR = {{ url_for('financeiro.lancamento_cancelar', lid=999999) | tojson }},
-      URL_COBRAR = {{ url_for('financeiro.lancamento_cobrar', lid=999999) | tojson }};
+      URL_COBRAR = {{ url_for('financeiro.lancamento_cobrar', lid=999999) | tojson }},
+      URL_CANCELAR_PEDIDO = {{ url_for('financeiro.fechamento_cancelar', fid=999999) | tojson }};
   function $(id) { return document.getElementById(id); }
   function esc(s) { var d = document.createElement('div'); d.textContent = s == null ? '' : String(s); return d.innerHTML; }
   function brl(v) { return 'R$ ' + Number(v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
@@ -576,6 +593,12 @@
     f.classList.add('on'); document.body.style.overflow = 'hidden';
   };
   window.cbFechar = function () { $('cbFundo').classList.remove('on'); document.body.style.overflow = ''; };
+  window.cnAbrir = function (fid, quem, total) {
+    $('cnForm').action = URL_CANCELAR_PEDIDO.replace('999999', fid);
+    $('cnQuem').textContent = 'Pedido nº ' + fid + (quem ? ' · ' + quem : '') + ' · ' + brl(+total);
+    $('cnFundo').classList.add('on'); document.body.style.overflow = 'hidden';
+  };
+  window.cnFechar = function () { $('cnFundo').classList.remove('on'); document.body.style.overflow = ''; };
   window.lmReprovar = function (id) { rpAbrir(id, false); };
   window.lmCancelar = function (id) { rpAbrir(id, true); };
   window.rpFechar = function () { $('rpFundo').classList.remove('on'); document.body.style.overflow = ''; };

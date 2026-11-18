@@ -260,6 +260,8 @@ MAPA = {
     'financeiro.lancamento_entrar_como':   'ADMIN',                           # admin vê/lança como o funcionário (18/11/2026)
     'financeiro.comissao_pedido':          'financeiro.lancamentos',          # quem pediu ou quem aprova (a rota confere)
     'financeiro.comissao_pedido_arquivo':  'financeiro.lancamentos',          # o mesmo pedido em PDF ou imagem (18/11/2026)
+    'financeiro.carteira_cobranca':        'financeiro.lancamentos',          # boleto da mensalidade da carteira (a rota confere)
+    'financeiro.fechamento_cancelar':      'financeiro.lancamentos',          # o próprio pedido, até ser pago (a rota confere)
     'financeiro.servico_comissao':         'financeiro.lancamentos.aprovar',  # e a rota só deixa o admin
     'financeiro.comissao_regras':          'financeiro.lancamentos.aprovar',  # Regras de comissão: a rota só deixa o admin
     'financeiro.comissao_regra_pessoa':    'financeiro.lancamentos.aprovar',
@@ -282,6 +284,8 @@ MAPA = {
     'financeiro.lote_emitir':              'financeiro.lote.incluir',
     'financeiro.lote_status':              'financeiro.lote',
     'financeiro.lote_reabrir':             'financeiro.lote.reabrir',
+    'financeiro.honorarios_escolha':       'financeiro.lote.incluir',    # 18/11/2026: banco/nota da empresa
+    'financeiro.honorarios_banco_padrao':  'ADMIN',
 
     # --- Relatórios ---------------------------------------------------------
     'relatorios.processos_report':     'relatorios.processos',

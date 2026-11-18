@@ -334,12 +334,13 @@ class FinLancamento:
     def adiantar(lid, usuario_id):
         """Pede a comissão de um serviço cuja cobrança está ATRASADA antes de o cliente pagar (18/11/2026 — Anderson:
         "vamos poder pagar as comissões posteriores também, mas não sairá dos atrasados para ele ter ciência").
-        Só o próprio, só AGUARDANDO e só com o título vencido e em aberto. Devolve True se adiantou."""
+        Só o próprio, só AGUARDANDO e só com o título em aberto (a vencer ou atrasado — Anderson, 18/11: "nos vencimento
+        A vencer tem que ter a opção de antecipar também"). Devolve True se adiantou."""
         n = execute_query(
             """UPDATE fin_lancamentos l JOIN fin_titulos t ON t.id = l.titulo_id
                   SET l.comissao_status = 'LIBERADA', l.comissao_adiantada = 1
                 WHERE l.id = %s AND l.lancado_por = %s AND l.comissao_status = 'AGUARDANDO' AND l.status = 'FATURADO'
-                  AND t.status NOT IN ('liquidado', 'cancelado') AND t.vencimento < CURDATE()""",
+                  AND t.status NOT IN ('liquidado', 'cancelado')""",
             (lid, usuario_id), fetch=False)
         return bool(n)
 
@@ -477,13 +478,13 @@ class FinCarteira:
 
     @staticmethod
     def adiantar_um(usuario_id, acordo_id, titulo_id):
-        """A comissão de UMA mensalidade ATRASADA da carteira, pedida antes de o cliente pagar (18/11/2026): grava o
-        lançamento LIBERADO e marcado como adiantado, pelo % sobre o valor da mensalidade. O cartão continua em atraso.
-        Devolve o id ou None."""
+        """A comissão de UMA mensalidade em aberto (a vencer ou atrasada) da carteira, pedida antes de o cliente pagar
+        (18/11/2026): grava o lançamento LIBERADO e marcado como adiantado, pelo % sobre o valor da mensalidade. O cartão
+        continua em "Esperando o cliente pagar". Devolve o id ou None."""
         a = execute_query("SELECT * FROM fin_comissao_acordos WHERE id = %s AND usuario_id = %s AND base = 'HONORARIOS' AND ativo = 1",
                           (acordo_id, usuario_id), fetch=True, fetch_one=True)
         t = execute_query('SELECT vencimento FROM fin_titulos WHERE id = %s', (titulo_id,), fetch=True, fetch_one=True)
-        if not a or not t or t['vencimento'] >= date.today():
+        if not a or not t:
             return None
         for ln in FinCarteira.mes(usuario_id, t['vencimento'].year, t['vencimento'].month):
             tt = ln['titulo']
@@ -594,6 +595,29 @@ class FinComissaoFechamento:
         execute_query(f"UPDATE fin_lancamentos SET comissao_status = 'FECHADA', fechamento_id = %s WHERE id IN ({marks})",
                       (fid,) + tuple(ids), fetch=False)
         return fid
+
+    @staticmethod
+    def cancelar(fid):
+        """Desfaz um pedido ainda não pago (18/11/2026 — Anderson: "até pagar tem que ter a opção do próprio usuário
+        excluir, só depois de pago que não"). As comissões voltam para "a pedir"; o que foi ADIANTADO e o cliente ainda
+        não pagou volta a esperar o cliente (a linha da carteira criada só para o adiantamento é apagada). Devolve o
+        número de itens devolvidos."""
+        f = FinComissaoFechamento.get(fid)
+        if not f or f['status'] in ('PAGO', 'CANCELADO') or _d(f['valor_pago']) > 0:
+            raise ValueError('Este pedido já foi pago (ou pago em parte) e não pode mais ser cancelado.')
+        itens = execute_query(
+            """SELECT l.id, l.origem, l.comissao_adiantada, l.desconto_de, t.status AS titulo_status
+                 FROM fin_lancamentos l LEFT JOIN fin_titulos t ON t.id = l.titulo_id WHERE l.fechamento_id = %s""", (fid,), fetch=True) or []
+        for l in itens:
+            if l['comissao_adiantada'] and l['titulo_status'] != 'liquidado':
+                if l['origem'] == 'HONORARIOS':        # linha criada só para adiantar a mensalidade: some, o cartão da carteira volta
+                    execute_query('DELETE FROM fin_lancamentos WHERE id = %s AND origem = %s AND comissao_adiantada = 1', (l['id'], 'HONORARIOS'), fetch=False)
+                else:                                   # serviço: volta a esperar o cliente pagar
+                    execute_query("UPDATE fin_lancamentos SET comissao_status = 'AGUARDANDO', comissao_adiantada = 0, fechamento_id = NULL WHERE id = %s", (l['id'],), fetch=False)
+            else:
+                execute_query("UPDATE fin_lancamentos SET comissao_status = 'LIBERADA', fechamento_id = NULL WHERE id = %s", (l['id'],), fetch=False)
+        execute_query("UPDATE fin_comissao_fechamentos SET status = 'CANCELADO' WHERE id = %s", (fid,), fetch=False)
+        return len(itens)
 
     @staticmethod
     def registrar_pagamento(fid, data, valor, registrado_por, titulo_id=None, extrato_id=None):

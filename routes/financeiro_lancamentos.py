@@ -186,14 +186,14 @@ def lancamentos():
             c = {'id': 'c%d_%d' % (a['id'], t['id']), 'carteira': True, 'numero_cliente': a['numero_cliente'],
                  'nome_razao_social': a['nome_razao_social'], 'servico_nome': 'Honorário',
                  'descricao': ('Honorário pago %s' % t['pago_em'].strftime('%d/%m')) if pago and t.get('pago_em') else ('Honorário vence %s' % t['vencimento'].strftime('%d/%m')),
-                 'valor_total': t['valor'], 'destino': 'MENSAL', 'competencia': t['vencimento'].replace(day=1),
+                 'valor_total': t['valor'], 'destino': 'MENSAL', 'competencia': t['vencimento'].replace(day=1), 'titulo_id': t['id'],
                  'vencimento': t['vencimento'], 'titulo_vencimento': t['vencimento'], 'titulo_status': t['status'],
                  'status': 'FATURADO', 'lancado_por': _eu().id, 'lancado_por_nome': getattr(_eu(), 'nome', ''),
                  'comissao_status': 'LIBERADA' if pago else 'AGUARDANDO', 'comissao_valor': com,
                  'como': 'Mensalidade'}
             c['fase'] = 'pag' if pago else ('atr' if t['vencimento'] < hoje else 'cob')
             c['situacao_com'] = 'Pago · a pedir' if pago else ('Vencido' if c['fase'] == 'atr' else 'Aguardando pagamento')
-            c['adiantavel'] = c['fase'] == 'atr'        # 18/11/2026: mensalidade atrasada pode ser pedida adiantada
+            c['adiantavel'] = not pago                  # 18/11/2026: mensalidade em aberto (a vencer ou atrasada) pode ser pedida adiantada
             grupos[c['fase']].append(c)
             cart.append(c)
     soma = lambda ls: sum(float(x['valor_total'] or 0) for x in ls)
@@ -205,7 +205,7 @@ def lancamentos():
     aguard = [l for l in meus_com if l['comissao_status'] == 'AGUARDANDO'
               or (l.get('comissao_adiantada') and not l.get('desconto_de') and l.get('titulo_status') != 'liquidado')]
     for l in aguard:
-        if not l.get('carteira') and l['comissao_status'] == 'AGUARDANDO' and l['fase'] == 'atr' and l['lancado_por'] == _eu().id:
+        if not l.get('carteira') and l['comissao_status'] == 'AGUARDANDO' and l['fase'] in ('cob', 'atr') and l.get('titulo_id') and l['lancado_por'] == _eu().id:
             l['adiantavel'] = True
     tem_adiantavel = any(l.get('adiantavel') for l in aguard)
     pedidos = FinComissaoFechamento.listar(usuario_id=None if aprov else _eu().id)
@@ -363,7 +363,7 @@ def comissao_pedido(fid):
     pix = _pix_de(f['usuario_id'])
     falta = float(f['total'] or 0) - float(f['valor_pago'] or 0)
     codigo = qr = None
-    if pix.get('pix_chave') and falta > 0:
+    if pix.get('pix_chave') and falta > 0 and f['status'] != 'CANCELADO':
         codigo = copia_e_cola(pix['pix_chave'], f['usuario_nome'], falta, txid='COMISSAO%d' % fid, mensagem='Comissao pedido %d' % fid)
         qr = qr_data_uri(codigo)
     from utils.comissao_pedido_doc import frase_resumo, link_whatsapp, texto_whatsapp
@@ -778,6 +778,24 @@ def lancamento_cobranca(lid):
     return janela(l['titulo_id'], restrito=not _aprovador())
 
 
+@financeiro.route('/financeiro/lancamentos/carteira/<int:tid>/cobranca')
+@permission_required(PERM)
+def carteira_cobranca(tid):
+    """A janela da cobrança de uma MENSALIDADE da carteira da pessoa (18/11/2026 — Anderson: "aqui ele tem que ter a
+    opção de enviar o boleto ao cliente"). O título tem de estar na carteira dela (FinCarteira.mes do mês do vencimento);
+    quem aprova abre qualquer um. Para quem não aprova sai restrita, como a do serviço avulso."""
+    from models.fin_lancamento import FinCarteira
+    from routes.financeiro_titulo_cobranca import janela
+    t = execute_query('SELECT id, vencimento FROM fin_titulos WHERE id = %s', (tid,), fetch=True, fetch_one=True)
+    if not t:
+        abort(404)
+    if not _aprovador():
+        meu = any(ln['titulo'] and ln['titulo']['id'] == tid for ln in FinCarteira.mes(_eu().id, t['vencimento'].year, t['vencimento'].month))
+        if not meu:
+            abort(404)
+    return janela(tid, restrito=not _aprovador())
+
+
 @financeiro.route('/financeiro/lancamentos/fechar', methods=['POST'])
 @permission_required(PERM)
 def comissoes_fechar():
@@ -835,6 +853,27 @@ def fechamento_pagar(fid):
 # ---------------------------------------------------------------------------
 # Acordos (admin)
 # ---------------------------------------------------------------------------
+@financeiro.route('/financeiro/lancamentos/fechamentos/<int:fid>/cancelar', methods=['POST'])
+@permission_required(PERM)
+def fechamento_cancelar(fid):
+    """Quem pediu cancela o próprio pedido enquanto não foi pago; quem aprova cancela qualquer um (18/11/2026 —
+    Anderson: "Cliquei errado, desfazer... até pagar tem que ter a opção do próprio usuário excluir")."""
+    f = FinComissaoFechamento.get(fid)
+    if not f or (not _aprovador() and f['usuario_id'] != _eu().id):
+        abort(404)
+    if _vendo_como():
+        flash('Você está vendo como outra pessoa: volte a ser você para cancelar o pedido.', 'warning')
+        return redirect(url_for('financeiro.lancamentos', aba='com'))
+    try:
+        n = FinComissaoFechamento.cancelar(fid)
+        registrar('escrita.cancelou_pedido_comissao', 'financeiro', tabela='fin_comissao_fechamentos', registro_id=fid,
+                  depois={'de': f['usuario_nome'], 'total': str(f['total']), 'itens': n})
+        flash('Pedido nº %d cancelado. As comissões voltaram para a sua tela; o que foi adiantado volta a esperar o cliente pagar.' % fid, 'success')
+    except ValueError as e:
+        flash(str(e), 'danger')
+    return redirect(url_for('financeiro.lancamentos', aba='com'))
+
+
 @financeiro.route('/financeiro/lancamentos/acordos/novo', methods=['POST'])
 @permission_required(PERM)
 def acordo_novo():
