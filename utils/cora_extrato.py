@@ -72,6 +72,16 @@ def _data_local(s):
     return _dia(s)
 
 
+_ROTULO = {('PIX', 'CREDIT'): 'Transf Pix recebida', ('PIX', 'DEBIT'): 'Transf Pix enviada',
+           ('TRANSFER', 'CREDIT'): 'Transferência recebida', ('TRANSFER', 'DEBIT'): 'Transferência enviada',
+           ('PAYMENT', 'CREDIT'): 'Boleto pago', ('PAYMENT', 'DEBIT'): 'Pagamento', ('FEE', 'DEBIT'): 'Tarifa'}
+
+
+def _rotulo(tipo_tx, tipo):
+    """Texto da linha quando a API não manda descrição, no molde do OFX do Cora."""
+    return _ROTULO.get((str(tipo_tx or '').upper(), tipo)) or ('Crédito' if tipo == 'CREDIT' else 'Débito')
+
+
 def ler(j):
     """Resposta da API -> lista de lançamentos no formato do parser de OFX. BLOCK/UNBLOCK (bloqueio
     judicial, reserva) não são movimento e ficam de fora. A descrição segue o OFX do Cora:
@@ -92,7 +102,9 @@ def ler(j):
             continue
         tr = e.get('transaction') or {}
         cp = tr.get('counterParty') or {}
-        partes = [re.sub(r'\s+', ' ', str(tr.get('description') or '')).strip()]
+        # 18/11/2026, 1ª leitura real: no Pix a API manda description vazia (o OFX traz "Transf Pix enviada");
+        # sem o rótulo a linha vira só "NOME - CPF" e o crédito não é reconhecido como recebimento
+        partes = [re.sub(r'\s+', ' ', str(tr.get('description') or '')).strip() or _rotulo(tr.get('type'), tipo)]
         if cp.get('name'):
             partes.append(re.sub(r'\s+', ' ', str(cp['name'])).strip())
         if _num(cp.get('identity')):
