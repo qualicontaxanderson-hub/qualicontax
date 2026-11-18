@@ -307,12 +307,14 @@ def comissao_regra_pessoa():
 @financeiro.route('/financeiro/lancamentos/servico-comissao', methods=['POST'])
 @permission_required(PERM)
 def servico_comissao():
-    """Comissão padrão de um serviço do catálogo (só o administrador): % / valor fixo / sem comissão / apagar."""
+    """Comissão padrão de um serviço do catálogo (só o administrador): % / valor fixo / sem comissão / apagar — e o
+    VALOR SUGERIDO do serviço (17/11/2026 — Anderson: "já fazemos uma relação dos serviços e sugestões de valores vamos
+    colocar nos que tem comissões"), o que vem preenchido quando alguém escolhe o serviço numa cobrança."""
     if not _admin():
         abort(403)
     sid = request.form.get('servico_id', type=int)
     tipo = request.form.get('tipo') or ''
-    s = execute_query('SELECT id, nome, comissao_tipo, comissao_valor FROM nfse_servicos WHERE id = %s AND empresa_id = %s',
+    s = execute_query('SELECT id, nome, comissao_tipo, comissao_valor, valor_padrao FROM nfse_servicos WHERE id = %s AND empresa_id = %s',
                       (sid, EMP), fetch=True, fetch_one=True)
     if not s or tipo not in ('', 'PCT', 'FIXO', 'SEM'):
         abort(400)
@@ -320,14 +322,23 @@ def servico_comissao():
         valor = _dec(request.form.get('valor')) if tipo in ('PCT', 'FIXO') else None
         if tipo in ('PCT', 'FIXO') and (valor is None or valor <= 0 or (tipo == 'PCT' and valor > 100)):
             raise ValueError('Comissão inválida.')
+        sugerido = s['valor_padrao']
+        if 'valor_padrao' in request.form:      # vazio = sem valor sugerido
+            vp = (request.form.get('valor_padrao') or '').strip()
+            sugerido = _dec(vp) if vp else None
+            if sugerido is not None and sugerido <= 0:
+                sugerido = None
     except (ValueError, InvalidOperation):
-        flash('Comissão inválida para %s.' % s['nome'], 'danger')
+        flash('Comissão ou valor sugerido inválido para %s.' % s['nome'], 'danger')
+        if request.form.get('volta') == 'regras':
+            return redirect(url_for('financeiro.comissao_regras', aba='servicos') + '#s%d' % sid)
         return redirect(url_for('financeiro.lancamentos', aba='com') + '#servicos-comissao')
-    execute_query('UPDATE nfse_servicos SET comissao_tipo = %s, comissao_valor = %s WHERE id = %s', (tipo or None, valor, sid), fetch=False)
+    execute_query('UPDATE nfse_servicos SET comissao_tipo = %s, comissao_valor = %s, valor_padrao = %s WHERE id = %s',
+                  (tipo or None, valor, sugerido, sid), fetch=False)
     registrar('escrita.alterou_comissao_servico', 'financeiro', tabela='nfse_servicos', registro_id=sid,
-              antes={'comissao_tipo': s['comissao_tipo'], 'comissao_valor': str(s['comissao_valor'] or '')},
-              depois={'servico': s['nome'], 'comissao_tipo': tipo or None, 'comissao_valor': str(valor or '')})
-    flash('Comissão de "%s" salva.' % s['nome'], 'success')
+              antes={'comissao_tipo': s['comissao_tipo'], 'comissao_valor': str(s['comissao_valor'] or ''), 'valor_sugerido': str(s['valor_padrao'] or '')},
+              depois={'servico': s['nome'], 'comissao_tipo': tipo or None, 'comissao_valor': str(valor or ''), 'valor_sugerido': str(sugerido or '')})
+    flash('"%s" salvo.' % s['nome'], 'success')
     if request.form.get('volta') == 'regras':
         return redirect(url_for('financeiro.comissao_regras', aba='servicos') + '#s%d' % sid)
     return redirect(url_for('financeiro.lancamentos', aba='com') + '#servicos-comissao')

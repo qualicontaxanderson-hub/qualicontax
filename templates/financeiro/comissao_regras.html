@@ -49,6 +49,9 @@
 .rg-sv-top div { flex:1; min-width:0; } .rg-sv-top b { display:block; font-size:13.5px; line-height:1.3; } .rg-sv-top small { color:#64748b; font-size:12px; }
 .rg-t-pct { background:#f5f3ff; color:#6d28d9; } .rg-t-fixo { background:#eff6ff; color:#1d4ed8; } .rg-t-sem { background:#fef2f2; color:#b91c1c; } .rg-t-acordo { background:#f1f5f9; color:#64748b; }
 .rg-tag { font-size:10.5px; font-weight:800; border-radius:99px; padding:2px 8px; white-space:nowrap; }
+.rg-rs { display:inline-flex; align-items:center; border:1px solid #d7e3dc; border-radius:9px; background:#fff; padding-left:9px; }
+.rg-rs i { font-style:normal; font-size:12px; font-weight:800; color:#94a3b8; } .rg-rs .rg-in { border:0; width:110px; }
+.rg-rs:focus-within { border-color:#0f766e; box-shadow:0 0 0 3px #ccfbf1; }
 .rg-ajuda { background:#fff; border:1px solid #e6eeea; border-radius:14px; padding:12px 15px; font-size:12.5px; color:#475569; line-height:1.5; margin-bottom:14px; display:flex; gap:10px; }
 .rg-ajuda i { color:#7c3aed; margin-top:2px; }
 .rg-c [hidden] { display:none !important; }
@@ -146,6 +149,13 @@
           <div class="rg-sv-top"><i class="ic fas {{ {'PCT': 'fa-percent rg-t-pct', 'FIXO': 'fa-coins rg-t-fixo', 'SEM': 'fa-lock rg-t-sem'}.get(t, 'fa-user-check rg-t-acordo') }}"></i>
             <div><b>{{ s.nome }}</b><small>{% if s.valor_padrao %}valor sugerido {{ s.valor_padrao | float | format_currency }}{% else %}sem valor sugerido{% endif %}</small></div>
             <span class="rg-tag {{ {'PCT': 'rg-t-pct', 'FIXO': 'rg-t-fixo', 'SEM': 'rg-t-sem'}.get(t, 'rg-t-acordo') }}">{{ {'PCT': ('%g%%' % (s.comissao_valor | float)) if s.comissao_valor else '%', 'FIXO': (s.comissao_valor | float | format_currency) if s.comissao_valor else 'fixo', 'SEM': 'nunca paga · travado'}.get(t, 'padrão da pessoa') }}</span></div>
+          {% if t != 'SEM' %}
+          <div class="rg-lin rg-vs"><span class="rg-lbl">Valor sugerido</span>
+            <span class="rg-rs"><i>R$</i><input class="rg-in rg-din" name="valor_padrao" inputmode="numeric" placeholder="0,00" autocomplete="off"
+              value="{{ ('%.2f' % (s.valor_padrao | float)) | replace('.', ',') if s.valor_padrao else '' }}"></span>
+            {% if s.valor_padrao and s.comissao_tipo == 'PCT' and s.comissao_valor %}<small class="rg-muted">comissão ≈ {{ ((s.valor_padrao | float) * (s.comissao_valor | float) / 100) | format_currency }}</small>{% endif %}
+          </div>
+          {% endif %}
           <div class="rg-lin">
             <span class="rg-seg">
               <label><input type="radio" name="tipo" value=""{{ ' checked' if not t }} onchange="rgTipo(this)"><span>Padrão da pessoa</span></label>
@@ -201,6 +211,12 @@
     if (!cx.checked) { if (confirm('Desligar a comissão de serviço desta pessoa?')) f.submit(); else { cx.checked = true; rgSw(cx); } }
     else f.querySelector('[name=valor]').focus();
   };
+  document.querySelectorAll('.rg-din').forEach(function (el) {      // como na maquininha: 150000 vira 1.500,00
+    el.addEventListener('input', function () {
+      var d = el.value.replace(/\D/g, '').replace(/^0+/, '').slice(0, 11);
+      el.value = d ? (parseInt(d, 10) / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '';
+    });
+  });
   window.rgTipo = function (r) {
     var v = r.form.querySelector('[name=valor]');
     v.hidden = !(r.value === 'PCT' || r.value === 'FIXO'); v.placeholder = r.value === 'FIXO' ? 'R$' : '%';
