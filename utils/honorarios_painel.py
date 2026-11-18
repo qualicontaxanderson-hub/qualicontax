@@ -130,4 +130,7 @@ def painel(competencia, empresa_id=EMPRESA_QUALICONTAX):
     n_nota = sum(1 for l in linhas if l['nota'])
     return {'lote': lote, 'linhas': linhas, 'bancos': bancos, 'padrao': padrao, 'tot': tot, 'por_banco': por_banco,
             'venc_mes': venc_mes, 'meses': meses, 'devendo': devendo, 'n_nota': n_nota, 'n_so_boleto': len(linhas) - n_nota,
+            # 18/11/2026: quadro "Nota fiscal" ao lado dos bancos (Anderson: "um retângulo que mostre o que é com e sem NF")
+            'v_nota': sum((l['total'] for l in linhas if l['nota']), Decimal('0')),
+            'v_so_boleto': sum((l['total'] for l in linhas if not l['nota']), Decimal('0')),
             'devendo_valor': sum((x['valor'] - x['pago'] for l in devendo for x in l['atrasos']), Decimal('0'))}
