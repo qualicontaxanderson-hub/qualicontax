@@ -47,6 +47,8 @@
 .lm-adm { display:inline-flex; align-items:center; gap:6px; margin-top:6px; font-size:11px; font-weight:800; color:#92400e; background:#fef3c7; border-radius:7px; padding:2px 8px; }
 .lm-ac .cob { color:#1d4ed8; border-color:#bfdbfe; background:#eff6ff; }
 .lm-falha { margin-top:8px; padding:7px 9px; border-radius:9px; background:#fffbeb; border:1px solid #fde68a; color:#92400e; font-size:12px; line-height:1.4; }
+.lm-adi { margin-top:8px; padding:7px 9px; border-radius:9px; background:#f5f3ff; border:1px solid #ddd6fe; color:#5b21b6; font-size:12px; line-height:1.4; } .lm-adi i { margin-right:4px; }
+.tx-c.adi { position:relative; } .tx-c.adi .lm-ck { top:10px; bottom:auto; } .lm-dica { margin-left:10px; font-style:normal; font-weight:600; color:#7c3aed; font-size:12px; text-transform:none; letter-spacing:0; }
 .lm-falha i { margin-right:4px; }
 .lm-ac .ok { background:#16a34a; border-color:#16a34a; color:#fff; } .lm-ac .no { color:#b91c1c; border-color:#fecaca; }
 .lm-por { font-size:11.5px; color:#64748b; margin-top:6px; display:flex; align-items:center; gap:6px; } .lm-por i { color:#94a3b8; }
@@ -165,10 +167,12 @@
 {% block content %}
 {% include 'financeiro/_nav_financeiro.html' %}
 
-{% macro cartao(l, fase) %}
+{% macro cartao(l, fase, pedir=False) %}
 {% set falhou = l.status == 'APROVADO' and l.destino == 'AVULSO' and not l.titulo_id and not l.carteira %}
 {% set cls = {'apr': 'tx-venc', 'cob': ('tx-fut' if l.destino == 'MENSAL' and l.status == 'APROVADO' else ('tx-venc' if falhou else 'tx-hoje')), 'pag': 'tx-ok', 'atr': 'tx-ina'}[fase] %}
-<div class="tx-c {{ cls }}" data-busca="{{ l.numero_cliente or '' }} {{ l.nome_razao_social }} {{ l.servico_nome }} {{ l.lancado_por_nome }}">
+{% set adiantado = l.comissao_adiantada and not l.desconto_de and l.titulo_status != 'liquidado' %}{% set adiantavel = pedir and l.adiantavel %}
+<div class="tx-c {{ cls }}{% if adiantavel %} marcavel adi{% endif %}" data-busca="{{ l.numero_cliente or '' }} {{ l.nome_razao_social }} {{ l.servico_nome }} {{ l.lancado_por_nome }}"{% if adiantavel %} data-v="{{ l.comissao_valor | float }}" onclick="lmMarcar(this)"{% endif %}>
+  {% if adiantavel %}<input type="checkbox" name="lanc" value="{{ l.id if l.carteira else 'a' ~ l.id }}" hidden><span class="lm-ck"><i class="fas fa-check"></i></span>{% endif %}
   <div class="tx-c-top"><span class="tx-c-num">{{ l.numero_cliente or '—' }}</span><span class="tx-c-nome" title="{{ l.nome_razao_social }}">{{ l.nome_razao_social }}</span></div>
   <div class="tx-c-meio"><div><div class="tx-c-val">{{ l.valor_total | float | format_currency }}</div>
     <div class="tx-c-desc">{{ l.descricao or l.servico_nome }} · {% if l.destino == 'MENSAL' %}mensalidade de {{ l.competencia.strftime('%m/%Y') }}{% elif l.titulo_vencimento or l.vencimento %}vence {{ (l.titulo_vencimento or l.vencimento).strftime('%d/%m/%Y') }}{% endif %}</div></div>
@@ -180,6 +184,8 @@
       {% else %}<i class="fas fa-paper-plane"></i> cobrado{% endif %}</span></div>
   {% if falhou %}{% set mf = motivo_nfse(l.motivo_falha) %}<div class="lm-falha"><i class="fas fa-circle-exclamation"></i> {% if mf.texto %}<b>{{ mf.texto }}</b>{% if mf.cod %} <small>({{ mf.cod }})</small>{% endif %}<br>{{ mf.fazer or 'Corrija o que o governo apontou e emita de novo.' }}{% if mf.bruto and mf.texto != mf.bruto %}<br><small title="{{ mf.bruto }}">Texto do governo: {{ mf.bruto[:160] }}{{ '…' if mf.bruto|length > 160 }}</small>{% endif %}{% else %}A nota ou o boleto não saíram na aprovação.{% endif %}{% if aprov %} {{ 'Depois toque em Cobrar de novo.' if mf.texto else 'Corrija o cadastro e cobre de novo.' }}{% else %} Quem aprova vai cobrar de novo.{% endif %}</div>{% endif %}
   <div style="margin-top:8px"><span class="lm-tipo {{ 'lm-t-me' if l.destino == 'MENSAL' else 'lm-t-av' }}"><i class="fas {{ 'fa-calendar' if l.destino == 'MENSAL' else 'fa-barcode' }}"></i> {{ l.como }}</span></div>
+  {% if adiantavel %}<div class="lm-adi"><i class="fas fa-forward"></i> Cliente em atraso. Marque para pedir a comissão adiantada; se não recebermos, ela é descontada dos próximos pedidos.</div>
+  {% elif adiantado %}<div class="lm-adi"><i class="fas fa-forward"></i> Comissão adiantada{% if l.fechamento_id %} no pedido nº {{ l.fechamento_id }}{% endif %}. O cliente ainda não pagou: se a cobrança for perdida, o valor é descontado do próximo pedido.</div>{% endif %}
   {% if l.lancado_pelo_admin %}<div class="lm-adm"><i class="fas fa-user-shield"></i> Lançado pelo administrador</div>{% endif %}
   {% if aprov and l.lancado_por != eu.id %}<div class="lm-por"><i class="fas fa-user"></i> {{ l.lancado_por_nome }}</div>{% endif %}
   {% if fase == 'apr' %}
@@ -304,21 +310,24 @@
     <div class="lm-sec">{{ 'Suas comissões pagas pelo cliente' if aprov else 'Pagas pelo cliente' }} — marque as que vai pedir <small>{{ liberadas|length }}</small></div>
     {% if liberadas %}
       <div class="tx-grade">{% for l in liberadas %}
-        <div class="tx-c tx-ok marcavel" data-v="{{ l.comissao_valor | float }}" onclick="lmMarcar(this)">
+        {% set desc_ = l.desconto_de %}{% set adi_ = l.comissao_adiantada and not desc_ and l.titulo_status != 'liquidado' %}
+        <div class="tx-c {{ 'tx-ina' if desc_ else 'tx-venc' if adi_ else 'tx-ok' }} marcavel" data-v="{{ l.comissao_valor | float }}" onclick="lmMarcar(this)">
           <input type="checkbox" name="lanc" value="{{ l.id }}" hidden>
           <div class="tx-c-top"><span class="tx-c-num">{{ l.numero_cliente or '—' }}</span><span class="tx-c-nome">{{ l.nome_razao_social }}</span></div>
           <div class="tx-c-meio"><div><div class="tx-c-val">{{ l.comissao_valor | float | format_currency }}</div><div class="tx-c-desc">{{ l.descricao or l.servico_nome }} ({{ l.valor_total | float | format_currency }})</div></div>
-            <span class="tx-c-st"><i class="fas fa-circle-check"></i> liberada</span></div>
+            <span class="tx-c-st">{% if desc_ %}<i class="fas fa-minus-circle"></i> desconto{% elif adi_ %}<i class="fas fa-forward"></i> adiantada{% else %}<i class="fas fa-circle-check"></i> liberada{% endif %}</span></div>
+          {% if desc_ %}<div class="lm-adi"><i class="fas fa-circle-info"></i> A cobrança adiantada foi perdida: este valor abate o seu próximo pedido.</div>{% endif %}
           <div style="margin-top:8px"><span class="lm-tipo {{ 'lm-t-me' if l.destino == 'MENSAL' else 'lm-t-av' }}">{{ l.como }}</span></div>
           <span class="lm-ck"><i class="fas fa-check"></i></span>
         </div>{% endfor %}</div>
+    {% else %}<div class="tx-vazio"><i class="fas fa-hand-holding-dollar"></i>Nenhuma comissão liberada agora: ela libera quando o cliente paga.</div>{% endif %}
+    {% if liberadas or tem_adiantavel %}
       <div class="lm-barra"><span><b id="lmSoma">R$ 0,00</b> · <span id="lmQtd">nenhuma comissão marcada</span> · {% if pix.pix_chave %}vai para a sua chave Pix ({{ PIX_TIPOS.get(pix.pix_tipo, '') }}){% else %}<a href="{{ url_for('meu_cadastro.index') }}" style="color:#fde68a; font-weight:800">sem chave Pix: preencha em Meu cadastro</a>{% endif %}</span>
         <button type="submit" id="lmPedir" disabled><i class="fas fa-paper-plane"></i> Pedir pagamento</button></div>
-    {% else %}<div class="tx-vazio"><i class="fas fa-hand-holding-dollar"></i>Nenhuma comissão liberada agora: ela libera quando o cliente paga.</div>{% endif %}
+    {% endif %}
+    {% if aguard %}<div class="lm-sec">Esperando o cliente pagar <small>{{ aguard|length }}</small>{% if tem_adiantavel %} <em class="lm-dica">atrasado pode ser pedido adiantado: é só marcar</em>{% endif %}</div>
+      <div class="tx-grade">{% for l in aguard %}{{ cartao(l, 'atr' if l.fase == 'atr' else 'cob', pedir=True) }}{% endfor %}</div>{% endif %}
     </form>
-    {% set aguard = meus_com | selectattr('comissao_status', 'equalto', 'AGUARDANDO') | list %}
-    {% if aguard %}<div class="lm-sec">Esperando o cliente pagar <small>{{ aguard|length }}</small></div>
-      <div class="tx-grade">{% for l in aguard %}{{ cartao(l, 'atr' if l.fase == 'atr' else 'cob') }}{% endfor %}</div>{% endif %}
     {% if not aprov %}
       <div class="lm-sec">Seus pedidos <small>{{ pedidos|length }}</small></div>
       {% for f in pedidos %}<div class="lm-pedido"><span class="ic"><i class="fas fa-receipt"></i></span>
@@ -511,8 +520,9 @@
   window.lmMarcar = function (c) {
     var cx = c.querySelector('input[name=lanc]'); cx.checked = !cx.checked; c.classList.toggle('marcado', cx.checked);
     var tot = 0, n = 0; document.querySelectorAll('.tx-c.marcavel.marcado').forEach(function (x) { tot += parseFloat(x.dataset.v || 0); n++; });
-    $('lmSoma').textContent = brl(tot); $('lmQtd').textContent = n ? n + ' comiss' + (n === 1 ? 'ão marcada' : 'ões marcadas') : 'nenhuma comissão marcada';
-    $('lmPedir').disabled = !n;
+    var na = document.querySelectorAll('.tx-c.marcavel.marcado.adi').length;
+    $('lmSoma').textContent = brl(tot); $('lmQtd').textContent = (n ? n + ' comiss' + (n === 1 ? 'ão marcada' : 'ões marcadas') : 'nenhuma comissão marcada') + (na ? ' · ' + na + ' adiantada' + (na === 1 ? '' : 's') : '');
+    $('lmPedir').disabled = !n || tot <= 0;
   };
 
   // ── aprovar / reprovar / cancelar ──

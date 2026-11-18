@@ -259,6 +259,7 @@ MAPA = {
     'financeiro.lancamento_cobranca':      'financeiro.lancamentos',          # a cobrança do que a pessoa lançou (18/11/2026)
     'financeiro.lancamento_entrar_como':   'ADMIN',                           # admin vê/lança como o funcionário (18/11/2026)
     'financeiro.comissao_pedido':          'financeiro.lancamentos',          # quem pediu ou quem aprova (a rota confere)
+    'financeiro.comissao_pedido_arquivo':  'financeiro.lancamentos',          # o mesmo pedido em PDF ou imagem (18/11/2026)
     'financeiro.servico_comissao':         'financeiro.lancamentos.aprovar',  # e a rota só deixa o admin
     'financeiro.comissao_regras':          'financeiro.lancamentos.aprovar',  # Regras de comissão: a rota só deixa o admin
     'financeiro.comissao_regra_pessoa':    'financeiro.lancamentos.aprovar',

@@ -37,6 +37,11 @@
 .cp-pag i { color:#16a34a; } .cp-pag div { flex:1; } .cp-pag small { color:#64748b; display:block; }
 .cp-form { display:flex; gap:8px; flex-wrap:wrap; margin-top:10px; } .cp-form input { flex:1; min-width:120px; height:38px; border:1px solid #d7e3dc; border-radius:10px; padding:0 10px; font:inherit; }
 .cp-form button { height:38px; border:0; border-radius:10px; background:#16a34a; color:#fff; font:inherit; font-weight:800; padding:0 14px; cursor:pointer; }
+.cp-env { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:6px; } .cp-env .cp-bt { margin-top:0; font-size:13px; padding:10px 8px; }
+.cp-bt.wa { background:linear-gradient(135deg,#25d366,#128c7e); } .cp-bt.wa i { font-size:17px; }
+.cp-tag { display:inline-block; margin-top:3px; font-size:11px; font-weight:800; border-radius:99px; padding:2px 8px; }
+.cp-tag.adi { background:#f5f3ff; color:#5b21b6; border:1px solid #ddd6fe; } .cp-tag.des { background:#fef2f2; color:#b91c1c; border:1px solid #fecaca; }
+.cp-it .v.des { color:#b91c1c; }
 .cp-volta { display:inline-flex; align-items:center; gap:7px; color:#4c1d95; font-weight:700; text-decoration:none; font-size:13.5px; margin-bottom:12px; }
 @media (max-width:860px) { .cp-g { grid-template-columns:minmax(0,1fr); } .cp-cab { flex-wrap:wrap; } .cp-val { width:100%; text-align:left; } }
 </style>
@@ -49,7 +54,7 @@
   <div class="cp-cab{{ ' pago' if f.status == 'PAGO' }}">
     <span class="cp-logo"><img src="{{ url_for('static', filename='images/logo.png') }}" alt="Qualicontax"></span>
     <div class="cp-tit"><small>Pedido de pagamento de comissão nº {{ f.id }}</small><b>{{ f.usuario_nome }}</b>
-      <span>{{ f.qtd_itens }} comiss{{ 'ões' if f.qtd_itens != 1 else 'ão' }} de cobranças já pagas pelo cliente · pedido em {{ f.criado_em.strftime('%d/%m/%Y') if f.criado_em else '' }}</span></div>
+      <span>{{ resumo }} · pedido em {{ f.criado_em.strftime('%d/%m/%Y') if f.criado_em else '' }}</span></div>
     <div class="cp-val"><b>{{ (f.total | float) | format_currency }}</b>
       <span class="cp-st">{{ {'PAGO': 'pago', 'PAGO_PARCIAL': 'pago em parte · falta ' ~ (falta | format_currency), 'CANCELADO': 'cancelado'}.get(f.status, 'aguardando pagamento') }}</span></div>
   </div>
@@ -59,9 +64,11 @@
       <div class="cp-b">
         <div class="cp-h"><i class="fas fa-list-check"></i> O que entrou neste pedido <em>{{ itens|length }}</em></div>
         {% for l in itens %}
+        {% set desc_ = l.desconto_de %}{% set adi_ = l.comissao_adiantada and not desc_ and l.titulo_status != 'liquidado' %}
         <div class="cp-it"><span class="n">{{ l.numero_cliente or '—' }}</span>
-          <div><b>{{ l.nome_razao_social }}</b><small>{{ l.descricao or l.servico_nome }} · cobrado {{ l.valor_total | float | format_currency }}{% if l.destino == 'MENSAL' %} na mensalidade de {{ l.competencia.strftime('%m/%Y') }}{% endif %}</small></div>
-          <span class="v">{{ l.comissao_valor | float | format_currency }}<small>{{ '%g%%' % ((l.comissao_valor | float) * 100 / (l.valor_total | float)) if l.valor_total else '' }}</small></span></div>
+          <div><b>{{ l.nome_razao_social }}</b><small>{{ l.descricao or l.servico_nome }} · cobrado {{ l.valor_total | float | format_currency }}{% if l.destino == 'MENSAL' %} na mensalidade de {{ l.competencia.strftime('%m/%Y') }}{% endif %}</small>
+            {% if desc_ %}<span class="cp-tag des"><i class="fas fa-minus-circle"></i> desconto: cobrança não recebida</span>{% elif adi_ %}<span class="cp-tag adi"><i class="fas fa-forward"></i> adiantada · o cliente ainda não pagou</span>{% endif %}</div>
+          <span class="v{{ ' des' if desc_ }}">{{ l.comissao_valor | float | format_currency }}<small>{{ '%g%%' % ((l.comissao_valor | float) | abs * 100 / (l.valor_total | float)) if l.valor_total else '' }}</small></span></div>
         {% endfor %}
         <div class="cp-tot"><span>Total do pedido</span><b>{{ (f.total | float) | format_currency }}</b></div>
       </div>
@@ -90,6 +97,18 @@
           <div class="cp-aviso" style="text-align:left"><i class="fas fa-key"></i> {{ f.usuario_nome.split()[0] }} não tem chave Pix no cadastro. {% if f.usuario_id == current_user.id %}Preencha em <a href="{{ url_for('meu_cadastro.index') }}"><b>Meu cadastro</b></a> e o código aparece aqui.{% else %}Peça para preencher em Meu cadastro (menu da esquerda).{% endif %}</div>
         {% endif %}
         <button type="button" class="cp-bt cl" onclick="cpLink(this)"><i class="fas fa-link"></i> Copiar link deste pedido</button>
+      </div>
+      {# 18/11/2026 — Anderson: "no fechamento teremos imagem, pdf e até texto de whatsapp a ser enviado para o financeiro" #}
+      <div class="cp-b" style="margin-top:16px">
+        <div class="cp-h"><i class="fas fa-paper-plane"></i> Mandar para o financeiro</div>
+        <textarea class="cp-cod" id="cpWa" readonly style="height:150px">{{ texto_wa }}</textarea>
+        <div class="cp-env">
+          <a class="cp-bt wa" href="{{ link_wa }}" target="_blank" rel="noopener"><i class="fab fa-whatsapp"></i> Abrir no WhatsApp</a>
+          <button type="button" class="cp-bt cl" onclick="cpCopiar('cpWa', this)"><i class="fas fa-copy"></i> Copiar o texto</button>
+          <a class="cp-bt cl" href="{{ url_for('financeiro.comissao_pedido_arquivo', fid=f.id, fmt='png') }}" target="_blank" rel="noopener"><i class="fas fa-image"></i> Imagem para colar</a>
+          <a class="cp-bt cl" href="{{ url_for('financeiro.comissao_pedido_arquivo', fid=f.id, fmt='pdf') }}"><i class="fas fa-file-pdf"></i> Baixar PDF</a>
+        </div>
+        <div style="font-size:12px; color:#64748b; margin-top:8px; line-height:1.45">O texto leva o total, a chave Pix e o link desta página. A imagem abre em outra aba: segure (ou clique com o direito) para copiar e colar na conversa.</div>
       </div>
       {% if aprov and f.status not in ('PAGO', 'CANCELADO') and pode_rota('financeiro.fechamento_pagar') %}
       <div class="cp-b" style="margin-top:16px">

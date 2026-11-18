@@ -331,16 +331,58 @@ class FinLancamento:
                              tuple(params), fetch=True) or []
 
     @staticmethod
+    def adiantar(lid, usuario_id):
+        """Pede a comissão de um serviço cuja cobrança está ATRASADA antes de o cliente pagar (18/11/2026 — Anderson:
+        "vamos poder pagar as comissões posteriores também, mas não sairá dos atrasados para ele ter ciência").
+        Só o próprio, só AGUARDANDO e só com o título vencido e em aberto. Devolve True se adiantou."""
+        n = execute_query(
+            """UPDATE fin_lancamentos l JOIN fin_titulos t ON t.id = l.titulo_id
+                  SET l.comissao_status = 'LIBERADA', l.comissao_adiantada = 1
+                WHERE l.id = %s AND l.lancado_por = %s AND l.comissao_status = 'AGUARDANDO' AND l.status = 'FATURADO'
+                  AND t.status NOT IN ('liquidado', 'cancelado') AND t.vencimento < CURDATE()""",
+            (lid, usuario_id), fetch=False)
+        return bool(n)
+
+    @staticmethod
+    def descontar_adiantadas_perdidas():
+        """Comissão adiantada cuja cobrança foi dada como perdida (título cancelado) vira um DESCONTO: lançamento com a
+        comissão negativa, LIBERADO, que entra no próximo pedido da pessoa e abate o total (18/11/2026 — Anderson:
+        "no futuro se não recebermos será descontado nas comissões dos meses seguintes"). Uma vez por adiantado."""
+        perdidas = execute_query(
+            """SELECT l.* FROM fin_lancamentos l JOIN fin_titulos t ON t.id = l.titulo_id
+                WHERE l.comissao_adiantada = 1 AND l.comissao_status IN ('FECHADA', 'PAGA') AND t.status = 'cancelado'
+                  AND NOT EXISTS (SELECT 1 FROM fin_lancamentos d WHERE d.desconto_de = l.id)""", fetch=True) or []
+        ids = []
+        for l in perdidas:
+            ids.append(execute_query(
+                """INSERT INTO fin_lancamentos (empresa_id, cliente_id, servico_id, descricao, quantidade, valor_unitario, valor_total,
+                       destino, origem, competencia, vencimento, status, lancado_por, aprovado_por, aprovado_em, titulo_id,
+                       comissao_acordo_id, comissao_valor, comissao_status, comissao_adiantada, desconto_de)
+                   VALUES (%s, %s, %s, %s, 1, %s, %s, %s, %s, %s, %s, 'FATURADO', %s, %s, NOW(), %s, %s, %s, 'LIBERADA', 0, %s)""",
+                (l['empresa_id'], l['cliente_id'], l['servico_id'], ('Desconto: não recebemos · ' + (l['descricao'] or ''))[:200],
+                 l['valor_total'], l['valor_total'], l['destino'], l['origem'], l['competencia'], l['vencimento'], l['lancado_por'],
+                 l['aprovado_por'], l['titulo_id'], l['comissao_acordo_id'], -_d(l['comissao_valor']), l['id']), fetch=False))
+        return ids
+
+    @staticmethod
     def liberar_comissoes_pagas():
         """AGUARDANDO → LIBERADA quando o título foi liquidado. Idempotente; roda antes de listar comissões."""
         execute_query("""UPDATE fin_lancamentos l JOIN fin_titulos t ON t.id = l.titulo_id
                             SET l.comissao_status = 'LIBERADA'
                           WHERE l.comissao_status = 'AGUARDANDO' AND t.status = 'liquidado'""", fetch=False)
+        try:
+            FinLancamento.descontar_adiantadas_perdidas()
+        except Exception:        # coluna ainda não criada etc.: a tela não pode cair por isso
+            pass
 
     @staticmethod
     def situacao_comissao(l):
         """Rótulo para quem lançou: aguardando pagamento / vencido / pago / fechada / paga / sem comissão."""
         cs = l.get('comissao_status')
+        if l.get('desconto_de'):
+            return {'LIBERADA': 'Desconto · entra no próximo pedido', 'FECHADA': 'Desconto · em pedido'}.get(cs, 'Desconto aplicado')
+        if l.get('comissao_adiantada') and l.get('titulo_status') != 'liquidado':
+            return {'LIBERADA': 'Adiantada · a pedir', 'FECHADA': 'Adiantada · em pedido', 'PAGA': 'Adiantada · paga'}.get(cs, COMISSAO.get(cs or 'SEM'))
         if cs in ('FECHADA', 'PAGA', 'SEM') or not cs:
             return COMISSAO.get(cs or 'SEM')
         if l.get('titulo_status') == 'liquidado' or cs == 'LIBERADA':
@@ -434,6 +476,37 @@ class FinCarteira:
         return None
 
     @staticmethod
+    def adiantar_um(usuario_id, acordo_id, titulo_id):
+        """A comissão de UMA mensalidade ATRASADA da carteira, pedida antes de o cliente pagar (18/11/2026): grava o
+        lançamento LIBERADO e marcado como adiantado, pelo % sobre o valor da mensalidade. O cartão continua em atraso.
+        Devolve o id ou None."""
+        a = execute_query("SELECT * FROM fin_comissao_acordos WHERE id = %s AND usuario_id = %s AND base = 'HONORARIOS' AND ativo = 1",
+                          (acordo_id, usuario_id), fetch=True, fetch_one=True)
+        t = execute_query('SELECT vencimento FROM fin_titulos WHERE id = %s', (titulo_id,), fetch=True, fetch_one=True)
+        if not a or not t or t['vencimento'] >= date.today():
+            return None
+        for ln in FinCarteira.mes(usuario_id, t['vencimento'].year, t['vencimento'].month):
+            tt = ln['titulo']
+            if ln['acordo']['id'] != acordo_id or not tt or tt['id'] != titulo_id:
+                continue
+            if tt['status'] in ('liquidado', 'cancelado'):
+                return None
+            if tt['lanc_id']:
+                return tt['lanc_id'] if tt['lanc_st'] == 'LIBERADA' else None
+            com = _d(a['valor']) if a['tipo'] == 'FIXO' else FinComissaoAcordo.calcular(a, _d(tt['valor']))
+            if com <= 0:
+                return None
+            return execute_query(
+                """INSERT INTO fin_lancamentos (empresa_id, cliente_id, servico_id, descricao, quantidade, valor_unitario, valor_total,
+                       destino, origem, competencia, vencimento, status, lancado_por, aprovado_por, aprovado_em, titulo_id,
+                       comissao_acordo_id, comissao_valor, comissao_status, comissao_adiantada)
+                   VALUES (2, %s, 1, %s, 1, %s, %s, 'MENSAL', 'HONORARIOS', %s, %s, 'FATURADO', %s, %s, NOW(), %s, %s, %s, 'LIBERADA', 1)""",
+                (a['cliente_id'], ('Mensalidade · carteira · venc. %s · adiantada' % tt['vencimento'].strftime('%m/%Y'))[:200],
+                 tt['valor'], tt['valor'], tt['vencimento'].replace(day=1), tt['vencimento'], usuario_id,
+                 a.get('aprovado_por') or usuario_id, tt['id'], a['id'], com), fetch=False)
+        return None
+
+    @staticmethod
     def _gravar(usuario_id, ln):
         t, a = ln['titulo'], ln['acordo']
         if not t or t['status'] != 'liquidado' or ln['comissao'] <= 0:
@@ -513,6 +586,8 @@ class FinComissaoFechamento:
         if len(rows) != len(ids):
             raise ValueError('Alguma comissão escolhida não está liberada, já foi fechada ou não é sua.')
         total = sum(_d(r['comissao_valor']) for r in rows)
+        if total <= 0:
+            raise ValueError('O desconto é maior que as comissões marcadas: marque mais comissões para o pedido ficar positivo.')
         fid = execute_query(
             'INSERT INTO fin_comissao_fechamentos (usuario_id, total, qtd_itens, observacao) VALUES (%s, %s, %s, %s)',
             (usuario_id, total, len(rows), observacao), fetch=False)

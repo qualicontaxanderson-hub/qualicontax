@@ -11,7 +11,7 @@ import re
 from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
 
-from flask import abort, flash, g, redirect, render_template, request, session, url_for
+from flask import abort, flash, g, redirect, render_template, request, send_file, session, url_for
 from flask_login import current_user
 from werkzeug.datastructures import MultiDict
 
@@ -193,12 +193,21 @@ def lancamentos():
                  'como': 'Mensalidade'}
             c['fase'] = 'pag' if pago else ('atr' if t['vencimento'] < hoje else 'cob')
             c['situacao_com'] = 'Pago · a pedir' if pago else ('Vencido' if c['fase'] == 'atr' else 'Aguardando pagamento')
+            c['adiantavel'] = c['fase'] == 'atr'        # 18/11/2026: mensalidade atrasada pode ser pedida adiantada
             grupos[c['fase']].append(c)
             cart.append(c)
     soma = lambda ls: sum(float(x['valor_total'] or 0) for x in ls)
     meus_com = [l for l in todos if l.get('comissao_status') in ('LIBERADA', 'FECHADA', 'PAGA', 'AGUARDANDO')
                 and (aprov is False or l['lancado_por'] == _eu().id)] + cart
     liberadas = [l for l in meus_com if l['comissao_status'] == 'LIBERADA' and l['lancado_por'] == _eu().id]
+    # Esperando o cliente pagar: o que aguarda e o que foi ADIANTADO e o cliente ainda não pagou (18/11/2026 — Anderson:
+    # "não sairá dos atrasados para ele ter ciência"). Serviço atrasado e ainda não pedido pode ser pedido adiantado.
+    aguard = [l for l in meus_com if l['comissao_status'] == 'AGUARDANDO'
+              or (l.get('comissao_adiantada') and not l.get('desconto_de') and l.get('titulo_status') != 'liquidado')]
+    for l in aguard:
+        if not l.get('carteira') and l['comissao_status'] == 'AGUARDANDO' and l['fase'] == 'atr' and l['lancado_por'] == _eu().id:
+            l['adiantavel'] = True
+    tem_adiantavel = any(l.get('adiantavel') for l in aguard)
     pedidos = FinComissaoFechamento.listar(usuario_id=None if aprov else _eu().id)
     a_pagar = [f for f in pedidos if f['status'] not in ('PAGO', 'CANCELADO')]
     acordos = [a for a in FinComissaoAcordo.listar(usuario_id=_eu().id) if a['base'] == 'SERVICO']
@@ -223,7 +232,7 @@ def lancamentos():
     }
     return render_template(
         'financeiro/lancamentos.html', aprov=aprov, admin=_admin(), hoje=hoje, grupos=grupos, fora=fora[:30],
-        tot={k: soma(v) for k, v in grupos.items()}, liberadas=liberadas, meus_com=meus_com,
+        tot={k: soma(v) for k, v in grupos.items()}, liberadas=liberadas, meus_com=meus_com, aguard=aguard, tem_adiantavel=tem_adiantavel,
         tot_liberadas=sum(float(l['comissao_valor'] or 0) for l in liberadas),
         pedidos=pedidos, a_pagar=a_pagar, tot_a_pagar=sum(float(f['total'] or 0) - float(f['valor_pago'] or 0) for f in a_pagar),
         aba=request.args.get('aba') if request.args.get('aba') in FASES + ('com',) else ('apr' if (aprov or grupos['apr']) else 'cob'),
@@ -357,8 +366,43 @@ def comissao_pedido(fid):
     if pix.get('pix_chave') and falta > 0:
         codigo = copia_e_cola(pix['pix_chave'], f['usuario_nome'], falta, txid='COMISSAO%d' % fid, mensagem='Comissao pedido %d' % fid)
         qr = qr_data_uri(codigo)
+    from utils.comissao_pedido_doc import frase_resumo, link_whatsapp, texto_whatsapp
+    ctx = {'f': f, 'itens': itens, 'pix': pix, 'falta': falta, 'codigo': codigo,
+           'link': url_for('financeiro.comissao_pedido', fid=fid, _external=True)}
+    texto = texto_whatsapp(ctx)
     return render_template('financeiro/comissao_pedido.html', f=f, itens=itens, pags=pags, pix=pix, PIX_TIPOS=PIX_TIPOS,
-                           falta=falta, codigo=codigo, qr=qr, aprov=_aprovador(), hoje=date.today())
+                           falta=falta, codigo=codigo, qr=qr, aprov=_aprovador(), hoje=date.today(),
+                           resumo=frase_resumo(itens), texto_wa=texto, link_wa=link_whatsapp(texto))
+
+
+@financeiro.route('/financeiro/lancamentos/pedido/<int:fid>.<fmt>')
+@permission_required(PERM)
+def comissao_pedido_arquivo(fid, fmt):
+    """O pedido em PDF ou em imagem PNG (18/11/2026 — Anderson: "no fechamento teremos imagem, pdf e até texto de
+    whatsapp a ser enviado para o financeiro"). Mesmas pessoas que abrem a página."""
+    import os
+    from utils.comissao_pedido_doc import gerar_pdf, gerar_png
+    from utils.pix_brcode import copia_e_cola
+    if fmt not in ('pdf', 'png'):
+        abort(404)
+    f = FinComissaoFechamento.get(fid)
+    if not f or (not _aprovador() and f['usuario_id'] != _eu().id):
+        abort(404)
+    itens = FinComissaoFechamento.itens(fid)
+    pags = execute_query("""SELECT p.*, l.descricao AS extrato_desc, l.banco AS extrato_banco, u.nome AS por_nome
+                             FROM fin_comissao_pagamentos p LEFT JOIN extrato_lancamentos l ON l.id = p.extrato_id
+                             LEFT JOIN usuarios u ON u.id = p.registrado_por WHERE p.fechamento_id = %s ORDER BY p.data, p.id""",
+                         (fid,), fetch=True) or []
+    pix = _pix_de(f['usuario_id'])
+    falta = float(f['total'] or 0) - float(f['valor_pago'] or 0)
+    codigo = copia_e_cola(pix['pix_chave'], f['usuario_nome'], falta, txid='COMISSAO%d' % fid, mensagem='Comissao pedido %d' % fid) if pix.get('pix_chave') and falta > 0 else None
+    logo = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'static', 'images', 'logo.png')
+    ctx = {'f': f, 'itens': itens, 'pags': pags, 'pix': pix, 'falta': falta, 'codigo': codigo,
+           'link': url_for('financeiro.comissao_pedido', fid=fid, _external=True), 'logo_path': logo if os.path.exists(logo) else None}
+    dados = gerar_pdf(ctx) if fmt == 'pdf' else gerar_png(ctx)
+    nome = 'pedido-comissao-%d-%s.%s' % (fid, re.sub(r'\W+', '-', (f['usuario_nome'] or '').split()[0].lower()) if f.get('usuario_nome') else 'x', fmt)
+    from io import BytesIO
+    return send_file(BytesIO(dados), as_attachment=fmt == 'pdf', download_name=nome, mimetype='application/pdf' if fmt == 'pdf' else 'image/png')
 
 
 @financeiro.route('/financeiro/lancamentos/regras')
@@ -739,20 +783,28 @@ def lancamento_cobranca(lid):
 def comissoes_fechar():
     try:
         from models.fin_lancamento import FinCarteira
-        ids = []
+        ids, adiantadas = [], 0
         for v in request.form.getlist('lanc'):
             m = re.fullmatch(r'c(\d+)_(\d+)', v or '')
-            if m:      # mensalidade da carteira paga: grava a comissão (uma vez) e entra no pedido
+            ma = re.fullmatch(r'a(\d+)', v or '')
+            if m:      # mensalidade da carteira: paga → libera; atrasada → adiantada (18/11/2026)
                 lid = FinCarteira.liberar_um(_eu().id, int(m.group(1)), int(m.group(2)))
+                if not lid:
+                    lid = FinCarteira.adiantar_um(_eu().id, int(m.group(1)), int(m.group(2)))
+                    adiantadas += bool(lid)
                 if lid:
                     ids.append(lid)
+            elif ma:   # serviço com cobrança atrasada, pedido antes de o cliente pagar
+                if FinLancamento.adiantar(int(ma.group(1)), _eu().id):
+                    ids.append(int(ma.group(1))); adiantadas += 1
             elif str(v).isdigit():
                 ids.append(int(v))
         fid = FinComissaoFechamento.criar(_eu().id, ids, (request.form.get('observacao') or '').strip() or None)
         f = FinComissaoFechamento.get(fid)
         registrar('escrita.fechou_comissoes', 'financeiro', tabela='fin_comissao_fechamentos', registro_id=fid,
-                  depois={'total': str(f['total']), 'itens': f['qtd_itens']})
-        flash('Pedido nº %d criado: R$ %s em %d comissão(ões). Copie o link e mande para Anderson ou Alessandra.' % (fid, f['total'], f['qtd_itens']), 'success')
+                  depois={'total': str(f['total']), 'itens': f['qtd_itens'], 'adiantadas': adiantadas})
+        flash('Pedido nº %d criado: R$ %s em %d comissão(ões)%s. Mande para Anderson ou Alessandra pelo WhatsApp, em PDF ou em imagem.'
+              % (fid, f['total'], f['qtd_itens'], (' · %d adiantada(s): o cliente ainda não pagou' % adiantadas) if adiantadas else ''), 'success')
         return redirect(url_for('financeiro.comissao_pedido', fid=fid))
     except ValueError as e:
         flash(str(e), 'danger')
