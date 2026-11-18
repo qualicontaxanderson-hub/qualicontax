@@ -403,8 +403,8 @@ def lancamento_novo():
 def _contas_cobranca():
     """Contas de cobrança que emitem boleto (ativas, não só-consulta) da empresa — a padrão primeiro."""
     return execute_query("""SELECT id, apelido, provedor, ambiente FROM fin_cobranca_contas
-                             WHERE empresa_id = %s AND ativo = 1 AND so_consulta = 0
-                             ORDER BY (ambiente = 'producao') DESC, id""", (EMP,), fetch=True) or []   # produção primeiro; TESTE aparece marcado
+                             WHERE empresa_id = %s AND ativo = 1 AND so_consulta = 0 AND ambiente = 'producao'
+                             ORDER BY id""", (EMP,), fetch=True) or []   # só Efí e Bradesco de verdade (Anderson: "nada de teste ou produção")
 
 
 def _conta_escolhida(form):

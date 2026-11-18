@@ -118,7 +118,7 @@
 .ns-seg button.on { background:#fff; color:#0f3d2e; box-shadow:0 1px 4px rgba(0,0,0,.08); }
 .ns-bancos { display:flex; gap:9px; flex-wrap:wrap; }
 .ns-banco { cursor:pointer; } .ns-banco input { display:none; }
-.ns-banco > span { display:flex; align-items:center; gap:11px; border:1.5px solid #e2e8f0; border-radius:14px; padding:10px 14px; background:#fff; min-width:230px; }
+.ns-banco > span { display:flex; align-items:center; gap:11px; border:1.5px solid #e2e8f0; border-radius:14px; padding:10px 14px; background:#fff; min-width:150px; }
 .ns-banco > span img, .ns-banco > span > span:first-child:not(.nb) { flex-shrink:0; border-radius:8px; }
 .ns-banco .nb { display:flex; flex-direction:column; line-height:1.15; min-width:0; } .ns-banco b { font-size:15px; } .ns-banco small { font-size:11.5px; color:#64748b; }
 .ns-banco .amb { margin-left:auto; font-style:normal; font-size:10.5px; font-weight:800; letter-spacing:.04em; text-transform:uppercase; border-radius:99px; padding:3px 9px; background:#dcfce7; color:#15803d; }
@@ -327,7 +327,7 @@
       {% if aprov and contas_cobranca %}
       <div class="ns-campo" id="nsBancoBox" style="grid-column:1/-1"><label>Banco do boleto</label>
         <div class="ns-bancos">{% for c in contas_cobranca %}<label class="ns-banco"><input type="radio" name="conta_cobranca_id" value="{{ c.id }}"{{ ' checked' if loop.first }}>
-          <span class="{{ 'teste' if c.ambiente != 'producao' }}">{{ logo_banco('364' if c.provedor == 'efi' else '237', none, 30) }}<span class="nb"><b>{{ 'Efí' if c.provedor == 'efi' else 'Bradesco' }}</b><small>{{ c.apelido }}</small></span><em class="amb">{{ 'Produção' if c.ambiente == 'producao' else 'Teste' }}</em></span></label>{% endfor %}</div></div>
+          <span>{{ logo_banco('364' if c.provedor == 'efi' else '237', none, 30) }}<span class="nb"><b>{{ 'Efí' if c.provedor == 'efi' else 'Bradesco' }}</b></span></span></label>{% endfor %}</div></div>
       {% endif %}
       <div class="ns-campo" id="nsCompBox" hidden><label>Mensalidade de</label><select class="ns-in" id="nsComp" name="competencia"></select></div>
       <div class="ns-campo" style="grid-column:1/-1"><label>Texto da nota / do boleto</label><input class="ns-in" id="nsDesc" name="descricao" maxlength="200" placeholder="o nome do serviço"></div>
@@ -361,7 +361,7 @@
     {% if contas_cobranca %}
     <section class="ns-b" id="apBancoBox"><div class="ns-h"><i class="fas fa-building-columns"></i> Banco do boleto</div>
       <div class="ns-bancos">{% for c in contas_cobranca %}<label class="ns-banco"><input type="radio" name="conta_cobranca_id" value="{{ c.id }}"{{ ' checked' if loop.first }}>
-        <span class="{{ 'teste' if c.ambiente != 'producao' }}">{{ logo_banco('364' if c.provedor == 'efi' else '237', none, 30) }}<span class="nb"><b>{{ 'Efí' if c.provedor == 'efi' else 'Bradesco' }}</b><small>{{ c.apelido }}</small></span><em class="amb">{{ 'Produção' if c.ambiente == 'producao' else 'Teste' }}</em></span></label>{% endfor %}</div></section>
+        <span>{{ logo_banco('364' if c.provedor == 'efi' else '237', none, 30) }}<span class="nb"><b>{{ 'Efí' if c.provedor == 'efi' else 'Bradesco' }}</b></span></span></label>{% endfor %}</div></section>
     {% endif %}
     <div class="ns-aviso" id="apAviso"></div>
   </div></div>
