@@ -2079,6 +2079,30 @@ def usuario_editar(uid):
                 (uid, cid), fetch=False,
             )
 
+        # Dados bancários / Pix (17/11/2026 — Anderson: "Quando os meninos se cadastraram tinham que por esses dados...
+        # era para colocar no CONFIG"). Os valores NUNCA vão para o log (regra do cadastro): só o fato.
+        banco_mudou = False
+        if request.form.get('banco_form') == '1':
+            bf = {k: (request.form.get(k) or '').strip() or None for k in
+                  ('banco_codigo', 'banco_nome', 'agencia', 'conta', 'conta_tipo', 'titular_nome', 'titular_cpf', 'pix_tipo', 'pix_chave')}
+            if bf['pix_tipo'] not in (None, 'CPF', 'CNPJ', 'EMAIL', 'TELEFONE', 'ALEATORIA'):
+                bf['pix_tipo'] = None
+            if bf['conta_tipo'] not in (None, 'CORRENTE', 'POUPANCA', 'SALARIO', 'PAGAMENTO'):
+                bf['conta_tipo'] = None
+            atual = execute_query("SELECT * FROM usuario_dados_bancarios WHERE usuario_id = %s ORDER BY id DESC LIMIT 1",
+                                  (uid,), fetch=True, fetch_one=True)
+            if atual:
+                banco_mudou = any((atual.get(k) or None) != bf[k] for k in bf)
+                if banco_mudou:
+                    execute_query("""UPDATE usuario_dados_bancarios SET banco_codigo=%s, banco_nome=%s, agencia=%s, conta=%s,
+                                         conta_tipo=%s, titular_nome=%s, titular_cpf=%s, pix_tipo=%s, pix_chave=%s, atualizado_por=%s
+                                    WHERE id=%s""", tuple(bf[k] for k in bf) + (current_user.id, atual['id']), fetch=False)
+            elif any(bf.values()):
+                banco_mudou = True
+                execute_query("""INSERT INTO usuario_dados_bancarios (usuario_id, banco_codigo, banco_nome, agencia, conta, conta_tipo,
+                                     titular_nome, titular_cpf, pix_tipo, pix_chave, atualizado_por)
+                                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""", (uid,) + tuple(bf[k] for k in bf) + (current_user.id,), fetch=False)
+
         # Quem mexeu em acesso tem de ficar registrado. Perfis e empresas
         # entram como lista ordenada de ids: o diff do registrar mostra
         # exatamente quais entraram e quais sairam. A SENHA nunca vai para o
@@ -2097,7 +2121,7 @@ def usuario_editar(uid):
                           'departamento_id': departamento_id,
                           'perfis': sorted(int(p) for p in perfis_sel),
                           'empresas': sorted(int(c) for c in empresas_sel),
-                          'senha_trocada': bool(nova_senha)})
+                          'senha_trocada': bool(nova_senha), 'dados_bancarios_alterados': banco_mudou})
         flash(f'Usuário "{nome}" atualizado com sucesso.', 'success')
         return redirect(url_for('configuracoes.usuarios'))
 
@@ -2108,11 +2132,16 @@ def usuario_editar(uid):
         "  FROM cliente_acesso_excecao e JOIN clientes c ON c.id = e.cliente_id "
         " WHERE e.usuario_id = %s ORDER BY c.nome_razao_social",
         (uid,), fetch=True) or []
+    # O que a pessoa preencheu no cadastro (link de convite) e os dados bancários / Pix (17/11/2026)
+    cadastro = execute_query("SELECT * FROM cadastro_pendente WHERE usuario_id = %s ORDER BY id DESC LIMIT 1",
+                             (uid,), fetch=True, fetch_one=True)
+    banco = execute_query("SELECT * FROM usuario_dados_bancarios WHERE usuario_id = %s ORDER BY id DESC LIMIT 1",
+                          (uid,), fetch=True, fetch_one=True) or {}
     return _render_usuario_form( departamentos=_departamentos_ativos(),
                            perfis=perfis, clientes=clientes, usuario=usuario,
                            perfis_usuario=perfis_usuario,
                            empresas_usuario=empresas_usuario,
-                           excecoes_reservadas=excecoes_reservadas)
+                           excecoes_reservadas=excecoes_reservadas, cadastro=cadastro, banco=banco)
 
 
 @configuracoes.route('/usuarios/<int:uid>/liberar-codigo', methods=['POST'])

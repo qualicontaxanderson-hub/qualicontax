@@ -32,6 +32,10 @@
 .us-campo input::placeholder { color:#94a3b8; font-weight:400; }
 .us-campo small { display:block; margin-top:4px; font-size:11.5px; color:#64748b; }
 .us-campo small a { color:#15803d; font-weight:700; }
+.us-dl { display:grid; grid-template-columns:repeat(2, minmax(0,1fr)); gap:10px 14px; margin:0; }
+.us-dl > div { min-width:0; } .us-dl dt { font-size:11px; font-weight:800; letter-spacing:.5px; text-transform:uppercase; color:#64748b; }
+.us-dl dd { margin:2px 0 0; font-size:13.5px; color:#0f172a; font-weight:600; overflow-wrap:anywhere; } .us-dl .us-dl-l { grid-column:1/-1; }
+@media (max-width:700px) { .us-dl { grid-template-columns:minmax(0,1fr); } }
 .us-senha { position:relative; }
 .us-senha input { padding-right:40px; }
 .us-senha button { position:absolute; right:4px; top:50%; transform:translateY(-50%); border:0; background:transparent; color:#64748b;
@@ -204,6 +208,50 @@
             </div>
         </div>
     </div>
+
+    {% if usuario %}
+    {# 17/11/2026 — Anderson: "Quando os meninos se cadastraram tinham que por esses dados... sumiram os dados por que era para
+       colocar no CONFIG". O que a pessoa preencheu no link de cadastro aparece aqui; banco e Pix se corrigem aqui. #}
+    {% if cadastro %}
+    <div class="cli-filtros us-bloco">
+        <div class="cli-f-row">
+            <span class="cli-seg-rot"><i class="fas fa-address-card"></i> O que a pessoa preencheu no cadastro</span>
+            <dl class="us-dl">
+                <div><dt>Nome completo</dt><dd>{{ cadastro.nome_completo or '—' }}</dd></div>
+                <div><dt>CPF</dt><dd>{{ cadastro.cpf or '—' }}</dd></div>
+                <div><dt>Nascimento</dt><dd>{{ cadastro.data_nascimento.strftime('%d/%m/%Y') if cadastro.data_nascimento else '—' }}</dd></div>
+                <div><dt>Trabalho</dt><dd>{{ (cadastro.modalidade_trabalho or '—') | capitalize }}</dd></div>
+                <div><dt>E-mail pessoal</dt><dd>{{ cadastro.email_pessoal or '—' }}</dd></div>
+                <div><dt>E-mail da empresa</dt><dd>{{ cadastro.email_corporativo or '—' }}</dd></div>
+                <div><dt>Celular pessoal</dt><dd>{{ cadastro.celular_pessoal or '—' }}</dd></div>
+                <div><dt>Celular da empresa</dt><dd>{{ cadastro.celular_corporativo or '—' }}</dd></div>
+                <div class="us-dl-l"><dt>Endereço</dt><dd>{{ [cadastro.logradouro, cadastro.numero, cadastro.complemento, cadastro.bairro] | select | join(', ') or '—' }}{% if cadastro.cidade %} — {{ cadastro.cidade }}{% if cadastro.estado %}/{{ cadastro.estado }}{% endif %}{% endif %}{% if cadastro.cep %} · CEP {{ cadastro.cep }}{% endif %}</dd></div>
+            </dl>
+            <p class="us-txt" style="margin-top:8px">Preenchido pela pessoa em {{ cadastro.criado_em.strftime('%d/%m/%Y') if cadastro.criado_em else '—' }} pelo link de cadastro.</p>
+        </div>
+    </div>
+    {% endif %}
+    <div class="cli-filtros us-bloco">
+        <div class="cli-f-row">
+            <span class="cli-seg-rot"><i class="fas fa-building-columns"></i> Dados bancários e Pix <small style="text-transform:none; letter-spacing:0; font-weight:600; color:#94a3b8">— a chave Pix é a que sai no pedido de comissão</small></span>
+            <input type="hidden" name="banco_form" value="1">
+            <div class="us-campos">
+                <label class="us-campo"><span>Tipo da chave Pix</span>
+                    <select name="pix_tipo"><option value="">—</option>{% for k, v in [('CPF', 'CPF'), ('CNPJ', 'CNPJ'), ('TELEFONE', 'Celular'), ('EMAIL', 'E-mail'), ('ALEATORIA', 'Chave aleatória')] %}<option value="{{ k }}"{{ ' selected' if banco.pix_tipo == k }}>{{ v }}</option>{% endfor %}</select></label>
+                <label class="us-campo"><span>Chave Pix</span><input type="text" name="pix_chave" value="{{ banco.pix_chave or '' }}" autocomplete="off"></label>
+                <label class="us-campo"><span>Banco (código)</span><input type="text" name="banco_codigo" value="{{ banco.banco_codigo or '' }}" placeholder="ex.: 260"></label>
+                <label class="us-campo"><span>Banco (nome)</span><input type="text" name="banco_nome" value="{{ banco.banco_nome or '' }}" placeholder="ex.: Nubank"></label>
+                <label class="us-campo"><span>Agência</span><input type="text" name="agencia" value="{{ banco.agencia or '' }}"></label>
+                <label class="us-campo"><span>Conta</span><input type="text" name="conta" value="{{ banco.conta or '' }}"></label>
+                <label class="us-campo"><span>Tipo de conta</span>
+                    <select name="conta_tipo"><option value="">—</option>{% for k, v in [('CORRENTE', 'Corrente'), ('POUPANCA', 'Poupança'), ('SALARIO', 'Salário'), ('PAGAMENTO', 'Pagamento')] %}<option value="{{ k }}"{{ ' selected' if banco.conta_tipo == k }}>{{ v }}</option>{% endfor %}</select></label>
+                <label class="us-campo"><span>Titular (nome / CPF)</span>
+                    <div style="display:flex; gap:6px"><input type="text" name="titular_nome" value="{{ banco.titular_nome or '' }}" placeholder="nome"><input type="text" name="titular_cpf" value="{{ banco.titular_cpf or '' }}" placeholder="CPF" style="max-width:150px"></div></label>
+            </div>
+            <p class="us-txt" style="margin-top:8px"><i class="fas fa-shield-halved"></i> Só o administrador vê esta parte. Os números não vão para a Auditoria, só o aviso de que mudaram.</p>
+        </div>
+    </div>
+    {% endif %}
 
     {# A antiga "Empresas Permitidas" saiu em 02/10/2026; a regra que vale é a
        EMPRESA RESERVADA, marcada na ficha da empresa e aplicada por utils/acesso.py. #}

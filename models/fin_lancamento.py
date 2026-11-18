@@ -425,7 +425,8 @@ class FinComissaoFechamento:
         import re
         import unicodedata
         abertos = execute_query(
-            """SELECT f.id, f.usuario_id, f.total, f.valor_pago, f.criado_em, u.nome, u.pix_chave
+            """SELECT f.id, f.usuario_id, f.total, f.valor_pago, f.criado_em, u.nome,
+                      (SELECT b.pix_chave FROM usuario_dados_bancarios b WHERE b.usuario_id = f.usuario_id ORDER BY b.id DESC LIMIT 1) AS pix_chave
                  FROM fin_comissao_fechamentos f JOIN usuarios u ON u.id = f.usuario_id
                 WHERE f.status IN ('ABERTO', 'PAGO_PARCIAL')""", fetch=True) or []
         if not abertos:

@@ -64,10 +64,21 @@ def _servicos():
 
 
 PIX_TIPOS = {'cpf': 'CPF', 'cnpj': 'CNPJ', 'celular': 'Celular', 'email': 'E-mail', 'aleatoria': 'Chave aleatória'}
+# 17/11/2026 — Anderson: "Quando os meninos se cadastraram tinham que por esses dados... era para colocar no CONFIG".
+# A chave Pix é a que a pessoa deu no cadastro (usuario_dados_bancarios, o mesmo de Configurações → Usuários).
+_PIX_DO_CADASTRO = {'CPF': 'cpf', 'CNPJ': 'cnpj', 'TELEFONE': 'celular', 'EMAIL': 'email', 'ALEATORIA': 'aleatoria'}
+_PIX_PARA_CADASTRO = {v: k for k, v in _PIX_DO_CADASTRO.items()}
 
 
 def _pix_de(usuario_id):
-    return execute_query('SELECT pix_tipo, pix_chave FROM usuarios WHERE id = %s', (usuario_id,), fetch=True, fetch_one=True) or {}
+    """{'pix_tipo': 'cpf'|'celular'|..., 'pix_chave': ...} do cadastro bancário da pessoa ({} sem chave)."""
+    from utils.pix_brcode import chave_normalizada
+    r = execute_query('SELECT pix_tipo, pix_chave FROM usuario_dados_bancarios WHERE usuario_id = %s ORDER BY id DESC LIMIT 1',
+                      (usuario_id,), fetch=True, fetch_one=True) or {}
+    tipo = _PIX_DO_CADASTRO.get((r.get('pix_tipo') or '').upper())
+    if not tipo or not (r.get('pix_chave') or '').strip():
+        return {}
+    return {'pix_tipo': tipo, 'pix_chave': chave_normalizada(tipo, r['pix_chave'])}
 
 
 # ---------------------------------------------------------------------------
@@ -183,9 +194,17 @@ def lancamento_minha_pix():
         flash(erro, 'danger')
     else:
         antes = _pix_de(current_user.id)
-        execute_query('UPDATE usuarios SET pix_tipo = %s, pix_chave = %s WHERE id = %s', (tipo, chave[:120], current_user.id), fetch=False)
-        registrar('escrita.alterou_chave_pix', 'financeiro', tabela='usuarios', registro_id=current_user.id,
-                  antes={'pix_tipo': antes.get('pix_tipo'), 'pix_chave': antes.get('pix_chave')}, depois={'pix_tipo': tipo, 'pix_chave': chave})
+        ja = execute_query('SELECT id FROM usuario_dados_bancarios WHERE usuario_id = %s ORDER BY id DESC LIMIT 1',
+                           (current_user.id,), fetch=True, fetch_one=True)
+        if ja:
+            execute_query('UPDATE usuario_dados_bancarios SET pix_tipo = %s, pix_chave = %s, atualizado_por = %s WHERE id = %s',
+                          (_PIX_PARA_CADASTRO[tipo], chave[:140], current_user.id, ja['id']), fetch=False)
+        else:
+            execute_query('INSERT INTO usuario_dados_bancarios (usuario_id, pix_tipo, pix_chave, atualizado_por) VALUES (%s, %s, %s, %s)',
+                          (current_user.id, _PIX_PARA_CADASTRO[tipo], chave[:140], current_user.id), fetch=False)
+        # dado bancário não vai para o log (regra do cadastro): só que trocou e o tipo
+        registrar('escrita.alterou_chave_pix', 'financeiro', tabela='usuario_dados_bancarios', registro_id=current_user.id,
+                  antes={'pix_tipo': antes.get('pix_tipo'), 'tinha_chave': bool(antes.get('pix_chave'))}, depois={'pix_tipo': tipo, 'tem_chave': True})
         flash('Chave Pix salva: os seus pedidos de comissão saem com ela.', 'success')
     return redirect(url_for('financeiro.lancamentos', aba='com'))
 
