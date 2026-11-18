@@ -88,7 +88,9 @@ def emitir(conta, boleto_id, pagador, total, vencimento):
     linha = _num(j.get('linhaDig10'))
     if len(linha) != 47:
         raise ValueError('O Bradesco registrou, mas não devolveu a linha digitável. Consulte o boleto antes de emitir outro.')
-    pix = (j.get('wqrcdPdraoMercd') or '').replace(' ', '') or None
+    # 17/11/2026: só as pontas. Tirar TODOS os espaços quebrava o Pix ("SAO PAULO" virava "SAOPAULO" com o
+    # tamanho declarado errado e o CRC não batia): o C6 recusou o copia e cola do boleto 226.
+    pix = (j.get('wqrcdPdraoMercd') or '').strip() or None
     _x("""UPDATE fin_boletos SET charge_id = %s, custom_id = %s, situacao = 'waiting', linha_digitavel = %s,
                  codigo_barras = %s, link = NULL, pdf_url = %s, pix_copia_cola = %s, pix_qrcode = NULL,
                  raw_resposta = %s, erro = NULL, atualizado_em = NOW()
