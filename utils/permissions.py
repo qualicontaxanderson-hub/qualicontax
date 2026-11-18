@@ -177,6 +177,10 @@ DEPARTAMENTOS_PERMISSOES = [
                     ('financeiro.honorarios.desfazer', 'desfazer reajuste', True)]},
         {'id': 'honc', 'nome': 'Honorários da empresa que cadastrei',
          'inc': ('financeiro.honorarios_cadastrar', 'cadastrar (vai para aprovação)')},
+        # 18/11/2026 — Anderson: honorário da equipe só "mediante o Contrato de Prestação de Serviços... com o Contrato
+        # apareceria para a Aprovação"; aprovado, o honorário passa a valer e o contrato vai para o cliente assinar.
+        {'id': 'ctr', 'nome': 'Contrato de prestação de serviços',
+         'inc': ('financeiro.contratos.montar', 'montar contrato (vai para aprovação)')},
         {'id': 'lan', 'nome': 'Serviço avulso e comissões',
          'ver': ('financeiro.lancamentos', 'meus lançamentos'),
          'inc': ('financeiro.lancamentos.incluir', 'lançar serviço'),

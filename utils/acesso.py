@@ -267,14 +267,17 @@ MAPA = {
     # Lote mensal (06/11/2026): só o Anderson emite o mensal — permissão sem perfil
     'financeiro.lote':                     'financeiro.lote',
     # Contrato de prestação: SÓ ADMIN — "pro ADMIN aparece todos, para os demais não aparece nada" (Anderson, 06/11/2026)
-    'financeiro.contratos':                        'ADMIN',
-    'financeiro.contrato_novo':                    'ADMIN',
-    'financeiro.contrato_editar':                  'ADMIN',
-    'financeiro.contrato_salvar':                  'ADMIN',
-    'financeiro.contrato_ver':                     'ADMIN',
-    'financeiro.contrato_pdf':                     'ADMIN',
-    'financeiro.contrato_enviar':                  'ADMIN',
-    'financeiro.contrato_cancelar':                'ADMIN',
+    'financeiro.contratos':                        'financeiro.contratos.montar',
+    'financeiro.contrato_novo':                    'financeiro.contratos.montar',
+    'financeiro.contrato_editar':                  'financeiro.contratos.montar',
+    'financeiro.contrato_salvar':                  'financeiro.contratos.montar',
+    'financeiro.contrato_ver':                     'financeiro.contratos.montar',
+    'financeiro.contrato_pdf':                     'financeiro.contratos.montar',
+    'financeiro.contrato_enviar':                  'financeiro.contratos.montar',
+    'financeiro.contrato_cancelar':                'financeiro.contratos.montar',
+    'financeiro.contrato_pedir_aprovacao':          'financeiro.contratos.montar',     # 18/11/2026: equipe monta, vai para aprovação
+    'financeiro.contrato_aprovar':                  'financeiro.lancamentos.aprovar',  # Anderson ou Alessandra
+    'financeiro.contrato_reprovar':                 'financeiro.lancamentos.aprovar',
     'financeiro.lote_emitir':              'financeiro.lote.incluir',
     'financeiro.lote_status':              'financeiro.lote',
     'financeiro.lote_reabrir':             'financeiro.lote.reabrir',

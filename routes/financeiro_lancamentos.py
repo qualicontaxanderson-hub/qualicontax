@@ -229,6 +229,7 @@ def lancamentos():
         pessoas=ClienteResponsavel.usuarios_disponiveis() if _admin() else [], servicos=_servicos(),
         eu=_eu(), vendo_como=_vendo_como(), admin_real=_admin_real(), acessos=_acessos_de(_eu()) if _vendo_como() else None,
         pessoas_como=[p for p in ClienteResponsavel.usuarios_disponiveis() if p['id'] != current_user.id] if _admin_real() else [],
+        ctr_aprovar=(execute_query("SELECT COUNT(*) n FROM prest_contratos WHERE status = 'APROVACAO'", fetch=True, fetch_one=True) or {}).get('n', 0) if _aprovador() else 0,
         pix=_pix_de(_eu().id), PIX_TIPOS=PIX_TIPOS, contas_cobranca=_contas_cobranca() if aprov else [])
 
 

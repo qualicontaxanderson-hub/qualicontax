@@ -52,7 +52,7 @@ AREAS = {
 }
 TITULOS = {'CONTABIL': 'CONTRATO DE PRESTAÇÃO DE SERVIÇOS CONTÁBEIS', 'FISCAL': 'CONTRATO DE PRESTAÇÃO DE SERVIÇOS FISCAIS',
            'PESSOAL': 'CONTRATO DE PRESTAÇÃO DE SERVIÇOS DE DEPARTAMENTO PESSOAL'}
-STATUS = ('RASCUNHO', 'ENVIADO', 'ASSINADO', 'CANCELADO')
+STATUS = ('RASCUNHO', 'APROVACAO', 'APROVADO', 'ENVIADO', 'ASSINADO', 'CANCELADO')   # 18/11/2026: aprovação da equipe
 REAJUSTE_TXT = {
     'SALARIO_MINIMO': 'Os honorários serão reajustados anualmente, no mês de janeiro, pelo mesmo percentual de reajuste do salário mínimo nacional.',
     'INDICE': 'Os honorários serão reajustados anualmente pelo índice {indice}.',
@@ -301,12 +301,15 @@ class PrestContrato:
         where = ('WHERE ' + ' AND '.join(cond)) if cond else ''
         rows = execute_query(
             f"""SELECT p.id, p.numero, p.cliente_id, p.tipo, p.titulo, p.status, p.criado_em, p.enviado_em, p.assinado_em, p.pdf_path,
+                       p.criado_por, (SELECT GROUP_CONCAT(e.cliente_id) FROM prest_contrato_empresas e WHERE e.contrato_id = p.id) AS empresas_csv,
                        cl.numero_cliente, cl.nome_razao_social, u.nome AS criado_por_nome,
                        (SELECT COUNT(*) FROM prest_contrato_empresas e WHERE e.contrato_id = p.id) AS n_empresas,
                        (SELECT COUNT(*) FROM prest_assinantes a WHERE a.contrato_id = p.id) AS n_assinantes,
                        (SELECT COUNT(*) FROM prest_assinantes a WHERE a.contrato_id = p.id AND a.assinado_em IS NOT NULL) AS n_assinados
                   FROM prest_contratos p JOIN clientes cl ON cl.id = p.cliente_id LEFT JOIN usuarios u ON u.id = p.criado_por
                  {where} ORDER BY p.id DESC""", tuple(params), fetch=True) or []
+        for r in rows:
+            r['empresas_ids'] = [int(x) for x in (r.get('empresas_csv') or '').split(',') if x.strip().isdigit()]
         return rows
 
     @staticmethod

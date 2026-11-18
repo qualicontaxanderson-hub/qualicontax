@@ -37,7 +37,9 @@
     <div class="pv-card">
         <div class="pv-head"><span class="pv-ico"><i class="fas fa-file-signature"></i></span>
             <div><h2>{{ c.titulo | title }} · nº {{ c.numero or c.id }}</h2><p>{{ emp.numero or 'PF' }} · {{ emp.razao }}{% if c.dados.empresas | length > 1 %} + {{ c.dados.empresas | length - 1 }} empresas{% endif %} · {{ c.criado_em.strftime('%d/%m/%Y') }} por {{ c.criado_por_nome }}</p></div>
-            <span class="pv-st">{{ {'RASCUNHO': 'Rascunho', 'ENVIADO': 'Aguardando assinatura', 'ASSINADO': 'Assinado', 'CANCELADO': 'Cancelado'}[c.status] }}</span></div>
+            <span class="pv-st">{{ ROTULO[c.status] }}</span></div>
+        {% if c.dados.reprovado and c.status == 'RASCUNHO' %}<div style="background:#fef2f2;color:#991b1b;padding:10px 18px;font-size:13px;"><i class="fas fa-rotate-left"></i> <b>Devolvido por {{ c.dados.reprovado.por }}</b>{% if c.dados.reprovado.motivo %}: “{{ c.dados.reprovado.motivo }}”{% endif %} — acerte e mande de novo para aprovação.</div>{% endif %}
+        {% if c.dados.aprovacao %}<div style="background:#f0fdf4;color:#166534;padding:10px 18px;font-size:13px;"><i class="fas fa-circle-check"></i> <b>Aprovado por {{ c.dados.aprovacao.nome }}</b> em {{ c.dados.aprovacao.em[8:10] }}/{{ c.dados.aprovacao.em[5:7] }} {{ c.dados.aprovacao.em[11:16] }}{% if c.dados.aprovacao.honorarios_criados %} · o honorário passou a valer{% endif %}{% for a in c.dados.aprovacao.avisos or [] %}<br><small>{{ a }}</small>{% endfor %}</div>{% endif %}
         {% set d = c.dados %}
         <div class="pv-res">
             <div><div class="l">Contratante</div><div class="v">{{ emp.razao }}{% if d.empresas | length > 1 %} <small>+ {{ d.empresas | length - 1 }}</small>{% endif %}</div><small>assina: {{ emp.rep_nome }}</small></div>
@@ -64,14 +66,28 @@
         </div>
         <div class="pv-card">
             <div class="pv-body pv-acoes">
-                {% if c.status == 'RASCUNHO' %}
+                {% if c.status == 'RASCUNHO' and (meu or aprov) %}
                 <a class="btn btn-outline" href="{{ url_for('financeiro.contrato_editar', cid=c.id) }}"><i class="fas fa-pen"></i> Editar rascunho</a>
-                <form method="POST" action="{{ url_for('financeiro.contrato_enviar', cid=c.id) }}" onsubmit="return confirm('Enviar para assinatura? Cada pessoa recebe o link por e-mail e o PDF fica congelado.');"><button class="btn btn-primary" style="width:100%;" type="submit"><i class="fas fa-paper-plane"></i> Enviar para assinatura</button></form>
-                {% elif c.status == 'ENVIADO' %}
+                {% if aprov %}
+                <form method="POST" action="{{ url_for('financeiro.contrato_aprovar', cid=c.id) }}" onsubmit="return confirm('Aprovar? O honorário passa a valer a partir do início do contrato.');"><button class="btn btn-primary" style="width:100%;" type="submit"><i class="fas fa-check"></i> Aprovar (honorário passa a valer)</button></form>
+                <form method="POST" action="{{ url_for('financeiro.contrato_enviar', cid=c.id) }}" onsubmit="return confirm('Enviar para assinatura sem aprovar? O honorário NÃO é criado. Cada pessoa recebe o link por e-mail e o PDF fica congelado.');"><button class="btn btn-outline" style="width:100%;" type="submit"><i class="fas fa-paper-plane"></i> Só enviar para assinatura</button></form>
+                {% else %}
+                <form method="POST" action="{{ url_for('financeiro.contrato_pedir_aprovacao', cid=c.id) }}" onsubmit="return confirm('Mandar para o Anderson ou a Alessandra aprovarem?');"><button class="btn btn-primary" style="width:100%;" type="submit"><i class="fas fa-paper-plane"></i> Enviar para aprovação</button></form>
+                {% endif %}
+                {% elif c.status == 'APROVACAO' %}
+                {% if aprov %}
+                <form method="POST" action="{{ url_for('financeiro.contrato_aprovar', cid=c.id) }}" onsubmit="return confirm('Aprovar? O honorário passa a valer a partir do início do contrato.');"><button class="btn btn-primary" style="width:100%;" type="submit"><i class="fas fa-check"></i> Aprovar (honorário passa a valer)</button></form>
+                <form method="POST" action="{{ url_for('financeiro.contrato_reprovar', cid=c.id) }}" onsubmit="var m = prompt('O que precisa acertar? (vai para quem montou)'); if (m === null) return false; this.motivo.value = m; return true;"><input type="hidden" name="motivo"><button class="btn btn-outline" style="width:100%;" type="submit"><i class="fas fa-rotate-left"></i> Devolver para acertar</button></form>
+                {% else %}
+                <div class="pv-info"><b>Aguardando aprovação</b> do Anderson ou da Alessandra. Aprovado, aparece aqui o botão para enviar ao cliente.</div>
+                {% endif %}
+                {% elif c.status == 'APROVADO' and (meu or aprov) %}
+                <form method="POST" action="{{ url_for('financeiro.contrato_enviar', cid=c.id) }}" onsubmit="return confirm('Enviar para assinatura? Cada pessoa recebe o link por e-mail e o PDF fica congelado.');"><button class="btn btn-primary" style="width:100%;" type="submit"><i class="fas fa-paper-plane"></i> Enviar para o cliente assinar</button></form>
+                {% elif c.status == 'ENVIADO' and (meu or aprov) %}
                 <form method="POST" action="{{ url_for('financeiro.contrato_enviar', cid=c.id) }}"><button class="btn btn-outline" style="width:100%;" type="submit"><i class="fas fa-envelope"></i> Reenviar e-mail a quem falta</button></form>
                 {% endif %}
                 <a class="btn btn-outline" href="{{ url_for('financeiro.contrato_pdf', cid=c.id) }}" target="_blank"><i class="fas fa-file-pdf"></i> Abrir PDF</a>
-                {% if c.status in ('RASCUNHO', 'ENVIADO') %}
+                {% if (c.status in ('RASCUNHO', 'APROVACAO') and (meu or aprov)) or (c.status in ('APROVADO', 'ENVIADO') and aprov) %}
                 <form method="POST" action="{{ url_for('financeiro.contrato_cancelar', cid=c.id) }}" onsubmit="return confirm('Cancelar este contrato? Os links de assinatura param de funcionar.');"><button class="btn btn-secondary" style="width:100%;" type="submit"><i class="fas fa-ban"></i> Cancelar contrato</button></form>
                 {% endif %}
                 <div class="pv-info">

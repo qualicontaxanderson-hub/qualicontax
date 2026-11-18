@@ -18,7 +18,7 @@ from models.prest_contrato import (AREAS, QUALICONTAX, SIGNATARIOS_QUALICONTAX, 
 from routes.financeiro import financeiro
 from utils import email_envio
 from utils.atividade import registrar
-from utils.auth_helper import admin_required
+from utils.auth_helper import admin_required, permission_required  # noqa: F401 (admin_required: compat)
 from utils.formatters import format_cnpj, format_cpf
 from utils.db_helper import execute_query
 from utils.prest_contrato_pdf import gerar_pdf, sha256
@@ -153,6 +153,99 @@ def _guardar_contato(dados, f):
         logger.warning('[contratos] não guardou o contato: %s', ex)
 
 
+# ── Contrato montado pela EQUIPE, com aprovação (18/11/2026) ─────────────────────────────────────────────
+# Anderson: "sobre os Honorários ele e alguns terão acesso mas seria mediante o Contrato de Prestação de Serviços...
+# com o Contrato apareceria para a Aprovação"; "Na nossa aprovação" o honorário passa a valer; "A equipe... verá só
+# o que estiver na Comissão ou nos Lançamentos, tipo o Guilherme consegue ver os Ativos e os Cancelados e Inativados".
+# Fluxo: RASCUNHO → (equipe) Enviar para aprovação → APROVACAO → (Anderson/Alessandra) Aprovar → APROVADO, e o
+# honorário (fin_contratos) nasce ATIVO → Enviar para assinatura → ENVIADO → ASSINADO.
+MONTAR = 'financeiro.contratos.montar'
+APROVAR = 'financeiro.lancamentos.aprovar'
+ROTULO = {'RASCUNHO': 'Rascunho', 'APROVACAO': 'Aguardando aprovação', 'APROVADO': 'Aprovado · pronto para enviar',
+          'ENVIADO': 'Aguardando assinatura', 'ASSINADO': 'Assinado', 'CANCELADO': 'Cancelado'}
+
+
+def _aprovador():
+    return current_user.is_admin() or current_user.has_permission(APROVAR)
+
+
+def _escopo():
+    """Empresas que a pessoa (que não aprova) enxerga: as dos lançamentos dela e as da carteira (qualquer situação)."""
+    rows = execute_query(
+        """SELECT cliente_id FROM fin_lancamentos WHERE lancado_por = %s AND cliente_id IS NOT NULL
+           UNION SELECT cliente_id FROM fin_comissao_acordos WHERE usuario_id = %s AND cliente_id IS NOT NULL""",
+        (current_user.id, current_user.id), fetch=True) or []
+    return {r['cliente_id'] for r in rows}
+
+
+def _ve(c, escopo=None):
+    """A pessoa pode ver este contrato? Quem aprova vê todos; a equipe, os que montou e os das empresas do escopo."""
+    if not c:
+        return False
+    if _aprovador() or c.get('criado_por') == current_user.id:
+        return True
+    escopo = _escopo() if escopo is None else escopo
+    ids = {c['cliente_id']} | {e.get('cliente_id') for e in ((c.get('dados') or {}).get('empresas') or [])}
+    return bool(ids & escopo)
+
+
+def _so_meu_ou_aprov(c):
+    if not c or not (_aprovador() or c.get('criado_por') == current_user.id):
+        abort(404)
+
+
+def _avisar_aprovadores(c):
+    try:
+        rows = execute_query(
+            """SELECT DISTINCT u.email FROM usuarios u WHERE u.email LIKE '%%@%%' AND (u.tipo_usuario = 'ADMIN'
+                  OR u.id IN (SELECT usuario_id FROM usuario_permissoes_extra WHERE permissao_codigo = %s))""",
+            (APROVAR,), fetch=True) or []
+        emp = c['dados']['empresas'][0]['razao']
+        link = url_for('financeiro.contrato_ver', cid=c['id'], _external=True)
+        html = ('<p><b>%s</b> montou o contrato de prestação de serviços de <b>%s</b> (honorários de %s por mês) e pediu a sua aprovação.</p>'
+                '<p><a href="%s" style="background:#15803d;color:#fff;padding:10px 18px;border-radius:8px;text-decoration:none;">Conferir e aprovar</a></p>'
+                % (_esc_html(getattr(current_user, 'nome', '')), _esc_html(emp), brl(c['dados'].get('valor')), link))
+        _enviar([r['email'] for r in rows], 'Contrato para aprovar – %s' % emp, html,
+                '%s pediu a aprovação do contrato de %s. Abra: %s' % (getattr(current_user, 'nome', ''), emp, link))
+    except Exception:
+        logger.exception('[contratos] aviso de aprovação')
+
+
+_DECIMO = {'COBRADO': 'DUAS', 'UNICA': 'UNICA', 'ISENTO': 'NENHUM'}
+
+
+def _honorario_do_contrato(c, aprovado_por):
+    """Na APROVAÇÃO o honorário passa a valer: cria o contrato de honorários (fin_contratos) ATIVO de cada empresa
+    que ainda não tem um vigente. Quem já tem fica como está (devolve o aviso). Devolve (criados, avisos)."""
+    from models.fin_contrato import REAJUSTE_TIPOS
+    d = c['dados']
+    try:
+        inicio = date.fromisoformat((d.get('inicio') or '')[:10])
+    except ValueError:
+        inicio = date.today()
+    reaj = d.get('reajuste_tipo') if d.get('reajuste_tipo') in REAJUSTE_TIPOS else 'SALARIO_MINIMO'
+    empresas = d.get('empresas') or []
+    if d.get('valores_por_empresa'):
+        alvos = [(e['cliente_id'], e.get('valor') or '0', e['razao']) for e in empresas]
+    else:
+        alvos = [(empresas[0]['cliente_id'], d.get('valor'), empresas[0]['razao'])]
+    criados, avisos = [], []
+    for cid, valor, razao in alvos:
+        if not valor or float(valor) <= 0:
+            avisos.append('%s: sem valor no contrato, honorário não criado' % razao); continue
+        vig = FinContrato.por_cliente(cid)
+        if vig:
+            avisos.append('%s já tinha honorário vigente de %s: ficou como estava (mude em Honorários, se precisar)' % (razao, brl(vig[0]['valor'])))
+            continue
+        fid = FinContrato.criar(cid, valor, int(d.get('dia_vencimento') or 10), inicio,
+                                [{'descricao': 'Honorários contábeis', 'valor': valor}],
+                                decimo_tipo=_DECIMO.get(d.get('decimo'), 'DUAS'), reajuste_tipo=reaj,
+                                reajuste_obs=d.get('reajuste_indice'), criado_por=c['criado_por'], aprovado_por=aprovado_por,
+                                observacao='Do contrato de prestação nº %s, aprovado no sistema' % (c.get('numero') or c['id']))
+        criados.append(fid)
+    return criados, avisos
+
+
 def _form_ctx(cliente_id=None, fin_contrato_id=None, contrato=None):
     """O que a tela do formulário precisa: empresa(s), sócios, honorários, testemunhas, signatários da Qualicontax."""
     d = (contrato or {}).get('dados') or {}
@@ -166,6 +259,8 @@ def _form_ctx(cliente_id=None, fin_contrato_id=None, contrato=None):
         fin = FinContrato.get(fin_contrato_id)
     elif emp and not contrato:
         fin = (FinContrato.por_cliente(emp['id']) or [None])[0]
+    if fin and not _aprovador() and emp and emp['id'] not in _escopo():
+        fin = None                     # honorário de empresa fora dos lançamentos/carteira da pessoa: não mostra
     if fin:
         fin['itens'] = FinContrato.itens(fin['id'])
     return {'emp': emp, 'fin': fin, 'dados': d, 'contrato': contrato, 'AREAS': AREAS, 'SIGN_Q': PrestContrato.signatarios_qualicontax(),
@@ -175,24 +270,36 @@ def _form_ctx(cliente_id=None, fin_contrato_id=None, contrato=None):
 
 # ---------------------------------------------------------------- telas internas
 @financeiro.route('/financeiro/contratos')
-@admin_required
+@permission_required(MONTAR)
 def contratos():
-    aba = request.args.get('aba') or 'todos'
-    lista = PrestContrato.listar(status=None if aba == 'todos' else aba.upper())
-    res = {s: 0 for s in ('RASCUNHO', 'ENVIADO', 'ASSINADO', 'CANCELADO')}
-    for r in PrestContrato.listar():
+    aba = request.args.get('aba') or ('aprovacao' if _aprovador() and execute_query(
+        "SELECT 1 FROM prest_contratos WHERE status = 'APROVACAO' LIMIT 1", fetch=True) else 'todos')
+    aprov = _aprovador()
+    escopo = None if aprov else _escopo()
+    todos = PrestContrato.listar()
+    if not aprov:
+        todos = [r for r in todos if r.get('criado_por') == current_user.id or r['cliente_id'] in escopo
+                 or (escopo & set(r.get('empresas_ids') or []))]
+    lista = [r for r in todos if aba == 'todos' or r['status'] == aba.upper()]
+    res = {s: 0 for s in ROTULO}
+    for r in todos:
         res[r['status']] = res.get(r['status'], 0) + 1
     pr = PrestContrato.prontas()
+    if not aprov:
+        for s in pr['lista']:
+            if s['id'] not in escopo:
+                s['valor'] = None          # honorário de empresa fora do escopo não aparece
     for s in pr['lista']:
         d = ''.join(ch for ch in (s['cpf_cnpj'] or '') if ch.isdigit())
         s['doc'] = format_cnpj(d) if len(d) == 14 else (format_cpf(d) if len(d) == 11 else (s['cpf_cnpj'] or ''))
     grupos = sorted({s['grupo'] for s in pr['lista'] if s['grupo']})
     return render_template('financeiro/contratos.html', aba=aba, lista=lista, res=res, prontas=pr['lista'], grupos=grupos,
+                           ROTULO=ROTULO, aprov=aprov,
                            pend_empresas=pr['pendentes_empresas'], pend_avulsos=pr['pendentes_avulsos'], hoje=date.today())
 
 
 @financeiro.route('/financeiro/contratos/novo')
-@admin_required
+@permission_required(MONTAR)
 def contrato_novo():
     """Só a partir de um cadastro completo: sem cliente_id, ou com pendência em A CADASTRAR, volta para a lista."""
     cid = request.args.get('cliente_id', type=int)
@@ -209,9 +316,10 @@ def contrato_novo():
 
 
 @financeiro.route('/financeiro/contratos/<int:cid>/editar')
-@admin_required
+@permission_required(MONTAR)
 def contrato_editar(cid):
     c = PrestContrato.get(cid)
+    _so_meu_ou_aprov(c)
     if not c or c['status'] != 'RASCUNHO':
         flash('Só rascunho pode ser editado.', 'warning')
         return redirect(url_for('financeiro.contrato_ver', cid=cid))
@@ -219,7 +327,7 @@ def contrato_editar(cid):
 
 
 @financeiro.route('/financeiro/contratos/salvar', methods=['POST'])
-@admin_required
+@permission_required(MONTAR)
 def contrato_salvar():
     f = request.form
     cid = f.get('contrato_id', type=int)
@@ -227,13 +335,14 @@ def contrato_salvar():
         dados = _ler_form(f)
         _guardar_contato(dados, f)
         if cid:
+            _so_meu_ou_aprov(PrestContrato.get(cid))
             PrestContrato.atualizar(cid, dados)
             registrar('escrita.alterou_contrato_prestacao', 'financeiro', tabela='prest_contratos', registro_id=cid, depois={'empresa': dados['empresas'][0]['razao']})
         else:
             cid = PrestContrato.criar(dados['empresas'][0]['cliente_id'], dados, current_user.id, fin_contrato_id=f.get('fin_contrato_id', type=int))
             registrar('escrita.criou_contrato_prestacao', 'financeiro', tabela='prest_contratos', registro_id=cid,
                       depois={'empresa': dados['empresas'][0]['razao'], 'valor': dados['valor'], 'areas': dados['areas']})
-        flash('Rascunho salvo. Confira o PDF e envie para assinatura.', 'success')
+        flash('Rascunho salvo. Confira o PDF e %s.' % ('envie para assinatura' if _aprovador() else 'envie para aprovação'), 'success')
         return redirect(url_for('financeiro.contrato_ver', cid=cid))
     except ValueError as e:
         flash(str(e), 'danger')
@@ -241,15 +350,16 @@ def contrato_salvar():
 
 
 @financeiro.route('/financeiro/contratos/<int:cid>')
-@admin_required
+@permission_required(MONTAR)
 def contrato_ver(cid):
     c = PrestContrato.get(cid)
-    if not c:
+    if not _ve(c):
         abort(404)
     ass = PrestContrato.assinantes(cid)
     for a in ass:
         a['link'] = url_for('assinatura.assinar', token=a['token'], _external=True)
-    return render_template('financeiro/contrato_ver.html', c=c, assinantes=ass, montado=PrestContrato.montar(c['dados']), hoje=date.today(), AREAS=AREAS, brl=brl)
+    return render_template('financeiro/contrato_ver.html', c=c, assinantes=ass, ROTULO=ROTULO, aprov=_aprovador(),
+                           meu=c.get('criado_por') == current_user.id, montado=PrestContrato.montar(c['dados']), hoje=date.today(), AREAS=AREAS, brl=brl)
 
 
 def _pdf_bytes(c):
@@ -262,10 +372,10 @@ def _pdf_bytes(c):
 
 
 @financeiro.route('/financeiro/contratos/<int:cid>/pdf')
-@admin_required
+@permission_required(MONTAR)
 def contrato_pdf(cid):
     c = PrestContrato.get(cid)
-    if not c:
+    if not _ve(c):
         abort(404)
     b = _pdf_bytes(c)
     return Response(b, mimetype='application/pdf', headers={'Content-Disposition': 'inline; filename="contrato_%s.pdf"' % (c.get('numero') or cid)})
@@ -287,18 +397,19 @@ def _email_assinatura(a, c, link):
 
 
 @financeiro.route('/financeiro/contratos/<int:cid>/enviar', methods=['POST'])
-@admin_required
+@permission_required(MONTAR)
 def contrato_enviar(cid):
     c = PrestContrato.get(cid)
-    if not c or c['status'] not in ('RASCUNHO', 'ENVIADO'):
-        flash('Este contrato não pode ser enviado.', 'warning')
+    _so_meu_ou_aprov(c)
+    if not c or c['status'] not in ('RASCUNHO', 'APROVADO', 'ENVIADO') or (c['status'] == 'RASCUNHO' and not _aprovador()):
+        flash('Este contrato não pode ser enviado%s.' % (' antes de aprovado' if c and c['status'] in ('RASCUNHO', 'APROVACAO') else ''), 'warning')
         return redirect(url_for('financeiro.contrato_ver', cid=cid))
     ass = PrestContrato.assinantes(cid)
     sem_email = [a['nome'] for a in ass if not a.get('email')]
     if sem_email:
         flash('Sem e-mail: %s. Todo mundo que assina precisa de e-mail.' % ', '.join(sem_email), 'danger')
         return redirect(url_for('financeiro.contrato_ver', cid=cid))
-    if c['status'] == 'RASCUNHO':
+    if c['status'] in ('RASCUNHO', 'APROVADO'):
         c['dados']['data_assinatura'] = date.today().isoformat()      # a data do fecho congela no envio
         execute_query('UPDATE prest_contratos SET dados = %s WHERE id = %s', (__import__('json').dumps(c['dados'], ensure_ascii=False), cid), fetch=False)
         c = PrestContrato.get(cid)
@@ -321,15 +432,80 @@ def contrato_enviar(cid):
 
 
 @financeiro.route('/financeiro/contratos/<int:cid>/cancelar', methods=['POST'])
-@admin_required
+@permission_required(MONTAR)
 def contrato_cancelar(cid):
     c = PrestContrato.get(cid)
+    _so_meu_ou_aprov(c)
+    if c['status'] in ('APROVADO', 'ENVIADO') and not _aprovador():
+        flash('Contrato já aprovado: só o Anderson ou a Alessandra cancelam.', 'warning')
+        return redirect(url_for('financeiro.contrato_ver', cid=cid))
     if not c or c['status'] == 'ASSINADO':
         flash('Contrato assinado não se cancela aqui: faça um distrato ou adendo.', 'warning')
         return redirect(url_for('financeiro.contrato_ver', cid=cid))
     PrestContrato.mudar_status(cid, 'CANCELADO')
     registrar('escrita.cancelou_contrato_prestacao', 'financeiro', tabela='prest_contratos', registro_id=cid, antes={'status': c['status']}, depois={'status': 'CANCELADO'})
     flash('Contrato cancelado.', 'info')
+    return redirect(url_for('financeiro.contratos'))
+
+
+@financeiro.route('/financeiro/contratos/<int:cid>/pedir-aprovacao', methods=['POST'])
+@permission_required(MONTAR)
+def contrato_pedir_aprovacao(cid):
+    c = PrestContrato.get(cid)
+    _so_meu_ou_aprov(c)
+    if c['status'] != 'RASCUNHO':
+        flash('Só rascunho vai para aprovação.', 'warning')
+        return redirect(url_for('financeiro.contrato_ver', cid=cid))
+    c['dados'].pop('reprovado', None)
+    c['dados']['pedido_aprovacao'] = {'por': current_user.id, 'nome': getattr(current_user, 'nome', ''), 'em': datetime.now().isoformat(timespec='minutes')}
+    execute_query('UPDATE prest_contratos SET dados = %s WHERE id = %s', (__import__('json').dumps(c['dados'], ensure_ascii=False), cid), fetch=False)
+    PrestContrato.mudar_status(cid, 'APROVACAO')
+    registrar('escrita.pediu_aprovacao_contrato', 'financeiro', tabela='prest_contratos', registro_id=cid,
+              depois={'empresa': c['dados']['empresas'][0]['razao'], 'valor': c['dados'].get('valor')})
+    _avisar_aprovadores(PrestContrato.get(cid))
+    flash('Enviado para aprovação. Anderson ou Alessandra conferem; aprovado, você envia para o cliente assinar.', 'success')
+    return redirect(url_for('financeiro.contrato_ver', cid=cid))
+
+
+@financeiro.route('/financeiro/contratos/<int:cid>/aprovar', methods=['POST'])
+@permission_required(APROVAR)
+def contrato_aprovar(cid):
+    """Aprovar: o honorário passa a valer (Anderson, 18/11/2026: "Na nossa aprovação, a aprovação ela tem a presunção
+    para conferirmos se não está errado")."""
+    c = PrestContrato.get(cid)
+    if not c or c['status'] not in ('APROVACAO', 'RASCUNHO'):
+        flash('Só contrato em rascunho ou aguardando aprovação pode ser aprovado.', 'warning')
+        return redirect(url_for('financeiro.contrato_ver', cid=cid))
+    try:
+        criados, avisos = _honorario_do_contrato(c, current_user.id)
+    except ValueError as e:
+        flash('Não aprovei: %s' % e, 'danger')
+        return redirect(url_for('financeiro.contrato_ver', cid=cid))
+    c['dados']['aprovacao'] = {'por': current_user.id, 'nome': getattr(current_user, 'nome', ''), 'em': datetime.now().isoformat(timespec='minutes'),
+                               'honorarios_criados': criados, 'avisos': avisos}
+    execute_query('UPDATE prest_contratos SET dados = %s, fin_contrato_id = COALESCE(fin_contrato_id, %s) WHERE id = %s',
+                  (__import__('json').dumps(c['dados'], ensure_ascii=False), criados[0] if criados else None, cid), fetch=False)
+    PrestContrato.mudar_status(cid, 'APROVADO')
+    registrar('escrita.aprovou_contrato_prestacao', 'financeiro', tabela='prest_contratos', registro_id=cid,
+              depois={'empresa': c['dados']['empresas'][0]['razao'], 'valor': c['dados'].get('valor'), 'honorarios_criados': criados, 'avisos': avisos})
+    flash('Contrato aprovado.%s%s Agora é enviar para o cliente assinar.' % (
+        (' Honorário passou a valer (%d).' % len(criados)) if criados else '', (' ' + '; '.join(avisos) + '.') if avisos else ''), 'success')
+    return redirect(url_for('financeiro.contrato_ver', cid=cid))
+
+
+@financeiro.route('/financeiro/contratos/<int:cid>/reprovar', methods=['POST'])
+@permission_required(APROVAR)
+def contrato_reprovar(cid):
+    c = PrestContrato.get(cid)
+    if not c or c['status'] != 'APROVACAO':
+        flash('Só contrato aguardando aprovação pode ser devolvido.', 'warning')
+        return redirect(url_for('financeiro.contrato_ver', cid=cid))
+    motivo = (request.form.get('motivo') or '').strip()[:500]
+    c['dados']['reprovado'] = {'por': getattr(current_user, 'nome', ''), 'em': datetime.now().isoformat(timespec='minutes'), 'motivo': motivo}
+    execute_query('UPDATE prest_contratos SET dados = %s WHERE id = %s', (__import__('json').dumps(c['dados'], ensure_ascii=False), cid), fetch=False)
+    PrestContrato.mudar_status(cid, 'RASCUNHO')
+    registrar('escrita.devolveu_contrato_prestacao', 'financeiro', tabela='prest_contratos', registro_id=cid, depois={'motivo': motivo})
+    flash('Devolvido para quem montou, com o motivo. Ele acerta e manda de novo.', 'info')
     return redirect(url_for('financeiro.contratos'))
 
 

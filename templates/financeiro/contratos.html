@@ -65,6 +65,7 @@
 .pc-sem-pe { padding:8px 18px 12px; font-size:12px; color:#7d968a; display:flex; justify-content:space-between; gap:10px; flex-wrap:wrap; }
 .pc-sem-pe a { color:#15803d; }
 @media (max-width:900px) { .gc-grid, .pc-sem-grid { grid-template-columns:1fr; } .pc-busca, .pc-sem-h .pc-busca { margin-left:0; width:100%; min-width:0; } .pc-filtros select { margin-left:0; width:100%; max-width:none; } }
+.pc-st.APROVACAO { background:#fef3c7 !important; color:#b45309 !important; } .pc-st.APROVADO { background:#dcfce7 !important; color:#15803d !important; }
 </style>
 {% endblock %}
 
@@ -78,7 +79,7 @@
 
 <div class="pc-barra">
     <div class="pc-abas fin-abas-claras">
-    {% for k, rot in (('todos', 'Todos'), ('rascunho', 'Rascunhos'), ('enviado', 'Aguardando assinatura'), ('assinado', 'Assinados'), ('cancelado', 'Cancelados')) %}
+    {% for k, rot in (('todos', 'Todos'), ('rascunho', 'Rascunhos'), ('aprovacao', 'Para aprovar' if aprov else 'Aguardando aprovação'), ('aprovado', 'Aprovados'), ('enviado', 'Aguardando assinatura'), ('assinado', 'Assinados'), ('cancelado', 'Cancelados')) %}
         <a class="fin-chip {{ 'ativo' if aba == k }}" href="{{ url_for('financeiro.contratos', aba=k) }}">{{ rot }}{% if k != 'todos' %} <strong>{{ res.get(k.upper(), 0) }}</strong>{% else %} <strong>{{ res.values() | sum }}</strong>{% endif %}</a>
     {% endfor %}
     </div>
@@ -92,13 +93,13 @@
         <header class="gc-head">
             <span class="gc-ava {% if not c.numero_cliente %}pf{% endif %}">{{ c.numero_cliente or 'PF' }}</span>
             <div class="gc-tit"><h3 title="{{ c.nome_razao_social }}">{{ c.nome_razao_social }}{% if c.n_empresas > 1 %} +{{ c.n_empresas - 1 }}{% endif %}</h3><small>{{ c.numero or ('nº ' ~ c.id) }} · {{ c.titulo | title }} · {{ c.criado_em.strftime('%d/%m/%Y') }}{% if c.criado_por_nome %} · {{ c.criado_por_nome.split()[0] }}{% endif %}</small></div>
-            <span class="pc-st {{ c.status }}">{{ {'RASCUNHO': 'Rascunho', 'ENVIADO': 'Aguardando', 'ASSINADO': 'Assinado', 'CANCELADO': 'Cancelado'}[c.status] }}</span>
+            <span class="pc-st {{ c.status }}">{{ {'RASCUNHO': 'Rascunho', 'APROVACAO': 'Para aprovar' if aprov else 'Em aprovação', 'APROVADO': 'Aprovado', 'ENVIADO': 'Aguardando', 'ASSINADO': 'Assinado', 'CANCELADO': 'Cancelado'}[c.status] }}</span>
         </header>
         {% if c.status in ('ENVIADO', 'ASSINADO') %}
         <div class="pc-prog"><i style="width:{{ (100 * c.n_assinados / c.n_assinantes) if c.n_assinantes else 0 }}%"></i></div>
         <div class="pc-pe"><span>assinaturas <b>{{ c.n_assinados }}/{{ c.n_assinantes }}</b></span><span>{% if c.assinado_em %}assinado em <b>{{ c.assinado_em.strftime('%d/%m/%Y') }}</b>{% elif c.enviado_em %}enviado em <b>{{ c.enviado_em.strftime('%d/%m/%Y') }}</b>{% endif %}</span></div>
         {% else %}
-        <div class="pc-pe"><span>{{ c.n_assinantes }} assinantes</span><span>{% if c.status == 'RASCUNHO' %}confira o PDF e envie{% endif %}</span></div>
+        <div class="pc-pe"><span>{{ c.n_assinantes }} assinantes · montou {{ (c.criado_por_nome or '').split()[0] }}</span><span>{% if c.status == 'RASCUNHO' %}confira o PDF e {{ 'envie' if aprov else 'mande para aprovação' }}{% elif c.status == 'APROVACAO' %}<b style="color:#b45309">{{ 'confira e aprove' if aprov else 'com Anderson/Alessandra' }}</b>{% elif c.status == 'APROVADO' %}<b style="color:#15803d">aprovado · envie para assinar</b>{% endif %}</span></div>
         {% endif %}
     </article>
 {% endfor %}
@@ -107,7 +108,7 @@
 {% else %}
 <div class="pc-vazio">
     <div class="ico"><i class="fas fa-file-signature"></i></div>
-    <h3>{% if aba == 'todos' %}Nenhum contrato montado ainda{% else %}Nenhum contrato {{ {'rascunho': 'em rascunho', 'enviado': 'aguardando assinatura', 'assinado': 'assinado', 'cancelado': 'cancelado'}.get(aba, '') }}{% endif %}</h3>
+    <h3>{% if aba == 'todos' %}Nenhum contrato montado ainda{% else %}Nenhum contrato {{ {'rascunho': 'em rascunho', 'aprovacao': 'aguardando aprovação', 'aprovado': 'aprovado esperando envio', 'enviado': 'aguardando assinatura', 'assinado': 'assinado', 'cancelado': 'cancelado'}.get(aba, '') }}{% endif %}</h3>
     <p>Escolha uma empresa pronta na lista abaixo e clique em Montar: o contrato nasce com os dados do cadastro e dos honorários, você confere o PDF e envia para assinatura.</p>
     <a class="btn btn-primary" href="#pc-prontas" onclick="pcIrProntas(); return false;"><i class="fas fa-building"></i> Escolher empresa</a>
 </div>
@@ -130,8 +131,8 @@
         <span class="fc ativo" data-f="">Todas<b>{{ prontas | length }}</b></span>
         <span class="fc" data-f="tipo=cliente">Clientes<b>{{ n_cli }}</b></span>
         <span class="fc" data-f="tipo=avulso">Avulsos<b>{{ n_av }}</b></span>
-        <span class="fc" data-f="hon=1">Com honorários<b>{{ n_hon }}</b></span>
-        <span class="fc" data-f="hon=0">Sem honorários<b>{{ prontas | length - n_hon }}</b></span>
+        {% if aprov %}<span class="fc" data-f="hon=1">Com honorários<b>{{ n_hon }}</b></span>
+        <span class="fc" data-f="hon=0">Sem honorários<b>{{ prontas | length - n_hon }}</b></span>{% endif %}
         {% if n_ra %}<span class="fc" data-f="rasc=1">Com rascunho<b>{{ n_ra }}</b></span>{% endif %}
         {% if grupos %}<select id="pc-grupo"><option value="">todos os grupos</option>{% for g in grupos %}<option value="{{ g | lower }}">{{ g }}</option>{% endfor %}<option value="__sem__">sem grupo</option></select>{% endif %}
         <span class="lim" id="pc-limpar" style="display:none;">limpar</span>
@@ -144,7 +145,7 @@
             <div class="h"><span class="n {% if s.avulso %}av{% elif s.tipo_pessoa == 'PF' %}pf{% endif %}">{{ s.numero_cliente or ('AV' if s.avulso else 'PF') }}</span>
                 <span class="t"><b title="{{ s.nome_razao_social }}">{{ s.nome_razao_social }}</b><small>{{ s.doc }}{% if s.nome_fantasia and s.nome_fantasia | lower != s.nome_razao_social | lower %} · {{ s.nome_fantasia }}{% endif %}{% if s.cidade %} · {{ s.cidade }}{% if s.uf %}/{{ s.uf }}{% endif %}{% endif %}</small></span></div>
             <div class="pe">
-                {% if s.valor %}<span class="val">R$ {{ '{:,.2f}'.format(s.valor).replace(',', 'X').replace('.', ',').replace('X', '.') }} <small>/ mês</small></span>{% else %}<span class="val sem"><i class="fas fa-triangle-exclamation"></i> sem honorários cadastrados</span>{% endif %}
+                {% if not aprov and not s.valor %}<span class="val" style="color:#94a3b8;font-weight:600;font-size:12px">honorário no contrato</span>{% elif s.valor %}<span class="val">R$ {{ '{:,.2f}'.format(s.valor).replace(',', 'X').replace('.', ',').replace('X', '.') }} <small>/ mês</small></span>{% else %}<span class="val sem"><i class="fas fa-triangle-exclamation"></i> sem honorários cadastrados</span>{% endif %}
                 <span class="pills">{% if s.avulso %}<span class="gr tp">avulso</span>{% endif %}{% if s.n_rascunhos %}<span class="gr ra">rascunho</span>{% endif %}{% if s.grupo %}<span class="gr">{{ s.grupo }}</span>{% else %}<span class="gr sem">sem grupo</span>{% endif %}</span>
                 <a class="btn btn-primary btn-sm" href="{{ url_for('financeiro.contrato_novo', cliente_id=s.id) }}" onclick="event.stopPropagation();"><i class="fas fa-file-signature"></i> Montar</a></div>
         </article>
