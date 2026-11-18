@@ -205,9 +205,11 @@ def nfse_emitidas():
         if not dias or dias[-1][0] != d:
             dias.append((d, []))
         dias[-1][1].append(n)
+    from routes.qrobo import csrf_token
     ctx = hub_ctx('emitidas', cid)
     return render_template('escrita_fiscal/nfse_emitidas.html', dias=dias, total=len(notas), n_testes=n_testes,
-                           testes=testes, situacao=situacao, busca=busca,
+                           testes=testes, situacao=situacao, busca=busca, csrf=csrf_token(),
+                           n_autorizadas=sum(1 for x in notas if x['situacao'] == 'autorizada' and x.get('chave_acesso')),
                            mes=mes, resumo=NfseEmitida.resumo(ids) if ids else {}, SITUACOES=SITUACOES,
                            nomes={e['id']: e for e in ctx['hub_empresas']}, **ctx)
 
@@ -518,4 +520,84 @@ def nfse_nota_cancelar(nota_id):
               depois={'chave': n.get('chave_acesso'), 'protocolo': linha.get('cancelamento_protocolo'),
                       'motivo': linha.get('cancelamento_motivo'), 'ambiente': n.get('ambiente')})
     flash('Nota cancelada no governo.', 'success')
+    return volta
+
+
+def _registrar_cancelada_fora(x):
+    """Auditoria de uma nota que o governo disse estar cancelada (cancelamento feito fora daqui)."""
+    linha = x.get('linha') or {}
+    registrar('escrita.nfse_cancelada_fora', 'fiscal', tabela='nfse_emitidas', registro_id=linha.get('id'),
+              depois={'chave': linha.get('chave_acesso'), 'protocolo': linha.get('cancelamento_protocolo'),
+                      'motivo': linha.get('cancelamento_motivo'), 'ambiente': linha.get('ambiente')})
+
+
+@escrita_fiscal.route('/nfse-emitir/nota/<int:nota_id>/conferir', methods=['POST'])
+@permission_required(PERM)
+def nfse_nota_conferir(nota_id):
+    """Pergunta ao governo se a nota foi cancelada fora do sistema (pelo portal, por exemplo) e,
+    se foi, passa a cancelada aqui também. Só lê: nada é enviado ao governo."""
+    from utils import nfse_emissor
+    _nota_ou_404(nota_id)
+    volta = redirect(url_for('escrita_fiscal.nfse_nota', nota_id=nota_id))
+    if not _csrf_ok():
+        flash('Formulário expirado. Tente de novo.', 'danger')
+        return volta
+    try:
+        x = nfse_emissor.conferir_cancelamento(nota_id)
+    except Exception as exc:
+        logger.exception('[nfse-fiscal] conferência da nota %s no governo', nota_id)
+        flash(f'Não deu para conferir no governo: {exc}', 'danger')
+        return volta
+    if x['resultado'] == 'cancelada' and not x.get('ja_estava'):
+        _registrar_cancelada_fora(x)
+        flash('O governo confirmou: a nota foi cancelada fora do sistema e agora está cancelada aqui também. '
+              + x['mensagem'], 'warning')
+    elif x['resultado'] == 'vigente':
+        flash(x['mensagem'], 'success')
+    else:
+        flash(x['mensagem'], 'danger' if x['resultado'] == 'falha' else 'info')
+    return volta
+
+
+@escrita_fiscal.route('/nfse-emitir/notas/conferir', methods=['POST'])
+@permission_required(PERM)
+def nfse_emitidas_conferir():
+    """Confere com o governo todas as notas autorizadas da empresa escolhida (ou de todas que a
+    pessoa vê). Nota cancelada pelo portal do governo passa a cancelada aqui."""
+    from utils import nfse_emissor
+    emp_raw = request.form.get('emp', '')
+    cid = int(emp_raw) if emp_raw.isdigit() else None
+    ids = _ids_dos_clientes()
+    if cid:
+        if cid not in ids:
+            abort(404)
+        ids = [cid]
+    volta = redirect(url_for('escrita_fiscal.nfse_emitidas', emp=cid))
+    if not _csrf_ok():
+        flash('Formulário expirado. Tente de novo.', 'danger')
+        return volta
+    if not ids:
+        flash('Nenhuma empresa para conferir.', 'info')
+        return volta
+    try:
+        r = nfse_emissor.conferir_cancelamentos(ids)
+    except Exception as exc:
+        logger.exception('[nfse-fiscal] conferência das notas no governo')
+        flash(f'Não deu para conferir no governo: {exc}', 'danger')
+        return volta
+    for x in r['canceladas']:
+        _registrar_cancelada_fora(x)
+    n = r['conferidas']
+    partes = [f"{n} nota{'' if n == 1 else 's'} autorizada{'' if n == 1 else 's'} conferida{'' if n == 1 else 's'} com o governo."]
+    if r['canceladas']:
+        nums = ', '.join(f"NFS-e {x['linha'].get('numero_nfse')} (série {x['linha'].get('serie')})" for x in r['canceladas'])
+        c = len(r['canceladas'])
+        partes.append(f"{c} estava{'' if c == 1 else 'm'} cancelada{'' if c == 1 else 's'} fora do sistema e agora "
+                      f"aparece{'' if c == 1 else 'm'} como cancelada{'' if c == 1 else 's'} aqui: {nums}.")
+    elif n:
+        partes.append('Todas continuam válidas no governo.')
+    if r['falhas']:
+        f = len(r['falhas'])
+        partes.append(f"{f} não deu para conferir: " + '; '.join(f'nota {i}: {m}' for i, m in r['falhas'][:3]))
+    flash(' '.join(partes), 'warning' if r['canceladas'] else ('danger' if r['falhas'] and not n else 'success'))
     return volta

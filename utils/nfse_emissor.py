@@ -526,7 +526,17 @@ def cancelar_nota(nota_id: int, c_motivo, x_motivo, usuario_id=None) -> dict:
     # (em produção o XML está no Dropbox). O evento vai ao Dropbox em produção e ao log aqui.
     logger.info('[nfse-cancelamento] nota %s: evento %s registrado (%s)', nota_id, r.id_evento, r.dh_proc)
 
-    efeitos = {'titulo': None, 'boleto': None, 'xml_evento_path': caminho}
+    efeitos = _efeitos_cancelamento(n, nota_id)
+    efeitos['xml_evento_path'] = caminho
+    linha = execute_query('SELECT * FROM nfse_emitidas WHERE id = %s', (nota_id,), fetch=True, fetch_one=True)
+    linha['_efeitos'] = efeitos
+    return linha
+
+
+def _efeitos_cancelamento(n, nota_id) -> dict:
+    """O que uma nota cancelada arrasta: o título a receber (se nada foi baixado) e o boleto em
+    aberto. Vale tanto para o cancelamento feito aqui quanto para o descoberto no governo."""
+    efeitos = {'titulo': None, 'boleto': None}
     if n.get('fin_titulo_id'):
         from models.fin_titulo import FinTitulo
         efeitos['titulo'] = 'cancelado' if FinTitulo.cancelar(n['fin_titulo_id']) else 'mantido (já tem baixa)'
@@ -543,9 +553,107 @@ def cancelar_nota(nota_id: int, c_motivo, x_motivo, usuario_id=None) -> dict:
     except Exception as exc:
         logger.warning('[nfse-cancelamento] boleto da nota %s não cancelado: %s', nota_id, exc)
         efeitos['boleto'] = f'NÃO cancelado: {exc}'
+    return efeitos
+
+
+# --- cancelamento feito FORA do sistema (portal do governo) ---------------------
+def conferir_cancelamento(nota_id: int) -> dict:
+    """Pergunta ao Sefin se a nota AUTORIZADA foi cancelada fora daqui (pelo portal do governo,
+    por exemplo). Se foi, marca como cancelada com o motivo, a hora e o protocolo de lá e faz os
+    mesmos efeitos do cancelamento feito aqui (título, boleto, XML do evento no Dropbox).
+    Só lê: nenhum evento é enviado ao governo.
+
+    Devolve {'resultado': 'cancelada' | 'vigente' | 'nao_se_aplica' | 'falha', 'mensagem', 'linha',
+    'ja_estava': bool}. Levanta ``SemCertificado``/``ADNError`` só se nem a sessão abrir.
+    """
+    from utils.integrations.nfse_adn import client as adn, eventos as EV
+    n = execute_query('SELECT * FROM nfse_emitidas WHERE id = %s', (nota_id,), fetch=True, fetch_one=True)
+    if not n:
+        return {'resultado': 'falha', 'mensagem': 'Nota não encontrada.', 'linha': None, 'ja_estava': False}
+    if n['situacao'] == 'cancelada':
+        return {'resultado': 'cancelada', 'mensagem': 'A nota já está cancelada aqui.', 'linha': n, 'ja_estava': True}
+    if n['situacao'] != 'autorizada' or not n.get('chave_acesso') or (n.get('emissor') or 'nacional') != 'nacional':
+        return {'resultado': 'nao_se_aplica', 'linha': n, 'ja_estava': False,
+                'mensagem': 'Só nota autorizada pelo Emissor Nacional pode ser conferida no governo.'}
+    sess = adn.abrir_sessao(adn.resolver_certificado(n['empresa_id']))
+    return _conferir_com_sessao(n, sess)
+
+
+def _conferir_com_sessao(n: dict, sess) -> dict:
+    from utils.integrations.nfse_adn import eventos as EV
+    nota_id, amb = n['id'], int(n['ambiente'] or 1)
+    try:
+        r = EV.consultar(sess, n['chave_acesso'], amb)
+    except Exception as exc:
+        return {'resultado': 'falha', 'mensagem': f'Não deu para falar com o governo: {exc}', 'linha': n, 'ja_estava': False}
+    if not r.ok:
+        sem_evento = r.http == 404 or (r.http == 200 and not (r.bruto or {}).get('eventos'))
+        if sem_evento:
+            return {'resultado': 'vigente', 'mensagem': 'O governo diz que a nota continua válida: não há cancelamento.',
+                    'linha': n, 'ja_estava': False}
+        return {'resultado': 'falha', 'mensagem': f'O governo não respondeu direito: {_texto_erros(r.erros)}',
+                'linha': n, 'ja_estava': False}
+
+    ev = EV.dados_do_evento(r.xml_evento)
+    quando = ev['dh_proc'] or datetime.now(FUSO)
+    if quando.tzinfo is None:
+        quando = quando.replace(tzinfo=FUSO)
+    quando = quando.astimezone(FUSO).replace(microsecond=0)
+    va = (ev['ver_aplic'] or '').strip()
+    origem = 'pelo portal do governo' if va.lower().startswith('emissorweb') else ('por outro sistema' + (f' ({va})' if va else ''))
+    motivo = (f"{EV.MOTIVOS_CANCELAMENTO.get(ev['c_motivo'], 'Cancelamento')}: {ev['x_motivo']} "
+              f"(cancelada {origem}, não por aqui)")[:255]
+    caminho = _arquivar(r.xml_evento, n['empresa_id'], n['chave_acesso'] + '-cancelamento', quando) if amb == 1 else None
+    execute_query(
+        """UPDATE nfse_emitidas SET situacao = 'cancelada', cancelada_em = %s, cancelamento_motivo = %s,
+                  cancelamento_protocolo = %s, erro_ultimo = NULL, atualizado_em = NOW()
+            WHERE id = %s AND situacao = 'autorizada'""",
+        (quando.replace(tzinfo=None), motivo, (r.id_evento or '')[:80], nota_id))
+    logger.warning('[nfse-cancelamento] nota %s estava cancelada FORA do sistema (%s, %s): marcada aqui.',
+                   nota_id, va or 'verAplic vazio', quando.isoformat())
+    efeitos = _efeitos_cancelamento(n, nota_id)
+    efeitos['xml_evento_path'] = caminho
     linha = execute_query('SELECT * FROM nfse_emitidas WHERE id = %s', (nota_id,), fetch=True, fetch_one=True)
     linha['_efeitos'] = efeitos
-    return linha
+    return {'resultado': 'cancelada', 'linha': linha, 'ja_estava': False,
+            'mensagem': f"Cancelada {origem} em {quando:%d/%m/%Y às %H:%M}. Motivo de lá: "
+                        f"{EV.MOTIVOS_CANCELAMENTO.get(ev['c_motivo'], 'Cancelamento')}: {ev['x_motivo']}."}
+
+
+def conferir_cancelamentos(empresa_ids=None, limite=300) -> dict:
+    """Varre as notas AUTORIZADAS do Emissor Nacional e pergunta ao Sefin, uma a uma, se foram
+    canceladas fora daqui. Roda no cron da captura de NFS-e e no botão "Conferir com o governo".
+    Devolve {'conferidas', 'vigentes', 'canceladas': [resultado...], 'falhas': [(nota_id, mensagem)]}."""
+    from utils.integrations.nfse_adn import client as adn
+    sql = ("SELECT * FROM nfse_emitidas WHERE situacao = 'autorizada' AND chave_acesso IS NOT NULL "
+           "AND COALESCE(emissor, 'nacional') = 'nacional'")
+    params = []
+    if empresa_ids:
+        sql += f" AND empresa_id IN ({','.join(['%s'] * len(empresa_ids))})"
+        params = [int(x) for x in empresa_ids]
+    sql += ' ORDER BY empresa_id, id DESC LIMIT %s'
+    params.append(int(limite))
+    notas = execute_query(sql, tuple(params), fetch=True) or []
+    r = {'conferidas': 0, 'vigentes': 0, 'canceladas': [], 'falhas': []}
+    sessoes = {}
+    for n in notas:
+        eid = n['empresa_id']
+        try:
+            if eid not in sessoes:
+                sessoes[eid] = adn.abrir_sessao(adn.resolver_certificado(eid))
+            x = _conferir_com_sessao(n, sessoes[eid])
+        except Exception as exc:
+            logger.warning('[nfse-cancelamento] nota %s não conferida: %s', n['id'], exc)
+            r['falhas'].append((n['id'], f'{exc.__class__.__name__}: {exc}'))
+            continue
+        r['conferidas'] += 1
+        if x['resultado'] == 'cancelada':
+            r['canceladas'].append(x)
+        elif x['resultado'] == 'vigente':
+            r['vigentes'] += 1
+        else:
+            r['falhas'].append((n['id'], x['mensagem']))
+    return r
 
 
 # --- prefeitura de São Paulo ---------------------------------------------------

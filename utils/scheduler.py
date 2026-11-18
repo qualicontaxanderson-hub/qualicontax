@@ -145,6 +145,28 @@ def _registrar_job_dfe(app) -> None:
             '[scheduler] DFE_SCHED_MINUTE inválido (%r) — job de DFe NÃO registrado.', minute)
 
 
+_NFSE_CONF_JOB_ID = 'conferir_nfse_canceladas'
+
+
+def _job_conferir_nfse(app):
+    """Job de meia em meia hora: pergunta ao Sefin se alguma NFS-e EMITIDA pelo sistema e ainda
+    "Autorizada" foi cancelada fora dele (pelo portal do governo). Só GET; nada é enviado.
+    18/11/2026: a Congonhas cancelou duas notas no portal e o sistema seguiu mostrando
+    "Autorizada" até alguém reclamar. O cron da captura de NFS-e também confere, mas só de 6 em 6 h."""
+    with app.app_context():
+        try:
+            from utils import nfse_emissor
+            c = nfse_emissor.conferir_cancelamentos()
+            if c['canceladas'] or c['falhas']:
+                logger.warning('[scheduler] NFS-e emitidas: %s conferida(s), %s cancelada(s) fora do sistema (%s), %s falha(s): %s',
+                               c['conferidas'], len(c['canceladas']),
+                               ', '.join(str(x['linha']['id']) for x in c['canceladas']), len(c['falhas']), c['falhas'][:3])
+            else:
+                logger.info('[scheduler] NFS-e emitidas: %s conferida(s) com o Sefin, todas válidas.', c['conferidas'])
+        except Exception:
+            logger.exception('[scheduler] Erro ao conferir as NFS-e emitidas no Sefin.')
+
+
 def _registrar_jobs(app) -> tuple[int, int]:
     """Registra os jobs no ``_scheduler`` já criado.
 
@@ -164,6 +186,17 @@ def _registrar_jobs(app) -> tuple[int, int]:
     )
     # Job de captura de DFe (Fase 3) — só entra se DFE_SCHED_ATIVO=1.
     _registrar_job_dfe(app)
+    # NFS-e emitidas x Sefin: cancelamento feito fora do sistema aparece em até 30 min.
+    _scheduler.add_job(
+        _job_conferir_nfse,
+        trigger=CronTrigger(minute='7,37', timezone='America/Sao_Paulo'),
+        args=[app],
+        id=_NFSE_CONF_JOB_ID,
+        replace_existing=True,
+        max_instances=1,
+        coalesce=True,
+        misfire_grace_time=600,
+    )
     return hour, minute
 
 

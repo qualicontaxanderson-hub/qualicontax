@@ -28,7 +28,9 @@ SOMENTE LEITURA
 ---------------
 Este cron consulta e grava no banco local. NUNCA envia evento ao ADN — nem
 manifestação, nem confirmação, nem cancelamento. O ADN aceita eventos; o
-Qualicontax não emite nenhum.
+Qualicontax não emite nenhum. No fim da rodada ele também confere, por GET no
+Sefin, se alguma nota EMITIDA pelo sistema foi cancelada fora dele (portal do
+governo) e marca a situação aqui.
 """
 import logging
 import os
@@ -82,6 +84,19 @@ def main() -> int:
         # falha no Railway.
         logger.exception('[cron-nfse] Rodada falhou por inteiro.')
         return 1
+    # Notas EMITIDAS por aqui: pergunta ao Sefin (GET, nada é enviado) se alguma foi cancelada
+    # fora do sistema — pelo portal do governo, por exemplo. 18/11/2026: a Congonhas cancelou
+    # duas notas no portal e o sistema seguiu mostrando "Autorizada".
+    try:
+        from utils import nfse_emissor
+        c = nfse_emissor.conferir_cancelamentos()
+        quais = ', '.join(f"nota {x['linha']['id']}" for x in c['canceladas'])
+        logger.warning('[cron-nfse] >>> NOTAS EMITIDAS: %s conferida(s) com o Sefin, %s cancelada(s) fora do sistema%s, %s falha(s).',
+                       c['conferidas'], len(c['canceladas']), f' ({quais})' if quais else '', len(c['falhas']))
+        for nid, msg in c['falhas']:
+            logger.warning('[cron-nfse]   nota %s não conferida: %s', nid, msg)
+    except Exception:
+        logger.exception('[cron-nfse] Conferência das notas emitidas falhou (a captura já tinha terminado).')
     return 0
 
 

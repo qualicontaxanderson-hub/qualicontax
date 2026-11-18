@@ -144,6 +144,30 @@ def _id_do_evento(xml_evento: str) -> str:
         return ''
 
 
+def dados_do_evento(xml_evento: str) -> dict:
+    """O que interessa mostrar do XML do evento: motivo, texto, hora do processamento e por qual
+    aplicativo foi pedido. O portal do governo se identifica com verAplic 'EmissorWeb_x.y'
+    (lido do Sefin em 18/11/2026, nas notas 38 e 39 da série 3 da Congonhas). Nunca estoura."""
+    d = {'c_motivo': None, 'x_motivo': '', 'dh_proc': None, 'ver_aplic': '', 'cnpj_autor': ''}
+    try:
+        from datetime import datetime
+        from lxml import etree
+        raiz = etree.fromstring(xml_evento.encode('utf-8'))
+
+        def t(tag):
+            el = raiz.find(f'.//{{{NS}}}{tag}')
+            return (el.text or '').strip() if el is not None else ''
+        d['ver_aplic'] = t('verAplic')
+        d['cnpj_autor'] = t('CNPJAutor')
+        d['c_motivo'] = int(t('cMotivo')) if t('cMotivo').isdigit() else None
+        d['x_motivo'] = t('xMotivo')
+        if t('dhProc'):
+            d['dh_proc'] = datetime.fromisoformat(t('dhProc'))
+    except Exception:
+        pass
+    return d
+
+
 def registrar(sessao: SessaoADN, chave: str, xml_pedido_assinado: str, tp_amb: int) -> Resultado:
     """POST /nfse/{chave}/eventos. ``tp_amb`` escolhe o host (tem que bater com o tpAmb do pedido)."""
     url = f'{SEFIN[int(tp_amb)]}/nfse/{chave}/eventos'

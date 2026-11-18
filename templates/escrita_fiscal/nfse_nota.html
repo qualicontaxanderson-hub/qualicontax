@@ -22,6 +22,10 @@
 .nd-erro { background:#fef2f2; border:1px solid #fca5a5; color:#991b1b; border-radius:10px; padding:10px 14px; font-size:13px; margin-bottom:14px; }
 .nd-erro li { margin-bottom:4px; }
 .nd-acoes { display:flex; gap:8px; flex-wrap:wrap; }
+.nd-conferir { display:flex; gap:12px; align-items:center; justify-content:space-between; flex-wrap:wrap; margin-top:14px;
+               padding-top:12px; border-top:1px dashed #e2e8f0; font-size:13px; color:#475569; }
+.nd-conferir span { flex:1 1 260px; min-width:0; }
+.nd-conferir button { white-space:nowrap; }
 @media (max-width: 860px) { .nd-cols { grid-template-columns:minmax(0,1fr); } }
 </style>
 {% endblock %}
@@ -119,6 +123,13 @@
         </div>
         <div style="display:flex; justify-content:flex-end;"><button class="btn btn-outline" style="color:#b91c1c; border-color:#fca5a5;"><i class="fas fa-ban"></i> Cancelar a nota</button></div>
     </form>
+    {% if n.emissor != 'fiorilli' and n.chave_acesso %}
+    <form method="POST" action="{{ url_for('escrita_fiscal.nfse_nota_conferir', nota_id=n.id) }}" class="nd-conferir">
+        <input type="hidden" name="csrf_token" value="{{ csrf }}">
+        <span><b>A nota foi cancelada pelo portal do governo?</b> O sistema pergunta ao governo e, se ela foi cancelada lá, passa a cancelada aqui também. Isso também é conferido sozinho, de tempo em tempo.</span>
+        <button class="btn btn-outline" type="submit"><i class="fas fa-rotate"></i> Conferir no governo</button>
+    </form>
+    {% endif %}
 </div>
 {% endif %}
 {% endblock %}

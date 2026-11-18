@@ -23,6 +23,10 @@
 .ne-nova { margin-left:auto; display:inline-flex; align-items:center; gap:6px; border-radius:10px; padding:8px 14px; font-size:13px; font-weight:700;
            background:#16a34a; color:#fff; text-decoration:none; }
 .ne-nova:hover { background:#15803d; color:#fff; }
+.ne-conf { display:flex; gap:10px; align-items:center; justify-content:flex-end; flex-wrap:wrap; margin:-8px 2px 14px; font-size:12.5px; color:#64748b; }
+.ne-conf button { display:inline-flex; align-items:center; gap:6px; border-radius:9px; padding:6px 12px; font-size:12.5px; font-weight:700; cursor:pointer;
+                  background:#fff; color:#0f3d2e; border:1px solid #cbd5e1; font-family:inherit; }
+.ne-conf button:hover { border-color:#0f3d2e; background:#f0fdf4; }
 .ne-vazio { background:#fff; border:1px dashed #cbd5e1; border-radius:14px; padding:28px 20px; text-align:center; color:#64748b; font-size:13px; }
 .ne-vazio i { font-size:24px; color:#cbd5e1; display:block; margin-bottom:8px; }
 @media (max-width: 860px) { .ne .cli-kpis { grid-template-columns:repeat(2,minmax(0,1fr)); } }
@@ -69,6 +73,14 @@
     </div>
     {% if hub_emp and pode_rota('escrita_fiscal.nfse_emitir') %}<a class="ne-nova" href="{{ url_for('escrita_fiscal.nfse_nova', cliente_id=hub_emp.id) }}"><i class="fas fa-plus"></i> Nova nota</a>{% endif %}
 </form>
+{% if n_autorizadas and pode_rota('escrita_fiscal.nfse_emitidas_conferir') %}
+<form class="ne-conf" method="POST" action="{{ url_for('escrita_fiscal.nfse_emitidas_conferir') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf }}">
+    {% if hub_emp %}<input type="hidden" name="emp" value="{{ hub_emp.id }}">{% endif %}
+    <span>Alguma nota foi cancelada pelo portal do governo? Confira: o que estiver cancelado lá passa a cancelado aqui.</span>
+    <button type="submit" title="Pergunta ao governo, nota a nota, se as autorizadas continuam válidas"><i class="fas fa-rotate"></i> Conferir com o governo</button>
+</form>
+{% endif %}
 
 {% if dias %}
 {% for d, lista in dias %}
