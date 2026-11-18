@@ -550,7 +550,8 @@ def nota_boleto(nota_id):
     if n['situacao'] != 'autorizada':
         flash('Só nota autorizada gera boleto.', 'warning')
         return redirect(url_for('financeiro.nota_detalhe', nota_id=nota_id))
-    if FinBoleto.da_nota(nota_id):
+    ja = FinBoleto.da_nota(nota_id)
+    if ja and ja['situacao'] != 'canceled':             # 17/11/2026: boleto cancelado não trava um novo (nota 6, R$ 17)
         flash('Esta nota já tem boleto.', 'warning')
         return redirect(url_for('financeiro.nota_detalhe', nota_id=nota_id))
     cid = request.form.get('conta_id', '')
