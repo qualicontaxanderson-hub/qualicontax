@@ -591,7 +591,12 @@ def _cobrar_avulso(l, usuario_id, conta_id=None):
             logger.exception('[lancamento] nota do lançamento %s', l['id'])
             return False, ['A nota não saiu: %s' % exc]
         if not linha or linha['situacao'] != 'autorizada':
-            return False, ['A nota não foi autorizada (%s). O lançamento continua aprovado; veja a nota em Cobranças.' % (linha or {}).get('situacao', 'falha')]
+            # 18/11/2026: o motivo e o que fazer vêm no aviso (a Infinity voltou "rejeitada" sem dizer que era o CEP)
+            from models.nfse_emissao import motivo_nfse
+            m = motivo_nfse((linha or {}).get('erro_ultimo'))
+            return False, [('O governo recusou a nota: %s%s %s' % (m['texto'] or 'sem detalhe', (' (%s).' % m['cod']) if m['cod'] else '.', m['fazer']))
+                           if linha else 'A nota não chegou ao governo (falha no envio).',
+                           'O lançamento continua aprovado, sem cobrança: corrija e use "Cobrar de novo" no cartão dele.']
         nfse_id = linha['id']
         msgs.append('Nota autorizada: série %s nº %s.' % (linha['serie'], linha['numero_dps']))
         n = NfseEmitida.get(nfse_id)

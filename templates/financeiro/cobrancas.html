@@ -225,7 +225,8 @@
         </div>
 
         {% if n.situacao in ('rejeitada', 'erro') and n.erro_ultimo %}
-        <p class="nfc-desc nfc-erro" title="{{ n.erro_ultimo }}"><i class="fas fa-exclamation-circle"></i> {{ n.erro_ultimo }}</p>
+        {% set mf = motivo_nfse(n.erro_ultimo) %}
+        <p class="nfc-desc nfc-erro" title="{{ mf.bruto }}"><i class="fas fa-exclamation-circle"></i> <b>{{ mf.texto }}</b>{% if mf.cod %} ({{ mf.cod }}){% endif %}{% if mf.fazer %}<br>{{ mf.fazer }}{% endif %}</p>
         {% else %}
         <p class="nfc-desc" title="{{ n.descricao or '' }}">{{ n.descricao or '—' }}</p>
         {% endif %}

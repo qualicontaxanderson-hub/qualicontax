@@ -62,6 +62,7 @@
         <li>{% if MOTIVOS_RECUSA.get(_cod) %}<b>{{ MOTIVOS_RECUSA[_cod] }}</b><br>{% endif %}<small>{{ _cod }}{{ ' — ' if _cod and _txt }}{{ _txt }}</small></li>
         {% else %}<li>{{ e[0] }} — {{ e[1] }}{% if e[2] %} ({{ e[2] }}){% endif %}</li>{% endif %}{% endfor %}</ul>
     {% else %}<div style="margin-top:4px;">{{ n.erro_ultimo or 'sem detalhe' }}</div>{% endif %}
+    {% set mf = motivo_nfse(n.erro_ultimo) %}{% if mf.fazer %}<div style="margin-top:8px;padding:8px 10px;border-radius:8px;background:#fffbeb;border:1px solid #fde68a;color:#92400e;"><i class="fas fa-wrench"></i> <b>O que fazer:</b> {{ mf.fazer }}</div>{% endif %}
     <div style="margin-top:8px;">O número {{ n.numero_dps }} ficou registrado como recusado. A próxima nota sai com o número seguinte.</div>
 </div>
 {% endif %}

@@ -46,7 +46,48 @@ MOTIVOS_RECUSA = {
     'E0120': 'A cidade da empresa não aceita a inscrição municipal na nota',
     'E0322': 'Faltou o tipo de serviço (NBS)',
     'E2243': 'O CPF da empresa não pode consultar por este caminho',
+    # 18/11/2026 — Infinity Aragarças: CEP geral antigo (76240-000) que os Correios não aceitam mais
+    'E0240': 'O CEP do cliente não existe ou não é da cidade dele',
+    'E0234': 'A nota precisa do endereço completo do cliente',
 }
+
+# O que a pessoa faz para a nota sair (18/11/2026 — Anderson: "esses erros têm que aparecer os motivos no site
+# para evitar dor de cabeça"). Por código; sem código conhecido, pela palavra-chave do texto do governo.
+O_QUE_FAZER = {
+    'E0240': 'Abra a ficha do cliente, confira o CEP no site dos Correios e corrija o endereço. Depois emita de novo.',
+    'E0234': 'Abra a ficha do cliente e complete o endereço (CEP, rua, número, bairro, cidade). Depois emita de novo.',
+    'E0116': 'Cadastre a inscrição municipal da empresa em Configuração fiscal. Depois emita de novo.',
+    'E0120': 'Em Configuração fiscal, deixe a inscrição municipal em branco para esta empresa. Depois emita de novo.',
+    'E0322': 'Em Configuração fiscal, informe o código NBS do serviço. Depois emita de novo.',
+    'E0037': 'A prefeitura ainda não aderiu ao Emissor Nacional: a nota não sai por aqui até ela aderir.',
+    'E0039': 'A prefeitura ainda não aderiu ao Emissor Nacional: a nota não sai por aqui até ela aderir.',
+}
+_FAZER_POR_PALAVRA = (
+    ('cep', 'Confira o CEP do cliente na ficha dele (site dos Correios) e emita de novo.'),
+    ('endereço', 'Complete ou corrija o endereço do cliente na ficha dele e emita de novo.'),
+    ('cnpj', 'Confira o CNPJ do cliente na ficha dele e emita de novo.'),
+    ('cpf', 'Confira o CPF do cliente na ficha dele e emita de novo.'),
+    ('inscrição municipal', 'Confira a inscrição municipal em Configuração fiscal e emita de novo.'),
+    ('certificado', 'O certificado digital da empresa venceu ou não serve: troque o certificado na ficha da empresa.'),
+    ('e-mail', 'Confira o e-mail do cliente na ficha dele e emita de novo.'),
+    ('alíquota', 'Confira a alíquota do ISS em Configuração fiscal e emita de novo.'),
+    ('município', 'Confira a cidade do cliente na ficha dele e a cidade da prestação em Configuração fiscal.'),
+)
+
+
+def o_que_fazer(erro):
+    """Frase de ação para o erro da nota ('' quando não há pista)."""
+    _t, cod = motivo_curto(erro)
+    if cod in O_QUE_FAZER:
+        return O_QUE_FAZER[cod]
+    baixo = (erro or '').lower()
+    return next((f for chave, f in _FAZER_POR_PALAVRA if chave in baixo), '')
+
+
+def motivo_nfse(erro):
+    """Para as telas: {'texto': em português, 'cod': código do governo, 'fazer': o que a pessoa faz, 'bruto': original}."""
+    texto, cod = motivo_curto(erro)
+    return {'texto': texto, 'cod': cod, 'fazer': o_que_fazer(erro), 'bruto': ' '.join((erro or '').split())}
 
 
 def motivo_curto(erro):

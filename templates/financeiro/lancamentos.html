@@ -178,7 +178,7 @@
       {% elif l.status == 'APROVADO' and l.destino == 'MENSAL' %}<i class="fas fa-calendar"></i> no lote de {{ l.competencia.strftime('%m/%Y') }}
       {% elif falhou %}<i class="fas fa-triangle-exclamation"></i> a cobrança não saiu
       {% else %}<i class="fas fa-paper-plane"></i> cobrado{% endif %}</span></div>
-  {% if falhou %}<div class="lm-falha"><i class="fas fa-circle-exclamation"></i> {{ l.motivo_falha or 'A nota ou o boleto não saíram na aprovação.' }}{% if aprov %} Corrija o cadastro e cobre de novo.{% else %} Quem aprova vai cobrar de novo.{% endif %}</div>{% endif %}
+  {% if falhou %}{% set mf = motivo_nfse(l.motivo_falha) %}<div class="lm-falha"><i class="fas fa-circle-exclamation"></i> {% if mf.texto %}<b>{{ mf.texto }}</b>{% if mf.cod %} <small>({{ mf.cod }})</small>{% endif %}<br>{{ mf.fazer or 'Corrija o que o governo apontou e emita de novo.' }}{% if mf.bruto and mf.texto != mf.bruto %}<br><small title="{{ mf.bruto }}">Texto do governo: {{ mf.bruto[:160] }}{{ '…' if mf.bruto|length > 160 }}</small>{% endif %}{% else %}A nota ou o boleto não saíram na aprovação.{% endif %}{% if aprov %} {{ 'Depois toque em Cobrar de novo.' if mf.texto else 'Corrija o cadastro e cobre de novo.' }}{% else %} Quem aprova vai cobrar de novo.{% endif %}</div>{% endif %}
   <div style="margin-top:8px"><span class="lm-tipo {{ 'lm-t-me' if l.destino == 'MENSAL' else 'lm-t-av' }}"><i class="fas {{ 'fa-calendar' if l.destino == 'MENSAL' else 'fa-barcode' }}"></i> {{ l.como }}</span></div>
   {% if l.lancado_pelo_admin %}<div class="lm-adm"><i class="fas fa-user-shield"></i> Lançado pelo administrador</div>{% endif %}
   {% if aprov and l.lancado_por != eu.id %}<div class="lm-por"><i class="fas fa-user"></i> {{ l.lancado_por_nome }}</div>{% endif %}

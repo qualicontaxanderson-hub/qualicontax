@@ -42,6 +42,7 @@
 {% endif %}
 
 {% if n.situacao in ('rejeitada', 'erro') %}
+<style>.nd-fazer { margin-top:10px; padding:10px 12px; border-radius:10px; background:#fffbeb; border:1px solid #fde68a; color:#92400e; font-size:13.5px; line-height:1.45; } .nd-fazer i { margin-right:4px; }</style>
 <div class="nf-sec" style="border-color:#fca5a5;">
     <h3><i class="fas fa-times-circle" style="color:#b91c1c;"></i> {{ 'O governo recusou a nota' if n.situacao == 'rejeitada' else 'A nota não chegou ao governo' }}
         <small>o número {{ n.serie }}-{{ n.numero_dps }} ficou registrado como {{ SITUACOES[n.situacao] | lower }}; a próxima tentativa recebe outro número</small></h3>
@@ -52,6 +53,8 @@
         <li>{{ n.erro_ultimo or 'Sem detalhe do erro.' }}</li>
         {% endfor %}
     </ul>
+    {% set mf = motivo_nfse(n.erro_ultimo) %}
+    {% if mf.texto %}<div class="nd-fazer"><i class="fas fa-wrench"></i> <b>{{ mf.texto }}.</b> {{ mf.fazer or 'Corrija o que o governo apontou e emita de novo.' }}</div>{% endif %}
 </div>
 {% endif %}
 

@@ -216,6 +216,9 @@ app.jinja_env.globals['logos_banco'] = _logos_banco
 # Número do boleto para gente ler (18/11/2026): {{ numero_boleto(b) }} — Efí/Bradesco o nº do banco; Cora o Nr. do Documento do PDF
 from models.fin_cobranca import FinBoleto as _FinBoleto
 app.jinja_env.globals['numero_boleto'] = _FinBoleto.numero
+# Motivo da recusa da nota em português e com o que fazer (18/11/2026): {{ motivo_nfse(n.erro_ultimo) }}
+from models.nfse_emissao import motivo_nfse as _motivo_nfse
+app.jinja_env.globals['motivo_nfse'] = _motivo_nfse
 
 
 # Template filters
