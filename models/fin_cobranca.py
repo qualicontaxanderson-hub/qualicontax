@@ -15,10 +15,11 @@ from utils import cobranca_segredos as seg
 
 logger = logging.getLogger(__name__)
 
-PROVEDORES = {'efi': 'Efí', 'bradesco': 'Bradesco'}
+PROVEDORES = {'efi': 'Efí', 'bradesco': 'Bradesco', 'cora': 'Cora'}
 # Prazo de baixa (dias depois do vencimento): a Efí aceita até 120; o Bradesco, até 365 no boleto com QR
-# (Anderson, 14/11/2026: "o Bradesco se tiver mais datas vamos seguir").
-DIAS_BAIXA_MAX = {'efi': 120, 'bradesco': 365}
+# (Anderson, 14/11/2026: "o Bradesco se tiver mais datas vamos seguir"). O Cora não tem baixa por prazo:
+# o boleto fica "em atraso" até ser pago ou cancelado (18/11/2026).
+DIAS_BAIXA_MAX = {'efi': 120, 'bradesco': 365, 'cora': 0}
 CAMPOS_BRADESCO = ('brad_carteira', 'brad_agencia', 'brad_conta', 'brad_telefone')
 AMBIENTES = {'homologacao': 'Teste (homologação)', 'producao': 'Produção — o boleto vale'}
 AVISA_POR = {'app': 'Nosso app, pela caixa de e-mail abaixo', 'efi': 'A Efí, pelo e-mail dela',
@@ -140,7 +141,7 @@ class FinCobrancaConta:
         dia = int(dia) if str(dia or '').isdigit() and 1 <= int(dia) <= 31 else None
         dias_baixa = dados.get('dias_baixa')
         teto = DIAS_BAIXA_MAX.get(provedor, 120)
-        dias_baixa = max(0, min(teto, int(dias_baixa))) if str(dias_baixa or '').isdigit() else (teto if provedor == 'bradesco' else 60)
+        dias_baixa = max(0, min(teto, int(dias_baixa))) if str(dias_baixa or '').isdigit() else (teto if provedor in ('bradesco', 'cora') else 60)
         cfg = None
         if provedor == 'bradesco':
             so_num = lambda k: ''.join(ch for ch in str(dados.get(k) or '') if ch.isdigit())
@@ -200,8 +201,12 @@ class FinCobrancaConta:
                    + ', atualizado_em = NOW(), alterado_por = %s WHERE id = %s AND empresa_id = %s')
             r = execute_query(sql, base + tuple(vals_seg) + (usuario_id, conta_id, empresa_id))
             return (conta_id, None) if r is not None else (None, 'Não foi possível salvar.')
-        if not client_id or not client_secret:
-            return None, 'Client ID e Client Secret são obrigatórios na primeira vez.'
+        if not client_id or (not client_secret and provedor != 'cora'):
+            return None, ('Client ID é obrigatório na primeira vez.' if provedor == 'cora'
+                          else 'Client ID e Client Secret são obrigatórios na primeira vez.')
+        if provedor == 'cora' and not certificado:
+            # 18/11/2026: o Cora não tem Client Secret; o acesso é o certificado + a chave que o app dele gera
+            return None, 'O Cora exige o certificado (certificate.pem) e a chave (private-key.key) gerados no app do Cora.'
         if provedor == 'bradesco' and not certificado and not certificado_do_cadastro_info(empresa_id):
             return None, ('O Bradesco exige o certificado digital A1 da empresa em toda chamada, e ela não tem um '
                           'válido no cadastro. Cadastre o A1 na ficha da empresa.')
@@ -289,6 +294,22 @@ class FinCobrancaConta:
                               agencia=cfg['agencia'], conta=cfg['conta'], carteira=cfg['carteira'],
                               ambiente=c['ambiente'], pfx=pfx, pfx_senha=pfx_senha)
         return Bradesco(conta), c
+
+    @staticmethod
+    def cliente_cora(conta_id):
+        """Cliente do Cora autenticado para esta conta (18/11/2026). Decifra só aqui, só na hora de usar.
+        O certificado e a chave do app do Cora ficam juntos, cifrados, em certificado_cif (um PEM só)."""
+        from utils.integrations.cora.client import Cora, ContaCora
+        c = FinCobrancaConta.get(conta_id, com_segredos=True)
+        if not c:
+            raise ValueError('Conta de cobrança não encontrada.')
+        if c['provedor'] != 'cora':
+            raise ValueError('Esta conta não é do Cora.')
+        if not c.get('certificado_cif'):
+            raise ValueError('Esta conta do Cora está sem o certificado e a chave da API.')
+        conta = ContaCora(client_id=seg.decifrar_texto(c['client_id_cif']), pem=seg.decifrar_bytes(c['certificado_cif']),
+                          ambiente=c['ambiente'])
+        return Cora(conta), c
 
     @staticmethod
     def da_conta_bancaria(fin_conta_ids):

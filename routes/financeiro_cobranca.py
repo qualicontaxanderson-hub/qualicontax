@@ -34,6 +34,8 @@ from utils.integrations.efi.client import SITUACOES, EfiErro
 from utils import efi_boletos
 from utils import bradesco_boletos
 from utils.integrations.bradesco.client import BradescoErro
+from utils import cora_boletos
+from utils.integrations.cora.client import CoraErro
 
 logger = logging.getLogger(__name__)
 PERM = 'financeiro.cobranca'
@@ -80,6 +82,11 @@ def cobranca_salvar():
         abort(404)
     arq = request.files.get('certificado')
     cert_bytes = arq.read() if arq and arq.filename else None
+    if cert_bytes and request.form.get('provedor') == 'cora':
+        # 18/11/2026: o Cora são DOIS arquivos (certificate.pem + private-key.key), conferidos e juntados no
+        # cartão da conta bancária (Contas → Ligar cobrança). Aqui só os outros campos.
+        flash('O certificado e a chave do Cora entram pelo cartão da conta bancária (Contas → Boletos → Trocar chave ou certificado).', 'danger')
+        return redirect(_volta_contas(emp_id))
     if cert_bytes and len(cert_bytes) > 200_000:
         flash('O certificado da API deve ser o .p12 da Efí (poucos KB).', 'danger')
         return redirect(_volta_contas(emp_id))
@@ -113,11 +120,16 @@ def cobranca_testar(conta_id):
         if c['provedor'] == 'bradesco':
             brad, _ = FinCobrancaConta.cliente_bradesco(conta_id)
             resultado = 'OK: ' + brad.testar()
+        elif c['provedor'] == 'cora':
+            cora, _ = FinCobrancaConta.cliente_cora(conta_id)
+            resultado = 'OK: ' + cora.testar()
+            if cora_boletos.garantir_webhook(conta_id, cora):
+                resultado += '; aviso de pagamento cadastrado no Cora'
         else:
             efi, _ = FinCobrancaConta.cliente_efi(conta_id)
             resultado = 'OK: ' + efi.testar()
         flash(f'{c["apelido"]}: {resultado}', 'success')
-    except (EfiErro, BradescoErro, ValueError) as exc:
+    except (EfiErro, BradescoErro, CoraErro, ValueError) as exc:
         resultado = f'FALHOU: {exc}'
         flash(f'{c["apelido"]}: {resultado}', 'danger')
     except Exception as exc:                      # chave mestra, rede
@@ -351,6 +363,8 @@ def _emitir_na_efi(conta, boleto_id, itens, pagador, vencimento, mensagem, titul
     custom_id = f'QC-{boleto_id}'
     if conta['provedor'] == 'bradesco':
         return _emitir_no_bradesco(conta, boleto_id, pagador, vencimento, titulo_id, nota_id, total, usuario_id)
+    if conta['provedor'] == 'cora':
+        return _emitir_no_cora(conta, boleto_id, itens, pagador, vencimento, mensagem, titulo_id, nota_id, total, usuario_id)
     try:
         efi, _c = FinCobrancaConta.cliente_efi(conta['id'])
         data = efi.criar_boleto(
@@ -409,6 +423,38 @@ def _emitir_no_bradesco(conta, boleto_id, pagador, vencimento, titulo_id, nota_i
     msg = (f"Boleto emitido no Bradesco (nosso número {nn}) — R$ {total:.2f}, vence {vencimento.strftime('%d/%m/%Y')}"
            .replace('.', ',', 1) + (' (ambiente de teste)' if conta['ambiente'] != 'producao' else '') + '.')
     return True, msg, aviso_email
+
+
+def _emitir_no_cora(conta, boleto_id, itens, pagador, vencimento, mensagem, titulo_id, nota_id, total, usuario_id):
+    """Mesmo passo comum, no Cora (18/11/2026): registra, grava (o PDF e o Pix vêm prontos do banco), liga o
+    título, manda o e-mail e registra."""
+    try:
+        inv, _j = cora_boletos.emitir(conta, boleto_id, pagador, itens, total, vencimento, mensagem)
+    except (CoraErro, ValueError) as exc:
+        FinBoleto.gravar_erro(boleto_id, str(exc))
+        return False, f'O Cora não emitiu o boleto: {exc}', None
+    except Exception as exc:
+        logger.exception('[cobranca] boleto Cora %s', boleto_id)
+        FinBoleto.gravar_erro(boleto_id, str(exc))
+        return False, f'Falha ao emitir o boleto: {exc}', None
+    if titulo_id:
+        execute_query('UPDATE fin_titulos SET boleto_id = %s WHERE id = %s', (boleto_id, titulo_id))
+    aviso_email = None
+    if (conta.get('avisa_por') or 'app') == 'app' and conta.get('email_remetente'):
+        from utils import cobranca_email
+        ok_mail, aviso_email = cobranca_email.enviar_boleto(boleto_id, usuario_id=usuario_id)
+        if not ok_mail:
+            aviso_email = 'O boleto saiu, mas o e-mail não: ' + aviso_email
+    registrar('escrita.emitiu_boleto', 'financeiro', tabela='fin_boletos', registro_id=boleto_id,
+              depois={'nfse_id': nota_id, 'charge_id': inv, 'valor': str(total), 'provedor': 'cora',
+                      'vencimento': vencimento.isoformat(), 'ambiente': conta['ambiente'], 'titulo_id': titulo_id})
+    msg = (f"Boleto emitido no Cora ({inv}) — R$ {total:.2f}, vence {vencimento.strftime('%d/%m/%Y')}"
+           .replace('.', ',', 1) + (' (ambiente de teste)' if conta['ambiente'] != 'producao' else '') + '.')
+    return True, msg, aviso_email
+
+
+BANCO_DE = {'efi': 'a Efí', 'bradesco': 'o Bradesco', 'cora': 'o Cora'}
+BANCO_EM = {'efi': 'na Efí', 'bradesco': 'no Bradesco', 'cora': 'no Cora'}
 
 
 def gerar_boleto_da_nota(n, conta, vencimento, mensagem, usuario_id):
@@ -609,11 +655,13 @@ def boleto_cancelar(boleto_id):
     try:
         if b['provedor'] == 'bradesco':
             bradesco_boletos.cancelar(b)
+        elif b['provedor'] == 'cora':
+            cora_boletos.cancelar(b)
         else:
             efi, _ = FinCobrancaConta.cliente_efi(b['conta_cobranca_id'])
             efi.cancelar(b['charge_id'])
-    except (EfiErro, BradescoErro, ValueError) as exc:
-        flash(f"{'O Bradesco' if b['provedor'] == 'bradesco' else 'A Efí'} não cancelou: {exc}", 'danger')
+    except (EfiErro, BradescoErro, CoraErro, ValueError) as exc:
+        flash(f"{BANCO_DE.get(b['provedor'], 'O banco').capitalize()} não cancelou: {exc}", 'danger')
         return redirect(volta)
     FinBoleto.atualizar_situacao(boleto_id, 'canceled')
     titulo_cancelado = False
@@ -622,7 +670,7 @@ def boleto_cancelar(boleto_id):
         titulo_cancelado = bool(FinTitulo.cancelar(b['titulo_id']))
     registrar('escrita.cancelou_boleto', 'financeiro', tabela='fin_boletos', registro_id=boleto_id,
               depois={'charge_id': b['charge_id'], 'titulo_cancelado': titulo_cancelado})
-    flash(f"Boleto cancelado {'no Bradesco' if b['provedor'] == 'bradesco' else 'na Efí'}." + (' O título a receber foi cancelado junto.' if titulo_cancelado else ''), 'success')
+    flash(f"Boleto cancelado {BANCO_EM.get(b['provedor'], 'no banco')}." + (' O título a receber foi cancelado junto.' if titulo_cancelado else ''), 'success')
     return redirect(volta)
 
 
@@ -634,11 +682,11 @@ def boleto_sincronizar(boleto_id):
     if not b or b['empresa_id'] not in FinEmpresa.ids_validos():
         abort(404)
     volta = request.form.get('volta') or url_for('financeiro.cobrancas', emp=b['empresa_id'], ver='boletos')
-    if b['provedor'] == 'bradesco':
+    if b['provedor'] in ('bradesco', 'cora'):
         try:
-            sit, feito = bradesco_boletos.consultar_e_aplicar(b)
-        except (BradescoErro, ValueError) as exc:
-            flash(f'O Bradesco não respondeu: {exc}', 'danger')
+            sit, feito = (bradesco_boletos if b['provedor'] == 'bradesco' else cora_boletos).consultar_e_aplicar(b)
+        except (BradescoErro, CoraErro, ValueError) as exc:
+            flash(f"{BANCO_DE[b['provedor']].capitalize()} não respondeu: {exc}", 'danger')
             return redirect(volta)
         flash(f'Boleto {b["charge_id"]}: {SITUACOES.get(sit, sit)}.' + (' Título baixado.' if feito == 'baixa' else ''), 'success')
         return redirect(volta)
@@ -701,8 +749,8 @@ def boleto_vencimento(boleto_id):
     if b['situacao'] not in ('waiting', 'unpaid'):
         flash('Só boleto aguardando pagamento ou vencido pode mudar de vencimento.', 'warning')
         return redirect(volta)
-    if b['provedor'] == 'bradesco':
-        flash('No Bradesco, por enquanto: cancele este boleto e emita outro com o vencimento novo.', 'warning')
+    if b['provedor'] in ('bradesco', 'cora'):
+        flash(f"{BANCO_EM[b['provedor']].capitalize()}, por enquanto: cancele este boleto e emita outro com o vencimento novo.", 'warning')
         return redirect(volta)
     novo = _data_do_form('vencimento', _hoje())
     if not novo:
@@ -739,11 +787,13 @@ def boleto_marcar_pago(boleto_id):
     try:
         if b['provedor'] == 'bradesco':           # o Bradesco não tem "marcar como pago": a baixa no banco tira o boleto
             bradesco_boletos.cancelar(b)
+        elif b['provedor'] == 'cora':             # idem no Cora: cancelar é o que impede o pagamento em duplicidade
+            cora_boletos.cancelar(b)
         else:
             efi, _ = FinCobrancaConta.cliente_efi(b['conta_cobranca_id'])
             efi.marcar_pago(b['charge_id'])
-    except (EfiErro, BradescoErro, ValueError) as exc:
-        flash(f"{'O Bradesco' if b['provedor'] == 'bradesco' else 'A Efí'} não marcou como pago: {exc}", 'danger')
+    except (EfiErro, BradescoErro, CoraErro, ValueError) as exc:
+        flash(f"{BANCO_DE.get(b['provedor'], 'O banco').capitalize()} não marcou como pago: {exc}", 'danger')
         return redirect(volta)
     # 'settled' ANTES do aviso da Efí chegar: o aviso vê que já estava assim e não baixa de novo
     FinBoleto.atualizar_situacao(boleto_id, 'settled')
@@ -988,3 +1038,33 @@ def efi(segredo):
                           'valor': str(valor_pago) if valor_pago is not None else None, 'feito': feito})
         tratados += 1
     return jsonify({'ok': True, 'eventos': tratados}), 200
+
+
+@cobranca_webhook.route('/webhooks/cora/<segredo>', methods=['POST', 'GET'])
+def cora(segredo):
+    """Aviso de pagamento do Cora (18/11/2026). O Cora manda um POST SEM corpo: o que importa vem nos cabeçalhos
+    ``webhook-event-type`` ('invoice.PAID') e ``webhook-resource-id`` (o 'inv_...'). Nada do aviso é tomado como
+    verdade: consultamos o boleto no próprio Cora (autenticado) e aplicamos o que ele diz. Repetição do aviso é
+    inofensiva (a baixa é idempotente). 2xx = entregue; 404 faz o Cora desistir desse evento."""
+    if request.method == 'GET':
+        return jsonify({'ok': True}), 200
+    conta = FinCobrancaConta.por_webhook(segredo)
+    if not conta or conta.get('provedor') != 'cora':
+        return jsonify({'ok': False}), 404
+    tipo = (request.headers.get('webhook-event-type') or '').lower()
+    rid = (request.headers.get('webhook-resource-id') or '').strip()
+    ev_id = (request.headers.get('webhook-event-id') or '')[:80]
+    if not rid or not tipo.startswith('invoice'):
+        return jsonify({'ok': True, 'ignorado': tipo or 'sem tipo'}), 200
+    b = FinBoleto.por_charge('cora', conta['ambiente'], rid)
+    if not b:
+        return jsonify({'ok': True, 'ignorado': 'boleto de outra aplicação'}), 200
+    try:
+        sit, feito = cora_boletos.consultar_e_aplicar(b)
+    except Exception as exc:
+        logger.warning('[cobranca] webhook do Cora (conta %s, %s): %s', conta['id'], rid, exc)
+        return jsonify({'ok': False}), 500          # o Cora tenta de novo (até 3 vezes); a consulta de hora em hora cobre
+    registrar('escrita.webhook_boleto', 'financeiro', tabela='fin_boletos', registro_id=b['id'],
+              depois={'charge_id': rid, 'evento': tipo, 'evento_id': ev_id, 'de': b['situacao'], 'para': sit, 'feito': feito,
+                      'provedor': 'cora'})
+    return jsonify({'ok': True, 'situacao': sit, 'feito': feito}), 200

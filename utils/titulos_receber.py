@@ -47,6 +47,8 @@ def _banco_baixa(b):
         return {'EFI': 'Efí'}.get(bl.upper(), bl)
     if str(b.get('referencia') or '').startswith('bradesco:'):
         return 'Bradesco'                 # 17/11/2026: baixa pelo boleto do Bradesco também grava origem 'webhook'
+    if str(b.get('referencia') or '').startswith('cora'):
+        return 'Cora'                     # 18/11/2026: 'cora:<inv>' (boleto) e 'cora-extrato:' (crédito do extrato)
     return 'Efí' if b['origem'] in ('extrato', 'webhook') else ''
 
 

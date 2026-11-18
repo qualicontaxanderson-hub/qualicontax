@@ -327,7 +327,7 @@
       {% if aprov and contas_cobranca %}
       <div class="ns-campo" id="nsBancoBox" style="grid-column:1/-1"><label>Banco do boleto</label>
         <div class="ns-bancos">{% for c in contas_cobranca %}<label class="ns-banco"><input type="radio" name="conta_cobranca_id" value="{{ c.id }}"{{ ' checked' if loop.first }}>
-          <span>{{ logo_banco('364' if c.provedor == 'efi' else '237', none, 30) }}<span class="nb"><b>{{ 'Efí' if c.provedor == 'efi' else 'Bradesco' }}</b></span></span></label>{% endfor %}</div></div>
+          <span>{{ logo_banco({'efi': '364', 'bradesco': '237', 'cora': '403'}.get(c.provedor, '364'), none, 30) }}<span class="nb"><b>{{ {'efi': 'Efí', 'bradesco': 'Bradesco', 'cora': 'Cora'}.get(c.provedor, c.provedor) }}</b></span></span></label>{% endfor %}</div></div>
       {% endif %}
       <div class="ns-campo" id="nsCompBox" hidden><label>Mensalidade de</label><select class="ns-in" id="nsComp" name="competencia"></select></div>
       <div class="ns-campo" style="grid-column:1/-1"><label>Texto da nota / do boleto</label><input class="ns-in" id="nsDesc" name="descricao" maxlength="200" placeholder="o nome do serviço"></div>
@@ -361,7 +361,7 @@
     {% if contas_cobranca %}
     <section class="ns-b" id="apBancoBox"><div class="ns-h"><i class="fas fa-building-columns"></i> Banco do boleto</div>
       <div class="ns-bancos">{% for c in contas_cobranca %}<label class="ns-banco"><input type="radio" name="conta_cobranca_id" value="{{ c.id }}"{{ ' checked' if loop.first }}>
-        <span>{{ logo_banco('364' if c.provedor == 'efi' else '237', none, 30) }}<span class="nb"><b>{{ 'Efí' if c.provedor == 'efi' else 'Bradesco' }}</b></span></span></label>{% endfor %}</div></section>
+        <span>{{ logo_banco({'efi': '364', 'bradesco': '237', 'cora': '403'}.get(c.provedor, '364'), none, 30) }}<span class="nb"><b>{{ {'efi': 'Efí', 'bradesco': 'Bradesco', 'cora': 'Cora'}.get(c.provedor, c.provedor) }}</b></span></span></label>{% endfor %}</div></section>
     {% endif %}
     <div class="ns-aviso" id="apAviso"></div>
   </div></div>

@@ -1489,6 +1489,10 @@ def contas():
                 c['cob'] = {'id': l['id'], 'ativo': bool(l['ativo']), 'ambiente': l['ambiente'], 'provedor': l['provedor'],
                             'carteira': cfg.get('carteira'), 'conta': cfg.get('conta'), 'agencia': cfg.get('agencia'),
                             'testado_em': _d(l['testado_em']), 'teste': (l['teste_resultado'] or '')[:300]}
+                if l['provedor'] == 'cora':                 # 18/11/2026: certificado próprio do app do Cora
+                    from utils.cora_boletos import config as _cfg_cora
+                    cc_ = _cfg_cora(l)
+                    c['cob'].update({'cert_validade': cc_.get('cert_validade'), 'webhook': bool(cc_.get('webhook_id'))})
         certs = {}
         for e in emps:
             ci = certificado_do_cadastro_info(e['cliente_id'])
@@ -1506,7 +1510,9 @@ def contas():
         from routes.financeiro_ligar_banco import contas_com_cobranca_visivel
         dados['cob_on'] = sorted(contas_com_cobranca_visivel())
         from utils.bradesco_extrato import ultimos as _ult_ext
+        from utils.cora_extrato import ultimos as _ult_cora
         _ext = _ult_ext()
+        _ext.update(_ult_cora())                          # 18/11/2026: o Cora guarda a puxada dele na chave dele
         for c in dados['contas']:
             if c.get('cob') and _ext.get(c['id']):
                 x = _ext[c['id']]

@@ -1056,6 +1056,15 @@ def main() -> int:
     except Exception:
         logger.exception('[roteador] consulta dos boletos do Bradesco falhou; tenta na próxima hora.')
 
+    # Boletos do Cora (18/11/2026), de hora em hora 7h-22h: o aviso de pagamento (webhook) do Cora dá a
+    # baixa na hora; a consulta é a rede de segurança (e a lista de pagos, uma vez por dia). Só age se
+    # houver conta Cora ativa. Desliga com CORA_BOLETOS_SYNC=0.
+    try:
+        from utils.cora_boletos import rodar_de_hora_em_hora as cora_de_hora_em_hora
+        cora_de_hora_em_hora()
+    except Exception:
+        logger.exception('[roteador] consulta dos boletos do Cora falhou; tenta na próxima hora.')
+
     # E o extrato diário da Efí pela API (12/11/2026): uma vez por dia, depois
     # das 7h, entra sozinho e dá baixa nos boletos recebidos — Anderson: "Ao
     # receber na conta é pra dar baixa". Desliga com EFI_EXTRATO_ATIVO=0.
@@ -1077,6 +1086,15 @@ def main() -> int:
         bradesco_extrato_de_hora()
     except Exception:
         logger.exception('[roteador] extrato do Bradesco falhou; tenta na próxima volta (a janela de 7 dias cobre).')
+
+    # E o extrato do Cora pela API (18/11/2026): mesmo ritmo do Bradesco (30 em 30 min, 7h-22h, 7 dias até
+    # hoje); o crédito que casa com um boleto nosso ou com o CPF/CNPJ de um cliente com UM título aberto
+    # dá baixa. Só age em conta com a cobrança do Cora ligada. Desliga com CORA_EXTRATO_ATIVO=0.
+    try:
+        from utils.cora_extrato import rodar_de_hora_em_hora as cora_extrato_de_hora
+        cora_extrato_de_hora()
+    except Exception:
+        logger.exception('[roteador] extrato do Cora falhou; tenta na próxima volta (a janela de 7 dias cobre).')
 
     # E os certificados digitais deixados na _ENTRADA com a senha no nome
     # ("175 senha 1234.pfx"): vincula sozinho, pelo mesmo núcleo da tela.

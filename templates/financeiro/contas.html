@@ -367,7 +367,7 @@
 }
 </style>
 <div id="lgModal" role="dialog" aria-modal="true" aria-labelledby="lgTit">
-  <form class="lg-box" method="POST" action="" autocomplete="off">
+  <form class="lg-box" method="POST" action="" autocomplete="off" enctype="multipart/form-data">
     <aside class="lg-esq">
       <div class="lg-banco"><span class="lg-logo"><img id="lgLogo" src="{{ url_for('static', filename='images/bancos/237.svg') }}" alt=""></span>
         <span><b id="lgNome">Bradesco</b><small id="lgNum"></small></span></div>
@@ -377,33 +377,42 @@
         <a href="#" id="lgContaAlt" class="lg-alt" style="color:#a7f3d0">A conta da cobrança é sem o dígito? Corrigir</a>
       </div>
       <div class="lg-passos">
-        <div class="lg-passo on"><span class="n">1</span><span><b>Acesso ao banco</b><small>chaves do portal Bradesco</small></span></div>
+        <div class="lg-passo on"><span class="n">1</span><span><b>Acesso ao banco</b><small id="lgPasso1">chaves do portal Bradesco</small></span></div>
         <div class="lg-passo"><span class="n"><i class="fas fa-check"></i></span><span><b>Boleto</b><small>já vem do padrão do escritório</small></span></div>
         <div class="lg-passo"><span class="n"><i class="fas fa-check"></i></span><span><b>Aviso ao cliente</b><small>Financeiro · pelo nosso app</small></span></div>
       </div>
     </aside>
     <div class="lg-dir">
       <h3 id="lgTit">Acesso ao banco</h3>
-      <p class="lg-sub">Cole as duas chaves que o portal do Bradesco mostrou. O resto já está pronto.</p>
+      <p class="lg-sub" id="lgSub">Cole as duas chaves que o portal do Bradesco mostrou. O resto já está pronto.</p>
       <div class="lg-g2">
         <div><label class="lg-l" for="lgCid">Client ID</label><input type="text" id="lgCid" name="client_id" spellcheck="false"></div>
-        <div><label class="lg-l" for="lgSec">Client Secret</label><input type="password" id="lgSec" name="client_secret" spellcheck="false" autocomplete="new-password"></div>
+        <div id="lgSecWrap"><label class="lg-l" for="lgSec">Client Secret</label><input type="password" id="lgSec" name="client_secret" spellcheck="false" autocomplete="new-password"></div>
       </div>
-      <div><label class="lg-l">Certificado digital</label><div class="lg-cert" id="lgCert"></div></div>
+      <div id="lgCertWrap"><label class="lg-l">Certificado digital</label><div class="lg-cert" id="lgCert"></div></div>
+      <div id="lgCoraWrap" hidden>
+        <label class="lg-l">Certificado e chave do app do Cora</label>
+        <div class="lg-cert" id="lgCoraCert"></div>
+        <div class="lg-g2" style="margin-top:8px">
+          <div><label class="lg-l" for="lgCoraCertArq">certificate.pem</label><input type="file" id="lgCoraCertArq" name="cora_cert" accept=".pem,.crt,.cer,.txt"></div>
+          <div><label class="lg-l" for="lgCoraKeyArq">private-key.key</label><input type="file" id="lgCoraKeyArq" name="cora_key" accept=".key,.pem,.txt"></div>
+        </div>
+        <div class="lg-ajuda">No app do Cora: Conta → Integrações via APIs → gerar certificado. Baixe os dois arquivos da mesma geração e anexe aqui. Eles ficam cifrados no sistema; nada vai para o Railway.</div>
+      </div>
       <div id="lgAgWrap" hidden><label class="lg-l" for="lgAg">Agência</label><input type="text" id="lgAg" name="agencia" inputmode="numeric" maxlength="6" placeholder="4 números, sem o dígito">
         <div class="lg-ajuda">O cadastro desta conta está sem a agência. Digite uma vez e ela fica guardada na conta.</div></div>
       <div id="lgContaWrap" hidden><label class="lg-l" for="lgConta">Conta da cobrança (sem o dígito)</label><input type="text" id="lgConta" name="conta_cobranca" inputmode="numeric" maxlength="8">
         <div class="lg-ajuda">Como o gerente passou. Ex.: conta 1686-5 → 1686.</div></div>
       <div class="lg-g2">
-        <div><label class="lg-l" for="lgCarteira">Carteira</label><input type="text" id="lgCarteira" name="carteira" inputmode="numeric" maxlength="3">
+        <div id="lgCartWrap"><label class="lg-l" for="lgCarteira">Carteira</label><input type="text" id="lgCarteira" name="carteira" inputmode="numeric" maxlength="3">
           <div class="lg-ajuda">o número que o gerente passou</div></div>
         <div><label class="lg-l">Ambiente</label>
           <div class="lg-seg"><label><input type="radio" name="ambiente" value="producao" checked><span>Produção</span></label><label><input type="radio" name="ambiente" value="homologacao"><span>Teste</span></label></div></div>
       </div>
       <dl class="lg-pad">
         <div><dt>Juros e multa</dt><dd>não cobra</dd></div>
-        <div><dt>Baixa após vencer</dt><dd>365 dias</dd></div>
-        <div><dt>Telefone</dt><dd>(11) 2523-1815</dd></div>
+        <div><dt>Baixa após vencer</dt><dd id="lgPadBaixa">365 dias</dd></div>
+        <div id="lgPadTel"><dt>Telefone</dt><dd>(11) 2523-1815</dd></div>
         <div><dt>Envia por</dt><dd>Financeiro</dd></div>
         <p><i class="fas fa-circle-check" style="color:#15803d"></i> Padrão do escritório, igual à Efí. Ao clicar, o sistema já pergunta ao banco se está tudo certo.</p>
       </dl>
@@ -678,7 +687,8 @@ function cartaoEmp(e, itens, semCad) {
 }
 
 /* ---------- BOLETOS DENTRO DA CONTA (15/11/2026) ---------- */
-const COM_COBRANCA = {'237': 'Bradesco'};            // bancos com cobrança pela API (por enquanto só o Bradesco)
+const COM_COBRANCA = {'237': 'Bradesco', '403': 'Cora'};   // bancos com cobrança pela API dentro da conta (18/11/2026: Cora)
+const PROV_DE = {'237': 'bradesco', '403': 'cora'};
 const temCobranca = c => !!COM_COBRANCA[String(c.banco_id || '').replace(/^0+/, '')];
 const dmy = iso => iso ? new Date(iso.slice(0, 10) + 'T12:00').toLocaleDateString('pt-BR') : '';
 /* Liga/desliga (15/11/2026, Anderson: "se a gente ligar conseguimos usar se não ligar não aparece"):
@@ -697,28 +707,29 @@ function blocoCobranca(c) {
   if (!k && !cobVisivel(c)) return chaveCobranca(c, false);
   if (!k && !temCobranca(c)) return `${chaveCobranca(c, true)}
       <div class="cc-cob"><span class="ic"><i class="fas fa-barcode"></i></span>
-        <span class="tx"><b>Boletos</b><small>a cobrança pela API ainda não existe para ${esc(c.banco_nome || 'este banco')} — hoje: Bradesco (aqui) e Efí (aba Cobrança)</small></span><span class="bol"></span></div>`;
+        <span class="tx"><b>Boletos</b><small>a cobrança pela API ainda não existe para ${esc(c.banco_nome || 'este banco')} — hoje: Bradesco e Cora (aqui) e Efí (aba Cobrança)</small></span><span class="bol"></span></div>`;
   if (!k) return `${chaveCobranca(c, true)}
       <div class="cc-cob"><span class="ic"><i class="fas fa-barcode"></i></span>
         <span class="tx"><b>Boletos</b><small>ainda não ligado</small></span><span class="bol"></span></div>
       <button class="cc-ligar" type="button" data-ligar="${c.id}"><i class="fas fa-plug"></i> Ligar cobrança</button>`;
   const ok = (k.teste || '').startsWith('OK');
   const amb = k.ambiente === 'producao' ? 'Produção' : 'Teste (sandbox)';
-  if (k.provedor !== 'bradesco') {           // Efí: configurada e testada na aba Cobrança
+  if (k.provedor === 'efi') {                // Efí: configurada e testada na aba Cobrança
     const estE = !k.ativo ? 'desligado' : `ligado · ${amb}${k.testado_em ? ' · teste ' + (ok ? 'OK' : 'falhou') + ' em ' + dmy(k.testado_em) : ''}`;
     return `
       <div class="cc-cob ${k.ativo && ok ? 'on' : (k.teste && !ok ? 'mal' : '')}"><span class="ic"><i class="fas fa-barcode"></i></span>
         <span class="tx"><b>Boletos</b><small>${esc(estE)}</small></span><span class="bol"></span></div>
       <div class="cc-cob-acoes"><a class="lnk" href="#cobranca" data-ir-cob="1"><i class="fas fa-gear"></i> Ver e testar na aba Cobrança</a></div>`;
   }
-  const est = !k.ativo ? 'desligado' : !k.teste ? 'ligado · ainda não testado'
+  let est = !k.ativo ? 'desligado' : !k.teste ? 'ligado · ainda não testado'
             : ok ? `ligado · ${amb} · teste OK em ${dmy(k.testado_em)}` : `ligado · ${amb} · o último teste falhou`;
+  if (k.provedor === 'cora' && k.cert_validade) est += ` · certificado vence ${dmy(k.cert_validade)}`;
   return `
       <div class="cc-cob ${k.ativo && ok ? 'on' : (k.teste && !ok ? 'mal' : '')}"><span class="ic"><i class="fas fa-barcode"></i></span>
         <span class="tx"><b>Boletos</b><small>${esc(est)}</small>${k.teste && !ok ? `<small style="color:var(--verm)">${esc(k.teste)}</small>` : ''}</span><span class="bol"></span></div>
       <div class="cc-cob-acoes">
         <form method="POST" action="${esc(url(D.url_testar_cob, c.id))}"><button class="lnk" type="submit"><i class="fas fa-vial"></i> Testar</button></form>
-        <button class="lnk" type="button" data-ligar="${c.id}"><i class="fas fa-key"></i> Trocar chaves ou carteira</button>
+        <button class="lnk" type="button" data-ligar="${c.id}"><i class="fas fa-key"></i> ${k.provedor === 'cora' ? 'Trocar chave ou certificado' : 'Trocar chaves ou carteira'}</button>
         <a class="lnk cinza" href="#cobranca" data-ir-cob="1">Ver na aba Cobrança</a>
       </div>${blocoExtrato(c)}`;
 }
@@ -743,7 +754,16 @@ function blocoExtrato(c) {
 function abrirLigar(id) {
   const c = D.contas.find(x => x.id === id); if (!c) return;
   const e = apel[c.empresa_id] || {}, k = c.cob, cert = (D.certs || {})[c.empresa_id];
+  const prov = PROV_DE[String(c.banco_id || '').replace(/^0+/, '')] || 'bradesco', cora = prov === 'cora';
   const m = document.getElementById('lgModal');
+  m.querySelector('#lgPasso1').textContent = cora ? 'Client ID, certificado e chave do app do Cora' : 'chaves do portal Bradesco';
+  m.querySelector('#lgSub').textContent = cora
+    ? 'Cole o Client ID e anexe o certificado e a chave que o app do Cora gerou. O resto já está pronto.'
+    : 'Cole as duas chaves que o portal do Bradesco mostrou. O resto já está pronto.';
+  ['lgSecWrap', 'lgCertWrap', 'lgCartWrap', 'lgPadTel'].forEach(i => { m.querySelector('#' + i).hidden = cora; });
+  m.querySelector('#lgCoraWrap').hidden = !cora;
+  m.querySelector('#lgPadBaixa').textContent = cora ? 'não há (fica em atraso até pagar)' : '365 dias';
+  m.querySelector('#lgContaAlt').hidden = cora;
   m.querySelector('form').action = url(D.url_ligar, c.id);
   m.querySelector('#lgNome').textContent = COM_COBRANCA[String(c.banco_id).replace(/^0+/, '')] || c.banco_nome;
   const lg = LOGOS[String(c.banco_id || '').replace(/^0+/, '')]; if (lg) m.querySelector('#lgLogo').src = lg;
@@ -765,9 +785,22 @@ function abrirLigar(id) {
     ? `<span class="lg-cic"><i class="fas fa-file-shield"></i></span><span><b>Certificado A1 da ${esc(e.apelido || 'empresa')}</b><small>já cadastrado no sistema · vence ${dmy(cert.validade)}</small></span>`
     : `<span class="lg-cic mal"><i class="fas fa-triangle-exclamation"></i></span><span><b>A empresa não tem certificado A1 válido</b><small>cadastre o certificado na ficha da empresa antes de ligar</small></span>`;
   m.querySelector('#lgCert').classList.toggle('mal', !cert);
-  m.querySelector('#lgOk').disabled = !cert;
+  if (cora) {
+    // 18/11/2026: o Cora não usa o A1 nem Client Secret: certificado e chave gerados no app dele, enviados uma vez
+    const temCert = !!(k && k.cert_validade);
+    m.querySelector('#lgSec').required = false;
+    m.querySelector('#lgCoraCert').innerHTML = temCert
+      ? `<span class="lg-cic"><i class="fas fa-file-shield"></i></span><span><b>Certificado do Cora já enviado</b><small>vence ${dmy(k.cert_validade)} · anexe os dois arquivos só para trocar</small></span>`
+      : `<span class="lg-cic mal"><i class="fas fa-triangle-exclamation"></i></span><span><b>Ainda sem certificado e chave</b><small>anexe o certificate.pem e a private-key.key gerados no app do Cora</small></span>`;
+    m.querySelector('#lgCoraCert').classList.toggle('mal', !temCert);
+    ['lgCoraCertArq', 'lgCoraKeyArq'].forEach(i => { const x = m.querySelector('#' + i); x.value = ''; x.required = !k; });
+    m.querySelector('#lgOk').disabled = false;
+  } else {
+    ['lgCoraCertArq', 'lgCoraKeyArq'].forEach(i => { const x = m.querySelector('#' + i); x.value = ''; x.required = false; });
+    m.querySelector('#lgOk').disabled = !cert;
+  }
   m.style.display = 'flex';
-  setTimeout(() => m.querySelector(k ? '#lgCarteira' : '#lgCid').focus(), 30);
+  setTimeout(() => m.querySelector(cora ? (k ? '#lgCoraCertArq' : '#lgCid') : (k ? '#lgCarteira' : '#lgCid')).focus(), 30);
 }
 document.addEventListener('click', ev => {
   const b = ev.target.closest('[data-ligar]');

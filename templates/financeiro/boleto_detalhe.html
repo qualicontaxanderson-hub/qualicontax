@@ -36,7 +36,7 @@
 </section>
 
 <section class="nf-card" id="boleto">
-    <header><b><i class="fas fa-barcode"></i></b><span>Boleto</span><small>emitido pela Efí sem nota fiscal</small></header>
+    <header><b><i class="fas fa-barcode"></i></b><span>Boleto</span><small>emitido {{ {'efi': 'pela Efí', 'bradesco': 'pelo Bradesco', 'cora': 'pelo Cora'}.get(boleto.provedor, 'pelo banco') }} sem nota fiscal</small></header>
     <div class="nf-card-body">
         {% set volta = url_for('financeiro.boleto_detalhe', boleto_id=boleto.id) ~ '#boleto' %}
         {% set email_padrao = cliente.email if cliente else '' %}

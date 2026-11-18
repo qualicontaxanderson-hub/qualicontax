@@ -171,6 +171,8 @@ def coletar(f, fresco=False, so_base=False):
             bk, bn = _banco(b['banco_linha'])
         elif str(b.get('referencia') or '').startswith('bradesco:'):
             bk, bn = '237', 'Bradesco'    # 17/11/2026: boleto do Bradesco também baixa com origem 'webhook'
+        elif str(b.get('referencia') or '').startswith('cora'):
+            bk, bn = '403', 'Cora'        # 18/11/2026: boleto ou crédito do Cora
         elif b['origem'] == 'webhook' or b['origem'] == 'extrato':
             bk, bn = '364', 'Efí'
         else:
@@ -179,7 +181,7 @@ def coletar(f, fresco=False, so_base=False):
     for t in T.values():
         saldo = float(t['valor']) - float(t['valor_baixado'] or 0)
         prov = bol.get(t['id'])
-        bk, bn = ({'efi': ('364', 'Efí'), 'bradesco': ('237', 'Bradesco')}.get(prov, ('x:' + str(prov), str(prov)))
+        bk, bn = ({'efi': ('364', 'Efí'), 'bradesco': ('237', 'Bradesco'), 'cora': ('403', 'Cora')}.get(prov, ('x:' + str(prov), str(prov)))
                   if prov else (SEM_BOLETO, BANCO_ESPECIAL[SEM_BOLETO]))
         if t['status'] in ('aberto', 'parcial') and saldo > 0.004:
             sit = 'vencido' if t['vencimento'] < hoje else 'avencer'

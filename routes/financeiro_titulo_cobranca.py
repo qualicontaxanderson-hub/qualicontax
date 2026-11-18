@@ -62,8 +62,8 @@ def titulo_cobranca(titulo_id):
     boleto = (vivos or boletos or [None])[0]
     # o banco do boleto aparece pelo LOGO (Anderson, 15/11/2026): Efí 364, Bradesco 237, senão o banco da conta
     for b in boletos:
-        b['banco_logo'] = {'efi': '364', 'bradesco': '237'}.get(b.get('conta_provedor') or '') or b.get('conta_banco_id') or ''
-        b['banco_nome'] = {'efi': 'Efí', 'bradesco': 'Bradesco'}.get(b.get('conta_provedor') or '') or ''
+        b['banco_logo'] = {'efi': '364', 'bradesco': '237', 'cora': '403'}.get(b.get('conta_provedor') or '') or b.get('conta_banco_id') or ''
+        b['banco_nome'] = {'efi': 'Efí', 'bradesco': 'Bradesco', 'cora': 'Cora'}.get(b.get('conta_provedor') or '') or ''
     if boleto and isinstance(boleto.get('itens_json'), str):
         try:
             boleto['itens_json'] = json.loads(boleto['itens_json'])
