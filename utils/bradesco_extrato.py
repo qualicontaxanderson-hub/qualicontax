@@ -147,9 +147,59 @@ def _guardar(fin_conta_id, res):
 # Baixa do Pix recebido
 # ---------------------------------------------------------------------------
 def nome_do_pix(desc):
-    """'PIX RECEBIDO REM: HENRIQUE SOUZA VICENT 06/11' -> 'HENRIQUE SOUZA VICENT' (o banco corta o nome)."""
-    m = re.match(r'^PIX RECEBIDO\s+REM:\s*(.+?)(?:\s+\d{2}/\d{2})?\s*$', str(desc or ''), re.I)
+    """'PIX RECEBIDO REM: HENRIQUE SOUZA VICENT 06/11' -> 'HENRIQUE SOUZA VICENT' (o banco corta o nome).
+    17/11/2026: o Pix pago pelo QR do boleto vem 'PIX QR CODE DINAMIC REM: ANDERSON ANTUNES VIEI 17/' (data cortada)."""
+    m = re.match(r'^PIX (?:RECEBIDO|QR CODE DINAMIC\w*)\s+REM:\s*(.+?)(?:\s+\d{2}/\d{0,2})?\s*$', str(desc or ''), re.I)
     return m.group(1).strip() if m else None
+
+
+def _boleto_da_linha(lanc, nome):
+    """O Pix é do QR de UM boleto nosso do Bradesco? Mesma conta, mesmo valor, pagador do boleto começa com o nome
+    que o banco escreveu (ele corta), boleto emitido até a data da linha e ainda sem linha amarrada. Devolve o boleto
+    (com baixa_id/lancamento_id da baixa pelo boleto, se já houve) ou None quando não é exatamente um."""
+    from utils.extrato_ingest import mesma_conta
+    bs = _q("""SELECT b.*, fc.conta AS conta_fin, x.id AS baixa_id, x.lancamento_id AS baixa_lanc
+                 FROM fin_boletos b
+                 JOIN fin_cobranca_contas c ON c.id = b.conta_cobranca_id
+                 JOIN fin_contas fc ON fc.id = c.fin_conta_id
+                 LEFT JOIN fin_titulo_baixas x ON x.titulo_id = b.titulo_id
+                      AND x.referencia COLLATE utf8mb4_unicode_ci = CONCAT('bradesco:', b.charge_id) COLLATE utf8mb4_unicode_ci
+                WHERE b.provedor = 'bradesco' AND b.empresa_id = %s AND b.titulo_id IS NOT NULL
+                  AND b.situacao IN ('new', 'waiting', 'unpaid', 'paid') AND ABS(b.valor - %s) < 0.005
+                  AND DATE(b.criado_em) <= %s AND (x.id IS NULL OR x.lancamento_id IS NULL)""",
+            (lanc['empresa_id'], Decimal(str(lanc['valor'])), lanc['data']))
+    n = re.sub(r'\s+', ' ', (nome or '').upper()).strip()
+    achados = [b for b in bs if mesma_conta(lanc['conta'], b['conta_fin'])
+               and n and re.sub(r'\s+', ' ', (b.get('pagador_nome') or '').upper()).startswith(n)]
+    return achados[0] if len(achados) == 1 else None
+
+
+def _baixar_pelo_boleto(lanc, b, seco):
+    """Baixa (ou só amarra) pelo boleto: o boleto identifica o pagamento, então vale mesmo quando o pagador é do
+    grupo ou o nome casaria com vários cadastros. Devolve (situação, detalhe)."""
+    from utils.atividade import registrar_agente
+    if seco:
+        return 'baixaria', {'titulo_id': b['titulo_id'], 'nome': b.get('pagador_nome'), 'boleto': b['charge_id']}
+    if b.get('baixa_id'):
+        _x('UPDATE fin_titulo_baixas SET lancamento_id = %s, confirmado_extrato = 1 WHERE id = %s AND lancamento_id IS NULL',
+           (lanc['id'], b['baixa_id']))
+        como = 'ja-baixado'
+    else:
+        from utils.bradesco_boletos import aplicar
+        feito = aplicar(b, 'paid', Decimal(str(lanc['valor'])), lanc['data'])   # cria a baixa e amarra esta linha
+        if feito != 'baixa':
+            return 'empate', {'nome': b.get('pagador_nome'), 'boleto': b['charge_id'], 'motivo': 'baixa recusada'}
+        como = 'baixado'
+    # a linha é recebimento de boleto, não transferência do grupo: solta a trava do par
+    _x("""UPDATE extrato_lancamentos SET par_estado = 'liberado', par_liberado_motivo = %s, par_liberado_em = NOW()
+           WHERE id = %s AND par_estado IN ('casado', 'suspeito')""",
+       (f"Pix do QR do boleto Bradesco {b['charge_id']} (título {b['titulo_id']})", lanc['id']))
+    registrar_agente('escrita.baixa_bradesco_extrato', 'financeiro', None, _ATOR[0], _ATOR[1],
+                     tabela='fin_titulos', registro_id=b['titulo_id'],
+                     depois={'valor': str(lanc['valor']), 'data': str(lanc['data']), 'quem_mandou': b.get('pagador_nome'),
+                             'lancamento_id': lanc['id'], 'boleto': b['charge_id'],
+                             'como': 'Pix do QR do boleto: mesma conta, valor e pagador' + (' (baixa já existia; só amarrou)' if como == 'ja-baixado' else '')})
+    return como, {'titulo_id': b['titulo_id'], 'nome': b.get('pagador_nome'), 'boleto': b['charge_id']}
 
 
 def clientes_pelo_nome(nome):
@@ -202,6 +252,9 @@ def baixar(lanc, seco=True):
         return 'ignorado', None
     if lanc.get('id') and _q('SELECT 1 x FROM fin_titulo_baixas WHERE lancamento_id = %s LIMIT 1', (lanc['id'],), one=True):
         return 'ja-amarrado', None
+    b = _boleto_da_linha(lanc, nome)                 # 17/11/2026: o boleto é a prova mais forte; vem antes do nome
+    if b:
+        return _baixar_pelo_boleto(lanc, b, seco)
     clis = clientes_pelo_nome(nome)
     grupo = _do_grupo()
     if clis and all(c in grupo for c in clis):
@@ -289,7 +342,8 @@ def rodar(seco=True, de=None, ate=None, fin_conta_id=None):
             from utils.extrato_ingest import mesma_conta
             alvo = [l for l in _q("""SELECT * FROM extrato_lancamentos
                                        WHERE empresa_id = %s AND valor > 0 AND data BETWEEN %s AND %s
-                                         AND descricao LIKE 'PIX RECEBIDO%%' ORDER BY data, id""", (emp, de, ate))
+                                         AND (descricao LIKE 'PIX RECEBIDO%%' OR descricao LIKE 'PIX QR CODE%%')
+                                       ORDER BY data, id""", (emp, de, ate))
                     if mesma_conta(l['conta'], r['conta'])]
         for l in alvo:
             try:
