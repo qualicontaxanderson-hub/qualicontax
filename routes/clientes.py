@@ -23,7 +23,7 @@ from models.cliente_responsavel import ClienteResponsavel
 from models.fin_contrato import FinContrato
 from models.cadastro_adicional_cliente import CadastroAdicionalCliente
 from models.socio_cliente import SocioCliente, pode_ser_responsavel, qual_recusada_pj
-from utils.qualificacao import qualificacao, ALVO_FALTA as QUAL_ALVO
+from utils.qualificacao import qualificacao, ficha as ficha_texto, ALVO_FALTA as QUAL_ALVO
 from models.contabilidade import Contabilidade
 from utils.natureza import classificar as natureza_classificar, codigo_formatado, FAMILIAS as NAT_FAMILIAS
 from models.pessoa_dados import cpf_valido, cpf_formatado
@@ -153,6 +153,65 @@ def _conjuge_cadastrado(pf_id):
         return None
     return execute_query("SELECT id, nome_razao_social FROM clientes "
                          "WHERE REGEXP_REPLACE(cpf_cnpj, '[^0-9]', '') = %s LIMIT 1", (dig,), fetch=True, fetch_one=True)
+
+
+def _conjuge_sugerido(pf_id):
+    """Alguém com cadastro diz que o cônjuge é ESTA pessoa (17/11/2026, Anderson: "estou editando o Anderson,
+    casado com a Monica e não aparece ela, era para sugerir"). Só quando esta ficha ainda não tem o cônjuge."""
+    eu = execute_query("SELECT cpf_cnpj, nome_razao_social FROM clientes WHERE id = %s", (pf_id,), fetch=True, fetch_one=True) or {}
+    meu = re.sub(r'\D', '', eu.get('cpf_cnpj') or '')
+    d = PessoaDados.get(pf_id)
+    if len(meu) != 11 or re.sub(r'\D', '', d.get('conjuge_cpf') or ''):
+        return None
+    rows = execute_query(
+        """SELECT c.id, c.nome_razao_social AS nome, c.cpf_cnpj AS cpf, p.estado_civil, p.regime_bens, p.sexo
+             FROM clientes_pf_dados p JOIN clientes c ON c.id = p.cliente_id
+            WHERE REGEXP_REPLACE(p.conjuge_cpf, '[^0-9]', '') = %s AND c.id <> %s AND COALESCE(c.situacao, 'ATIVO') <> 'INATIVO'
+            ORDER BY p.alterado_em DESC LIMIT 3""", (meu, pf_id), fetch=True) or []
+    rows = filtrar_lista(rows)
+    if not rows:
+        return None
+    s = rows[0]
+    civil = s.get('estado_civil') if s.get('estado_civil') in COM_REGIME else 'CASADO'
+    rot = dict(ESTADOS_CIVIS).get(civil, 'Casado(a)')
+    if s.get('sexo') == 'F':
+        rot = rot.replace('o(a)', 'a')
+    elif s.get('sexo') == 'M':
+        rot = rot.replace('(a)', '')
+    verbo = ('é ' + rot[0].lower() + rot[1:]) if civil == 'CASADO' else 'vive em união estável'
+    return {'id': s['id'], 'nome': s['nome'], 'cpf': s['cpf'], 'estado_civil': civil, 'regime_bens': s.get('regime_bens') or '',
+            'frase': f"{verbo} com {(eu.get('nome_razao_social') or '').split(' ')[0].title()}"}
+
+
+def _espelhar_conjuge(pf_id, antes, depois, usuario_id):
+    """Gravou o cônjuge aqui e ele tem cadastro sem cônjuge? Preenche lá também (CPF, nome e, se estiverem vazios,
+    estado civil e regime). Devolve o nome de quem recebeu, para a mensagem da tela."""
+    novo = re.sub(r'\D', '', depois.get('conjuge_cpf') or '')
+    if len(novo) != 11 or novo == re.sub(r'\D', '', antes.get('conjuge_cpf') or ''):
+        return None
+    eu = execute_query("SELECT cpf_cnpj, nome_razao_social FROM clientes WHERE id = %s", (pf_id,), fetch=True, fetch_one=True) or {}
+    outro = execute_query("SELECT id, nome_razao_social FROM clientes WHERE REGEXP_REPLACE(cpf_cnpj, '[^0-9]', '') = %s "
+                          "AND tipo_pessoa = 'PF' AND id <> %s LIMIT 1", (novo, pf_id), fetch=True, fetch_one=True)
+    if not outro or not filtrar_lista([outro]):
+        return None
+    o_antes = PessoaDados.get(outro['id'])
+    if re.sub(r'\D', '', o_antes.get('conjuge_cpf') or ''):
+        return None                                   # lá já tem cônjuge: não mexe
+    o_depois = dict(o_antes)
+    o_depois['conjuge_cpf'] = cpf_formatado(eu.get('cpf_cnpj'))
+    o_depois['conjuge_nome'] = (eu.get('nome_razao_social') or '').upper()[:255] or None
+    if not o_depois.get('estado_civil') or o_depois['estado_civil'] not in COM_REGIME:
+        o_depois['estado_civil'] = depois.get('estado_civil') if depois.get('estado_civil') in COM_REGIME else 'CASADO'
+    if not o_depois.get('regime_bens') and depois.get('regime_bens'):
+        o_depois['regime_bens'] = depois['regime_bens']
+    mudou = [c for c in PESSOA_CAMPOS if (o_antes.get(c) or None) != (o_depois.get(c) or None)]
+    if not mudou:
+        return None
+    PessoaDados.salvar(outro['id'], o_depois, usuario_id)
+    registrar('escrita.alterou_dados_pessoa', 'cadastros', tabela='clientes', registro_id=outro['id'],
+              antes={c: (o_antes.get(c) or None) for c in mudou},
+              depois={**{c: (o_depois.get(c) or None) for c in mudou}, 'espelho_de': pf_id})
+    return outro['nome_razao_social']
 
 
 def _empresas_do_socio(pf_id):
@@ -705,6 +764,7 @@ def _salvar_pessoa(cliente_id, form):
     PessoaDados.salvar(cliente_id, depois, current_user.id)
     registrar('escrita.alterou_dados_pessoa', 'cadastros', tabela='clientes', registro_id=cliente_id,
               antes={c: _s(antes.get(c)) for c in mudou}, depois={c: _s(depois.get(c)) for c in mudou})
+    _espelhar_conjuge(cliente_id, antes, depois, current_user.id)
 
 
 def _ler_socios(form):
@@ -1815,6 +1875,7 @@ def detalhes(id):
                          socio_em=(_empresas_do_socio(id) if cliente.get('tipo_pessoa') == 'PF' else []),
                          # "Copiar qualificação" (20/10/2026): o parágrafo do contrato
                          qualif=qualificacao(id), qualif_alvo=QUAL_ALVO,
+                         ficha_txt=ficha_texto(id),      # "Copiar ficha" em texto organizado (17/11/2026)
                          qualif_socios=qualif_socios,
                          qualif_todos=(';\n\n'.join(q[0] for q in qualif_socios.values() if q[0]) + '.'
                                        if any(q[0] for q in qualif_socios.values()) else ''),
@@ -1822,6 +1883,7 @@ def detalhes(id):
                          hoje_iso=date.today().isoformat(),
                          pessoa=PessoaDados.get(id) if cliente.get('tipo_pessoa') == 'PF' else {},
                          conjuge_cad=_conjuge_cadastrado(id) if cliente.get('tipo_pessoa') == 'PF' else None,
+                         conjuge_sug=_conjuge_sugerido(id) if cliente.get('tipo_pessoa') == 'PF' else None,
                          documentos=Documentos.listar(id) if cliente.get('tipo_pessoa') == 'PF' else [],
                          natureza=(natureza_classificar(cliente.get('natureza_codigo'), cliente.get('natureza_juridica'))
                                    + (codigo_formatado(cliente.get('natureza_codigo')),)),
@@ -2235,6 +2297,10 @@ def salvar_campos(id):
                       antes={c: _s(pf_antes.get(c)) for c in mudou}, depois={c: _s(pf_depois.get(c)) for c in mudou})
             inv = {v: k for k, v in _CAMPOS_PF.items()}
             salvos += [_ROTULO_CAMPO[inv[c]] for c in mudou if c in inv]
+            espelho = _espelhar_conjuge(id, pf_antes, pf_depois, current_user.id)
+            if espelho:
+                from utils.texto import nome_proprio as _np
+                salvos.append(f'Cônjuge também na ficha de {_np(espelho)}')
 
     if docs_novos is not None:
         r_antes, r_depois = Documentos.resumo(docs_antes), Documentos.resumo(docs_novos)

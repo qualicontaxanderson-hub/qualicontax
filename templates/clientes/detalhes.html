@@ -116,7 +116,7 @@
                     <a href="{{ url_for('clientes.avulsos') if cliente.avulso else url_for('clientes.index') }}" id="btnVoltar" class="qb-btn-v"><i class="fas fa-arrow-left"></i> <span>Voltar</span></a>
                     {% if qualif[0] %}<button type="button" class="qb-btn-v" data-copiar-texto="{{ qualif[0] }}" data-copiar-rotulo="Qualificação"
                             title="Copia o parágrafo de qualificação para contrato{% if qualif[1] %} — falta no cadastro: {{ qualif[1]|join(', ') }}{% endif %}"><i class="fas fa-file-signature"></i> Copiar qualificação{% if qualif[1] %} <span style="background:#fbbf24;color:#422006;border-radius:99px;padding:1px 8px;font-size:11px;font-weight:800;">falta{{ 'm' if qualif[1]|length > 1 }} {{ qualif[1]|join(' e ') if qualif[1]|length <= 2 else (qualif[1]|length ~ ' · veja em Cadastro') }}</span>{% endif %}</button>{% endif %}
-                    <button type="button" class="qb-btn-v" data-copiar-ficha="{{ cliente.nome_razao_social }}" title="Copia identificação, contato, dados fiscais e endereços"><i class="far fa-copy"></i> Copiar ficha</button>
+                    <button type="button" class="qb-btn-v" data-copiar-texto="{{ ficha_txt }}" data-copiar-rotulo="Ficha" title="Copia a ficha cadastral inteira em texto: identificação, documentos, endereços, contatos, sócios e responsáveis"><i class="far fa-copy"></i> Copiar ficha</button>
                     {% if pode_rota('clientes.salvar_campos') %}<button type="button" id="tuEditar" class="qb-btn-v qb-btn-salvar" title="Abre todos os campos da ficha para alterar, inclusive número, {{ 'razão social e a busca na Receita' if pj else 'nome e CPF' }}"><i class="fas fa-pen"></i> Editar</button>{% endif %}
                     {% if pode_rota('clientes.salvar_campos') %}<button type="button" id="tuSalvar" class="qb-btn-v qb-btn-salvar tu-salvar" disabled title="Grava o que você alterou na página"><i class="fas fa-check"></i> Salvar <b id="tuN"></b></button>{% endif %}
                 </div>
@@ -343,6 +343,13 @@
                             </div>
                             <div class="pf-cert" id="pfConjCad"{% if not conjuge_cad %} hidden{% endif %}>{% if conjuge_cad %}<i class="fas fa-link"></i> Cônjuge cadastrado: <b>{{ conjuge_cad.nome_razao_social | nome_proprio }}</b><a href="{{ url_for('clientes.detalhes', id=conjuge_cad.id) }}">abrir ficha <i class="fas fa-arrow-right"></i></a>{% endif %}</div>
                         </div>
+                        {% if conjuge_sug %}
+                        <div class="pf-cert" id="pfConjSug" style="background:#fefce8;border-color:#fde047;color:#713f12;display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;">
+                            <span><i class="fas fa-lightbulb"></i> <b>{{ conjuge_sug.nome | nome_proprio }}</b> <small>CPF {{ conjuge_sug.cpf }}</small> informa no cadastro que {{ conjuge_sug.frase }}.</span>
+                            {% if pode_rota('clientes.salvar_campos') %}<button type="button" id="pfConjUsar" data-cpf="{{ conjuge_sug.cpf }}" data-nome="{{ conjuge_sug.nome | upper }}" data-civil="{{ conjuge_sug.estado_civil }}" data-regime="{{ conjuge_sug.regime_bens }}" style="display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border-radius:999px;border:1px solid #ca8a04;background:#fff;color:#713f12;font-weight:700;font-size:12.5px;cursor:pointer;white-space:nowrap;font-family:inherit;"><i class="fas fa-ring"></i> Usar como cônjuge</button>{% endif %}
+                            <a href="{{ url_for('clientes.detalhes', id=conjuge_sug.id) }}" target="_blank" rel="noopener">abrir ficha <i class="fas fa-arrow-right"></i></a>
+                        </div>
+                        {% endif %}
                         <div class="pf-nota" id="pfSolteiroNota"{% if casado %} hidden{% endif %}><i class="fas fa-circle-info"></i> {% if ps.estado_civil %}{{ pessoa_rotulo('estado_civil', ps.estado_civil) }}: não há regime de bens nem cônjuge a informar.{% else %}Escolha o estado civil. Regime de bens e cônjuge aparecem só para casado(a) ou união estável.{% endif %}</div>
                     </div>
 
@@ -2210,6 +2217,24 @@
             }).catch(function (err) { console.error('cônjuge: busca falhou', err); });
         }, 350);
     }
+    // 17/11/2026: a outra ficha diz que o cônjuge é esta pessoa — um clique preenche estado civil, regime, CPF e nome
+    var usarConj = document.getElementById('pfConjUsar');
+    if (usarConj) usarConj.addEventListener('click', function () {
+        var civBox = document.querySelector('.qb-opcoes[data-campo="pf_estado_civil"]'), civ = usarConj.dataset.civil || 'CASADO';
+        if (civBox) { if (civ === (civBox.dataset.valor || '')) delete pend.pf_estado_civil; else pend.pf_estado_civil = civ; mostrar(civBox); }
+        pfCivil();
+        [['pf_regime_bens', usarConj.dataset.regime], ['pf_conjuge_cpf', usarConj.dataset.cpf], ['pf_conjuge_nome', usarConj.dataset.nome]].forEach(function (par) {
+            var el = document.querySelector('.tu-v[data-campo="' + par[0] + '"]'); if (!el || !par[1]) return;
+            if (par[0] === 'pf_regime_bens' && ((el.dataset.valor || '') || pend.pf_regime_bens)) return;   // regime já escolhido aqui: fica o daqui
+            if (par[1] === (el.dataset.valor || '')) delete pend[par[0]]; else pend[par[0]] = par[1];
+            fechar(el); mostrar(el);
+        });
+        atualizarBotao();
+        var sug = document.getElementById('pfConjSug'); if (sug) sug.style.display = 'none';
+        var box = document.getElementById('pfConjCad');
+        if (box) { box.hidden = false; box.classList.remove('venc'); box.innerHTML = '<i class="fas fa-link"></i> Cônjuge: <b>' + esc(usarConj.dataset.nome) + '</b> <small>· veio da ficha dele(a). Confira e clique em Salvar.</small>'; }
+        conjUltimo = String(usarConj.dataset.cpf || '').replace(/\D/g, '');
+    });
     // 17/11/2026 (Anderson): "Sempre letras maiúsculas em tudo" — todo texto digitado na ficha vira maiúscula na hora
     // (menos e-mail, buscas e as listas, que têm a grafia delas). O servidor já grava assim; a tela acompanha.
     document.addEventListener('input', function (e) {
