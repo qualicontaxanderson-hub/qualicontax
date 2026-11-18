@@ -86,6 +86,37 @@
 .ho-enc { margin-top:14px; padding-top:12px; border-top:1px dashed #e2e8f0; }
 .ho-enc-box { margin-top:10px; display:flex; flex-direction:column; gap:10px; } .ho-enc-l { display:flex; align-items:flex-end; gap:8px; flex-wrap:wrap; }
 .ho-row-falta { border-color:#fca5a5 !important; box-shadow:0 0 0 3px #fee2e2; }
+.ho-chips-cab { display:flex; gap:6px; flex-wrap:wrap; margin-top:7px; } .ho-chips-cab:empty { display:none; }
+.ho-chips-cab span { font-size:11.5px; font-weight:700; background:rgba(255,255,255,.16); border:1px solid rgba(255,255,255,.28); border-radius:99px; padding:3px 10px; white-space:nowrap; }
+.ho-chips-cab span.ok { background:rgba(187,247,208,.25); border-color:rgba(187,247,208,.6); } .ho-chips-cab span.al { background:rgba(254,215,170,.3); border-color:rgba(254,215,170,.7); }
+.ho-kpis { display:grid; grid-template-columns:repeat(4, minmax(0,1fr)); gap:10px; padding:12px 22px 0; background:#f6faf7; }
+.ho-kpi { display:flex; gap:11px; align-items:center; background:#fff; border:1px solid #e6eeea; border-radius:14px; padding:10px 12px; min-width:0; }
+.ho-kpi > i { width:36px; height:36px; border-radius:11px; display:inline-flex; align-items:center; justify-content:center; font-size:15px; color:#fff; flex-shrink:0; }
+.ho-kpi.k1 > i { background:linear-gradient(135deg,#22c55e,#15803d); } .ho-kpi.k2 > i { background:linear-gradient(135deg,#a78bfa,#6d28d9); }
+.ho-kpi.k3 > i { background:linear-gradient(135deg,#60a5fa,#1d4ed8); } .ho-kpi.k4 > i { background:linear-gradient(135deg,#f87171,#b91c1c); }
+.ho-kpi.k4.zero > i { background:linear-gradient(135deg,#94a3b8,#475569); }
+.ho-kpi div { min-width:0; } .ho-kpi small { display:block; font-size:10px; font-weight:800; letter-spacing:.07em; text-transform:uppercase; color:#94a3b8; }
+.ho-kpi b { display:block; font-size:15.5px; color:#0f172a; font-variant-numeric:tabular-nums; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; } .ho-kpi span { font-size:11.5px; color:#64748b; display:block; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.ho-atalhos { display:inline-flex; gap:5px; flex-wrap:wrap; } .ho-atalhos button { font:inherit; font-size:11.5px; font-weight:700; color:#0f3d2e; background:#f0faf3; border:1px solid #bfe3cd; border-radius:99px; padding:4px 9px; cursor:pointer; }
+.ho-atalhos button:hover { background:#dcf3e4; }
+.ho-vig-txt { margin-top:8px; font-size:12.5px; color:#64748b; } .ho-vig-txt b { color:#0f3d2e; }
+.hp-meses { display:grid; grid-template-columns:repeat(6, minmax(0,1fr)); gap:4px; } .ho-meses { grid-template-columns:repeat(12, minmax(0,1fr)); gap:3px; margin:0; padding:0; border:0; }
+.hp-m { text-align:center; font-size:10px; font-weight:800; color:#94a3b8; text-transform:uppercase; letter-spacing:0; }
+.hp-m i { display:block; height:8px; border-radius:99px; margin-top:3px; background:#e2e8f0; }
+.hp-m.pago i { background:#22c55e; } .hp-m.aberto i { background:#3b82f6; } .hp-m.atrasado i { background:#ef4444; } .hp-m.parcial i { background:repeating-linear-gradient(90deg,#22c55e 0 6px,#ef4444 6px 12px); }
+.hp-m.atual { color:#0f3d2e; } .hp-m.atual i { box-shadow:0 0 0 2px #fff, 0 0 0 3.5px #0f3d2e; }
+.hp-m.sem.atual i { background:repeating-linear-gradient(90deg,#fdba74 0 5px,#fed7aa 5px 10px); }
+.ho-paga-txt { margin-top:9px; font-size:12.5px; color:#334155; line-height:1.45; } .ho-paga-txt b { color:#0f3d2e; } .ho-paga-txt .deve { display:block; margin-top:5px; color:#991b1b; font-weight:700; }
+.ho-leg { display:flex; gap:10px; flex-wrap:wrap; margin-top:7px; font-size:10.5px; color:#64748b; } .ho-leg i { display:inline-block; width:14px; height:6px; border-radius:99px; margin-right:4px; vertical-align:middle; }
+.ho-cont { display:flex; flex-direction:column; gap:6px; } .ho-cont div { display:flex; gap:9px; align-items:center; font-size:12.5px; }
+.ho-cont .av { width:28px; height:28px; border-radius:9px; background:#eef6f1; color:#15803d; display:inline-flex; align-items:center; justify-content:center; font-weight:800; font-size:11px; flex-shrink:0; }
+.ho-cont b { display:block; font-size:12.5px; color:#0f172a; } .ho-cont small { color:#64748b; display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:220px; }
+.ho-cont .vazio { color:#991b1b; font-weight:700; background:#fef2f2; border:1px solid #fecaca; border-radius:9px; padding:7px 9px; display:block; }
+.ho-lista { display:flex; flex-direction:column; gap:6px; font-size:12.5px; color:#334155; } .ho-lista div { display:flex; gap:8px; align-items:baseline; }
+.ho-lista div span:first-child { flex:0 0 auto; font-weight:800; color:#0f3d2e; font-variant-numeric:tabular-nums; } .ho-lista small { color:#94a3b8; margin-left:auto; white-space:nowrap; }
+.ho-lista .des { text-decoration:line-through; color:#94a3b8; }
+.ns-op small.prev { color:#15803d; font-weight:700; }
+@media (max-width:980px) { .ho-kpis { grid-template-columns:repeat(2, minmax(0,1fr)); padding:12px 14px 0; } .ho-meses { grid-template-columns:repeat(6, minmax(0,1fr)); } }
 .ho-num { color:#94a3b8; font-size:12px; font-variant-numeric:tabular-nums; }
 @media (max-width:980px) {
   .ns { top:0; left:0; transform:none; width:100vw !important; max-height:100vh; height:100vh; border-radius:0; }
@@ -255,10 +286,17 @@
   <div class="ns ho" role="dialog" aria-modal="true" aria-labelledby="ho-titulo">
     <header class="ns-cab">
       <span class="ns-ico"><i class="fas fa-file-signature"></i></span>
-      <div class="ns-tit"><b id="ho-titulo">Contrato de honorários</b><span id="ho-sub">escolha a empresa</span></div>
+      <div class="ns-tit"><b id="ho-titulo">Contrato de honorários</b><span id="ho-sub">escolha a empresa</span>
+        <div class="ho-chips-cab" id="ho-chips-cab"></div></div>
       <div class="ns-prev"><small>Mensal</small><b id="ho-prev">R$ 0,00</b><span id="ho-prev-sub">—</span></div>
       <button type="button" class="ns-x" onclick="hoFechar()" aria-label="Fechar"><i class="fas fa-xmark"></i></button>
     </header>
+    <div class="ho-kpis" id="ho-kpis">
+      <div class="ho-kpi k1"><i class="fas fa-coins"></i><div><small>Mensal</small><b id="ho-k-mensal">—</b><span id="ho-k-mensal-s">valor do contrato</span></div></div>
+      <div class="ho-kpi k2"><i class="fas fa-gift"></i><div><small>13º deste ano</small><b id="ho-k-dec">—</b><span id="ho-k-dec-s">sem 13º</span></div></div>
+      <div class="ho-kpi k3"><i class="fas fa-arrow-trend-up"></i><div><small>Próximo reajuste</small><b id="ho-k-reaj">—</b><span id="ho-k-reaj-s">salário mínimo</span></div></div>
+      <div class="ho-kpi k4"><i class="fas fa-clock"></i><div><small>Em atraso</small><b id="ho-k-atr">—</b><span id="ho-k-atr-s">mensalidades vencidas</span></div></div>
+    </div>
     <form id="ho-form" method="POST" action="{{ acao_form or url_for('financeiro.honorarios_salvar') }}" novalidate style="display:contents">
       <input type="hidden" name="contrato_id" id="ho-id">
       <input type="hidden" name="cliente_id" id="ho-cliente-id">
@@ -291,6 +329,7 @@
             <table class="ho-itens" id="ho-itens"><tbody></tbody></table>
             <div class="ho-itens-pe">
               <button type="button" class="ns-bt mini" onclick="hoAddItem()"><i class="fas fa-plus"></i> Outra discriminação</button>
+              <span class="ho-atalhos" id="ho-atalhos"></span>
               <div class="ho-soma">Total mensal <b id="ho-total">R$ 0,00</b></div>
             </div>
           </section>
@@ -365,6 +404,7 @@
               <label class="ns-campo"><span class="ho-lbl">Início</span><input type="date" name="inicio" id="ho-inicio" class="ns-in" required></label>
               <label class="ns-campo"><span class="ho-lbl">Fim <small>em branco = sem fim</small></span><input type="date" name="fim" id="ho-fim" class="ns-in"></label>
             </div>
+            <div class="ho-vig-txt" id="ho-vig-txt"></div>
             {% if modo != 'admin' %}
             <label class="ns-campo" style="margin-top:12px; display:block;"><span class="ho-lbl">Recado <small>para quem aprova</small></span><input type="text" name="observacao" class="ns-in" placeholder="ex.: combinado com o cliente em reunião de 05/11"></label>
             {% endif %}
@@ -395,11 +435,28 @@
               <div><dt>Vigência</dt><dd id="ho-r-vig">—</dd></div>
             </dl>
           </div>
+          <div class="ns-b" id="ho-b-paga" style="display:none;">
+            <div class="ns-h"><i class="fas fa-wave-square"></i> Como paga <em id="ho-paga-em"></em></div>
+            <div class="hp-meses ho-meses" id="ho-meses"></div>
+            <div class="ho-paga-txt" id="ho-paga-txt"></div>
+          </div>
           <div class="ns-b ho-prox">
             <div class="ns-h"><i class="fas fa-paper-plane"></i> Próxima cobrança <em id="ho-px-comp"></em></div>
             <div class="ho-px-val" id="ho-px-val">—</div>
             <div class="ho-px-l" id="ho-px-lin"></div>
             <small class="ho-px-obs">previsão pelo contrato; o lote do mês é quem emite</small>
+          </div>
+          <div class="ns-b" id="ho-b-cont" style="display:none;">
+            <div class="ns-h"><i class="fas fa-envelope"></i> Quem recebe a cobrança <em id="ho-cont-em"></em></div>
+            <div class="ho-cont" id="ho-cont"></div>
+          </div>
+          <div class="ns-b" id="ho-b-reaj" style="display:none;">
+            <div class="ns-h"><i class="fas fa-percent"></i> Reajustes aplicados <em id="ho-reaj-em"></em></div>
+            <div class="ho-lista" id="ho-reaj-lista"></div>
+          </div>
+          <div class="ns-b" id="ho-b-hist" style="display:none;">
+            <div class="ns-h"><i class="fas fa-clock-rotate-left"></i> Histórico</div>
+            <div class="ho-lista" id="ho-hist"></div>
           </div>
           <div class="ns-aviso" id="ho-nota"></div>
         </aside>
@@ -499,7 +556,75 @@ function hoResumoLado(t) {
     if (px.dec) linhas.push('<span class="dec"><i>13º honorário (' + (tipo === 'DUAS' ? 'parcela' : 'parcela única') + ')</i><b>' + brl(px.dec) + '</b></span>');
     $('ho-px-lin').innerHTML = linhas.join('');
     var enc = document.getElementById('ho-enc'); if (enc) enc.style.display = $('ho-id').value ? 'block' : 'none';
+    // indicadores do topo
+    $('ho-k-mensal').textContent = brl(t); $('ho-k-mensal-s').textContent = nf ? 'nota + boleto' : 'só boleto';
+    var base = ini || { y: HO_ANO, m: 1 }; if (modo === 'INTEIRO') base = { y: base.y, m: 1 }; else if (modo === 'PROXIMO') base = { y: base.y + 1, m: 1 }; else if (modo === 'DATA' && desde) base = desde;
+    var mesesDec = base.y > HO_ANO ? 0 : (base.y < HO_ANO ? 12 : 13 - base.m), dec13 = t * mesesDec / 12;
+    if (tipo === 'NENHUM') { $('ho-k-dec').textContent = 'não cobra'; $('ho-k-dec-s').textContent = 'sem 13º'; }
+    else { $('ho-k-dec').textContent = mesesDec ? brl(dec13) : 'a partir de ' + base.y; $('ho-k-dec-s').textContent = mesesDec ? (mesesDec + '/12 · ' + (tipo === 'DUAS' ? '2 parcelas' : tipo === 'UNICA' ? 'parcela única' : 'personalizado')) : 'só no ano que vem'; }
+    if (prox) { var pp = hoData(prox); $('ho-k-reaj').textContent = HO_MESES[pp.m - 1] + '/' + pp.y; } else if (rt === 'SALARIO_MINIMO' && ini) { $('ho-k-reaj').textContent = 'jan/' + (ini.m === 1 ? ini.y + 1 : ini.y + 2); } else $('ho-k-reaj').textContent = rt === 'SEM' ? 'adiado' : '—';
+    $('ho-k-reaj-s').textContent = (HO_REAJ_ROT[rt] || '').toLowerCase();
+    // prévia de valor nos cartões do 13º
+    var pv = { UNICA: mesesDec ? brl(dec13) + ' em dez' : 'só no ano que vem', DUAS: mesesDec ? '2 × ' + brl(dec13 / 2) : 'só no ano que vem', PERSONALIZADO: 'frações por competência', NENHUM: 'não cobra ou foi cancelado' };
+    document.querySelectorAll('#ho-dec-ops .ns-op').forEach(function (b) { var s = b.querySelector('small'); s.textContent = pv[b.dataset.v] || s.textContent; s.classList.toggle('prev', t > 0 && b.dataset.v !== 'NENHUM' && b.dataset.v !== 'PERSONALIZADO'); });
+    var vt = $('ho-vig-txt'); if (vt) vt.innerHTML = ini ? '<i class="fas fa-calendar-check"></i> <b>' + hoMesesEntre(ini) + '</b>' + (fim ? ' · encerra em ' + hoDataBr(fim) : '') : '';
 }
+// ---- contexto do contrato (18/11/2026): cabeçalho, indicadores, como paga, quem recebe, reajustes, histórico ----
+var HO_EXTRA = null;
+function hoExtra(x) {
+    HO_EXTRA = x || null;
+    var $ = function (i) { return document.getElementById(i); };
+    var chips = [];
+    if (x) {
+        if (x.cpf_cnpj) chips.push('<span><i class="fas fa-id-card"></i> ' + x.cpf_cnpj + '</span>');
+        if (x.grupo_nome) chips.push('<span><i class="fas fa-layer-group"></i> ' + x.grupo_nome + '</span>');
+        if (x.plano) chips.push('<span>' + x.plano + '</span>');
+        if (x.situacao) chips.push('<span class="' + (x.situacao === 'ATIVO' ? 'ok' : 'al') + '">' + ({ATIVO: 'ativo', PENDENTE: 'aguardando aprovação', ENCERRADO: 'encerrado', REPROVADO: 'reprovado'}[x.situacao] || x.situacao) + '</span>');
+        if (x.conexa) chips.push('<span>veio do Conexa</span>');
+    }
+    $('ho-chips-cab').innerHTML = chips.join('');
+    // como paga
+    var bp = $('ho-b-paga');
+    if (x && x.meses && x.meses.length) {
+        bp.style.display = 'block';
+        var rot = {pago: 'pago', aberto: 'a vencer', atrasado: 'atrasado', parcial: 'pago em parte', sem: 'sem cobrança'};
+        $('ho-meses').innerHTML = x.meses.map(function (m, i) { return '<span class="hp-m ' + m.status + (i === x.meses.length - 1 ? ' atual' : '') + '" title="vencimento ' + m.mes + '/' + m.ano + ': ' + (i === x.meses.length - 1 && m.status === 'sem' ? 'a emitir' : rot[m.status]) + (m.valor ? ' · ' + brl(m.valor) : '') + '">' + m.mes[0].toUpperCase() + '<i></i></span>'; }).join('');
+        $('ho-paga-em').textContent = '12 meses';
+        var t = x.cobrados ? '<b>' + x.em_dia + ' de ' + x.cobrados + '</b> mensalidades pagas' + (x.em_dia === x.cobrados ? ' · em dia' : '') : 'ainda sem mensalidade cobrada por aqui';
+        if (x.atrasado > 0) t += '<span class="deve"><i class="fas fa-clock"></i> deve ' + brl(x.atrasado) + ' de meses anteriores</span>';
+        t += '<div class="ho-leg"><span><i style="background:#22c55e"></i>pago</span><span><i style="background:#3b82f6"></i>a vencer</span><span><i style="background:#ef4444"></i>atrasado</span><span><i style="background:repeating-linear-gradient(90deg,#fdba74 0 5px,#fed7aa 5px 10px)"></i>a emitir</span></div>';
+        $('ho-paga-txt').innerHTML = t;
+        var k4 = $('ho-k-atr'); k4.textContent = x.atrasado > 0 ? brl(x.atrasado) : 'nada'; $('ho-k-atr-s').textContent = x.atrasado > 0 ? 'mensalidades vencidas' : 'em dia'; k4.closest('.ho-kpi').classList.toggle('zero', !(x.atrasado > 0));
+    } else { bp.style.display = 'none'; $('ho-k-atr').textContent = '—'; $('ho-k-atr-s').textContent = 'sem histórico ainda'; $('ho-k-atr').closest('.ho-kpi').classList.add('zero'); }
+    // quem recebe
+    var bc = $('ho-b-cont');
+    if (x && x.contatos) {
+        bc.style.display = 'block'; $('ho-cont-em').textContent = x.contatos.length ? x.contatos.length + ' do Financeiro' : '';
+        $('ho-cont').innerHTML = x.contatos.length ? x.contatos.map(function (c) { return '<div><span class="av">' + hoIniciais(c.nome) + '</span><div style="min-width:0"><b>' + c.nome + '</b><small>' + c.email + '</small></div></div>'; }).join('')
+            : '<span class="vazio"><i class="fas fa-triangle-exclamation"></i> Nenhum contato do Financeiro com e-mail: o boleto vai para o e-mail do cadastro. Arrume nos Contatos da ficha.</span>';
+    } else bc.style.display = 'none';
+    // reajustes
+    var br = $('ho-b-reaj');
+    if (x && x.reajustes && x.reajustes.length) {
+        br.style.display = 'block'; $('ho-reaj-em').textContent = x.reajustes.length;
+        $('ho-reaj-lista').innerHTML = x.reajustes.map(function (r) { return '<div class="' + (r.desfeito ? 'des' : '') + '"><span>' + r.vigencia + '</span><span>' + (r.pct ? r.pct.toLocaleString('pt-BR') + '% · ' : '') + brl(r.antes) + ' → ' + brl(r.depois) + '</span><small>' + (r.desfeito ? 'desfeito' : (r.lote || '')) + '</small></div>'; }).join('');
+    } else br.style.display = 'none';
+    // histórico
+    var bh = $('ho-b-hist');
+    if (x && ((x.historico && x.historico.length) || x.criado_em)) {
+        bh.style.display = 'block';
+        var h = (x.historico || []).map(function (l) { return '<div><span>' + l.o_que + '</span><small>' + l.quando + (l.quem ? ' · ' + l.quem.split(' ')[0] : '') + '</small></div>'; });
+        if (!h.length && x.criado_em) h.push('<div><span>Cadastrado</span><small>' + x.criado_em + (x.criado_por ? ' · ' + x.criado_por.split(' ')[0] : '') + '</small></div>');
+        $('ho-hist').innerHTML = h.join('');
+    } else bh.style.display = 'none';
+}
+function hoAtalhos() {
+    var el = document.getElementById('ho-atalhos'); if (!el) return;
+    var ids = [1, 20, 17, 22, 21, 6], feitos = 0, html = '';
+    ids.forEach(function (id) { var s = HO_SERVICOS.find(function (x) { return String(x.id) === String(id); }); if (s && feitos < 5) { feitos++; html += '<button type="button" onclick="hoAddItem(' + JSON.stringify(s.nome.split(' — ')[0]) + ', ' + (s.valor_padrao || '\'\'') + ', ' + s.id + ')" title="' + s.nome + '">+ ' + s.nome.split(' — ')[0].replace('Honorários contábeis', 'Honorários') + '</button>'; } });
+    el.innerHTML = html;
+}
+function hoMesesEntre(ini) { if (!ini) return ''; var a = HO_ANO * 12 + HO_MES - (ini.y * 12 + ini.m); if (a < 1) return 'começa agora'; var y = Math.floor(a / 12), m = a % 12; return 'cliente há ' + (y ? y + (y === 1 ? ' ano' : ' anos') : '') + (y && m ? ' e ' : '') + (m ? m + (m === 1 ? ' mês' : ' meses') : ''); }
 function hoEncAbrir() { document.getElementById('ho-enc-box').style.display = 'flex'; document.getElementById('ho-enc-bt').style.display = 'none'; var d = document.getElementById('ho-enc-data'); if (!d.value) d.value = '{{ hoje.isoformat() }}'; d.focus(); }
 function hoEncFechar() { document.getElementById('ho-enc-box').style.display = 'none'; document.getElementById('ho-enc-bt').style.display = 'inline-flex'; }
 function hoEncConfirmar() {
@@ -548,6 +673,7 @@ function hoLimpar() {
     document.getElementById('ho-nfse').checked = true; document.getElementById('ho-boleto').checked = true;
     document.querySelectorAll('.ho-row-falta').forEach(function (r) { r.classList.remove('ho-row-falta'); });
     if (document.getElementById('ho-enc-box')) hoEncFechar();
+    hoExtra(null); hoAtalhos();
     hoDecimo(); hoResumo();
 }
 function hoSetCliente(id, nome, numero) {
@@ -646,6 +772,7 @@ function hoEditar(cid) {
         document.getElementById('ho-prox').value = c.proximo_reajuste || ''; document.getElementById('ho-reaj-obs').value = c.reajuste_obs || '';
         document.getElementById('ho-nfse').checked = !!Number(c.gerar_nfse); document.getElementById('ho-boleto').checked = !!Number(c.gerar_boleto);
         if (document.getElementById('ho-banco')) document.getElementById('ho-banco').value = /^\d+$/.test(String(c.banco_boleto || '')) ? String(c.banco_boleto) : '';
+        hoExtra(c.extra);
         hoDecimo(); hoResumo(); document.getElementById('hoModal').style.display = 'block';
         if (window.HO_ENC_AO_ABRIR) { window.HO_ENC_AO_ABRIR = false; if (document.getElementById('ho-enc-bt')) hoEncAbrir(); }
     });

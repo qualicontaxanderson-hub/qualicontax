@@ -152,7 +152,59 @@ def honorarios_json(cid):
     from models.cliente import Cliente
     g = Cliente.get_grupos(c['cliente_id'])
     out['grupo_id'] = g[0]['id'] if g else None
+    out['extra'] = _extra_contrato(c, g[0]['nome'] if g else None)      # 18/11/2026: o que a janela mostra além dos campos
     return jsonify(out)
+
+
+def _extra_contrato(c, grupo_nome=None):
+    """O que a janela do contrato mostra de contexto (18/11/2026 — Anderson: "dá uma melhorada boa, está simples demais"):
+    como a empresa paga (12 meses pelo vencimento), quem recebe a cobrança, reajustes aplicados e o histórico do contrato."""
+    from utils.honorarios_painel import _historico, MESES
+    from models.fin_lancamento import mes_seguinte
+    hoje = date.today()
+    cid = c['cliente_id']
+    # 12 vencimentos: os 11 anteriores + o da competência atual (vence no mês que vem)
+    venc = mes_seguinte(hoje.replace(day=1))
+    meses = []
+    m = venc
+    for _ in range(12):
+        meses.insert(0, m)
+        m = date(m.year - (m.month == 1), (m.month - 2) % 12 + 1, 1)
+    h = _historico([{'cliente_id': cid, 'cpf_cnpj': c.get('cpf_cnpj'), 'nome': c.get('nome_razao_social')}], meses[0], mes_seguinte(venc)).get(cid, {})
+    linha = []
+    for x in meses:
+        r = h.get(x.strftime('%Y-%m')) or {'status': 'sem'}
+        linha.append({'mes': MESES[x.month - 1], 'ano': x.year, 'status': r['status'], 'valor': float(r.get('valor') or 0),
+                      'pago': float(r.get('pago') or 0), 'id': r.get('id')})
+    passados = [x for x in linha[:-1] if x['status'] != 'sem']
+    em_dia = sum(1 for x in passados if x['status'] == 'pago')
+    atrasado = sum(x['valor'] - x['pago'] for x in linha[:-1] if x['status'] in ('atrasado', 'parcial'))
+    contatos = execute_query(
+        """SELECT ct.nome, ct.email, ct.celular FROM contatos_clientes ct JOIN contatos_departamentos cd ON cd.contato_id = ct.id
+            WHERE ct.cliente_id = %s AND ct.ativo = 1 AND cd.departamento_id = 8 AND ct.email <> '' ORDER BY ct.nome""", (cid,), fetch=True) or []
+    reaj = execute_query(
+        """SELECT vigencia, percentual, valor_antes, valor_depois, aplicado_em, desfeito_em, lote FROM fin_contrato_reajustes
+            WHERE contrato_id = %s ORDER BY vigencia DESC, id DESC LIMIT 6""", (c['id'],), fetch=True) or []
+    logs = execute_query(
+        """SELECT acao, data_hora, usuario_nome FROM logs_sistema WHERE registro_id = %s AND acao LIKE '%%contrato_honorarios%%'
+            ORDER BY id DESC LIMIT 6""", (c['id'],), fetch=True) or []
+    rot = {'escrita.criou_contrato_honorarios': 'Contrato criado', 'escrita.alterou_contrato_honorarios': 'Contrato alterado',
+           'escrita.encerrou_contrato_honorarios': 'Contrato encerrado', 'escrita.aprovou_contrato_honorarios': 'Contrato aprovado',
+           'escrita.reprovou_contrato_honorarios': 'Contrato reprovado', 'escrita.contrato_conexa_correcao': 'Ajuste da migração'}
+    quem = execute_query('SELECT id, nome FROM usuarios WHERE id IN (%s, %s)', (c.get('criado_por') or 0, c.get('aprovado_por') or 0), fetch=True) or []
+    nomes = {u['id']: u['nome'] for u in quem}
+    return {
+        'cpf_cnpj': c.get('cpf_cnpj'), 'grupo_nome': grupo_nome, 'situacao': c.get('situacao'), 'plano': c.get('plano'),
+        'criado_em': c['criado_em'].strftime('%d/%m/%Y') if c.get('criado_em') else None, 'criado_por': nomes.get(c.get('criado_por')),
+        'aprovado_por': nomes.get(c.get('aprovado_por')), 'conexa': bool(c.get('conexa_contrato_id')),
+        'meses': linha, 'em_dia': em_dia, 'cobrados': len(passados), 'atrasado': float(atrasado),
+        'contatos': [{'nome': x['nome'], 'email': x['email'], 'celular': x.get('celular')} for x in contatos],
+        'reajustes': [{'vigencia': r['vigencia'].strftime('%m/%Y') if r['vigencia'] else '', 'pct': float(r['percentual'] or 0),
+                       'antes': float(r['valor_antes'] or 0), 'depois': float(r['valor_depois'] or 0), 'desfeito': bool(r['desfeito_em']),
+                       'lote': r.get('lote')} for r in reaj],
+        'historico': [{'o_que': rot.get(l['acao'], l['acao'].replace('escrita.', '').replace('_', ' ')), 'quando': l['data_hora'].strftime('%d/%m/%Y %H:%M') if l['data_hora'] else '',
+                       'quem': l['usuario_nome']} for l in logs],
+    }
 
 
 @financeiro.route('/financeiro/honorarios/sugestoes/<int:cliente_id>')
