@@ -52,6 +52,9 @@
 
     <div class="ef-section-label">Dia a dia</div>
     <div class="ef-grid">
+        {# 17/11/2026: Usuários e Perfis são só do administrador (a rota é @admin_required); o resto da equipe clicava e
+           batia em "Você não tem permissão" (o Miguel). Para quem não é admin, o cartão leva ao MEU CADASTRO. #}
+        {% if current_user.is_admin() %}
         <a href="{{ url_for('configuracoes.usuarios') }}" class="ef-card">
             <div class="ef-card-ico" style="background:#dbeafe;color:#1d4ed8;"><i class="fas fa-users-cog"></i></div>
             <h3 class="ef-card-title">Usuários</h3>
@@ -64,11 +67,19 @@
             <div class="ef-card-num" data-counter="perfis"></div>
             <p class="ef-card-desc">Defina permissões e níveis de acesso por perfil ou usuário</p>
         </a>
+        {% endif %}
+        <a href="{{ url_for('meu_cadastro.index') }}" class="ef-card">
+            <div class="ef-card-ico" style="background:#dcfce7;color:#15803d;"><i class="fas fa-id-card"></i></div>
+            <h3 class="ef-card-title">Meu cadastro</h3>
+            <p class="ef-card-desc">Seus dados pessoais, endereço, banco e chave Pix</p>
+        </a>
+        {% if pode_rota('configuracoes.auditoria') %}
         <a href="{{ url_for('configuracoes.auditoria') }}" class="ef-card">
             <div class="ef-card-ico" style="background:#dcfce7;color:#15803d;"><i class="fas fa-clipboard-list"></i></div>
             <h3 class="ef-card-title">Auditoria</h3>
             <p class="ef-card-desc">Quem fez o quê, quando e em qual empresa</p>
         </a>
+        {% endif %}
         {# Só admin — a rota é @admin_required; sem esta guarda o cartão apareceria
            para todo mundo e o clique bateria num 403. #}
         {% if current_user.is_admin() %}
