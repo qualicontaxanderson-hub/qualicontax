@@ -67,6 +67,16 @@
 .lm-sv select, .lm-sv input { height:32px; border:1px solid #d7e3dc; border-radius:8px; padding:0 6px; font:inherit; font-size:12px; } .lm-sv input { width:64px; }
 .lm-sv button { height:32px; width:32px; border:0; border-radius:8px; background:#0f3d2e; color:#fff; cursor:pointer; }
 @media (max-width:980px) { .lm-serv { grid-template-columns:minmax(0,1fr); } }
+.lm-regras { display:flex; align-items:center; gap:14px; margin-top:16px; background:linear-gradient(135deg,#faf8ff,#fff); border:1.5px solid #ddd6fe; border-radius:16px;
+  padding:14px 18px; text-decoration:none; color:#1e293b; transition:all .15s; }
+.lm-regras:hover { border-color:#a78bfa; box-shadow:0 10px 24px rgba(124,58,237,.12); transform:translateY(-1px); }
+.lm-regras .ic { width:44px; height:44px; border-radius:13px; background:linear-gradient(135deg,#7c3aed,#5b21b6); color:#fff; display:inline-flex; align-items:center; justify-content:center; font-size:18px; }
+.lm-regras .tx { flex:1; min-width:0; } .lm-regras b { display:block; font-size:15px; } .lm-regras small { color:#64748b; font-size:12.5px; } .lm-regras > i { color:#7c3aed; }
+.ns-op { position:relative; } .ns-op-tag { position:absolute; right:10px; top:10px; font-size:10px; font-weight:800; letter-spacing:.04em; text-transform:uppercase;
+  background:#dcfce7; color:#15803d; border-radius:99px; padding:2px 8px; } .ns-op-m .ns-op-tag { background:#ede9fe; color:#6d28d9; }
+.ns-op .ns-op-tag i { display:inline; font-size:inherit; margin:0; color:inherit; }
+.ns-ops-a .ns-op { padding:14px 14px 13px; } .ns-ops-a .ns-op b { font-size:14.5px; }
+.ns-op-m.on { border-color:#7c3aed; background:#faf8ff; box-shadow:0 0 0 3px #ede9fe; } .ns-op-m > i { color:#7c3aed; }
 /* caixa (molde da caixa do relatório) */
 .ns-fundo { position:fixed; inset:0; z-index:1200; background:rgba(15,23,42,.5); backdrop-filter:blur(2px); display:none; }
 .ns-fundo.on { display:block; }
@@ -174,6 +184,7 @@
       {% if aprov %}
         {% if pode_rota('financeiro.cobrancas') %}<a class="lm-btn lm-btn2" href="{{ url_for('financeiro.cobrancas') }}"><i class="fas fa-file-invoice"></i> Notas e boletos</a>{% endif %}
         {% if pode_rota('financeiro.notas_config') %}<a class="lm-btn lm-btn2" href="{{ url_for('financeiro.notas_config') }}"><i class="fas fa-sliders-h"></i> Configuração fiscal</a>{% endif %}
+        {% if admin %}<a class="lm-btn lm-btn2" href="{{ url_for('financeiro.comissao_regras') }}"><i class="fas fa-sliders"></i> Regras de comissão</a>{% endif %}
         {% if pode_rota('financeiro.nota_nova') %}<a class="lm-btn lm-btn2" href="{{ url_for('financeiro.nota_nova') }}" title="Emite agora, sem passar por aprovação"><i class="fas fa-bolt"></i> Emitir direto</a>{% endif %}
       {% endif %}
       {% if pode_rota('financeiro.lancamento_novo') %}<button type="button" class="lm-btn" onclick="nsAbrir()"><i class="fas fa-plus"></i> Nova solicitação</button>{% endif %}
@@ -267,41 +278,10 @@
     {% endif %}
   {% endif %}
   {% if admin %}
-    <div class="lm-sec" id="acordos" style="margin-top:14px">Acordos de comissão <small>quem tem direito e quanto (só o administrador cadastra)</small></div>
-    <div class="lm-acordos">
-      <table><tr><th>Pessoa</th><th>Base</th><th>Serviço / empresa</th><th>Comissão</th><th>Desde</th><th></th></tr>
-      {% for a in acordos_todos %}<tr><td><b>{{ a.usuario_nome }}</b></td><td>{{ {'SERVICO': 'Serviço lançado', 'HONORARIOS': 'Mensalidade da empresa', 'INDICACAO': 'Indicação'}.get(a.base, a.base) }}</td>
-        <td>{{ a.servico_nome or a.cliente_nome or 'todos os serviços' }}</td><td>{{ ('%g' % (a.valor | float)) ~ '%' if a.tipo == 'PCT' else (a.valor | float | format_currency) }}</td>
-        <td>{{ a.vigencia_inicio.strftime('%d/%m/%Y') if a.vigencia_inicio else '' }}</td>
-        <td><form method="POST" action="{{ url_for('financeiro.acordo_encerrar', aid=a.id) }}" onsubmit="return confirm('Encerrar este acordo?')"><button class="ns-bt" style="padding:4px 10px; font-size:12px"><i class="fas fa-ban"></i> Encerrar</button></form></td></tr>
-      {% else %}<tr><td colspan="6" style="color:#94a3b8">Nenhum acordo: sem acordo, a pessoa não ganha comissão (a não ser que quem aprova dê).</td></tr>{% endfor %}</table>
-      <div style="font-size:12px; color:#64748b; margin-top:8px"><i class="fas fa-circle-info"></i> "Serviço lançado" em todos os serviços = a pessoa tem direito a comissão; o % de cada serviço vem da tabela abaixo (sem % no serviço, vale o do acordo).</div>
-      <form class="nv" method="POST" action="{{ url_for('financeiro.acordo_novo') }}">
-        <select name="usuario_id" required><option value="">Pessoa…</option>{% for p in pessoas %}<option value="{{ p.id }}">{{ p.nome }}</option>{% endfor %}</select>
-        <select name="base"><option value="SERVICO">Serviço lançado</option><option value="HONORARIOS">Mensalidade da empresa</option></select>
-        <select name="servico_id"><option value="">Todos os serviços</option>{% for s in servicos %}<option value="{{ s.id }}">{{ s.nome }}</option>{% endfor %}</select>
-        <select name="cliente_id" id="acCli"><option value="">Empresa (só na mensalidade)</option></select>
-        <select name="tipo"><option value="PCT">%</option><option value="FIXO">R$ fixo</option></select>
-        <input name="valor" placeholder="10 ou 25,00" required>
-        <button><i class="fas fa-plus"></i> Cadastrar</button>
-      </form>
-    </div>
-    <div class="lm-sec" id="servicos-comissao" style="margin-top:18px">Comissão padrão de cada serviço <small>a sugestão que aparece para quem lança (pode ajustar ao lançar e ao aprovar)</small></div>
-    <div class="lm-acordos lm-serv">
-      {% for s in servicos %}
-      <form method="POST" action="{{ url_for('financeiro.servico_comissao') }}" class="lm-sv">
-        <input type="hidden" name="servico_id" value="{{ s.id }}">
-        <span class="nm">{{ s.nome }}{% if s.valor_padrao %} <small>{{ s.valor_padrao | float | format_currency }}</small>{% endif %}</span>
-        <select name="tipo" onchange="this.form.querySelector('[name=valor]').hidden = !(this.value === 'PCT' || this.value === 'FIXO')">
-          <option value=""{{ ' selected' if not s.comissao_tipo }}>Vale o acordo da pessoa</option>
-          <option value="PCT"{{ ' selected' if s.comissao_tipo == 'PCT' }}>% do serviço</option>
-          <option value="FIXO"{{ ' selected' if s.comissao_tipo == 'FIXO' }}>Valor fixo (R$)</option>
-          <option value="SEM"{{ ' selected' if s.comissao_tipo == 'SEM' }}>Sem comissão (ex.: taxa)</option></select>
-        <input name="valor" inputmode="decimal" value="{{ ('%g' % (s.comissao_valor | float)) | replace('.', ',') if s.comissao_valor else '' }}" placeholder="10"{{ ' hidden' if s.comissao_tipo not in ('PCT', 'FIXO') }}>
-        <button title="Salvar"><i class="fas fa-check"></i></button>
-      </form>
-      {% endfor %}
-    </div>
+    <a class="lm-regras" href="{{ url_for('financeiro.comissao_regras') }}" id="acordos">
+      <span class="ic"><i class="fas fa-sliders"></i></span>
+      <span class="tx"><b>Regras de comissão</b><small>Quem recebe e quanto (Gabriel 10%, Guilherme 25% da mensalidade…) e o que tem comissão ou não (taxa da Junta, cartório…)</small></span>
+      <i class="fas fa-arrow-right"></i></a>
   {% endif %}
   </div>
 </div>
@@ -310,18 +290,26 @@
 {# ── caixa: Nova solicitação ── #}
 <div class="ns-fundo" id="nsFundo"><div class="ns" role="dialog" aria-modal="true" aria-label="Nova solicitação">
   <header class="ns-cab"><span class="ns-logo"><img src="{{ url_for('static', filename='images/logo.png') }}" alt="Qualicontax"></span>
-    <div class="ns-tit"><b>Nova solicitação de cobrança</b><span>{{ (current_user.nome or '').split()[0] }} · {{ 'você aprova as suas e as da equipe' if aprov else 'vai para aprovação de Anderson ou Alessandra' }}</span></div>
+    <div class="ns-tit"><b>{{ 'Nova cobrança' if aprov else 'Nova solicitação de cobrança' }}</b><span>{{ (current_user.nome or '').split()[0] }} · {{ 'emite agora ou inclui na mensalidade — sem passar por aprovação' if aprov else 'vai para aprovação de Anderson ou Alessandra' }}</span></div>
     <div class="ns-prev"><small>cliente vai pagar</small><b id="nsPv">R$ 0,00</b><span id="nsPc">escolha o serviço</span></div>
     <button type="button" class="ns-x" onclick="nsFechar()" title="Fechar (Esc)"><i class="fas fa-xmark"></i></button></header>
   <form method="POST" action="{{ url_for('financeiro.lancamento_novo') }}" id="nsForm" style="display:contents">
-  <input type="hidden" name="como" id="nsComo" value="BOLETO_NOTA"><input type="hidden" name="comissao_tipo" id="nsCt" value="PADRAO">
+  <input type="hidden" name="como" id="nsComo" value="BOLETO_NOTA"><input type="hidden" name="comissao_tipo" id="nsCt" value="{{ 'SEM' if aprov else 'PADRAO' }}">
+  {% if aprov %}<input type="hidden" name="emitir" value="1">{% endif %}
   <div class="ns-g"><div class="ns-f">
     <section class="ns-b"><div class="ns-h"><i class="fas fa-building"></i> Cliente</div>
       <div class="ns-campo"><select id="nsCli" name="cliente_id" placeholder="Nome, número ou CNPJ/CPF"></select></div></section>
+    {% if aprov %}
+    <section class="ns-b"><div class="ns-h"><i class="fas fa-route"></i> O que fazer</div><div class="ns-ops ns-ops-a" id="nsOps">
+      <button type="button" class="ns-op on" data-v="BOLETO_NOTA"><span class="ns-op-tag"><i class="fas fa-bolt"></i> agora</span><i class="fas fa-file-invoice-dollar"></i><b>Emitir boleto + nota</b><small>a nota e o boleto saem agora e vão por e-mail</small></button>
+      <button type="button" class="ns-op" data-v="BOLETO"><span class="ns-op-tag"><i class="fas fa-bolt"></i> agora</span><i class="fas fa-barcode"></i><b>Emitir só o boleto</b><small>sem nota (ex.: taxa que repassamos)</small></button>
+      <button type="button" class="ns-op ns-op-m" data-v="MENSAL"><span class="ns-op-tag"><i class="fas fa-calendar"></i> no lote</span><i class="fas fa-calendar-plus"></i><b>Incluir na mensalidade</b><small>entra no boleto do mês, junto com o honorário</small></button></div></section>
+    {% else %}
     <section class="ns-b"><div class="ns-h"><i class="fas fa-route"></i> Como cobrar</div><div class="ns-ops" id="nsOps">
       <button type="button" class="ns-op on" data-v="BOLETO_NOTA"><i class="fas fa-file-invoice-dollar"></i><b>Boleto + nota fiscal</b><small>cobrança própria, sai na aprovação</small></button>
       <button type="button" class="ns-op" data-v="BOLETO"><i class="fas fa-barcode"></i><b>Só boleto</b><small>sem nota (ex.: taxa que repassamos)</small></button>
       <button type="button" class="ns-op" data-v="MENSAL"><i class="fas fa-calendar-plus"></i><b>Na mensalidade</b><small>entra no boleto do mês escolhido</small></button></div></section>
+    {% endif %}
     <section class="ns-b"><div class="ns-h"><i class="fas fa-briefcase"></i> Serviço e valor</div><div class="ns-campos">
       <div class="ns-campo"><label>Serviço</label><select id="nsServ" name="servico_id" placeholder="Escolha o serviço"></select></div>
       <div class="ns-campo"><label>Valor (R$)</label><input class="ns-in" id="nsValor" name="valor" inputmode="numeric" placeholder="0,00" autocomplete="off"></div>
@@ -329,11 +317,11 @@
       <div class="ns-campo" id="nsCompBox" hidden><label>Mensalidade de</label><select class="ns-in" id="nsComp" name="competencia"></select></div>
       <div class="ns-campo" style="grid-column:1/-1"><label>Texto da nota / do boleto</label><input class="ns-in" id="nsDesc" name="descricao" maxlength="200" placeholder="o nome do serviço"></div>
     </div></section>
-    <section class="ns-b" id="nsComBox"><div class="ns-h"><i class="fas fa-hand-holding-dollar"></i> Sua comissão <em id="nsComPad"></em></div>
+    <section class="ns-b" id="nsComBox"{{ ' hidden' if aprov }}><div class="ns-h"><i class="fas fa-hand-holding-dollar"></i> Sua comissão <em id="nsComPad"></em></div>
       <div class="ns-com"><div class="ns-seg" id="nsSeg"><button type="button" data-v="PADRAO" class="on">Padrão</button><button type="button" data-v="PCT">Outro %</button><button type="button" data-v="FIXO">Valor fixo</button><button type="button" data-v="SEM">Sem comissão</button></div>
         <input class="ns-in" id="nsCv" name="comissao_valor" inputmode="decimal" placeholder="%" hidden><b id="nsCr" style="color:#6d28d9"></b></div>
       <div class="ns-aviso" style="margin-top:10px"><i class="fas fa-circle-info"></i><span>A comissão é liberada quando o cliente pagar. Quem aprova pode ajustar; vale o valor aprovado. Taxa que só repassamos (ex.: Junta Comercial) não tem comissão.</span></div></section>
-    <section class="ns-b"><div class="ns-h"><i class="fas fa-comment"></i> Observação para quem aprova <em>opcional</em></div><input class="ns-in" name="observacao" maxlength="250" placeholder="ex.: combinado com o cliente por telefone"></section>
+    <section class="ns-b"><div class="ns-h"><i class="fas fa-comment"></i> {{ 'Observação' if aprov else 'Observação para quem aprova' }} <em>opcional</em></div><input class="ns-in" name="observacao" maxlength="250" placeholder="ex.: combinado com o cliente por telefone"></section>
   </div><aside class="ns-r">
     <section class="ns-b ns-res" id="nsRes"></section>
     <div class="ns-aviso"><i class="fas fa-stamp"></i><span id="nsAviso"></span></div>
@@ -465,7 +453,7 @@
   window.rpFechar = function () { $('rpFundo').classList.remove('on'); document.body.style.overflow = ''; };
 
   // ── caixa Nova solicitação ──
-  var tsCli = null, tsServ = null, como = 'BOLETO_NOTA', ct = 'PADRAO';
+  var tsCli = null, tsServ = null, como = 'BOLETO_NOTA', ct = D.aprovador ? 'SEM' : 'PADRAO';   // quem aprova emite sem comissão para si
   function acordo(sid) {
     // acordo da pessoa para o serviço > padrão do serviço (para quem tem acordo geral) > acordo geral
     var esp = D.acordos.filter(function (x) { return String(x.servico_id) === String(sid); })[0];
@@ -494,18 +482,25 @@
     $('nsSeg').querySelector('[data-v=PADRAO]').textContent = a ? 'Padrão (' + (a.sem ? 'sem' : a.tipo === 'FIXO' ? brl(a.valor) : a.valor + '%') + ')' : 'Padrão (sem acordo)';
     $('nsCr').textContent = '= ' + brl(com);
     $('nsPv').textContent = brl(como === 'MENSAL' && c && c.mensal ? c.mensal + valor : valor);
-    $('nsPc').textContent = com ? 'sua comissão: ' + brl(com) : (s ? 'sem comissão' : 'escolha o serviço');
+    $('nsPc').textContent = D.aprovador ? (como === 'MENSAL' ? 'no boleto da mensalidade' : 'emissão agora') : (com ? 'sua comissão: ' + brl(com) : (s ? 'sem comissão' : 'escolha o serviço'));
     var comp = $('nsComp').selectedOptions[0];
     var linhas = [['Cliente', c ? (c.num ? c.num + ' · ' : '') + c.nome : '—'], ['Cobrança', { BOLETO_NOTA: 'Boleto + nota fiscal', BOLETO: 'Só boleto', MENSAL: 'Na mensalidade' + (comp ? ' de ' + comp.textContent : '') }[como]],
                   ['Serviço', s ? s.nome : '—']];
     if (como !== 'MENSAL') linhas.push(['Vencimento', dbr($('nsVenc').value) || '—']);
-    linhas.push(['Comissão', com ? brl(com) + (ct === 'PCT' ? ' (' + num($('nsCv').value) + '%)' : '') : 'sem']);
+    if (!D.aprovador) linhas.push(['Comissão', com ? brl(com) + (ct === 'PCT' ? ' (' + num($('nsCv').value) + '%)' : '') : 'sem']);
     var h = '<div class="ns-h"><i class="fas fa-eye"></i> Resumo</div>' + linhas.map(function (x) { return '<div><span>' + x[0] + '</span><b>' + esc(x[1]) + '</b></div>'; }).join('');
     if (como === 'MENSAL' && c) h += '<div><span>Mensalidade</span><b>' + (c.mensal ? brl(c.mensal) : 'sem contrato') + '</b></div><div class="big"><span>Boleto do mês</span><b>' + brl((c.mensal || 0) + valor) + '</b></div>';
     else h += '<div class="big"><span>Total do boleto</span><b>' + brl(valor) + '</b></div>';
     $('nsRes').innerHTML = h;
-    $('nsAviso').innerHTML = como === 'MENSAL' ? 'Entra no boleto da mensalidade' + (comp ? ' de <b>' + comp.textContent + '</b>' : '') + ' depois da aprovação. Você vê só a sua parte (' + brl(valor) + ').'
-      : (D.aprovador ? 'Você aprova a sua solicitação no quadro <b>Para aprovar</b>: é ali que ' : 'Nada sai agora: ') + (como === 'BOLETO' ? 'o boleto é emitido' : 'a nota e o boleto são emitidos') + (D.aprovador ? '.' : ' quando Anderson ou Alessandra aprovarem. Você acompanha em <b>Aguardando aprovação</b>.');
+    if (D.aprovador) {      // quem aprova: tela única de emitir agora ou incluir no mensal
+      $('nsAviso').innerHTML = como === 'MENSAL' ? 'Entra no boleto da mensalidade' + (comp ? ' de <b>' + comp.textContent + '</b>' : '') + ' e sai junto com o lote do mês.'
+        : '<b>Sai agora:</b> ' + (como === 'BOLETO' ? 'o boleto é emitido' : 'a nota e o boleto são emitidos') + ' e vão por e-mail aos contatos do Financeiro do cliente.';
+      $('nsEnviar').innerHTML = como === 'MENSAL' ? '<i class="fas fa-calendar-plus"></i> Incluir na mensalidade' + (comp ? ' de ' + comp.textContent : '')
+        : '<i class="fas fa-bolt"></i> Emitir agora';
+    } else {
+      $('nsAviso').innerHTML = como === 'MENSAL' ? 'Entra no boleto da mensalidade' + (comp ? ' de <b>' + comp.textContent + '</b>' : '') + ' depois da aprovação. Você vê só a sua parte (' + brl(valor) + ').'
+        : 'Nada sai agora: ' + (como === 'BOLETO' ? 'o boleto é emitido' : 'a nota e o boleto são emitidos') + ' quando Anderson ou Alessandra aprovarem. Você acompanha em <b>Aguardando aprovação</b>.';
+    }
   }
   function setComo(v) {
     como = v; $('nsComo').value = v;
@@ -551,7 +546,8 @@
       var m = !tsCli.getValue() ? 'Escolha o cliente.' : !tsServ.getValue() ? 'Escolha o serviço.' : !num($('nsValor').value) ? 'Informe o valor.'
             : (como !== 'MENSAL' && !$('nsVenc').value) ? 'Informe o vencimento.' : ((ct === 'PCT' || ct === 'FIXO') && !num($('nsCv').value)) ? 'Informe a comissão.' : '';
       if (m) { e.preventDefault(); $('nsMsg').textContent = m; return; }
-      $('nsEnviar').disabled = true; $('nsEnviar').innerHTML = '<i class="fas fa-spinner fa-spin"></i> Enviando…';
+      if (D.aprovador && como !== 'MENSAL' && !confirm('Emitir agora ' + ({ BOLETO_NOTA: 'a nota e o boleto', BOLETO: 'o boleto' }[como]) + ' de ' + brl(num($('nsValor').value)) + ' para ' + (cliente() || {}).nome + '?')) { e.preventDefault(); return; }
+      $('nsEnviar').disabled = true; $('nsEnviar').innerHTML = '<i class="fas fa-spinner fa-spin"></i> ' + (D.aprovador ? 'Emitindo…' : 'Enviando…');
     });
   }
   window.nsAbrir = function () {

@@ -1,0 +1,220 @@
+{% extends "base.html" %}
+{% block title %}Regras de comissão - Financeiro - Qualicontax{% endblock %}
+
+{% block extra_css %}
+{# 17/11/2026 — Anderson: "como farei o cadastramento do que tem Comissão e o que não tem e quem recebe ou não?". Só o
+   administrador. QUEM RECEBE: cada pessoa liga/desliga e o padrão (% ou R$ fixo) + carteira de mensalidades (Guilherme 25%).
+   SERVIÇOS: o que tem comissão, quanto, e o que não tem (taxa da Junta, cartório...). #}
+{% include 'financeiro/_lanc_tx_css.html' %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/tom-select@2.4.3/dist/css/tom-select.default.min.css">
+<style>
+.rg-btn { display:inline-flex; align-items:center; gap:9px; padding:10px 15px; border-radius:13px; border:1px solid rgba(255,255,255,.35); background:rgba(255,255,255,.14);
+  color:#fff; font:inherit; font-weight:800; font-size:13.5px; text-decoration:none; }
+.tx-a-pes { --cor:#7c3aed; --cor-e:#5b21b6; --fundo:#f5f3ff; } .tx-a-ser { --cor:#0f766e; --cor-e:#115e59; --fundo:#f0fdfa; }
+.rg-abas { grid-template-columns:repeat(2, minmax(0,1fr)) !important; }
+.rg-faixa { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:14px; }
+.rg-faixa .tx-busca { margin-left:auto; }
+.rg-grade { display:grid; grid-template-columns:repeat(auto-fill, minmax(340px, 1fr)); gap:12px; }
+.rg-c { background:#fff; border:1px solid #e6eeea; border-radius:16px; overflow:hidden; box-shadow:0 6px 16px rgba(15,23,42,.05); display:flex; flex-direction:column; }
+.rg-c.on { border-color:#c4b5fd; box-shadow:0 0 0 3px #ede9fe, 0 6px 16px rgba(15,23,42,.05); }
+.rg-top { display:flex; align-items:center; gap:11px; padding:13px 15px; border-bottom:1px solid #f1f5f4; }
+.rg-av { width:38px; height:38px; border-radius:12px; background:#f1f5f9; color:#475569; display:inline-flex; align-items:center; justify-content:center; font-weight:800; font-size:13px; flex-shrink:0; }
+.rg-c.on .rg-av { background:linear-gradient(135deg,#7c3aed,#5b21b6); color:#fff; }
+.rg-top div { flex:1; min-width:0; } .rg-top b { display:block; font-size:14.5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; } .rg-top small { color:#64748b; font-size:12px; }
+.rg-sw { position:relative; width:46px; height:26px; flex-shrink:0; } .rg-sw input { opacity:0; width:0; height:0; }
+.rg-sw span { position:absolute; inset:0; background:#cbd5e1; border-radius:99px; cursor:pointer; transition:.2s; }
+.rg-sw span::before { content:''; position:absolute; width:20px; height:20px; left:3px; top:3px; background:#fff; border-radius:99px; transition:.2s; box-shadow:0 1px 3px rgba(0,0,0,.2); }
+.rg-sw input:checked + span { background:#7c3aed; } .rg-sw input:checked + span::before { transform:translateX(20px); }
+.rg-corpo { padding:12px 15px 14px; display:flex; flex-direction:column; gap:10px; flex:1; }
+.rg-lin { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+.rg-lbl { font-size:11px; font-weight:800; letter-spacing:.06em; text-transform:uppercase; color:#64748b; }
+.rg-seg { display:inline-flex; background:#eef4f0; border-radius:10px; padding:3px; gap:2px; flex-wrap:wrap; }
+.rg-seg label { cursor:pointer; } .rg-seg input { display:none; }
+.rg-seg span { display:inline-block; font-size:12.5px; font-weight:700; color:#475569; padding:6px 10px; border-radius:8px; }
+.rg-seg input:checked + span { background:#fff; color:#0f3d2e; box-shadow:0 1px 4px rgba(0,0,0,.08); }
+.rg-in { height:34px; border:1px solid #d7e3dc; border-radius:9px; padding:0 10px; font:inherit; font-size:13px; width:90px; box-sizing:border-box; }
+.rg-in:focus { outline:0; border-color:#7c3aed; box-shadow:0 0 0 3px #ede9fe; }
+.rg-ok { height:34px; border:0; border-radius:9px; background:#0f3d2e; color:#fff; font:inherit; font-weight:800; font-size:12.5px; padding:0 12px; cursor:pointer; display:inline-flex; gap:6px; align-items:center; }
+.rg-ok.v { background:#7c3aed; }
+.rg-muted { color:#94a3b8; font-size:12.5px; }
+.rg-cart { border-top:1px dashed #e2e8f0; padding-top:10px; }
+.rg-chip { display:flex; align-items:center; gap:8px; background:#faf8ff; border:1px solid #ede9fe; border-radius:10px; padding:6px 6px 6px 10px; font-size:12.5px; margin-top:6px; }
+.rg-chip span { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; } .rg-chip b { color:#6d28d9; white-space:nowrap; } .rg-chip small { color:#94a3b8; white-space:nowrap; }
+.rg-chip button { border:0; width:24px; height:24px; border-radius:7px; background:#fff; color:#b91c1c; cursor:pointer; }
+.rg-add { display:grid; grid-template-columns:minmax(0,1fr) 70px auto; gap:6px; margin-top:8px; align-items:center; }
+.rg-add .ts-control { min-height:34px; border:1px solid #d7e3dc; border-radius:9px; padding:4px 8px; font-size:12.5px; box-shadow:none; }
+.ts-dropdown.rg-dd { z-index:1300; font-size:12.5px; border:1px solid #d7e3dc; border-radius:10px; box-shadow:0 12px 28px rgba(15,23,42,.18); }
+.rg-sv { display:flex; flex-direction:column; gap:10px; padding:13px 15px; }
+.rg-sv-top { display:flex; align-items:flex-start; gap:10px; } .rg-sv-top i.ic { width:34px; height:34px; border-radius:10px; display:inline-flex; align-items:center; justify-content:center; font-size:14px; flex-shrink:0; }
+.rg-sv-top div { flex:1; min-width:0; } .rg-sv-top b { display:block; font-size:13.5px; line-height:1.3; } .rg-sv-top small { color:#64748b; font-size:12px; }
+.rg-t-pct { background:#f5f3ff; color:#6d28d9; } .rg-t-fixo { background:#eff6ff; color:#1d4ed8; } .rg-t-sem { background:#fef2f2; color:#b91c1c; } .rg-t-acordo { background:#f1f5f9; color:#64748b; }
+.rg-tag { font-size:10.5px; font-weight:800; border-radius:99px; padding:2px 8px; white-space:nowrap; }
+.rg-ajuda { background:#fff; border:1px solid #e6eeea; border-radius:14px; padding:12px 15px; font-size:12.5px; color:#475569; line-height:1.5; margin-bottom:14px; display:flex; gap:10px; }
+.rg-ajuda i { color:#7c3aed; margin-top:2px; }
+.rg-c [hidden] { display:none !important; }
+.tx-painel[data-p="pessoas"] { --sec:#7c3aed; --sec-e:#5b21b6; --sec-f:#f5f3ff; --sec-b:#ddd6fe; }
+.tx-painel[data-p="servicos"] { --sec:#0f766e; --sec-e:#115e59; --sec-f:#f0fdfa; --sec-b:#99f6e4; }
+.tx-painel .tx-f.on { background:var(--sec); border-color:var(--sec); color:#fff; }
+.rg-sec { font-size:11.5px; font-weight:800; letter-spacing:.07em; text-transform:uppercase; color:#475569; margin:6px 2px 10px; display:flex; align-items:center; gap:10px; }
+.rg-sec::after { content:''; flex:1; height:1px; background:#e6eeea; }
+@media (max-width:760px) { .rg-grade { grid-template-columns:minmax(0,1fr); } .rg-faixa .tx-busca { margin-left:0; width:100%; } }
+</style>
+{% endblock %}
+
+{% block content %}
+{% include 'financeiro/_nav_financeiro.html' %}
+<div class="tx">
+<div class="ef-hero"><div class="ef-hero-inner ef-hero-head">
+  <div><h1 class="ef-hero-title">Regras de comissão</h1><p class="ef-hero-sub">Quem recebe comissão e quanto · o que tem comissão e o que não tem</p></div>
+  <div class="ef-hero-actions"><a class="rg-btn" href="{{ url_for('financeiro.lancamentos', aba='com') }}"><i class="fas fa-arrow-left"></i> Lançamentos</a></div>
+</div></div>
+
+<div class="ef-body">
+  <div class="tx-abas rg-abas">
+    <button type="button" class="tx-aba tx-a-pes{{ ' on' if aba == 'pessoas' }}" data-p="pessoas"><span class="tx-aba-ico"><i class="fas fa-users"></i></span>
+      <span class="tx-aba-txt"><span class="tx-aba-lbl">Quem recebe</span><span class="tx-aba-val">{{ n_recebem }} de {{ pessoas|length }} pessoas</span>
+      <span class="tx-aba-sub">recebem comissão de serviço · {{ n_carteira }} empresa{{ 's' if n_carteira != 1 }} em carteira de mensalidade</span></span></button>
+    <button type="button" class="tx-aba tx-a-ser{{ ' on' if aba == 'servicos' }}" data-p="servicos"><span class="tx-aba-ico"><i class="fas fa-briefcase"></i></span>
+      <span class="tx-aba-txt"><span class="tx-aba-lbl">Serviços</span><span class="tx-aba-val">{{ servicos|length }} serviços</span>
+      <span class="tx-aba-sub">{{ n_serv_regra - n_serv_sem }} com comissão própria · {{ n_serv_sem }} sem comissão · o resto segue o padrão da pessoa</span></span></button>
+  </div>
+
+  {# ── QUEM RECEBE ── #}
+  <div class="tx-painel{{ ' on' if aba == 'pessoas' }}" data-p="pessoas">
+    <div class="rg-ajuda"><i class="fas fa-circle-info"></i><span><b>Recebe comissão</b> ligado = a pessoa ganha comissão nos serviços que lançar, no padrão dela (ex.: 10%). Na hora de lançar ela pode pedir outro % ou valor fixo, e quem aprova confirma.
+      Desligado = não ganha (ex.: quem ainda não é comissionado). <b>Carteira de mensalidade</b> = % da mensalidade de empresas escolhidas, todo mês que o cliente pagar (ex.: Guilherme 25%).</span></div>
+    <div class="rg-faixa"><div class="tx-busca"><i class="fas fa-magnifying-glass"></i><input type="search" placeholder="Buscar pessoa ou departamento" data-busca="pessoas"></div></div>
+    <div class="rg-grade">
+    {% for p in pessoas %}
+      {% set pn = p.nome.split() %}
+      <div class="rg-c{{ ' on' if p.geral or p.carteira }}" id="p{{ p.id }}" data-b="{{ p.nome }} {{ p.departamento }}">
+        <form method="POST" action="{{ url_for('financeiro.comissao_regra_pessoa') }}">
+        <input type="hidden" name="usuario_id" value="{{ p.id }}">
+        <div class="rg-top"><span class="rg-av">{{ pn[0][:1] }}{{ pn[-1][:1] if pn|length > 1 }}</span>
+          <div><b>{{ p.nome }}</b><small>{{ p.departamento }}</small></div>
+          <label class="rg-sw" title="Recebe comissão de serviço"><input type="checkbox" name="recebe" value="1"{{ ' checked' if p.geral }} onchange="rgSw(this)"><span></span></label></div>
+        <div class="rg-corpo">
+          <div class="rg-lin rg-cfg"{{ ' hidden' if not p.geral }}>
+            <span class="rg-lbl">Padrão</span>
+            <span class="rg-seg"><label><input type="radio" name="tipo" value="PCT"{{ ' checked' if not p.geral or p.geral.tipo == 'PCT' }}><span>%</span></label><label><input type="radio" name="tipo" value="FIXO"{{ ' checked' if p.geral and p.geral.tipo == 'FIXO' }}><span>R$ fixo</span></label></span>
+            <input class="rg-in" name="valor" inputmode="decimal" value="{{ (('%g' % (p.geral.valor | float)) | replace('.', ',')) if p.geral else '10' }}">
+            <button class="rg-ok v"><i class="fas fa-check"></i> Salvar</button>
+          </div>
+          <div class="rg-muted rg-off"{{ ' hidden' if p.geral }}>Não recebe comissão de serviço.</div>
+          {% if p.geral %}<div class="rg-muted">desde {{ p.geral.vigencia_inicio.strftime('%d/%m/%Y') if p.geral.vigencia_inicio else '' }}</div>{% endif %}
+          {% for a in p.por_servico %}<div class="rg-chip"><span>{{ a.servico_nome }}</span><b>{{ ('%g%%' % (a.valor | float)) if a.tipo == 'PCT' else (a.valor | float | format_currency) }}</b><small>só este serviço</small></div>{% endfor %}
+        </div>
+        </form>
+        <div class="rg-corpo rg-cart">
+          <span class="rg-lbl"><i class="fas fa-building" style="color:#7c3aed"></i> Carteira de mensalidade <span style="text-transform:none; letter-spacing:0; font-weight:600">· {{ p.carteira|length }} empresa{{ 's' if p.carteira|length != 1 }}</span></span>
+          {% for a in p.carteira %}
+          <form class="rg-chip" method="POST" action="{{ url_for('financeiro.acordo_encerrar', aid=a.id) }}" onsubmit="return confirm('Tirar {{ a.cliente_nome }} da carteira de {{ pn[0] }}?')">
+            <input type="hidden" name="volta" value="regras">
+            <span title="{{ a.cliente_nome }}">{{ a.cliente_nome }}</span><b>{{ ('%g%%' % (a.valor | float)) if a.tipo == 'PCT' else (a.valor | float | format_currency) }}</b>
+            <button title="Tirar da carteira"><i class="fas fa-xmark"></i></button></form>
+          {% endfor %}
+          <form class="rg-add" method="POST" action="{{ url_for('financeiro.acordo_novo') }}">
+            <input type="hidden" name="volta" value="regras"><input type="hidden" name="usuario_id" value="{{ p.id }}">
+            <input type="hidden" name="base" value="HONORARIOS"><input type="hidden" name="tipo" value="PCT">
+            <select name="cliente_id" class="rg-cli" placeholder="+ Empresa da carteira…" required></select>
+            <input class="rg-in" name="valor" inputmode="decimal" placeholder="%" style="width:100%" required>
+            <button class="rg-ok" title="Pôr na carteira"><i class="fas fa-plus"></i></button>
+          </form>
+        </div>
+      </div>
+    {% endfor %}
+    </div>
+  </div>
+
+  {# ── SERVIÇOS ── #}
+  <div class="tx-painel{{ ' on' if aba == 'servicos' }}" data-p="servicos">
+    <div class="rg-ajuda"><i class="fas fa-circle-info" style="color:#0f766e"></i><span><b>Segue o padrão da pessoa</b> = vale o % de quem lançou (ex.: 10%). <b>% do serviço</b> ou <b>R$ fixo</b> = este serviço tem comissão própria, para todos que recebem.
+      <b>Sem comissão</b> = ninguém ganha (taxa que só repassamos: Junta Comercial, cartório, urgência).</span></div>
+    <div class="rg-faixa">
+      <div class="tx-filtros" id="rgFil"><button type="button" class="tx-f on" data-v="">Todos <b>{{ servicos|length }}</b></button>
+        <button type="button" class="tx-f" data-v="acordo">Seguem a pessoa <b>{{ servicos|length - n_serv_regra }}</b></button>
+        <button type="button" class="tx-f" data-v="propria">Comissão própria <b>{{ n_serv_regra - n_serv_sem }}</b></button>
+        <button type="button" class="tx-f" data-v="SEM">Sem comissão <b>{{ n_serv_sem }}</b></button></div>
+      <div class="tx-busca"><i class="fas fa-magnifying-glass"></i><input type="search" placeholder="Buscar serviço" data-busca="servicos"></div>
+    </div>
+    <div class="rg-grade">
+    {% for s in servicos %}
+      {% set t = s.comissao_tipo or '' %}
+      <form class="rg-c" id="s{{ s.id }}" method="POST" action="{{ url_for('financeiro.servico_comissao') }}" data-b="{{ s.nome }}" data-t="{{ t or 'acordo' }}">
+        <input type="hidden" name="servico_id" value="{{ s.id }}"><input type="hidden" name="volta" value="regras">
+        <div class="rg-sv">
+          <div class="rg-sv-top"><i class="ic fas {{ {'PCT': 'fa-percent rg-t-pct', 'FIXO': 'fa-coins rg-t-fixo', 'SEM': 'fa-ban rg-t-sem'}.get(t, 'fa-user-check rg-t-acordo') }}"></i>
+            <div><b>{{ s.nome }}</b><small>{% if s.valor_padrao %}valor sugerido {{ s.valor_padrao | float | format_currency }}{% else %}sem valor sugerido{% endif %}</small></div>
+            <span class="rg-tag {{ {'PCT': 'rg-t-pct', 'FIXO': 'rg-t-fixo', 'SEM': 'rg-t-sem'}.get(t, 'rg-t-acordo') }}">{{ {'PCT': ('%g%%' % (s.comissao_valor | float)) if s.comissao_valor else '%', 'FIXO': (s.comissao_valor | float | format_currency) if s.comissao_valor else 'fixo', 'SEM': 'sem comissão'}.get(t, 'padrão da pessoa') }}</span></div>
+          <div class="rg-lin">
+            <span class="rg-seg">
+              <label><input type="radio" name="tipo" value=""{{ ' checked' if not t }} onchange="rgTipo(this)"><span>Padrão da pessoa</span></label>
+              <label><input type="radio" name="tipo" value="PCT"{{ ' checked' if t == 'PCT' }} onchange="rgTipo(this)"><span>%</span></label>
+              <label><input type="radio" name="tipo" value="FIXO"{{ ' checked' if t == 'FIXO' }} onchange="rgTipo(this)"><span>R$</span></label>
+              <label><input type="radio" name="tipo" value="SEM"{{ ' checked' if t == 'SEM' }} onchange="rgTipo(this)"><span>Sem</span></label></span>
+            <input class="rg-in" name="valor" inputmode="decimal" value="{{ (('%g' % (s.comissao_valor | float)) | replace('.', ',')) if s.comissao_valor else '' }}" placeholder="{{ '%' if t != 'FIXO' else 'R$' }}"{{ ' hidden' if t not in ('PCT', 'FIXO') }}>
+            <button class="rg-ok" style="margin-left:auto"><i class="fas fa-check"></i> Salvar</button>
+          </div>
+        </div>
+      </form>
+    {% endfor %}
+    </div>
+  </div>
+</div>
+</div>
+<script id="rgCli" type="application/json">{{ clientes_json | safe }}</script>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/tom-select@2.4.3/dist/js/tom-select.complete.min.js"></script>
+<script>
+(function () {
+  function brl(v) { return 'R$ ' + Number(v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+  function esc(s) { var d = document.createElement('div'); d.textContent = s == null ? '' : String(s); return d.innerHTML; }
+  function semAc(s) { return String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase(); }
+  document.querySelectorAll('.tx-aba').forEach(function (b) {
+    b.addEventListener('click', function () {
+      document.querySelectorAll('.tx-aba').forEach(function (x) { x.classList.toggle('on', x === b); });
+      document.querySelectorAll('.tx-painel').forEach(function (x) { x.classList.toggle('on', x.dataset.p === b.dataset.p); });
+      try { var u = new URL(location.href); u.searchParams.set('aba', b.dataset.p); u.hash = ''; history.replaceState(null, '', u); } catch (e) {}
+    });
+  });
+  var filtro = '';
+  function aplicar(pn) {
+    var q = semAc((pn.querySelector('[data-busca]') || {}).value || '');
+    pn.querySelectorAll('.rg-c').forEach(function (c) {
+      var ok = !q || semAc(c.dataset.b).indexOf(q) >= 0;
+      if (ok && pn.dataset.p === 'servicos' && filtro) ok = filtro === 'propria' ? (c.dataset.t === 'PCT' || c.dataset.t === 'FIXO') : c.dataset.t === filtro;
+      c.style.display = ok ? '' : 'none';
+    });
+  }
+  document.querySelectorAll('[data-busca]').forEach(function (i) { i.addEventListener('input', function () { aplicar(i.closest('.tx-painel')); }); });
+  document.getElementById('rgFil').addEventListener('click', function (e) {
+    var b = e.target.closest('.tx-f'); if (!b) return; filtro = b.dataset.v;
+    this.querySelectorAll('.tx-f').forEach(function (x) { x.classList.toggle('on', x === b); });
+    aplicar(document.querySelector('.tx-painel[data-p=servicos]'));
+  });
+  // liga/desliga: ligar mostra o padrão para salvar; desligar salva na hora
+  window.rgSw = function (cx) {
+    var f = cx.form, c = f.closest('.rg-c');
+    f.querySelector('.rg-cfg').hidden = !cx.checked; f.querySelector('.rg-off').hidden = cx.checked;
+    if (!cx.checked) { if (confirm('Desligar a comissão de serviço desta pessoa?')) f.submit(); else { cx.checked = true; rgSw(cx); } }
+    else f.querySelector('[name=valor]').focus();
+  };
+  window.rgTipo = function (r) {
+    var v = r.form.querySelector('[name=valor]');
+    v.hidden = !(r.value === 'PCT' || r.value === 'FIXO'); v.placeholder = r.value === 'FIXO' ? 'R$' : '%';
+    if (r.value === 'SEM' || r.value === '') r.form.submit(); else v.focus();
+  };
+  var CLI = JSON.parse(document.getElementById('rgCli').textContent);
+  if (typeof TomSelect !== 'undefined') document.querySelectorAll('.rg-cli').forEach(function (s) {
+    new TomSelect(s, {
+      options: CLI.map(function (c) { return { value: String(c.id), text: (c.num ? c.num + ' · ' : '') + c.nome, m: c.mensal }; }),
+      searchField: ['text'], maxOptions: 50, dropdownParent: 'body', dropdownClass: 'ts-dropdown rg-dd',
+      render: { option: function (o) { return '<div style="display:flex;gap:8px"><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(o.text) + '</span><small style="color:#94a3b8">' + (o.m ? brl(o.m) + '/mês' : 'sem contrato') + '</small></div>'; } }
+    });
+  });
+  if (location.hash) { var el = document.querySelector(location.hash); if (el) { el.scrollIntoView({ block: 'center' }); el.style.transition = 'box-shadow .3s'; el.style.boxShadow = '0 0 0 4px #a78bfa'; setTimeout(function () { el.style.boxShadow = ''; }, 1600); } }
+})();
+</script>
+{% endblock %}

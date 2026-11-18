@@ -258,6 +258,8 @@ MAPA = {
     'financeiro.lancamento_minha_pix':     'financeiro.lancamentos',          # a própria chave Pix (17/11/2026)
     'financeiro.comissao_pedido':          'financeiro.lancamentos',          # quem pediu ou quem aprova (a rota confere)
     'financeiro.servico_comissao':         'financeiro.lancamentos.aprovar',  # e a rota só deixa o admin
+    'financeiro.comissao_regras':          'financeiro.lancamentos.aprovar',  # Regras de comissão: a rota só deixa o admin
+    'financeiro.comissao_regra_pessoa':    'financeiro.lancamentos.aprovar',
     'financeiro.acordo_novo':              'financeiro.lancamentos',
     'financeiro.acordo_encerrar':          'financeiro.lancamentos',
     # Lote mensal (06/11/2026): só o Anderson emite o mensal — permissão sem perfil
