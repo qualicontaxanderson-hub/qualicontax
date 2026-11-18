@@ -420,7 +420,7 @@
                 {# 15/11/2026: celular obrigatório só na pessoa física; na empresa vale o do CONTATO #}
                 {{ campo('celular', 'Celular', cliente.celular, ancora='campo-celular', chave='celular', ph='(11) 98888-7777', ajuda=('DDD + número.' if pj else 'Obrigatório: DDD + número.'), mono=True) }}
                 {{ campo('telefone', 'Telefone', cliente.telefone, ancora='campo-telefone', chave='telefone_ruim', ph='(11) 3333-4444', mono=True) }}
-                {{ campo('email', 'E-mail', cliente.email, ancora='campo-email', chave=('email' if falta.avulso else ''), ph=('nome@empresa.com.br' if pj else 'nome@email.com'), ajuda=('No PJ é o e-mail do CNPJ; boletos e documentos vão para os e-mails dos CONTATOS.' if pj else '')) }}
+                {{ campo('email', 'E-mail', cliente.email, ancora='campo-email', chave=('email' if falta.avulso else ('contato' if not pj else '')), ph=('nome@empresa.com.br' if pj else 'nome@email.com'), ajuda=('No PJ é o e-mail do CNPJ; boletos e documentos vão para os e-mails dos CONTATOS.' if pj else '')) }}
                 {% if cliente.celular or cliente.email %}
                 <div class="qb-acoes-c" data-nocopiar>
                     {% if cel_dig %}<a class="i-verde" href="https://wa.me/55{{ cel_dig }}" target="_blank" rel="noopener"><i class="fab fa-whatsapp"></i>WhatsApp</a>
@@ -668,7 +668,7 @@
             <!-- CONTATOS -->
             {% set sem_cel = contatos | rejectattr('celular') | list | length %}
             <section class="qb-b s8" id="contatos" data-copiar-secao>
-                <div class="qb-bh"><span class="qb-ico i-azul"><i class="fas fa-address-book"></i></span><h3>Contatos <span class="qb-h3-sub">(Comercial)</span></h3>
+                <div class="qb-bh"><span class="qb-ico i-azul"><i class="fas fa-address-book"></i></span><h3>Contatos <span class="qb-h3-sub">({{ 'Comercial' if pj else 'opcional: a pessoa responde por si' }})</span></h3>
                     {% if contatos %}<span class="qb-selo {{ 'qb-selo-amb' if sem_cel else 'qb-selo-ok' }}">{{ contatos|length }} · {{ (sem_cel ~ ' sem celular') if sem_cel else 'todos com celular' }}</span>{% else %}{{ selo(['contato', 'email']) }}{% endif %}
                     <span class="qb-bh-dir">{% if contatos %}<button type="button" class="qb-add qb-add-cinza" data-copiar-secao-btn title="Copia os dados de todos os contatos"><i class="far fa-copy"></i></button>{% endif %}
                         <button type="button" class="qb-add" onclick="showAddContactModal()"><i class="fas fa-plus"></i> Contato</button></span></div>

@@ -24,7 +24,9 @@ PENDENCIAS_EMPRESA = [
     ('cobranca', 'Financeiro (cobrança)', 'verm', 'como cobrar: própria, via grupo ou pendente'),
     ('email', 'Contato com e-mail', 'verm', 'nenhum contato com e-mail (é por eles que vão boletos e documentos)'),
     ('contato_celular', 'Celular do contato', 'amb', 'há contato sem celular (obrigatório desde 05/11/2026)'),
-    ('contato', 'Contato', 'verm', 'pessoa física sem nenhum contato (nome + celular)'),
+    # 17/11/2026 (Anderson): "na PESSOA FÍSICA o contato comercial tem que ser facultativo porque quase todos os PF
+    # respondem por si mesmos" — o que a pessoa física precisa ter é um e-mail (o dela ou de um contato).
+    ('contato', 'E-mail da pessoa', 'verm', 'pessoa física sem e-mail no cadastro e sem contato com e-mail (é por ele que vão boletos e documentos; o contato comercial é opcional)'),
     # 09/11/2026 (Anderson): "O A CADASTRAR deve passar a cobrar o documento da pessoa física? SIM" — desde
     # que o Novo grava incompleto, o documento deixou de travar o salvar e passou a ser cobrado aqui.
     ('documento', 'Documento', 'verm', 'pessoa física sem documento de identificação (RG, CNH, CIN...)'),
@@ -162,8 +164,8 @@ def _pend_empresa(c):
         p.append('cobranca')
     if pj and _vazio(c['email']) and not c['n_contatos_email']:
         p.append('email')
-    if not pj and not c['n_contatos']:
-        p.append('contato')          # PF: sem e-mail no cadastro, o contato é obrigatório (05/11/2026)
+    if not pj and _vazio(c['email']) and not c['n_contatos_email']:
+        p.append('contato')          # PF: o contato comercial é opcional; o e-mail (dela ou de um contato) não (17/11/2026)
     if not pj and not c['n_docs']:
         p.append('documento')        # PF: documento de identificação (09/11/2026)
     if not pj and c['n_ramo_rural'] and not c['n_ie_rural']:
@@ -255,7 +257,7 @@ ALVO = {
     'cobranca': 'campo-cobranca', 'celular': 'campo-celular', 'telefone_ruim': 'campo-telefone', 'ramo': 'campo-ramos',
     'origem': 'campo-origem', 'conferir': 'campo-observacoes',
     'grupo': 'campo-grupo', 'socios': 'socios', 'email': 'contatos', 'contato_celular': 'contatos',
-    'contato': 'contatos', 'contador': 'contadores', 'documento': 'dados-pessoais',
+    'contato': 'campo-email', 'contador': 'contadores', 'documento': 'dados-pessoais',
     'ie_rural': 'ies-rural', 'ie_conferir': 'campo-ie',
 }
 
@@ -320,7 +322,7 @@ def pendencias_do_cadastro(cliente_id):
         if k == 'contato_celular':
             return 'todos têm' if c['n_contatos'] else 'nenhum contato'
         if k == 'contato':
-            return f"{c['n_contatos']} contato(s)"
+            return c['email'] or f"{c['n_contatos_email']} contato(s) com e-mail"
         if k == 'documento':
             return f"{c['n_docs']} documento(s)"
         if k == 'ie_rural':
