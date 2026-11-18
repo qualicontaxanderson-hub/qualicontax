@@ -303,9 +303,9 @@ def pedido_do_fiscal(f, empresa_id, cfg, tomador, series_ativas):
     try:
         comp = date.fromisoformat(g('competencia') or date.today().isoformat())
     except ValueError:
-        raise PedidoInvalido('Competência inválida.')
+        raise PedidoInvalido('Data do serviço (competência) inválida.')
     if comp > date.today():
-        raise PedidoInvalido('A competência não pode ser depois de hoje.')
+        raise PedidoInvalido('A data do serviço não pode ser depois de hoje.')
     anonimo = bool(tomador.get('anonimo'))
     obrig = [x['texto'] for x in tomador['faltas'] if x['nivel'] == 'obrigatorio']
     if obrig:

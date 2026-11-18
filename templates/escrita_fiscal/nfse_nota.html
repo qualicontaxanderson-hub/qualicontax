@@ -86,7 +86,7 @@
             {% if n.valor_liquido %}<dt>Líquido</dt><dd>{{ n.valor_liquido|format_currency }}</dd>{% endif %}
             <dt>ISS</dt><dd>{{ 'retido pelo tomador' if n.iss_retido else 'não retido' }}</dd>
             {% if n.ibs_total or n.cbs_valor %}<dt>IBS / CBS</dt><dd>{{ (n.ibs_total or 0)|format_currency }} / {{ (n.cbs_valor or 0)|format_currency }}</dd>{% endif %}
-            <dt>Competência</dt><dd>{{ n.competencia.strftime('%m/%Y') if n.competencia else '—' }}</dd>
+            <dt>Data do serviço</dt><dd>{{ n.competencia.strftime('%d/%m/%Y') if n.competencia else '—' }}<small> (competência)</small></dd>
         </dl>
     </div>
 </div>

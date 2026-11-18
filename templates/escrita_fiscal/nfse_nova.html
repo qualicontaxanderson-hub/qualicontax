@@ -271,9 +271,9 @@
         <h3><span class="nn-passo">2</span> O serviço</h3>
         <div class="form-row">
             <div class="form-group">
-                <label>Competência *</label>
-                <input type="month" id="nnMes" class="form-control" value="{{ (pre.competencia or '')[:7] }}" max="{{ hoje.strftime('%Y-%m') }}" required>
-                <input type="hidden" name="competencia" id="nnComp" value="{{ pre.competencia }}">
+                <label>Data do serviço (competência) *</label>
+                <input type="date" name="competencia" id="nnComp" class="form-control" value="{{ pre.competencia }}" max="{{ hoje.isoformat() }}" required>
+                <span class="nf-ajuda">O dia em que o serviço foi feito. A emissão é hoje; a competência da nota fica com este dia.</span>
             </div>
             <div class="form-group">
                 <label>Valor do serviço (R$) *</label>
@@ -455,16 +455,15 @@
     // mudou a cidade à mão sem CEP: o código do município não vale mais
     ['t_cidade', 't_uf'].forEach(function (id) { $(id).addEventListener('input', function () { $('t_municipio_ibge').value = ''; }); });
 
-    // competência -> data e descrição
-    var mes = $('nnMes'), desc = $('nnDesc');
+    // data do serviço -> descrição (pelo mês/ano da data). 18/11/2026: a Congonhas precisa
+    // do DIA do serviço na competência; o campo era só o mês e a nota saía com "hoje".
+    var comp = $('nnComp'), desc = $('nnDesc');
     function textoDe(v) { var p = (v || '').split('-'); if (p.length < 2) return ''; return MODELO.replace('{mes}', MESES[+p[1] - 1]).replace('{ano}', p[0]).replace('{competencia}', p[1] + '/' + p[0]); }
-    var ultimo = textoDe(mes.value);
-    mes.addEventListener('change', function () {
-        $('nnComp').value = mes.value ? mes.value + '-01' : '';
-        if (desc.value.trim() === ultimo.trim() || !desc.value.trim()) desc.value = textoDe(mes.value);
-        ultimo = textoDe(mes.value);
+    var ultimo = textoDe(comp.value);
+    comp.addEventListener('change', function () {
+        if (desc.value.trim() === ultimo.trim() || !desc.value.trim()) desc.value = textoDe(comp.value);
+        ultimo = textoDe(comp.value);
     });
-    if (mes.value && !$('nnComp').value) $('nnComp').value = mes.value + '-01';
 
     // total e líquido
     function num(s) { s = String(s || '').trim(); if (!s) return 0; if (s.indexOf(',') >= 0) s = s.replace(/\./g, '').replace(',', '.'); var n = parseFloat(s); return isNaN(n) ? 0 : n; }

@@ -127,7 +127,9 @@ def pedido_do_form(f, empresa_id, cfg):
     try:
         comp = date.fromisoformat(g('competencia') or date.today().isoformat())
     except ValueError:
-        raise PedidoInvalido('Competência inválida.')
+        raise PedidoInvalido('Data do serviço (competência) inválida.')
+    if comp > date.today():
+        raise PedidoInvalido('A data do serviço não pode ser depois de hoje.')
     # O tomador é SEMPRE alguém do cadastro (cliente ou avulso) — decisão de 02/11/2026.
     # A tela não digita tomador: mostra a ficha; aqui o cadastro é relido na hora de
     # emitir, para a nota sair com o que está lá (corrigiu no cadastro, corrigiu para todas).
