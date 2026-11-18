@@ -100,9 +100,9 @@ def _endereco_extenso(e):
     """'Rua Jaime Taveira, nº 91, Apartamento 32, Bloco A, Chácara Cruzeiro do Sul, São Paulo/SP, CEP 03732-060'."""
     if not e or not e.get('logradouro'):
         return ''
-    partes = [nome_proprio(e['logradouro']) + ', ' + _numero(e.get('numero')), _complemento(e.get('complemento')),
-              nome_proprio(e.get('bairro')),
-              nome_proprio(e.get('cidade') or '') + ('/' + e['estado'] if e.get('estado') else '')]
+    partes = [_lugar(e['logradouro']) + ', ' + _numero(e.get('numero')), _complemento_limpo(e.get('complemento')),
+              _lugar(e.get('bairro')),
+              _lugar(e.get('cidade') or '') + ('/' + e['estado'] if e.get('estado') else '')]
     if e.get('cep'):
         partes.append('CEP ' + _cep(e['cep']))
     return ', '.join(p for p in partes if p and p.strip())
@@ -178,7 +178,7 @@ def _qualificacao_pf(c, com_nome=True):
         faltam.append('sexo')
     partes.append(_flex(p['nacionalidade'], sexo)) if p.get('nacionalidade') else faltam.append('nacionalidade')
     if p.get('naturalidade_cidade'):
-        partes.append('natural de ' + nome_proprio(p['naturalidade_cidade']) + ('/' + p['naturalidade_uf'] if p.get('naturalidade_uf') else ''))
+        partes.append('natural de ' + _lugar(p['naturalidade_cidade']) + ('/' + p['naturalidade_uf'] if p.get('naturalidade_uf') else ''))
     else:
         faltam.append('naturalidade')
     partes.append(f"{_g(sexo, 'nascido', 'nascida')} em {_data(p['data_nascimento'])}") if p.get('data_nascimento') else faltam.append('nascimento')
