@@ -394,7 +394,7 @@ function hpOpcoes(dim) {
   var lista = Object.keys(m).map(function (k) { return m[k]; });
   if (dim === 'valor') lista.sort(function (x, y) { return HP_FAIXAS.findIndex(function (f) { return f[0] === x.v; }) - HP_FAIXAS.findIndex(function (f) { return f[0] === y.v; }); });
   else if (dim === 'grupo') lista.sort(function (x, y) { return y.n - x.n || hpRotulo(dim, x.v).localeCompare(hpRotulo(dim, y.v)); });
-  else lista.sort(function (x, y) { return hpRotulo(dim, y.v) < hpRotulo(dim, x.v) ? 1 : -1; });
+  else lista.sort(function (x, y) { return y.n - x.n || hpRotulo(dim, x.v).localeCompare(hpRotulo(dim, y.v)); });   // quem tem empresa primeiro
   return lista;
 }
 function hpPop(ref) {
