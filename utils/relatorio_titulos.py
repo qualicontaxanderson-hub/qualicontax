@@ -169,6 +169,8 @@ def coletar(f, fresco=False, so_base=False):
             bk, bn = APP_EFI, BANCO_ESPECIAL[APP_EFI]
         elif (b.get('banco_linha') or '').strip():
             bk, bn = _banco(b['banco_linha'])
+        elif str(b.get('referencia') or '').startswith('bradesco:'):
+            bk, bn = '237', 'Bradesco'    # 17/11/2026: boleto do Bradesco também baixa com origem 'webhook'
         elif b['origem'] == 'webhook' or b['origem'] == 'extrato':
             bk, bn = '364', 'Efí'
         else:

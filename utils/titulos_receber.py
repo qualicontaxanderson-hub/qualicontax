@@ -45,6 +45,8 @@ def _banco_baixa(b):
     bl = (b.get('banco_linha') or '').strip()
     if bl:
         return {'EFI': 'Efí'}.get(bl.upper(), bl)
+    if str(b.get('referencia') or '').startswith('bradesco:'):
+        return 'Bradesco'                 # 17/11/2026: baixa pelo boleto do Bradesco também grava origem 'webhook'
     return 'Efí' if b['origem'] in ('extrato', 'webhook') else ''
 
 
