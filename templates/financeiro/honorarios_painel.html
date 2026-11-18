@@ -232,8 +232,8 @@ span.hp-bco, span.hp-nf { cursor:default; }
     {% for b in P.bancos %}{% set pb = P.por_banco.get(b.id) %}
     <div class="hp-banco{{ ' padrao' if b.padrao }}" data-banco="{{ b.id }}" onclick="hpFiltroBanco(this)" role="button" tabindex="0">
       {{ bco_img(b, 40) }}
-      <span class="tx"><b>{{ b.nome }}{% if b.padrao %}<span class="hp-tag pd"><i class="fas fa-star"></i> padrão</span>{% endif %}</b>
-        <small>{{ b.apelido }}</small></span>
+      {# 18/11/2026 — Anderson: "Efí eu já sei que é Efí, não precisa abaixo constar BANCO EFI PRODUÇÃO": os honorários são só da Qualicontax #}
+      <span class="tx"><b>{{ b.nome }}{% if b.padrao %}<span class="hp-tag pd"><i class="fas fa-star"></i> padrão</span>{% endif %}</b></span>
       <span class="vl"><b>{{ (pb.valor if pb else 0) | float | format_currency }}</b><small>{{ pb.n if pb else 0 }} empresa{{ 's' if not pb or pb.n != 1 }} a emitir</small></span>
       {% if not b.padrao and pode_rota('financeiro.honorarios_banco_padrao') %}<a class="mk" href="#" onclick="event.stopPropagation(); hpPadrao({{ b.id }}, '{{ b.nome }}'); return false">tornar padrão</a>{% endif %}
     </div>{% endfor %}
@@ -281,7 +281,7 @@ span.hp-bco, span.hp-nf { cursor:default; }
     <div class="hp-cx-corpo">
       <div id="hpOpBanco">
       {% for b in P.bancos %}<label class="hp-op"><input type="radio" name="hpval" value="{{ b.id }}">{{ bco_img(b, 34) }}
-        <span class="tx"><b>{{ b.nome }}{% if b.padrao %} <span class="hp-tag pd"><i class="fas fa-star"></i> padrão</span>{% endif %}</b><small>{{ b.apelido }}</small></span></label>{% endfor %}
+        <span class="tx"><b>{{ b.nome }}{% if b.padrao %} <span class="hp-tag pd"><i class="fas fa-star"></i> padrão</span>{% endif %}</b></span></label>{% endfor %}
       </div>
       <div id="hpOpNota">
         <label class="hp-op"><input type="radio" name="hpval" value="1"><span class="hp-ic"><i class="fas fa-file-invoice"></i></span>
