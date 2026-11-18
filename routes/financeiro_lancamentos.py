@@ -225,7 +225,7 @@ def lancamentos():
             GROUP BY cliente_id""", fetch=True) or []}
     comp0 = FinLoteMensal.competencia_aberta(EMP)
     comps = [comp0]
-    while len(comps) < 3:
+    while len(comps) < 12:          # 18/11/2026: parcelas na mensalidade escolhem o mês de cada uma
         comps.append(date(comps[-1].year + (comps[-1].month == 12), comps[-1].month % 12 + 1, 1))
     caixa = {
         'clientes': [{'id': c['id'], 'num': str(c['num'] or ''), 'nome': c['nome'], 'doc': c['doc'] or '', 'av': bool(c['av']),
@@ -542,26 +542,32 @@ def lancamento_novo():
                                   comissao_tipo='SEM' if FinLancamento.servico_travado(servico_id) else (f.get('comissao_tipo') or 'PADRAO'),
                                   comissao_valor=None if FinLancamento.servico_travado(servico_id) else (f.get('comissao_valor') or None))
         _marcar_pelo_admin(lid)
+        n = _parcelas_do_form(f)
+        datas = _datas_parcelas(f, n, destino == 'MENSAL')
+        if n > 1:
+            execute_query('UPDATE fin_lancamentos SET parcelas = %s, parcelas_datas = %s WHERE id = %s',
+                          (n, ','.join(d.isoformat() for d in datas) if datas else None, lid), fetch=False)
         l = FinLancamento.get(lid)
         registrar('escrita.lancou_servico', 'financeiro', tabela='fin_lancamentos', registro_id=lid,
                   depois={'empresa': l['nome_razao_social'], 'servico': l['servico_nome'], 'valor': str(l['valor_total']),
                           'como': _como(l), 'vencimento': str(l['vencimento'] or ''),
-                          'comissao_pedida': (l.get('comissao_pedida_tipo') or '') + (' ' + str(l['comissao_pedida_valor']) if l.get('comissao_pedida_valor') else '')})
+                          'comissao_pedida': (l.get('comissao_pedida_tipo') or '') + (' ' + str(l['comissao_pedida_valor']) if l.get('comissao_pedida_valor') else ''),
+                          'parcelas': n})
         if _aprovador() and f.get('emitir') == '1':
             # 17/11/2026 — Anderson: "numa tela só para emissão imediata ou para incluir no mensal". Quem aprova não
             # precisa aprovar a própria: já sai aprovado — avulso emite agora, mensal entra no lote do mês.
-            com = FinLancamento.aprovar(lid, _eu().id)
+            parcelas, com, ok, msgs = _aprovar_e_cobrar(lid, _eu().id, None, None, n, _conta_escolhida(f), datas)
             registrar('escrita.aprovou_lancamento', 'financeiro', tabela='fin_lancamentos', registro_id=lid,
                       depois={'empresa': l['nome_razao_social'], 'servico': l['servico_nome'], 'valor': str(l['valor_total']),
-                              'destino': l['destino'], 'comissao': str(com), 'lancado_por': l['lancado_por_nome'], 'direto': True})
+                              'destino': l['destino'], 'comissao': str(com), 'lancado_por': l['lancado_por_nome'], 'direto': True,
+                              'parcelas': len(parcelas)})
             if l['destino'] == 'AVULSO':
-                ok, msgs = _cobrar_avulso(FinLancamento.get(lid), _eu().id, _conta_escolhida(f))
                 for m in msgs:
                     flash(m, 'success' if ok else 'warning')
                 if not ok:
-                    flash('Ficou aprovado, mas a cobrança não saiu. Corrija e cobre pela tela Cobranças.', 'danger')
+                    flash('Ficou aprovado, mas alguma cobrança não saiu. Corrija e use "Cobrar de novo" no cartão.', 'danger')
                 return redirect(url_for('financeiro.lancamentos', aba='cob'))
-            flash('Incluído na mensalidade de %s de %s: sai no boleto do lote do mês.' % (l['competencia'].strftime('%m/%Y'), l['nome_razao_social']), 'success')
+            flash('Incluído na mensalidade de %s de %s: sai no boleto do lote do mês.' % (', '.join(p['competencia'].strftime('%m/%Y') for p in parcelas), l['nome_razao_social']), 'success')
             return redirect(url_for('financeiro.lancamentos', aba='cob'))
         flash('Solicitação enviada: %s · %s. Anderson ou Alessandra aprovam e a cobrança sai.' % (l['nome_razao_social'], _como(l)), 'success')
     except (ValueError, InvalidOperation) as e:
@@ -670,6 +676,104 @@ def _cobrar_avulso(l, usuario_id, conta_id=None):
     return ok, msgs
 
 
+def _parcelas_do_form(form):
+    try:
+        n = int(form.get('parcelas') or 1)
+    except ValueError:
+        n = 1
+    return max(1, min(n, 12))
+
+
+def _datas_parcelas(form, n, mensal):
+    """As datas de cada parcela escolhidas na caixa (Anderson: "tem que ter a opção de escolher as datas tipo
+    05/12/2026 20/12/2026 05/01/2027" e "incluir nas mensalidades 11/26 12/26 01/27"). None = mês a mês."""
+    if n <= 1:
+        return None
+    raw = [x for x in form.getlist('parc_comp' if mensal else 'parc_venc') if x]
+    if len(raw) != n:
+        return None
+    ds = [_data(x) for x in raw]
+    if mensal:
+        return [d.replace(day=1) for d in ds]
+    for i, d in enumerate(ds):
+        if d < _hoje_br():
+            raise ValueError('A data da %dª parcela (%s) já passou.' % (i + 1, d.strftime('%d/%m/%Y')))
+    return ds
+
+
+def _somar_meses(d, k):
+    import calendar
+    m = d.month - 1 + k
+    a, m = d.year + m // 12, m % 12 + 1
+    return d.replace(year=a, month=m, day=min(d.day, calendar.monthrange(a, m)[1]))
+
+
+def _repartir(total, n):
+    """total em n partes de centavos inteiros; a sobra dos centavos fica na 1ª."""
+    from decimal import ROUND_DOWN
+    total = Decimal(str(total))
+    base = (total / n).quantize(Decimal('0.01'), rounding=ROUND_DOWN)
+    return [total - base * (n - 1)] + [base] * (n - 1)
+
+
+def _dividir(l, n, datas=None):
+    """Divide o lançamento (ainda LANCADO) em n parcelas — 18/11/2026, Anderson: "quando precisarmos de serviços
+    parcelados... 1500,00... dividir em 2 ou 3 parcelas". Cada parcela é um lançamento próprio (uma nota e um boleto
+    por parcela, ou um pedaço em cada mensalidade), ligado pela parcela_grupo (o id da 1ª). Avulso vence mês a mês a
+    partir do vencimento escolhido; mensalidade vai para os meses seguintes. Devolve os ids na ordem."""
+    base = re.sub(r'\s*\(parcela \d+/\d+\)$', '', (l['descricao'] or l['servico_nome'] or '').strip())
+    valores = _repartir(l['valor_total'], n)
+    pt, pv = l.get('comissao_pedida_tipo'), l.get('comissao_pedida_valor')
+    pvs = _repartir(pv, n) if pt == 'FIXO' and pv else [pv] * n
+    mensal = l['destino'] == 'MENSAL'
+    if datas and len(datas) == n:
+        vencs = [None] * n if mensal else datas
+        comps = [FinLoteMensal.competencia_aberta(l['empresa_id'], d) for d in datas] if mensal else [l['competencia']] * n
+    else:
+        vencs = [None] * n if mensal else [_somar_meses(l['vencimento'], k) for k in range(n)]
+        comps = [_somar_meses(l['competencia'], k) for k in range(n)] if mensal else [l['competencia']] * n
+    execute_query("""UPDATE fin_lancamentos SET quantidade = 1, valor_unitario = %s, valor_total = %s, descricao = %s,
+                         comissao_pedida_valor = %s, parcela = 1, parcelas = %s, parcela_grupo = id, vencimento = %s, competencia = %s
+                      WHERE id = %s AND status = 'LANCADO'""",
+                  (valores[0], valores[0], ('%s (parcela 1/%d)' % (base, n))[:200], pvs[0], n, vencs[0], comps[0], l['id']), fetch=False)
+    ids = [l['id']]
+    for k in range(1, n):
+        nid = FinLancamento.criar(
+            l['empresa_id'], l['cliente_id'], l['servico_id'], '%s (parcela %d/%d)' % (base, k + 1, n), Decimal('1'), valores[k],
+            l['destino'], l['lancado_por'],
+            vencimento=vencs[k], observacao=l.get('observacao'), competencia=comps[k],
+            com_nota=l.get('com_nota'), comissao_tipo=pt, comissao_valor=pvs[k])
+        execute_query("""UPDATE fin_lancamentos SET parcela = %s, parcelas = %s, parcela_grupo = %s, lancado_pelo_admin = %s
+                          WHERE id = %s""", (k + 1, n, l['id'], l.get('lancado_pelo_admin'), nid), fetch=False)
+        ids.append(nid)
+    return ids
+
+
+def _aprovar_e_cobrar(lid, usuario_id, ct=None, cv=None, n=1, conta_id=None, datas=None):
+    """Aprova (dividindo em n parcelas se pedirem) e cobra o avulso. A comissão é a do TOTAL, repartida entre as
+    parcelas (acordo fixo de R$ 100 não vira R$ 100 por parcela) e cada pedaço libera quando aquela parcela é paga.
+    Devolve (lista de lançamentos, comissão total, ok, mensagens)."""
+    l = FinLancamento.get(lid)
+    acordo, com = FinLancamento.comissao_calculada(l, ct, cv)
+    if com > Decimal(str(l['valor_total'])):
+        raise ValueError('A comissão não pode ser maior que o valor cobrado.')
+    if n > 1 and not l.get('parcela'):
+        ids = _dividir(l, n, datas)
+        coms = _repartir(com, n)
+        for i, pid in enumerate(ids):
+            FinLancamento.aprovar(pid, usuario_id, comissao_tipo='FIXO' if coms[i] > 0 else 'SEM', comissao_valor=coms[i] if coms[i] > 0 else None)
+    else:
+        ids = [lid]
+        com = FinLancamento.aprovar(lid, usuario_id, comissao_tipo=ct, comissao_valor=cv)
+    ok, msgs = True, []
+    if l['destino'] == 'AVULSO':
+        for i, pid in enumerate(ids):
+            o, m = _cobrar_avulso(FinLancamento.get(pid), usuario_id, conta_id)
+            ok = ok and o
+            msgs += [('Parcela %d/%d: ' % (i + 1, len(ids)) + x) if len(ids) > 1 else x for x in m]
+    return [FinLancamento.get(i) for i in ids], com, ok, msgs
+
+
 @financeiro.route('/financeiro/lancamentos/<int:lid>/aprovar', methods=['POST'])
 @permission_required(PERM)
 def lancamento_aprovar(lid):
@@ -710,21 +814,26 @@ def lancamento_aprovar(lid):
             registrar('escrita.alterou_cobranca_lancamento', 'financeiro', tabela='fin_lancamentos', registro_id=lid, antes=antes,
                       depois={'empresa': l['nome_razao_social'], 'servico': l['servico_nome'], 'como': _como(l),
                               'vencimento': str(l['vencimento'] or '')})
+    n = _parcelas_do_form(request.form)
     try:
-        com = FinLancamento.aprovar(lid, current_user.id, comissao_tipo=ct,
-                                    comissao_valor=_dec(request.form.get('comissao_valor')) if ct in ('PCT', 'FIXO') else None)
+        datas = _datas_parcelas(request.form, n, (request.form.get('como') or ('MENSAL' if l['destino'] == 'MENSAL' else '')) == 'MENSAL')
+        parcelas, com, ok, msgs = _aprovar_e_cobrar(lid, current_user.id, ct,
+                                                    _dec(request.form.get('comissao_valor')) if ct in ('PCT', 'FIXO') else None,
+                                                    n, _conta_escolhida(request.form), datas)
     except (ValueError, InvalidOperation) as e:
         flash(str(e) if isinstance(e, ValueError) else 'Valor da comissão inválido.', 'danger')
         return redirect(url_for('financeiro.lancamentos', aba='apr'))
     registrar('escrita.aprovou_lancamento', 'financeiro', tabela='fin_lancamentos', registro_id=lid,
               depois={'empresa': l['nome_razao_social'], 'servico': l['servico_nome'], 'valor': str(l['valor_total']),
-                      'destino': l['destino'], 'comissao': str(com), 'lancado_por': l['lancado_por_nome']})
+                      'destino': l['destino'], 'comissao': str(com), 'lancado_por': l['lancado_por_nome'],
+                      'parcelas': len(parcelas)})
     if l['destino'] == 'AVULSO':
-        ok, msgs = _cobrar_avulso(FinLancamento.get(lid), current_user.id, _conta_escolhida(request.form))
         for m in msgs:
             flash(m, 'success' if ok else 'warning')
         if not ok:
-            flash('Aprovado, mas a cobrança não saiu. Corrija e cobre pela tela Cobranças.', 'danger')
+            flash('Aprovado, mas alguma cobrança não saiu. Corrija e use "Cobrar de novo" no cartão.', 'danger')
+    elif len(parcelas) > 1:
+        flash('Aprovado em %d parcelas: entram nas mensalidades de %s.' % (len(parcelas), ', '.join(p['competencia'].strftime('%m/%Y') for p in parcelas)), 'success')
     else:
         flash('Aprovado: entra na cobrança mensal de %s.' % l['competencia'].strftime('%m/%Y'), 'success')
     return redirect(url_for('financeiro.lancamentos', aba='apr'))

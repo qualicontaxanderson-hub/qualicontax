@@ -1810,7 +1810,10 @@ def _apply_migrations():
     if _t.get('cnt', 0):
         for _col_name, _col_def in [('com_nota', 'TINYINT(1) NULL'), ('comissao_pedida_tipo', 'VARCHAR(8) NULL'),
                                     ('comissao_pedida_valor', 'DECIMAL(12,2) NULL'),
-                                    ('lancado_pelo_admin', 'INT NULL')]:     # 18/11/2026: "lançado pelo administrador"
+                                    ('lancado_pelo_admin', 'INT NULL'),      # 18/11/2026: "lançado pelo administrador"
+                                    # 18/11/2026: serviço parcelado ("1500,00... dividir em 2 ou 3 parcelas")
+                                    ('parcelas', 'TINYINT NULL'), ('parcela', 'TINYINT NULL'), ('parcela_grupo', 'INT NULL'),
+                                    ('parcelas_datas', 'VARCHAR(400) NULL')]:     # as datas/meses escolhidos no pedido
             _c = execute_query(
                 "SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() "
                 "AND TABLE_NAME = 'fin_lancamentos' AND COLUMN_NAME = %s", (_col_name,), fetch=True, fetch_one=True) or {}
