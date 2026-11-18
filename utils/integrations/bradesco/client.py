@@ -258,9 +258,13 @@ class Bradesco:
             'cctrlPartcTitlo': 0, 'cformaEmisPplta': '02', 'cindcdPgtoParcial': 'N', 'qtdePgtoParcial': 0,
             'filler1': '',
             'ptxJuroVcto': float(round(juros / 30, 5)) if juros else 0, 'vdiaJuroMora': 0,
-            'qdiaInicJuro': 1,                                  # manual: mínimo 1, mesmo sem juros
+            # 17/11/2026: sem juros, dias de juros = 0 (com 1 e taxa 0 o banco recusa:
+            # "INFORME TODOS OS CAMPOS PARA COMISSAO DE PERMANENCIA", erro 85 do manual).
+            'qdiaInicJuro': 1 if juros else 0,
             'pmultaAplicVcto': float(round(multa, 5)) if multa else 0, 'vmultaAtrsoPgto': 0,
-            'qdiaInicMulta': 1,
+            # 17/11/2026: sem multa, dias de multa = 0. Com 1 e percentual 0 o banco recusa:
+            # HTTP 400 "INFORME TODOS OS CAMPOS PARA MULTA" (erro 83 do manual: multa é tudo ou nada).
+            'qdiaInicMulta': 1 if multa else 0,
             'pdescBonifPgto01': 0, 'vdescBonifPgto01': 0, 'dlimDescBonif1': '',
             'pdescBonifPgto02': 0, 'vdescBonifPgto02': 0, 'dlimDescBonif2': '',
             'pdescBonifPgto03': 0, 'vdescBonifPgto03': 0, 'dlimDescBonif3': '',
