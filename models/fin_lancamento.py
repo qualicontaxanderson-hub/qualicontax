@@ -336,13 +336,14 @@ class FinLancamento:
         "vamos poder pagar as comissões posteriores também, mas não sairá dos atrasados para ele ter ciência").
         Só o próprio, só AGUARDANDO e só com o título em aberto (a vencer ou atrasado — Anderson, 18/11: "nos vencimento
         A vencer tem que ter a opção de antecipar também"). Devolve True se adiantou."""
-        n = execute_query(
-            """UPDATE fin_lancamentos l JOIN fin_titulos t ON t.id = l.titulo_id
-                  SET l.comissao_status = 'LIBERADA', l.comissao_adiantada = 1
-                WHERE l.id = %s AND l.lancado_por = %s AND l.comissao_status = 'AGUARDANDO' AND l.status = 'FATURADO'
-                  AND t.status NOT IN ('liquidado', 'cancelado')""",
-            (lid, usuario_id), fetch=False)
-        return bool(n)
+        onde = """l.id = %s AND l.lancado_por = %s AND l.comissao_status = 'AGUARDANDO' AND l.status = 'FATURADO'
+                  AND t.status NOT IN ('liquidado', 'cancelado')"""
+        # execute_query devolve True em UPDATE mesmo sem linha (utils/db_helper.py): conferir antes
+        if not execute_query('SELECT l.id FROM fin_lancamentos l JOIN fin_titulos t ON t.id = l.titulo_id WHERE ' + onde, (lid, usuario_id), fetch=True):
+            return False
+        execute_query("UPDATE fin_lancamentos l JOIN fin_titulos t ON t.id = l.titulo_id SET l.comissao_status = 'LIBERADA', l.comissao_adiantada = 1 WHERE " + onde,
+                      (lid, usuario_id), fetch=False)
+        return True
 
     @staticmethod
     def descontar_adiantadas_perdidas():
@@ -646,9 +647,11 @@ class FinComissaoFechamento:
         import unicodedata
         abertos = execute_query(
             """SELECT f.id, f.usuario_id, f.total, f.valor_pago, f.criado_em, u.nome,
-                      (SELECT b.pix_chave FROM usuario_dados_bancarios b WHERE b.usuario_id = f.usuario_id ORDER BY b.id DESC LIMIT 1) AS pix_chave
+                      (SELECT b.pix_chave FROM usuario_dados_bancarios b WHERE b.usuario_id = f.usuario_id ORDER BY b.recebe_pagamentos DESC, b.id DESC LIMIT 1) AS pix_chave,
+                      (SELECT b.titular_nome FROM usuario_dados_bancarios b WHERE b.usuario_id = f.usuario_id ORDER BY b.recebe_pagamentos DESC, b.id DESC LIMIT 1) AS titular
                  FROM fin_comissao_fechamentos f JOIN usuarios u ON u.id = f.usuario_id
-                WHERE f.status IN ('ABERTO', 'PAGO_PARCIAL')""", fetch=True) or []
+                WHERE f.status IN ('ENVIADO', 'ABERTO', 'PAGO_PARCIAL')""", fetch=True) or []
+        # 18/11/2026: 'ENVIADO' é o status com que o pedido nasce (padrão da tabela); sem ele a quitação nunca rodava.
         if not abertos:
             return []
 
@@ -665,14 +668,21 @@ class FinComissaoFechamento:
                     WHERE l.tipo IN ('debito', 'DEBIT') AND l.valor = %s AND l.data >= %s
                       AND NOT EXISTS (SELECT 1 FROM fin_comissao_pagamentos p WHERE p.extrato_id = l.id)""",
                 (-falta, f['criado_em'].date()), fetch=True) or []
-            partes = [p for p in norm(f['nome']).split() if len(p) > 2 and p not in ('DOS', 'DAS', 'DES')]
+            nomes = [f['nome']] + ([f['titular']] if f.get('titular') else [])     # a pessoa OU o titular da conta que recebe
             chave = re.sub(r'\D', '', f.get('pix_chave') or '')
+            chave_txt = norm(f.get('pix_chave') or '').strip()
 
             def casa(c):
                 d = norm(c['descricao'])
                 if chave and len(chave) >= 8 and chave in re.sub(r'\D', '', c['descricao'] or ''):
                     return True
-                return len(partes) >= 2 and partes[0] in d.split() and sum(1 for p in partes[1:] if p in d.split()) >= 1
+                if chave_txt and len(chave_txt) >= 20 and chave_txt in d:          # chave aleatória / e-mail
+                    return True
+                for nome in nomes:
+                    partes = [p for p in norm(nome).split() if len(p) > 2 and p not in ('DOS', 'DAS', 'DES')]
+                    if len(partes) >= 2 and partes[0] in d.split() and sum(1 for p in partes[1:] if p in d.split()) >= 1:
+                        return True
+                return False
             bate = [c for c in cands if casa(c)]
             if len(bate) != 1:
                 continue

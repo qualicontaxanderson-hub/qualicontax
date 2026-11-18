@@ -2089,8 +2089,8 @@ def usuario_editar(uid):
                 bf['pix_tipo'] = None
             if bf['conta_tipo'] not in (None, 'CORRENTE', 'POUPANCA', 'SALARIO', 'PAGAMENTO'):
                 bf['conta_tipo'] = None
-            atual = execute_query("SELECT * FROM usuario_dados_bancarios WHERE usuario_id = %s ORDER BY id DESC LIMIT 1",
-                                  (uid,), fetch=True, fetch_one=True)
+            from utils import contas_recebimento as _cr
+            atual = _cr.escolhida(uid) or None       # 18/11/2026: o formulário do admin edita a conta que RECEBE
             if atual:
                 banco_mudou = any((atual.get(k) or None) != bf[k] for k in bf)
                 if banco_mudou:
@@ -2135,13 +2135,28 @@ def usuario_editar(uid):
     # O que a pessoa preencheu no cadastro (link de convite) e os dados bancários / Pix (17/11/2026)
     cadastro = execute_query("SELECT * FROM cadastro_pendente WHERE usuario_id = %s ORDER BY id DESC LIMIT 1",
                              (uid,), fetch=True, fetch_one=True)
-    banco = execute_query("SELECT * FROM usuario_dados_bancarios WHERE usuario_id = %s ORDER BY id DESC LIMIT 1",
-                          (uid,), fetch=True, fetch_one=True) or {}
+    from utils import contas_recebimento as _cr
+    contas = _cr.contas_de(uid)                       # 18/11/2026: todas as contas da pessoa; a escolhida recebe
+    banco = _cr.escolhida(uid)
     return _render_usuario_form( departamentos=_departamentos_ativos(),
                            perfis=perfis, clientes=clientes, usuario=usuario,
                            perfis_usuario=perfis_usuario,
                            empresas_usuario=empresas_usuario,
-                           excecoes_reservadas=excecoes_reservadas, cadastro=cadastro, banco=banco)
+                           excecoes_reservadas=excecoes_reservadas, cadastro=cadastro, banco=banco, contas=contas)
+
+
+@configuracoes.route('/usuarios/<int:uid>/conta/<int:cid>/usar', methods=['POST'])
+@admin_required
+def usuario_conta_usar(uid, cid):
+    """Admin escolhe qual conta da pessoa recebe os pagamentos (18/11/2026)."""
+    from utils import contas_recebimento as _cr
+    if _cr.escolher(uid, cid, current_user.id):
+        registrar('escrita.escolheu_conta_recebimento', 'configuracoes', tabela='usuario_dados_bancarios', registro_id=cid,
+                  depois={'usuario_id': uid, 'por': 'admin'})
+        flash('Pronto: os pedidos de pagamento dessa pessoa saem para a conta escolhida.', 'success')
+    else:
+        flash('Conta não encontrada.', 'danger')
+    return redirect(url_for('configuracoes.usuario_editar', uid=uid))
 
 
 @configuracoes.route('/usuarios/<int:uid>/liberar-codigo', methods=['POST'])

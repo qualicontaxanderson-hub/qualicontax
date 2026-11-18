@@ -70,6 +70,8 @@ MAPA = {
     # --- comuns a todo usuário logado ---------------------------------------
     'dashboard.index':                 'LOGIN',
     'meu_cadastro.index':              'LOGIN',   # cada um só os PRÓPRIOS dados (17/11/2026)
+    'meu_cadastro.conta_usar':         'LOGIN',   # 18/11/2026: várias contas para receber; a pessoa escolhe a sua
+    'meu_cadastro.conta_excluir':      'LOGIN',
     'dashboard.get_stats':             'LOGIN',
     'api.get_chart_data':              'LOGIN',
     'api.search_municipios':           'LOGIN',

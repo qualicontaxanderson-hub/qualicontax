@@ -101,15 +101,21 @@ _PIX_DO_CADASTRO = {'CPF': 'cpf', 'CNPJ': 'cnpj', 'TELEFONE': 'celular', 'EMAIL'
 _PIX_PARA_CADASTRO = {v: k for k, v in _PIX_DO_CADASTRO.items()}
 
 
-def _pix_de(usuario_id):
-    """{'pix_tipo': 'cpf'|'celular'|..., 'pix_chave': ...} do cadastro bancário da pessoa ({} sem chave)."""
+def _pix_de(usuario_id, nome_usuario=None):
+    """{'pix_tipo': 'cpf'|'celular'|..., 'pix_chave', 'titular', 'banco', 'apelido', 'outro'} da CONTA QUE RECEBE da pessoa
+    ({} sem chave). 18/11/2026: o Pix sai no nome do TITULAR da conta (a Elizangela, no caso do Guilherme), porque o banco
+    do pagador compara o nome do código com o dono da chave e recusa quando não bate."""
+    from utils import contas_recebimento as cr
     from utils.pix_brcode import chave_normalizada
-    r = execute_query('SELECT pix_tipo, pix_chave FROM usuario_dados_bancarios WHERE usuario_id = %s ORDER BY id DESC LIMIT 1',
-                      (usuario_id,), fetch=True, fetch_one=True) or {}
+    r = cr.escolhida(usuario_id)
     tipo = _PIX_DO_CADASTRO.get((r.get('pix_tipo') or '').upper())
     if not tipo or not (r.get('pix_chave') or '').strip():
         return {}
-    return {'pix_tipo': tipo, 'pix_chave': chave_normalizada(tipo, r['pix_chave'])}
+    if nome_usuario is None:
+        u = execute_query('SELECT nome FROM usuarios WHERE id = %s', (usuario_id,), fetch=True, fetch_one=True) or {}
+        nome_usuario = u.get('nome') or ''
+    return {'pix_tipo': tipo, 'pix_chave': chave_normalizada(tipo, r['pix_chave']), 'titular': (r.get('titular_nome') or '').strip() or nome_usuario,
+            'banco': r.get('banco_nome') or '', 'apelido': r.get('apelido') or '', 'outro': cr.titular_e_outro(r, nome_usuario)}
 
 
 # ---------------------------------------------------------------------------
@@ -325,8 +331,8 @@ def lancamento_minha_pix():
         flash(erro, 'danger')
     else:
         antes = _pix_de(current_user.id)
-        ja = execute_query('SELECT id FROM usuario_dados_bancarios WHERE usuario_id = %s ORDER BY id DESC LIMIT 1',
-                           (current_user.id,), fetch=True, fetch_one=True)
+        from utils import contas_recebimento as cr
+        ja = cr.escolhida(current_user.id) or None       # 18/11/2026: mexe na conta que recebe
         if ja:
             execute_query('UPDATE usuario_dados_bancarios SET pix_tipo = %s, pix_chave = %s, atualizado_por = %s WHERE id = %s',
                           (_PIX_PARA_CADASTRO[tipo], chave[:140], current_user.id, ja['id']), fetch=False)
@@ -364,7 +370,7 @@ def comissao_pedido(fid):
     falta = float(f['total'] or 0) - float(f['valor_pago'] or 0)
     codigo = qr = None
     if pix.get('pix_chave') and falta > 0 and f['status'] != 'CANCELADO':
-        codigo = copia_e_cola(pix['pix_chave'], f['usuario_nome'], falta, txid='COMISSAO%d' % fid, mensagem='Comissao pedido %d' % fid)
+        codigo = copia_e_cola(pix['pix_chave'], pix.get('titular') or f['usuario_nome'], falta, txid='COMISSAO%d' % fid, mensagem='Comissao pedido %d' % fid)
         qr = qr_data_uri(codigo)
     from utils.comissao_pedido_doc import frase_resumo, link_whatsapp, texto_whatsapp
     ctx = {'f': f, 'itens': itens, 'pix': pix, 'falta': falta, 'codigo': codigo,
@@ -395,7 +401,7 @@ def comissao_pedido_arquivo(fid, fmt):
                          (fid,), fetch=True) or []
     pix = _pix_de(f['usuario_id'])
     falta = float(f['total'] or 0) - float(f['valor_pago'] or 0)
-    codigo = copia_e_cola(pix['pix_chave'], f['usuario_nome'], falta, txid='COMISSAO%d' % fid, mensagem='Comissao pedido %d' % fid) if pix.get('pix_chave') and falta > 0 else None
+    codigo = copia_e_cola(pix['pix_chave'], pix.get('titular') or f['usuario_nome'], falta, txid='COMISSAO%d' % fid, mensagem='Comissao pedido %d' % fid) if pix.get('pix_chave') and falta > 0 else None
     logo = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'static', 'images', 'logo.png')
     ctx = {'f': f, 'itens': itens, 'pags': pags, 'pix': pix, 'falta': falta, 'codigo': codigo,
            'link': url_for('financeiro.comissao_pedido', fid=fid, _external=True), 'logo_path': logo if os.path.exists(logo) else None}

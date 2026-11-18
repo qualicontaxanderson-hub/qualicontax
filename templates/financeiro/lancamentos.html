@@ -327,7 +327,7 @@
         </div>{% endfor %}</div>
     {% else %}<div class="tx-vazio"><i class="fas fa-hand-holding-dollar"></i>Nenhuma comissão liberada agora: ela libera quando o cliente paga.</div>{% endif %}
     {% if liberadas or tem_adiantavel %}
-      <div class="lm-barra"><span><b id="lmSoma">R$ 0,00</b> · <span id="lmQtd">nenhuma comissão marcada</span> · {% if pix.pix_chave %}vai para a sua chave Pix ({{ PIX_TIPOS.get(pix.pix_tipo, '') }}){% else %}<a href="{{ url_for('meu_cadastro.index') }}" style="color:#fde68a; font-weight:800">sem chave Pix: preencha em Meu cadastro</a>{% endif %}</span>
+      <div class="lm-barra"><span><b id="lmSoma">R$ 0,00</b> · <span id="lmQtd">nenhuma comissão marcada</span> · {% if pix.pix_chave %}vai para {{ ('a conta de ' ~ pix.titular.split()[0] ~ ' (' ~ PIX_TIPOS.get(pix.pix_tipo, '') ~ ')') if pix.outro else ('a sua chave Pix (' ~ PIX_TIPOS.get(pix.pix_tipo, '') ~ ')') }}{% else %}<a href="{{ url_for('meu_cadastro.index') }}" style="color:#fde68a; font-weight:800">sem chave Pix: preencha em Meu cadastro</a>{% endif %}</span>
         <button type="submit" id="lmPedir" disabled><i class="fas fa-paper-plane"></i> Pedir pagamento</button></div>
     {% endif %}
     {% if aguard %}<div class="lm-sec">Esperando o cliente pagar <small>{{ aguard|length }}</small>{% if tem_adiantavel %} <em class="lm-dica">a vencer ou atrasado pode ser pedido adiantado: é só marcar</em>{% endif %}</div>

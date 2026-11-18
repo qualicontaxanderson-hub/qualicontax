@@ -90,6 +90,8 @@ def texto_whatsapp(ctx):
         linhas.append('Já recebi %s · falta *%s*' % (brl(f['valor_pago']), brl(ctx['falta'])))
     if pix.get('pix_chave'):
         linhas.append('Pix (%s): %s' % (PIX_ROT.get(pix.get('pix_tipo'), 'chave'), pix['pix_chave']))
+        if pix.get('titular'):
+            linhas.append('Em nome de: %s%s' % (pix['titular'], (' (%s)' % pix['banco']) if pix.get('banco') else ''))
     else:
         linhas.append('Ainda sem chave Pix no meu cadastro.')
     if quando:
@@ -196,6 +198,7 @@ def gerar_pdf(ctx):
         txt = [_p('PAGAR POR PIX', 7.5, ROXO, bold=True),
                _p('%s: <b>%s</b>' % (PIX_ROT.get(pix.get('pix_tipo'), 'Chave'), escape(pix.get('pix_chave') or '')), 10, TEXTO, leading=14),
                _p('Valor: <b>%s</b>' % brl(ctx.get('falta', 0)), 10, TEXTO, leading=14),
+               _p('Em nome de <b>%s</b>%s' % (escape(pix.get('titular') or f['usuario_nome']), (' · ' + escape(pix['banco'])) if pix.get('banco') else ''), 8.5, AMBAR if pix.get('outro') else CINZA, leading=12),
                Spacer(1, 4), _p('Pix copia e cola:', 7.5, CINZA),
                _p(escape(ctx['codigo']), 6.6, colors.HexColor('#334155'), leading=8.5),
                Spacer(1, 4), _p('Depois de pagar não precisa fazer mais nada: quando o extrato puxar a saída, o pedido fica quitado sozinho.', 7.5, CINZA, leading=10)]
@@ -324,8 +327,8 @@ def gerar_png(ctx):
         d.text((tx, y + 110), _corta(d, pix.get('pix_chave') or '', f_b, W - M - tx - 20), font=f_b, fill=TEXTO)
         d.text((tx, y + 162), 'Valor:', font=f_s, fill=CINZA)
         d.text((tx, y + 192), brl(ctx.get('falta', 0)), font=f_b, fill=TEXTO)
-        d.text((tx, y + 250), 'O Pix copia e cola está na página', font=f_xs, fill=CINZA)
-        d.text((tx, y + 278), 'do pedido (link no texto do WhatsApp).', font=f_xs, fill=CINZA)
+        d.text((tx, y + 236), _corta(d, 'Em nome de ' + (pix.get('titular') or f['usuario_nome']), f_xs, W - M - tx - 20), font=f_xs, fill=AMBAR if pix.get('outro') else CINZA)
+        d.text((tx, y + 264), 'O Pix copia e cola está na página do pedido.', font=f_xs, fill=CINZA)
     elif pago:
         d.rounded_rectangle((M, y, W - M, y + 80), radius=18, fill=(240, 253, 244), outline=(187, 247, 208), width=2)
         d.text((M + 24, y + 24), 'Pedido quitado. Nada a pagar.', font=f_b, fill=VERDE)

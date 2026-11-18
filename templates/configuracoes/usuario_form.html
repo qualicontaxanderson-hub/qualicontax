@@ -233,7 +233,20 @@
     {% endif %}
     <div class="cli-filtros us-bloco">
         <div class="cli-f-row">
-            <span class="cli-seg-rot"><i class="fas fa-building-columns"></i> Dados bancários e Pix <small style="text-transform:none; letter-spacing:0; font-weight:600; color:#94a3b8">— a chave Pix é a que sai no pedido de comissão</small></span>
+            <span class="cli-seg-rot"><i class="fas fa-building-columns"></i> Contas para receber <small style="text-transform:none; letter-spacing:0; font-weight:600; color:#94a3b8">— a marcada sai no pedido de comissão, com o nome do titular no Pix</small></span>
+            {% if contas and contas|length > 1 %}
+            {# 18/11/2026: a pessoa pode ter várias contas (a dela, a de outra pessoa, a da empresa); aqui o admin vê e escolhe #}
+            <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(280px, 1fr)); gap:10px; margin-bottom:12px">
+              {% for c in contas %}
+              <div style="border:1.5px solid {{ '#16a34a' if c.recebe_pagamentos else '#e2e8f0' }}; background:{{ '#f0fdf4' if c.recebe_pagamentos else '#fff' }}; border-radius:12px; padding:10px 12px; font-size:12.5px; color:#334155">
+                <b style="color:#0f172a">{{ c.apelido or c.titular_nome or 'Conta ' ~ loop.index }}</b>{% if c.recebe_pagamentos %} <span style="font-size:11px; font-weight:800; color:#15803d; background:#dcfce7; border-radius:99px; padding:2px 8px">recebe os pagamentos</span>{% endif %}<br>
+                {{ c.titular_nome or '' }}{% if c.titular_cpf %} · {{ c.titular_cpf }}{% endif %}<br>{{ c.banco_nome or '' }}{% if c.pix_chave %} · Pix: {{ c.pix_chave }}{% endif %}
+                {% if not c.recebe_pagamentos %}<div style="margin-top:6px"><button type="submit" formaction="{{ url_for('configuracoes.usuario_conta_usar', uid=usuario.id, cid=c.id) }}" formmethod="post" formnovalidate class="btn btn-sm" style="font-size:12px; font-weight:700; color:#15803d; border:1.5px solid #bbf7d0; background:#f0fdf4; border-radius:8px; padding:4px 9px"><i class="fas fa-check"></i> Usar esta para receber</button></div>{% endif %}
+              </div>
+              {% endfor %}
+            </div>
+            <p class="us-txt" style="margin:0 0 8px">O formulário abaixo altera a conta que recebe. As outras a pessoa edita em Meu cadastro.</p>
+            {% endif %}
             <input type="hidden" name="banco_form" value="1">
             <div class="us-campos">
                 <label class="us-campo"><span>Tipo da chave Pix</span>
@@ -245,8 +258,8 @@
                 <label class="us-campo"><span>Conta</span><input type="text" name="conta" value="{{ banco.conta or '' }}"></label>
                 <label class="us-campo"><span>Tipo de conta</span>
                     <select name="conta_tipo"><option value="">—</option>{% for k, v in [('CORRENTE', 'Corrente'), ('POUPANCA', 'Poupança'), ('SALARIO', 'Salário'), ('PAGAMENTO', 'Pagamento')] %}<option value="{{ k }}"{{ ' selected' if banco.conta_tipo == k }}>{{ v }}</option>{% endfor %}</select></label>
-                <label class="us-campo"><span>Titular (nome / CPF)</span>
-                    <div style="display:flex; gap:6px"><input type="text" name="titular_nome" value="{{ banco.titular_nome or '' }}" placeholder="nome"><input type="text" name="titular_cpf" value="{{ banco.titular_cpf or '' }}" placeholder="CPF" style="max-width:150px"></div></label>
+                <label class="us-campo"><span>Titular (nome / CPF ou CNPJ)</span>
+                    <div style="display:flex; gap:6px"><input type="text" name="titular_nome" value="{{ banco.titular_nome or '' }}" placeholder="nome: é o que vai no Pix"><input type="text" name="titular_cpf" value="{{ banco.titular_cpf or '' }}" placeholder="CPF ou CNPJ" maxlength="18" style="max-width:170px"></div></label>
             </div>
             <p class="us-txt" style="margin-top:8px"><i class="fas fa-shield-halved"></i> Só o administrador vê esta parte. Os números não vão para a Auditoria, só o aviso de que mudaram.</p>
         </div>
