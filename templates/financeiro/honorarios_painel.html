@@ -96,7 +96,10 @@
 .hp-barra .pb { display:inline-flex; align-items:center; gap:6px; background:rgba(255,255,255,.18); border-radius:99px; padding:3px 10px 3px 4px; font-weight:800; font-size:12.5px; margin-left:6px; }
 .hp-barra .pb img { border-radius:99px; background:#fff; }
 .hp-barra button { border:0; background:#fff; color:#c2410c; font:inherit; font-weight:800; border-radius:11px; padding:11px 18px; display:inline-flex; gap:8px; align-items:center; cursor:pointer; font-size:14px; }
-.hp-mais { display:flex; gap:8px; flex-wrap:wrap; margin:-8px 0 18px; }
+.hp-refino { margin:0 0 10px; padding:8px 10px; } .hp-refino .tx-ref-resumo.filtrado { padding:5px 12px; }
+.hp-refino, .tx-ref-pop.hp-pop { --sec:#0f3d2e; --sec-e:#0b2d22; --sec-f:#ecfdf3; --sec-b:#bbf7d0; }
+.hp-refino .tx-ref-pop .op .logo { width:22px; height:22px; display:inline-flex; align-items:center; justify-content:center; } .hp-refino .tx-ref-pop .op .logo img { width:20px; height:20px; border-radius:5px; }
+.hp-mais { display:flex; gap:8px; flex-wrap:wrap; margin:0 0 18px; }
 .hp-mais a { display:inline-flex; align-items:center; gap:7px; font-size:12.5px; font-weight:700; color:#475569; background:#fff; border:1px solid #e6eeea; border-radius:99px; padding:6px 13px; text-decoration:none; }
 .hp-mais a b { color:#0f3d2e; } .hp-mais a i { color:#16a34a; } .hp-mais a.al { border-color:#fde68a; background:#fffbeb; color:#92400e; } .hp-mais a.al i { color:#d97706; }
 /* caixa: escolher o banco */
@@ -156,7 +159,7 @@ span.hp-bco, span.hp-nf { cursor:default; }
 {% set cls = {'emitir': 'tx-venc', 'erro': 'tx-venc', 'cobradas': 'tx-hoje', 'pagas': 'tx-ok', 'atrasadas': 'tx-ina'}.get(f, 'tx-fut') %}
 {% set marca = f in ('emitir', 'erro') and pode_emitir %}
 {% set muda = f in ('emitir', 'erro') and pode_esc %}
-<div class="tx-c hp-c {{ cls }}{{ ' marcavel' if marca }}" data-banco="{{ l.banco.id if l.banco else '' }}" data-nota="{{ 1 if l.nota else 0 }}" data-v="{{ l.total | float }}" data-cli="{{ l.cliente_id }}"
+<div class="tx-c hp-c {{ cls }}{{ ' marcavel' if marca }}" data-banco="{{ l.banco.id if l.banco else '' }}" data-nota="{{ 1 if l.nota else 0 }}" data-v="{{ l.total | float }}" data-cli="{{ l.cliente_id }}" data-grupo="{{ l.grupo or '' }}" data-dec="{{ 1 if l.decimo else 0 }}"
      data-busca="{{ l.numero or '' }} {{ l.empresa }} {{ l.contrato.nome_fantasia or '' }}"{% if marca %} onclick="hpMarcar(event, this)"{% endif %}>
   {% if marca %}<input type="checkbox" name="cliente" value="{{ l.cliente_id }}" hidden form="hpForm"><span class="hp-ck"><i class="fas fa-check"></i></span>{% endif %}
   <div class="tx-c-top"><span class="tx-c-num">{{ l.numero or '—' }}</span><span class="tx-c-nome" title="{{ l.empresa }}">{{ l.empresa }}</span></div>
@@ -253,15 +256,22 @@ span.hp-bco, span.hp-nf { cursor:default; }
     </div>
   </div>
 
+  {# 18/11/2026 — Anderson: "melhore essas caixas de filtro": a mesma barra de refino de Cobranças (tx-refino) #}
+  <div class="tx-refino hp-refino" id="hpRefino">
+    <i class="fas fa-sliders"></i>
+    <div class="tx-ref" data-dim="banco"><button type="button"><i class="fas fa-building-columns"></i> Banco <b></b><i class="fas fa-chevron-down"></i></button><div class="tx-ref-pop"></div></div>
+    <div class="tx-ref" data-dim="nota"><button type="button"><i class="fas fa-file-invoice"></i> Nota <b></b><i class="fas fa-chevron-down"></i></button><div class="tx-ref-pop"></div></div>
+    <div class="tx-ref" data-dim="grupo"><button type="button"><i class="fas fa-layer-group"></i> Grupo <b></b><i class="fas fa-chevron-down"></i></button><div class="tx-ref-pop"></div></div>
+    <div class="tx-ref" data-dim="dec"><button type="button"><i class="fas fa-gift"></i> 13º <b></b><i class="fas fa-chevron-down"></i></button><div class="tx-ref-pop"></div></div>
+    <div class="tx-ref" data-dim="valor"><button type="button"><i class="fas fa-coins"></i> Valor <b></b><i class="fas fa-chevron-down"></i></button><div class="tx-ref-pop"></div></div>
+    <button type="button" class="tx-ref-limpar" id="hpRefLimpar" onclick="hpLimpar()"><i class="fas fa-xmark"></i> Limpar</button>
+    <div class="tx-ref-resumo" id="hpRefResumo"></div>
+    <div class="tx-ref-chips" id="hpRefChips"></div>
+  </div>
   <div class="hp-mais">
     <a href="{{ url_for('financeiro.honorarios', aba='com') }}"><i class="fas fa-list"></i> Lista de contratos <b>{{ resumo.n or 0 }}</b></a>
     <a href="{{ url_for('financeiro.honorarios', aba='sem') }}"><i class="fas fa-building-circle-xmark"></i> Sem honorários <b>{{ resumo.sem_contrato or 0 }}</b></a>
     <a href="{{ url_for('financeiro.honorarios', aba='pendentes') }}"{% if resumo.pendentes %} class="al"{% endif %}><i class="fas fa-stamp"></i> Aguardando aprovação <b>{{ resumo.pendentes or 0 }}</b></a>
-    <span class="hp-filtros">
-      <button type="button" class="tx-f on" data-fn="">Todas</button>
-      <button type="button" class="tx-f" data-fn="1"><i class="fas fa-file-invoice"></i> Com nota <b>{{ P.n_nota }}</b></button>
-      <button type="button" class="tx-f" data-fn="0"><i class="fas fa-barcode"></i> Só boleto <b>{{ P.n_so_boleto }}</b></button>
-    </span>
   </div>
 
   <form id="hpForm" method="POST" action="{{ url_for('financeiro.lote_emitir') }}" onsubmit="return hpConfirmar()"><input type="hidden" name="competencia" value="{{ competencia.strftime('%Y-%m') }}"></form>
@@ -337,37 +347,113 @@ document.querySelectorAll('.tx-aba').forEach(function (a) {
   });
 });
 function brl(v) { return v.toLocaleString('pt-BR', {style: 'currency', currency: 'BRL'}); }
-/* filtros: banco + nota + busca, juntos */
-var F = {banco: '', nota: ''};
+/* filtros (18/11/2026): Banco, Nota, Grupo, 13º, Valor + busca — a mesma barra de refino de Cobranças.
+   Cada dimensão aceita mais de uma opção; o painel ativo mostra só quem passa em TODAS; o resumo diz quantas e quanto. */
+var F = {banco: [], nota: [], grupo: [], dec: [], valor: []};
+var HP_BANCOS = {{ painel.bancos | map(attribute='nome') | list | tojson }};
+var HP_BANCO_ID = {{ painel.bancos | map(attribute='id') | list | tojson }};
+var HP_BANCO_LOGO = [{% for b in painel.bancos %}{{ (logo_banco(b.cod, tam=20, titulo=b.nome) | string) | tojson }}{{ ',' if not loop.last }}{% endfor %}];
+var HP_FAIXAS = [['ate500', 'até R$ 500', 0, 500], ['500a1000', 'R$ 500 a 1.000', 500, 1000], ['1000a2000', 'R$ 1.000 a 2.000', 1000, 2000], ['mais2000', 'acima de R$ 2.000', 2000, 1e12]];
+function hpFaixa(v) { for (var i = 0; i < HP_FAIXAS.length; i++) { if (v > HP_FAIXAS[i][2] && v <= HP_FAIXAS[i][3]) return HP_FAIXAS[i][0]; } return v <= 0 ? 'ate500' : 'mais2000'; }
+function hpValor(c, dim) {
+  if (dim === 'banco') return c.dataset.banco; if (dim === 'nota') return c.dataset.nota; if (dim === 'grupo') return c.dataset.grupo || '(sem grupo)';
+  if (dim === 'dec') return c.dataset.dec; if (dim === 'valor') return hpFaixa(parseFloat(c.dataset.v || 0)); return '';
+}
+function hpPassa(c, menos) {
+  for (var dim in F) { if (dim === menos || !F[dim].length) continue; if (F[dim].indexOf(hpValor(c, dim)) < 0) return false; }
+  return true;
+}
+function hpPainelAtivo() { return document.querySelector('.tx-painel.on') || document.querySelector('.tx-painel'); }
 function hpFiltrar() {
   document.querySelectorAll('.tx-painel').forEach(function (p) {
     var q = ((p.querySelector('.tx-busca input') || {}).value || '').trim().toLowerCase();
     p.querySelectorAll('.hp-c').forEach(function (c) {
-      var ok = (!F.banco || c.dataset.banco === F.banco) && (F.nota === '' || c.dataset.nota === F.nota) && (!q || c.dataset.busca.toLowerCase().indexOf(q) >= 0);
+      var ok = hpPassa(c) && (!q || c.dataset.busca.toLowerCase().indexOf(q) >= 0);
       c.style.display = ok ? '' : 'none';
     });
   });
+  hpRefinoPinta();
 }
 function hpBusca() { hpFiltrar(); }
-function hpFiltroBanco(bt) {
-  var on = !bt.classList.contains('on');
-  document.querySelectorAll('.hp-banco').forEach(function (x) { x.classList.toggle('on', on && x === bt); });
-  F.banco = on ? bt.dataset.banco : ''; hpFiltrar();
+function hpRotulo(dim, v) {
+  if (dim === 'banco') { var i = HP_BANCO_ID.indexOf(parseInt(v, 10)); return i >= 0 ? HP_BANCOS[i] : 'sem banco'; }
+  if (dim === 'nota') return v === '1' ? 'Nota + boleto' : 'Só boleto';
+  if (dim === 'dec') return v === '1' ? 'Com 13º' : 'Sem 13º';
+  if (dim === 'valor') { var f = HP_FAIXAS.filter(function (x) { return x[0] === v; })[0]; return f ? f[1] : v; }
+  return v;
 }
-// quadro Nota fiscal: aperta o mesmo filtro das pílulas (e desliga se apertar de novo)
-window.hpNotaClique = function (l) {
-  var liga = !l.classList.contains('on');
-  document.querySelectorAll('.hp-nfq-l').forEach(function (x) { x.classList.toggle('on', liga && x === l); });
-  var alvo = document.querySelector('.hp-filtros .tx-f[data-fn="' + (liga ? l.dataset.fn : '') + '"]');
-  if (alvo) alvo.click();
-};
-document.querySelectorAll('.hp-filtros .tx-f').forEach(function (b) {
-  b.addEventListener('click', function () {
-    document.querySelectorAll('.hp-filtros .tx-f').forEach(function (x) { x.classList.toggle('on', x === b); });
-    F.nota = b.dataset.fn; hpFiltrar();
-    document.querySelectorAll('.hp-nfq-l').forEach(function (x) { x.classList.toggle('on', x.dataset.fn === b.dataset.fn); });
+var HP_DIM_NOME = {banco: 'Banco', nota: 'Nota', grupo: 'Grupo', dec: '13º', valor: 'Valor'};
+function hpOpcoes(dim) {
+  // opções com contagem e soma, contadas no painel ativo e respeitando os OUTROS filtros (como em Cobranças)
+  var p = hpPainelAtivo(), m = {};
+  p.querySelectorAll('.hp-c').forEach(function (c) {
+    if (!hpPassa(c, dim)) return;
+    var v = hpValor(c, dim); if (!m[v]) m[v] = {v: v, n: 0, soma: 0}; m[v].n++; m[v].soma += parseFloat(c.dataset.v || 0);
+  });
+  if (dim === 'banco') HP_BANCO_ID.forEach(function (id) { if (!m[String(id)]) m[String(id)] = {v: String(id), n: 0, soma: 0}; });   // bancos sem empresa aparecem apagados
+  var lista = Object.keys(m).map(function (k) { return m[k]; });
+  if (dim === 'valor') lista.sort(function (x, y) { return HP_FAIXAS.findIndex(function (f) { return f[0] === x.v; }) - HP_FAIXAS.findIndex(function (f) { return f[0] === y.v; }); });
+  else if (dim === 'grupo') lista.sort(function (x, y) { return y.n - x.n || hpRotulo(dim, x.v).localeCompare(hpRotulo(dim, y.v)); });
+  else lista.sort(function (x, y) { return hpRotulo(dim, y.v) < hpRotulo(dim, x.v) ? 1 : -1; });
+  return lista;
+}
+function hpPop(ref) {
+  var dim = ref.dataset.dim, pop = ref.querySelector('.tx-ref-pop'), ops = hpOpcoes(dim);
+  var h = '<h5>' + HP_DIM_NOME[dim] + '</h5><div class="lista">';
+  ops.forEach(function (o) {
+    var on = F[dim].indexOf(o.v) >= 0, logo = '';
+    if (dim === 'banco') { var i = HP_BANCO_ID.indexOf(parseInt(o.v, 10)); if (i >= 0 && HP_BANCO_LOGO[i]) logo = '<span class="logo">' + HP_BANCO_LOGO[i] + '</span>'; }
+    h += '<div class="op' + (on ? ' on' : '') + (o.n ? '' : ' zero') + '" data-v="' + String(o.v).replace(/"/g, '&quot;') + '"><span class="cx"><i class="fas fa-check"></i></span>' + logo + '<span>' + hpRotulo(dim, o.v) + '</span><small>' + o.n + ' · ' + brl(o.soma) + '</small></div>';
+  });
+  if (!ops.length) h += '<div class="dica">Nada para filtrar neste quadro.</div>';
+  h += '</div><div class="rodape"><button type="button" data-acao="limpar">Limpar</button><button type="button" data-acao="fechar">Fechar</button></div>';
+  pop.innerHTML = h; pop.classList.add('hp-pop');
+  pop.querySelectorAll('.op').forEach(function (op) { op.addEventListener('click', function () {
+    var v = op.dataset.v, i = F[dim].indexOf(v); if (i >= 0) F[dim].splice(i, 1); else F[dim].push(v);
+    hpFiltrar(); hpPop(ref); hpSincroniza();
+  }); });
+  pop.querySelector('[data-acao=limpar]').addEventListener('click', function () { F[dim] = []; hpFiltrar(); hpPop(ref); hpSincroniza(); });
+  pop.querySelector('[data-acao=fechar]').addEventListener('click', function () { hpFechaPops(); });
+}
+function hpFechaPops() { document.querySelectorAll('#hpRefino .tx-ref').forEach(function (r) { r.classList.remove('aberto'); r.querySelector('.tx-ref-pop').classList.remove('on'); }); }
+document.querySelectorAll('#hpRefino .tx-ref > button').forEach(function (bt) {
+  bt.addEventListener('click', function (e) {
+    e.stopPropagation(); var ref = bt.parentNode, abrir = !ref.classList.contains('aberto'); hpFechaPops();
+    if (abrir) { hpPop(ref); ref.classList.add('aberto'); ref.querySelector('.tx-ref-pop').classList.add('on'); }
   });
 });
+document.addEventListener('click', function (e) { if (!e.target.closest('#hpRefino')) hpFechaPops(); });
+document.addEventListener('keydown', function (e) { if (e.key === 'Escape') hpFechaPops(); });
+function hpRefinoPinta() {
+  var algum = false;
+  document.querySelectorAll('#hpRefino .tx-ref').forEach(function (r) { var n = F[r.dataset.dim].length; r.classList.toggle('on', n > 0); r.querySelector('button b').textContent = n || ''; if (n) algum = true; });
+  var p = hpPainelAtivo(), n = 0, soma = 0, total = 0;
+  p.querySelectorAll('.hp-c').forEach(function (c) { total++; if (c.style.display !== 'none') { n++; soma += parseFloat(c.dataset.v || 0); } });
+  var q = ((p.querySelector('.tx-busca input') || {}).value || '').trim();
+  var res = document.getElementById('hpRefResumo');
+  res.innerHTML = (algum || q ? '<i class="fas fa-filter"></i> ' : '') + n + ' de ' + total + ' empresa' + (total === 1 ? '' : 's') + ' · <b>' + brl(soma) + '</b>';
+  res.classList.toggle('filtrado', algum || !!q);
+  document.getElementById('hpRefLimpar').style.display = (algum || q) ? 'inline-flex' : 'none';
+  var chips = document.getElementById('hpRefChips'), h = '';
+  for (var dim in F) F[dim].forEach(function (v) { h += '<span class="tx-chip"><i class="fas fa-sliders dim"></i>' + HP_DIM_NOME[dim] + ': ' + hpRotulo(dim, v) + '<button type="button" onclick="hpTira(\'' + dim + '\', ' + JSON.stringify(v).replace(/"/g, '&quot;') + ')"><i class="fas fa-xmark"></i></button></span>'; });
+  chips.innerHTML = h; chips.classList.toggle('on', !!h);
+}
+function hpTira(dim, v) { var i = F[dim].indexOf(v); if (i >= 0) F[dim].splice(i, 1); hpFiltrar(); hpSincroniza(); }
+function hpLimpar() { for (var d in F) F[d] = []; document.querySelectorAll('.tx-busca input').forEach(function (i) { i.value = ''; }); hpFiltrar(); hpSincroniza(); }
+function hpSincroniza() {   // a faixa dos bancos e o quadro Nota fiscal acompanham o filtro
+  document.querySelectorAll('.hp-banco').forEach(function (x) { x.classList.toggle('on', F.banco.length === 1 && F.banco[0] === x.dataset.banco); });
+  document.querySelectorAll('.hp-nfq-l').forEach(function (x) { x.classList.toggle('on', F.nota.length === 1 && F.nota[0] === x.dataset.fn); });
+}
+function hpFiltroBanco(bt) {
+  var id = bt.dataset.banco, so = F.banco.length === 1 && F.banco[0] === id;
+  F.banco = so ? [] : [id]; hpFiltrar(); hpSincroniza();
+}
+window.hpNotaClique = function (l) {
+  var v = l.dataset.fn, so = F.nota.length === 1 && F.nota[0] === v;
+  F.nota = so ? [] : [v]; hpFiltrar(); hpSincroniza();
+};
+document.querySelectorAll('.tx-abas .tx-aba').forEach(function (a) { a.addEventListener('click', function () { setTimeout(hpRefinoPinta, 0); }); });
+hpRefinoPinta();
 /* marcar e emitir */
 function hpSoma() {
   var soma = 0, n = 0, pb = {}, nf = 0;

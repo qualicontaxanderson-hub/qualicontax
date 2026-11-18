@@ -102,7 +102,16 @@ def painel(competencia, empresa_id=EMPRESA_QUALICONTAX):
     hist = _historico(clientes, meses[0], mes_seguinte(venc_mes))
     tot = defaultdict(lambda: {'n': 0, 'valor': Decimal('0')})
     por_banco = defaultdict(lambda: {'n': 0, 'valor': Decimal('0')})
+    # grupo de cada empresa, para o filtro Grupo da barra (18/11/2026)
+    ids = [l['cliente_id'] for l in linhas]
+    grupos = {}
+    if ids:
+        for r in execute_query(f"""SELECT r.cliente_id, g.nome FROM cliente_grupo_relacao r JOIN grupos_clientes g ON g.id = r.grupo_id
+                                    WHERE r.cliente_id IN ({','.join(['%s'] * len(ids))})""", tuple(ids), fetch=True) or []:
+            grupos.setdefault(r['cliente_id'], r['nome'])
     for l in linhas:
+        l['grupo'] = grupos.get(l['cliente_id']) or (l['contrato'].get('plano') or '').replace('Mensalidade ', '').strip() or ''
+        l['decimo'] = (l['contrato'].get('decimo_tipo') or 'NENHUM') != 'NENHUM'
         conta = por_id.get(l.get('conta_id'))
         l['banco'] = conta or padrao
         l['banco_trocado'] = bool(conta and padrao and conta['id'] != padrao['id'])
