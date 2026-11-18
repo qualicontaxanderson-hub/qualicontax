@@ -864,6 +864,18 @@ def boleto_reemitir(boleto_id):
 # ---------------------------------------------------------------------------
 # Webhook da Efí (público; o segredo da URL identifica a conta)
 # ---------------------------------------------------------------------------
+def _abertura(token, qual):
+    """Acha o boleto do link e carimba "cliente abriu" — menos quando quem abre é da EQUIPE (18/11/2026 — Anderson:
+    "se ele fizer isso queria que chegasse um e-mail informando que ele abriu um boleto do cliente e não deve ser
+    feito isso, por conta do registro de auditoria do recebimento do cliente"): aí não conta e vai o aviso."""
+    from utils import cobranca_email, equipe_aparelho
+    eq = equipe_aparelho.quem()
+    b = cobranca_email.registrar_abertura(token, qual, carimbar=not eq)
+    if b and eq:
+        equipe_aparelho.avisar(eq, b, qual)
+    return b
+
+
 @cobranca_publica.route('/c/<token>')
 def pagina_pagamento(token):
     """Página de pagamento do cliente (16/11/2026) — Anderson: "quero que o cliente tenha o boleto, código de
@@ -871,7 +883,7 @@ def pagina_pagamento(token):
     algo prático". No WhatsApp não há botão de copiar; aqui há: Copiar código Pix, Copiar linha digitável,
     boleto e nota em PDF. Sem login: só quem tem o código do link chega; abrir carimba como "abriu o boleto"."""
     from utils import cobranca_email
-    b = cobranca_email.registrar_abertura(token, 'boleto')
+    b = _abertura(token, 'boleto')
     if not b:
         abort(404)
     empresa = cobranca_email._empresa(b['empresa_id'])
@@ -932,7 +944,7 @@ def abrir_boleto(token):
 def _pdf_do_boleto_do_token(token, disposicao):
     from flask import Response
     from utils import cobranca_email
-    b = cobranca_email.registrar_abertura(token, 'boleto')
+    b = _abertura(token, 'boleto')
     if not b or not (b.get('pdf_url') or b.get('link')):
         abort(404)
     pdf = cobranca_email.pdf_do_boleto(b) if b.get('pdf_url') else None
@@ -960,7 +972,7 @@ def baixar_boleto(token):
 def _pdf_da_nota_do_token(token, disposicao):
     from flask import Response
     from utils import cobranca_email
-    b = cobranca_email.registrar_abertura(token, 'nota')
+    b = _abertura(token, 'nota')
     if not b or not b.get('nfse_id'):
         abort(404)
     nota = NfseEmitida.get(b['nfse_id'])

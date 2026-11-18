@@ -137,14 +137,17 @@ def garantir_token(boleto):
 CARIMBOS = {'pixel': 'email_visto_em', 'boleto': 'abriu_boleto_em', 'nota': 'abriu_nota_em'}
 
 
-def registrar_abertura(token, qual):
-    """Anota a ÚLTIMA vez que o cliente abriu (pixel, boleto ou nota). Devolve o boleto ou None."""
+def registrar_abertura(token, qual, carimbar=True):
+    """Anota a ÚLTIMA vez que o cliente abriu (pixel, boleto ou nota). Devolve o boleto ou None.
+    ``carimbar=False``: quem abriu é da EQUIPE (18/11/2026) — só acha o boleto, não conta como o cliente."""
     col = CARIMBOS.get(qual)
     if not col or not token or len(token) > 48:
         return None
     b = execute_query('SELECT * FROM fin_boletos WHERE email_token = %s', (token,), fetch=True, fetch_one=True)
     if not b:
         return None
+    if not carimbar:
+        return b
     # Guarda a ULTIMA abertura (Anderson, 04/11/2026: 'nao esta voltando' — com a primeira
     # vez fixa ele clicava de novo e nada mudava). O reenvio zera os tres carimbos.
     # IP e navegador de quem abriu (migracao 05): separam o clique do cliente da visita

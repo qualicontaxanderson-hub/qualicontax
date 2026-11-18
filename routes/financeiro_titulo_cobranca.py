@@ -37,9 +37,20 @@ def _quando(v):
     return d.strftime('%d/%m/%y %H:%M')
 
 
+def _restrito():
+    """18/11/2026 — Anderson: a equipe (Guilherme, Gabriel, Melke...) vê o boleto que mandou para reenviar ao cliente,
+    mas "o que fazer" e a "Página do cliente" ficam só com ele e a Alessandra (quem aprova)."""
+    from flask_login import current_user
+    return not (current_user.is_admin() or current_user.has_permission('financeiro.lancamentos.aprovar'))
+
+
 @financeiro.route('/financeiro/titulos/<int:titulo_id>/cobranca')
 @permission_required('financeiro.titulos')
 def titulo_cobranca(titulo_id):
+    return janela(titulo_id)
+
+
+def janela(titulo_id, restrito=None):
     t = execute_query(
         """SELECT t.*, c.numero_cliente, c.nome_razao_social, c.cpf_cnpj, c.email, c.celular, c.telefone,
                   cat.nome AS categoria_nome
@@ -241,4 +252,5 @@ def titulo_cobranca(titulo_id):
         comp_difere=comp_difere, copias=copias, nota_pdf_ok=bool(nota and nota.get('situacao') in ('autorizada', 'cancelada')),
         BOLETO_ROTULO=TR.BOLETO_ROTULO, SIT_BOLETO=SITUACOES, volta=volta, email_padrao=t.get('email') or '',
         cel=cel, msg=TR._msg_cobranca([t], saldo) if cel else '',
-        cancelavel=t['status'] == 'aberto' and not t['valor_baixado'], hoje=hoje, hoje_iso=hoje.isoformat())
+        cancelavel=t['status'] == 'aberto' and not t['valor_baixado'], hoje=hoje, hoje_iso=hoje.isoformat(),
+        restrito=_restrito() if restrito is None else restrito)

@@ -19,6 +19,11 @@ from utils.db_helper import execute_query
 
 meu_cadastro = Blueprint('meu_cadastro', __name__)
 
+# 18/11/2026: o aparelho de quem entra no sistema fica marcado (cookie de 1 ano), para a página do cliente (/c/<token>)
+# saber que quem abriu é da equipe — ver utils/equipe_aparelho.py
+from utils.equipe_aparelho import marcar as _marcar_aparelho  # noqa: E402
+meu_cadastro.after_app_request(_marcar_aparelho)
+
 PESSOAIS = ('cpf', 'data_nascimento', 'email_pessoal', 'celular_pessoal', 'celular_corporativo',
             'cep', 'logradouro', 'numero', 'complemento', 'bairro', 'cidade', 'estado')
 BANCARIOS = ('banco_codigo', 'banco_nome', 'agencia', 'conta', 'conta_tipo', 'titular_nome', 'titular_cpf', 'pix_tipo', 'pix_chave')

@@ -392,11 +392,13 @@ class FinCarteira:
                           (SELECT l.comissao_status FROM fin_lancamentos l WHERE l.comissao_acordo_id = %s AND l.titulo_id = t.id LIMIT 1) AS lanc_st
                      FROM fin_titulos t LEFT JOIN fin_categorias cat ON cat.id = t.categoria_id
                     WHERE t.tipo = 'R' AND t.status <> 'cancelado' AND t.vencimento >= %s AND t.vencimento < %s
-                      AND (t.cliente_id = %s OR (%s <> '' AND REPLACE(REPLACE(REPLACE(t.contraparte_doc, '.', ''), '/', ''), '-', '') = %s))
+                      AND (t.cliente_id = %s OR (%s <> '' AND REPLACE(REPLACE(REPLACE(t.contraparte_doc, '.', ''), '/', ''), '-', '') = %s)
+                           -- boleto pago que entrou pelo extrato sem cliente: "Recebimento de cobrança: <nº> de <RAZÃO SOCIAL>"
+                           OR (t.cliente_id IS NULL AND t.descricao LIKE CONCAT('Recebimento de cobrança: %% de ', %s)))
                       AND (cat.nome LIKE 'Honor%%' OR t.descricao LIKE 'Honor%%')
                       AND t.descricao NOT LIKE 'Honorários e serviços —%%'
                     ORDER BY t.vencimento, t.id""",
-                (a['id'], a['id'], ini, fim, a['cliente_id'], doc, doc), fetch=True) or []
+                (a['id'], a['id'], ini, fim, a['cliente_id'], doc, doc, a['nome_razao_social'] or '-'), fetch=True) or []
             if a['vigencia_inicio'] and a['vigencia_inicio'] >= ini and a['vigencia_inicio'] < fim:
                 novo = True
             else:

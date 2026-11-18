@@ -256,6 +256,8 @@ MAPA = {
     'financeiro.comissoes_fechar':         'financeiro.lancamentos',
     'financeiro.fechamento_pagar':         'financeiro.lancamentos.aprovar',
     'financeiro.lancamento_minha_pix':     'financeiro.lancamentos',          # a própria chave Pix (17/11/2026)
+    'financeiro.lancamento_cobranca':      'financeiro.lancamentos',          # a cobrança do que a pessoa lançou (18/11/2026)
+    'financeiro.lancamento_entrar_como':   'ADMIN',                           # admin vê/lança como o funcionário (18/11/2026)
     'financeiro.comissao_pedido':          'financeiro.lancamentos',          # quem pediu ou quem aprova (a rota confere)
     'financeiro.servico_comissao':         'financeiro.lancamentos.aprovar',  # e a rota só deixa o admin
     'financeiro.comissao_regras':          'financeiro.lancamentos.aprovar',  # Regras de comissão: a rota só deixa o admin
@@ -498,6 +500,24 @@ def pode_rota(endpoint):
     if endpoint in ENDPOINTS_PUBLICOS or endpoint.split('.', 1)[0] in BLUEPRINTS_PUBLICOS:
         return True
     return _atende(regra_da_rota(endpoint, current_app.view_functions.get(endpoint)))
+
+
+def pode_rota_de(usuario, endpoint):
+    """pode_rota para OUTRA pessoa (18/11/2026 — o admin "vendo como" o funcionário em Lançamentos confere o que
+    ele consegue abrir). Mesma regra do portão, com as permissões da pessoa."""
+    from flask import current_app
+    if usuario.is_admin():
+        return True
+    if endpoint in ENDPOINTS_PUBLICOS or endpoint.split('.', 1)[0] in BLUEPRINTS_PUBLICOS:
+        return True
+    regra = regra_da_rota(endpoint, current_app.view_functions.get(endpoint))
+    if regra == 'LOGIN':
+        return True
+    if regra == 'ADMIN' or regra is None:
+        return False
+    if isinstance(regra, tuple):
+        return any(usuario.has_permission(c) for c in regra)
+    return usuario.has_permission(regra)
 
 
 def _atende(regra):
