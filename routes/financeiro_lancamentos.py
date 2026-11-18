@@ -682,6 +682,34 @@ def lancamento_aprovar(lid):
     if not l:
         abort(404)
     ct = request.form.get('comissao_tipo') or None
+    # 18/11/2026 — quem aprova acerta como cobrar e o vencimento antes de emitir (Anderson: "Tenho que ter essa
+    # prerrogativa" e "Posso alterar tudo se é BOLETO + NF, só BOLETO ou alterar para a Mensalidade")
+    como = request.form.get('como')
+    if l['status'] == 'LANCADO' and como in ('BOLETO_NOTA', 'BOLETO', 'MENSAL'):
+        try:
+            if como == 'MENSAL':
+                destino, com_nota, venc = 'MENSAL', None, None
+                comp = FinLoteMensal.competencia_aberta(EMP, _data(request.form.get('competencia')) or l['competencia'])
+            else:
+                destino, com_nota = 'AVULSO', 1 if como == 'BOLETO_NOTA' else 0
+                venc = _data(request.form.get('vencimento')) or l['vencimento']
+                if not venc or venc < _hoje_br():
+                    raise ValueError
+                comp = l['competencia'] if l['destino'] == 'AVULSO' and l['competencia'] else _hoje_br().replace(day=1)
+        except ValueError:
+            flash('Vencimento inválido: escolha hoje ou uma data à frente.', 'danger')
+            return redirect(url_for('financeiro.lancamentos', aba='apr'))
+        antes = {'como': _como(l), 'vencimento': str(l['vencimento'] or '')}
+        nota_antes = l['com_nota'] if l.get('com_nota') is not None else l.get('emite_nota')
+        mudou = (destino != l['destino'] or venc != l['vencimento'] or comp != l['competencia']
+                 or (destino == 'AVULSO' and bool(com_nota) != bool(nota_antes)))
+        if mudou:
+            execute_query("UPDATE fin_lancamentos SET destino = %s, com_nota = %s, vencimento = %s, competencia = %s "
+                          "WHERE id = %s AND status = 'LANCADO'", (destino, com_nota, venc, comp, lid), fetch=False)
+            l = FinLancamento.get(lid)
+            registrar('escrita.alterou_cobranca_lancamento', 'financeiro', tabela='fin_lancamentos', registro_id=lid, antes=antes,
+                      depois={'empresa': l['nome_razao_social'], 'servico': l['servico_nome'], 'como': _como(l),
+                              'vencimento': str(l['vencimento'] or '')})
     try:
         com = FinLancamento.aprovar(lid, current_user.id, comissao_tipo=ct,
                                     comissao_valor=_dec(request.form.get('comissao_valor')) if ct in ('PCT', 'FIXO') else None)

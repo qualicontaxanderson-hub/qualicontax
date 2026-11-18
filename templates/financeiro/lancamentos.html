@@ -143,7 +143,7 @@
 .ns-banco input:checked + span { border-color:#16a34a; background:#f0fdf4; box-shadow:0 0 0 3px #dcfce7; }
 .ns-campo[hidden], .ns-b[hidden] { display:none; }
 .ns-seg button:disabled { opacity:.35; cursor:not-allowed; } .ns-aviso[hidden] { display:none; }
-.ns-com { display:flex; gap:12px; align-items:center; flex-wrap:wrap; } .ns-com .ns-in { max-width:170px; }
+.ns-com { display:flex; gap:12px; align-items:center; flex-wrap:wrap; } .ns-com .ns-in { max-width:170px; } .ns-com[hidden] { display:none; }
 .ns-res div { display:flex; justify-content:space-between; gap:10px; font-size:13px; padding:5px 0; border-bottom:1px solid #f1f5f4; }
 .ns-res div span { color:#64748b; } .ns-res div b { color:#0f172a; text-align:right; }
 .ns-res .big { border:0; padding-top:10px; } .ns-res .big b { font-size:20px; color:#15803d; }
@@ -414,6 +414,13 @@
     <section class="ns-b"><div class="ns-h"><i class="fas fa-hand-holding-dollar"></i> Comissão de <span id="apPessoa" style="text-transform:none; letter-spacing:0"></span> <em id="apPedida"></em></div>
       <div class="ns-com"><div class="ns-seg" id="apSeg"><button type="button" data-v="">Como pediu</button><button type="button" data-v="PCT">Outro %</button><button type="button" data-v="FIXO">Valor fixo</button><button type="button" data-v="SEM">Sem comissão</button></div>
         <input class="ns-in" id="apCv" name="comissao_valor" inputmode="decimal" hidden><b id="apCr" style="color:#6d28d9"></b></div></section>
+    {# 18/11/2026 — Anderson: "Quero alterar a data de vencimento... Tenho que ter essa prerrogativa" #}
+    {# e também como cobrar ("Posso alterar tudo se é BOLETO + NF, só BOLETO ou alterar para a Mensalidade") #}
+    <section class="ns-b"><div class="ns-h"><i class="fas fa-file-invoice-dollar"></i> Como cobrar <em id="apComoPed"></em></div>
+      <input type="hidden" name="como" id="apComoIn">
+      <div class="ns-seg" id="apComoSeg"><button type="button" data-v="BOLETO_NOTA">Boleto + nota</button><button type="button" data-v="BOLETO">Só boleto</button><button type="button" data-v="MENSAL">Na mensalidade</button></div>
+      <div class="ns-com" id="apVencBox" style="margin-top:12px"><label style="font-size:12.5px; font-weight:700; color:#334155">Vencimento</label><input class="ns-in" type="date" id="apVenc" name="vencimento"><span id="apVencObs" style="font-size:12.5px; color:#64748b"></span></div>
+      <div class="ns-com" id="apCompBox" style="margin-top:12px" hidden><label style="font-size:12.5px; font-weight:700; color:#334155">Mensalidade de</label><select class="ns-in" id="apComp" name="competencia"></select></div></section>
     {% if contas_cobranca %}
     <section class="ns-b" id="apBancoBox"><div class="ns-h"><i class="fas fa-building-columns"></i> Banco do boleto</div>
       <div class="ns-bancos">{% for c in contas_cobranca %}<label class="ns-banco"><input type="radio" name="conta_cobranca_id" value="{{ c.id }}"{{ ' checked' if loop.first }}>
@@ -502,7 +509,7 @@
   var D = JSON.parse(document.getElementById('lmDados').textContent);
   var APR = {
     {% for l in grupos.apr %}{{ l.id }}: { cli: {{ l.nome_razao_social | tojson }}, num: {{ (l.numero_cliente or '') | string | tojson }}, serv: {{ (l.descricao or l.servico_nome) | tojson }},
-      valor: {{ l.valor_total | float }}, como: {{ l.como | tojson }}, por: {{ l.lancado_por_nome | tojson }}, venc: {{ ((l.vencimento.strftime('%d/%m/%Y')) if l.vencimento else '') | tojson }},
+      valor: {{ l.valor_total | float }}, como: {{ l.como | tojson }}, por: {{ l.lancado_por_nome | tojson }}, venc: {{ ((l.vencimento.strftime('%d/%m/%Y')) if l.vencimento else '') | tojson }}, vi: {{ ((l.vencimento.isoformat()) if l.vencimento else '') | tojson }}, cc: {{ ('MENSAL' if l.destino == 'MENSAL' else ('BOLETO_NOTA' if (l.com_nota if l.com_nota is not none else l.emite_nota) else 'BOLETO')) | tojson }}, ci: {{ (l.competencia.isoformat() if l.competencia else '') | tojson }},
       pt: {{ (l.comissao_pedida_tipo or 'PADRAO') | tojson }}, pv: {{ (l.comissao_pedida_valor | float) if l.comissao_pedida_valor else 0 }}, prev: {{ l.com_prev | float }}, trava: {{ 'true' if l.com_trava else 'false' }},
       obs: {{ (l.observacao or '') | tojson }} }{{ ',' if not loop.last }}{% endfor %}
   };
@@ -562,17 +569,36 @@
     $('apPessoa').textContent = l.por.split(' ')[0];
     $('apPedida').textContent = 'pediu: ' + ({ PADRAO: 'o padrão do acordo', PCT: l.pv + '%', FIXO: brl(l.pv) + ' fixo', SEM: 'sem comissão' }[l.pt] || l.pt);
     $('apRes').innerHTML = '<div class="ns-h"><i class="fas fa-eye"></i> O que vai sair</div><div><span>Cliente</span><b>' + esc((l.num ? l.num + ' · ' : '') + l.cli) + '</b></div>'
-      + '<div><span>Serviço</span><b>' + esc(l.serv) + '</b></div><div><span>Cobrança</span><b>' + esc(l.como) + '</b></div>'
-      + (l.venc ? '<div><span>Vencimento</span><b>' + l.venc + '</b></div>' : '') + (l.obs ? '<div><span>Observação</span><b>' + esc(l.obs) + '</b></div>' : '')
+      + '<div><span>Serviço</span><b>' + esc(l.serv) + '</b></div>'
+      + (l.obs ? '<div><span>Observação</span><b>' + esc(l.obs) + '</b></div>' : '')
       + '<div class="big"><span>Valor</span><b>' + brl(l.valor) + '</b></div>';
     $('apAviso').innerHTML = /Mensalidade/.test(l.como) ? '<i class="fas fa-calendar"></i><span>Entra no boleto da mensalidade: sai junto com o lote do mês.</span>'
                                                         : '<i class="fas fa-bolt"></i><span>Ao aprovar, ' + (/nota/.test(l.como) ? 'a nota e o boleto são emitidos' : 'o boleto é emitido') + ' agora e vão por e-mail ao cliente.</span>';
     $('apCv').value = ''; apSeg('');
-    if ($('apBancoBox')) $('apBancoBox').hidden = /Mensalidade/.test(l.como);
+    // vencimento (avulso, não aceita data passada) e mensalidade (competências abertas)
+    var hj = new Date(); hj = new Date(hj.getTime() - hj.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+    var amanha = new Date(Date.parse(hj) + 86400000).toISOString().slice(0, 10);
+    $('apVenc').min = hj; $('apVenc').value = l.vi && l.vi >= hj ? l.vi : (l.vi ? hj : amanha);
+    $('apVencObs').textContent = l.venc ? 'pedido para ' + l.venc + (l.vi < hj ? ' (já passou: sai com hoje)' : '') : '';
+    $('apComp').innerHTML = D.comps.map(function (c) { return '<option value="' + c.v + '"' + (c.v === l.ci ? ' selected' : '') + '>' + c.rot + '</option>'; }).join('');
+    $('apComoPed').textContent = 'pediu: ' + l.como;
+    apComo(l.cc);
     $('apSeg').querySelectorAll('button').forEach(function (b) { b.disabled = l.trava && b.dataset.v !== 'SEM'; });
     if (l.trava) { apSeg('SEM'); $('apPedida').innerHTML = '<i class="fas fa-lock"></i> serviço que nunca paga comissão'; }
     $('apFundo').classList.add('on'); document.body.style.overflow = 'hidden';
   };
+  function apComo(v) {
+    var m = v === 'MENSAL';
+    $('apComoIn').value = v;
+    $('apComoSeg').querySelectorAll('button').forEach(function (b) { b.classList.toggle('on', b.dataset.v === v); });
+    $('apVencBox').hidden = m; $('apVenc').disabled = m; $('apCompBox').hidden = !m; $('apComp').disabled = !m;
+    if ($('apBancoBox')) $('apBancoBox').hidden = m;
+    $('apComo').textContent = m ? 'Mensalidade ' + (($('apComp').selectedOptions[0] || {}).textContent || '') : (v === 'BOLETO' ? 'Só boleto' : 'Boleto + nota');
+    $('apAviso').innerHTML = m ? '<i class="fas fa-calendar"></i><span>Entra no boleto da mensalidade: sai junto com o lote do mês.</span>'
+                               : '<i class="fas fa-bolt"></i><span>Ao aprovar, ' + (v === 'BOLETO_NOTA' ? 'a nota e o boleto são emitidos agora e vão' : 'o boleto é emitido agora e vai') + ' por e-mail ao cliente.</span>';
+  }
+  $('apComoSeg').addEventListener('click', function (e) { var b = e.target.closest('button'); if (b) apComo(b.dataset.v); });
+  $('apComp').addEventListener('change', function () { apComo($('apComoIn').value); });
   window.apFechar = function () { $('apFundo').classList.remove('on'); document.body.style.overflow = ''; };
   $('apSeg').addEventListener('click', function (e) { var b = e.target.closest('button'); if (b) apSeg(b.dataset.v); });
   $('apCv').addEventListener('input', apCalc);
