@@ -222,6 +222,15 @@ class FinLancamento:
         só ganha se quem aprova der."""
         acordo = FinComissaoAcordo.vigente(l['lancado_por'], l['servico_id'], l['lancado_em'].date() if l.get('lancado_em') else None)
         tipo = tipo or l.get('comissao_pedida_tipo') or 'PADRAO'
+        if tipo == 'PADRAO' and acordo and not acordo.get('servico_id'):
+            # 17/11/2026: o catálogo de serviços tem a comissão padrão do serviço (ex.: taxa da Junta = sem comissão);
+            # vale para quem tem direito (acordo geral). Acordo da pessoa para AQUELE serviço vence o padrão.
+            s = execute_query('SELECT comissao_tipo, comissao_valor FROM nfse_servicos WHERE id = %s', (l['servico_id'],),
+                              fetch=True, fetch_one=True) or {}
+            if s.get('comissao_tipo') == 'SEM':
+                return acordo, Decimal('0')
+            if s.get('comissao_tipo') in ('PCT', 'FIXO') and s.get('comissao_valor'):
+                return acordo, FinComissaoAcordo.calcular({'tipo': s['comissao_tipo'], 'valor': s['comissao_valor']}, l['valor_total'])
         valor = valor if valor is not None else l.get('comissao_pedida_valor')
         if tipo == 'SEM':
             return acordo, Decimal('0')
@@ -406,6 +415,50 @@ class FinComissaoFechamento:
         if status == 'PAGO':
             execute_query("UPDATE fin_lancamentos SET comissao_status = 'PAGA' WHERE fechamento_id = %s", (fid,), fetch=False)
         return status
+
+    @staticmethod
+    def quitar_pelo_extrato():
+        """Pedido de comissão em aberto + saída no extrato do valor exato que falta, depois do pedido, com o nome de
+        quem recebe (ou a chave Pix) na descrição → registra o pagamento e quita (17/11/2026 — Anderson: "quando
+        pago e o sistema EXTRATO puxar o Pagamento dar a Quitação"). Só quando há UMA saída que bate. Devolve os
+        pedidos quitados [(fid, extrato_id)]."""
+        import re
+        import unicodedata
+        abertos = execute_query(
+            """SELECT f.id, f.usuario_id, f.total, f.valor_pago, f.criado_em, u.nome, u.pix_chave
+                 FROM fin_comissao_fechamentos f JOIN usuarios u ON u.id = f.usuario_id
+                WHERE f.status IN ('ABERTO', 'PAGO_PARCIAL')""", fetch=True) or []
+        if not abertos:
+            return []
+
+        def norm(s):
+            s = unicodedata.normalize('NFKD', str(s or '')).encode('ascii', 'ignore').decode().upper()
+            return re.sub(r'[^A-Z0-9@.]+', ' ', s)
+        feitos = []
+        for f in abertos:
+            falta = _d(f['total']) - _d(f['valor_pago'])
+            if falta <= 0:
+                continue
+            cands = execute_query(
+                """SELECT l.id, l.data, l.descricao FROM extrato_lancamentos l
+                    WHERE l.tipo IN ('debito', 'DEBIT') AND l.valor = %s AND l.data >= %s
+                      AND NOT EXISTS (SELECT 1 FROM fin_comissao_pagamentos p WHERE p.extrato_id = l.id)""",
+                (-falta, f['criado_em'].date()), fetch=True) or []
+            partes = [p for p in norm(f['nome']).split() if len(p) > 2 and p not in ('DOS', 'DAS', 'DES')]
+            chave = re.sub(r'\D', '', f.get('pix_chave') or '')
+
+            def casa(c):
+                d = norm(c['descricao'])
+                if chave and len(chave) >= 8 and chave in re.sub(r'\D', '', c['descricao'] or ''):
+                    return True
+                return len(partes) >= 2 and partes[0] in d.split() and sum(1 for p in partes[1:] if p in d.split()) >= 1
+            bate = [c for c in cands if casa(c)]
+            if len(bate) != 1:
+                continue
+            c = bate[0]
+            FinComissaoFechamento.registrar_pagamento(f['id'], c['data'], falta, None, extrato_id=c['id'])
+            feitos.append((f['id'], c['id']))
+        return feitos
 
     @staticmethod
     def pagamentos(fid):

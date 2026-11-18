@@ -59,8 +59,15 @@ def _meu_ou_admin(l):
 
 
 def _servicos():
-    return execute_query("SELECT id, nome, valor_padrao, emite_nota FROM nfse_servicos WHERE empresa_id = %s AND ativo = 1 ORDER BY ordem, nome",
-                         (EMP,), fetch=True) or []
+    return execute_query("SELECT id, nome, valor_padrao, emite_nota, comissao_tipo, comissao_valor FROM nfse_servicos "
+                         "WHERE empresa_id = %s AND ativo = 1 ORDER BY ordem, nome", (EMP,), fetch=True) or []
+
+
+PIX_TIPOS = {'cpf': 'CPF', 'cnpj': 'CNPJ', 'celular': 'Celular', 'email': 'E-mail', 'aleatoria': 'Chave aleatória'}
+
+
+def _pix_de(usuario_id):
+    return execute_query('SELECT pix_tipo, pix_chave FROM usuarios WHERE id = %s', (usuario_id,), fetch=True, fetch_one=True) or {}
 
 
 # ---------------------------------------------------------------------------
@@ -100,6 +107,12 @@ def lancamentos():
     aprov = _aprovador()
     hoje = date.today()
     FinLancamento.liberar_comissoes_pagas()
+    try:            # pedido de comissão pago: o extrato que puxou a saída quita sozinho
+        for fid, eid in FinComissaoFechamento.quitar_pelo_extrato():
+            registrar('escrita.quitou_comissao_pelo_extrato', 'financeiro', tabela='fin_comissao_fechamentos', registro_id=fid,
+                      depois={'extrato_id': eid})
+    except Exception:
+        logger.exception('[lancamentos] quitação de comissão pelo extrato')
     quem = None if aprov else current_user.id
     todos = FinLancamento.listar(EMP, lancado_por=quem, origem=None if not aprov else 'SERVICO', limite=1500)
     grupos = {k: [] for k in FASES}
@@ -131,7 +144,8 @@ def lancamentos():
     caixa = {
         'clientes': [{'id': c['id'], 'num': str(c['num'] or ''), 'nome': c['nome'], 'doc': c['doc'] or '', 'av': bool(c['av']),
                       'mensal': mensal.get(c['id'], 0)} for c in clientes],
-        'servicos': [{'id': s['id'], 'nome': s['nome'], 'valor': float(s['valor_padrao'] or 0), 'nota': bool(s['emite_nota'])} for s in _servicos()],
+        'servicos': [{'id': s['id'], 'nome': s['nome'], 'valor': float(s['valor_padrao'] or 0), 'nota': bool(s['emite_nota']),
+                      'ct': s.get('comissao_tipo') or '', 'cv': float(s.get('comissao_valor') or 0)} for s in _servicos()],
         'acordos': [{'servico_id': a['servico_id'], 'tipo': a['tipo'], 'valor': float(a['valor'])} for a in acordos],
         'comps': [{'v': c.isoformat(), 'rot': c.strftime('%m/%Y')} for c in comps],
         'hoje': hoje.isoformat(), 'eu': getattr(current_user, 'nome', ''), 'aprovador': aprov,
@@ -144,7 +158,93 @@ def lancamentos():
         aba=request.args.get('aba') if request.args.get('aba') in FASES + ('com',) else ('apr' if (aprov or grupos['apr']) else 'cob'),
         caixa_json=json.dumps(caixa, ensure_ascii=False), STATUS=STATUS, COMISSAO=COMISSAO,
         acordos_todos=FinComissaoAcordo.listar(so_ativos=True) if _admin() else [],
-        pessoas=ClienteResponsavel.usuarios_disponiveis() if _admin() else [], servicos=_servicos())
+        pessoas=ClienteResponsavel.usuarios_disponiveis() if _admin() else [], servicos=_servicos(),
+        pix=_pix_de(current_user.id), PIX_TIPOS=PIX_TIPOS)
+
+
+@financeiro.route('/financeiro/lancamentos/minha-pix', methods=['POST'])
+@permission_required(PERM)
+def lancamento_minha_pix():
+    """A chave Pix de quem recebe comissão (17/11/2026): vai no pedido de pagamento, com o Pix copia e cola."""
+    import re
+    from utils.pix_brcode import chave_normalizada
+    tipo = request.form.get('pix_tipo') or ''
+    chave = (request.form.get('pix_chave') or '').strip()
+    erro = None
+    if tipo not in PIX_TIPOS or not chave:
+        erro = 'Escolha o tipo e escreva a chave.'
+    else:
+        chave = chave_normalizada(tipo, chave)
+        d = re.sub(r'\D', '', chave)
+        if (tipo == 'cpf' and len(d) != 11) or (tipo == 'cnpj' and len(d) != 14) or (tipo == 'celular' and len(d) not in (12, 13)) \
+                or (tipo == 'email' and not re.fullmatch(r'[^@\s]+@[^@\s]+\.[^@\s]+', chave)) or (tipo == 'aleatoria' and len(chave) < 30):
+            erro = 'Essa chave não parece um ' + PIX_TIPOS[tipo] + ' válido.'
+    if erro:
+        flash(erro, 'danger')
+    else:
+        antes = _pix_de(current_user.id)
+        execute_query('UPDATE usuarios SET pix_tipo = %s, pix_chave = %s WHERE id = %s', (tipo, chave[:120], current_user.id), fetch=False)
+        registrar('escrita.alterou_chave_pix', 'financeiro', tabela='usuarios', registro_id=current_user.id,
+                  antes={'pix_tipo': antes.get('pix_tipo'), 'pix_chave': antes.get('pix_chave')}, depois={'pix_tipo': tipo, 'pix_chave': chave})
+        flash('Chave Pix salva: os seus pedidos de comissão saem com ela.', 'success')
+    return redirect(url_for('financeiro.lancamentos', aba='com'))
+
+
+@financeiro.route('/financeiro/lancamentos/pedido/<int:fid>')
+@permission_required(PERM)
+def comissao_pedido(fid):
+    """Pedido de pagamento de comissão (17/11/2026 — Anderson: "gerar um Documento para receber esse valor e enviar
+    para anderson ou alessandra igual PÁGINA DO CLIENTE, o qual se ele cadastrou a chave dele PIX no CONFIG consigo
+    copiar e pagar"). Quem pediu e quem aprova abrem; o Pix já vem com o valor que falta."""
+    from utils.pix_brcode import copia_e_cola, qr_data_uri
+    FinLancamento.liberar_comissoes_pagas()
+    try:
+        FinComissaoFechamento.quitar_pelo_extrato()
+    except Exception:
+        logger.exception('[lancamentos] quitação de comissão pelo extrato')
+    f = FinComissaoFechamento.get(fid)
+    if not f or (not _aprovador() and f['usuario_id'] != current_user.id):
+        abort(404)
+    itens = FinComissaoFechamento.itens(fid)
+    pags = execute_query("""SELECT p.*, l.descricao AS extrato_desc, l.banco AS extrato_banco, u.nome AS por_nome
+                             FROM fin_comissao_pagamentos p LEFT JOIN extrato_lancamentos l ON l.id = p.extrato_id
+                             LEFT JOIN usuarios u ON u.id = p.registrado_por WHERE p.fechamento_id = %s ORDER BY p.data, p.id""",
+                         (fid,), fetch=True) or []
+    pix = _pix_de(f['usuario_id'])
+    falta = float(f['total'] or 0) - float(f['valor_pago'] or 0)
+    codigo = qr = None
+    if pix.get('pix_chave') and falta > 0:
+        codigo = copia_e_cola(pix['pix_chave'], f['usuario_nome'], falta, txid='COMISSAO%d' % fid, mensagem='Comissao pedido %d' % fid)
+        qr = qr_data_uri(codigo)
+    return render_template('financeiro/comissao_pedido.html', f=f, itens=itens, pags=pags, pix=pix, PIX_TIPOS=PIX_TIPOS,
+                           falta=falta, codigo=codigo, qr=qr, aprov=_aprovador(), hoje=date.today())
+
+
+@financeiro.route('/financeiro/lancamentos/servico-comissao', methods=['POST'])
+@permission_required(PERM)
+def servico_comissao():
+    """Comissão padrão de um serviço do catálogo (só o administrador): % / valor fixo / sem comissão / apagar."""
+    if not _admin():
+        abort(403)
+    sid = request.form.get('servico_id', type=int)
+    tipo = request.form.get('tipo') or ''
+    s = execute_query('SELECT id, nome, comissao_tipo, comissao_valor FROM nfse_servicos WHERE id = %s AND empresa_id = %s',
+                      (sid, EMP), fetch=True, fetch_one=True)
+    if not s or tipo not in ('', 'PCT', 'FIXO', 'SEM'):
+        abort(400)
+    try:
+        valor = _dec(request.form.get('valor')) if tipo in ('PCT', 'FIXO') else None
+        if tipo in ('PCT', 'FIXO') and (valor is None or valor <= 0 or (tipo == 'PCT' and valor > 100)):
+            raise ValueError('Comissão inválida.')
+    except (ValueError, InvalidOperation):
+        flash('Comissão inválida para %s.' % s['nome'], 'danger')
+        return redirect(url_for('financeiro.lancamentos', aba='com') + '#servicos-comissao')
+    execute_query('UPDATE nfse_servicos SET comissao_tipo = %s, comissao_valor = %s WHERE id = %s', (tipo or None, valor, sid), fetch=False)
+    registrar('escrita.alterou_comissao_servico', 'financeiro', tabela='nfse_servicos', registro_id=sid,
+              antes={'comissao_tipo': s['comissao_tipo'], 'comissao_valor': str(s['comissao_valor'] or '')},
+              depois={'servico': s['nome'], 'comissao_tipo': tipo or None, 'comissao_valor': str(valor or '')})
+    flash('Comissão de "%s" salva.' % s['nome'], 'success')
+    return redirect(url_for('financeiro.lancamentos', aba='com') + '#servicos-comissao')
 
 
 @financeiro.route('/financeiro/lancamentos/novo', methods=['POST'])
@@ -317,7 +417,8 @@ def comissoes_fechar():
         f = FinComissaoFechamento.get(fid)
         registrar('escrita.fechou_comissoes', 'financeiro', tabela='fin_comissao_fechamentos', registro_id=fid,
                   depois={'total': str(f['total']), 'itens': f['qtd_itens']})
-        flash('Pedido nº %d enviado: R$ %s em %d comissão(ões). Anderson ou Alessandra pagam na sua chave Pix.' % (fid, f['total'], f['qtd_itens']), 'success')
+        flash('Pedido nº %d criado: R$ %s em %d comissão(ões). Copie o link e mande para Anderson ou Alessandra.' % (fid, f['total'], f['qtd_itens']), 'success')
+        return redirect(url_for('financeiro.comissao_pedido', fid=fid))
     except ValueError as e:
         flash(str(e), 'danger')
     return redirect(url_for('financeiro.lancamentos', aba='com'))
@@ -336,6 +437,8 @@ def fechamento_pagar(fid):
         flash('Pagamento registrado. Pedido %s.' % ('quitado' if st == 'PAGO' else 'pago em parte'), 'success')
     except (ValueError, InvalidOperation) as e:
         flash(str(e) if isinstance(e, ValueError) else 'Valor inválido.', 'danger')
+    if request.form.get('volta') == 'pedido':      # pagou de dentro da página do pedido
+        return redirect(url_for('financeiro.comissao_pedido', fid=fid))
     return redirect(url_for('financeiro.lancamentos', aba='com'))
 
 

@@ -59,6 +59,14 @@
 .lm-acordos form.nv { display:grid; grid-template-columns:repeat(6, minmax(0,1fr)) auto; gap:8px; margin-top:12px; }
 .lm-acordos form.nv select, .lm-acordos form.nv input { height:36px; border:1px solid #d7e3dc; border-radius:9px; padding:0 8px; font:inherit; font-size:12.5px; min-width:0; }
 .lm-acordos form.nv button { height:36px; border:0; border-radius:9px; background:#0f3d2e; color:#fff; font:inherit; font-weight:800; font-size:12.5px; padding:0 14px; cursor:pointer; }
+.lm-abrir { display:inline-flex; align-items:center; gap:7px; border:1.5px solid #ddd6fe; color:#5b21b6; background:#faf8ff; border-radius:10px; padding:7px 12px;
+  font-size:12.5px; font-weight:800; text-decoration:none; white-space:nowrap; } .lm-abrir:hover { background:#f5f3ff; }
+.lm-serv { display:grid; grid-template-columns:repeat(2, minmax(0,1fr)); gap:6px 18px; }
+.lm-sv { display:flex; align-items:center; gap:8px; padding:6px 0; border-bottom:1px solid #f1f5f4; min-width:0; }
+.lm-sv .nm { flex:1; min-width:0; font-size:12.5px; font-weight:700; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; } .lm-sv .nm small { color:#94a3b8; font-weight:600; }
+.lm-sv select, .lm-sv input { height:32px; border:1px solid #d7e3dc; border-radius:8px; padding:0 6px; font:inherit; font-size:12px; } .lm-sv input { width:64px; }
+.lm-sv button { height:32px; width:32px; border:0; border-radius:8px; background:#0f3d2e; color:#fff; cursor:pointer; }
+@media (max-width:980px) { .lm-serv { grid-template-columns:minmax(0,1fr); } }
 /* caixa (molde da caixa do relatório) */
 .ns-fundo { position:fixed; inset:0; z-index:1200; background:rgba(15,23,42,.5); backdrop-filter:blur(2px); display:none; }
 .ns-fundo.on { display:block; }
@@ -168,6 +176,7 @@
         {% if pode_rota('financeiro.notas_config') %}<a class="lm-btn lm-btn2" href="{{ url_for('financeiro.notas_config') }}"><i class="fas fa-sliders-h"></i> Configuração fiscal</a>{% endif %}
         {% if pode_rota('financeiro.nota_nova') %}<a class="lm-btn lm-btn2" href="{{ url_for('financeiro.nota_nova') }}" title="Emite agora, sem passar por aprovação"><i class="fas fa-bolt"></i> Emitir direto</a>{% endif %}
       {% endif %}
+      <button type="button" class="lm-btn lm-btn2" onclick="pxAbrir()" title="{{ ('Sua chave: ' ~ pix.pix_chave) if pix.pix_chave else 'Cadastre para receber as comissões por Pix' }}"><i class="fas fa-key"></i> {{ 'Minha chave Pix' if pix.pix_chave else 'Cadastrar chave Pix' }}</button>
       {% if pode_rota('financeiro.lancamento_novo') %}<button type="button" class="lm-btn" onclick="nsAbrir()"><i class="fas fa-plus"></i> Nova solicitação</button>{% endif %}
     </div>
   </div>
@@ -215,6 +224,7 @@
       {% set falta = (f.total | float) - (f.valor_pago | float) %}
       <div class="lm-pedido"><span class="ic"><i class="fas fa-user"></i></span>
         <div class="tx"><b>{{ f.usuario_nome }}</b><small>Pedido nº {{ f.id }} · {{ f.qtd_itens }} comiss{{ 'ões' if f.qtd_itens != 1 else 'ão' }} · {{ f.criado_em.strftime('%d/%m/%Y') if f.criado_em else '' }}</small></div>
+        <a class="lm-abrir" href="{{ url_for('financeiro.comissao_pedido', fid=f.id) }}"><i class="fas fa-qrcode"></i> Abrir e pagar</a>
         <div class="vl">{{ f.total | float | format_currency }}<br>
           {% if f.status == 'PAGO' %}<span class="lm-st" style="background:#dcfce7;color:#15803d">pago</span>
           {% elif f.status == 'PAGO_PARCIAL' %}<span class="lm-st" style="background:#fef3c7;color:#92400e">falta {{ falta | format_currency }}</span>
@@ -241,7 +251,7 @@
           <div style="margin-top:8px"><span class="lm-tipo {{ 'lm-t-me' if l.destino == 'MENSAL' else 'lm-t-av' }}">{{ l.como }}</span></div>
           <span class="lm-ck"><i class="fas fa-check"></i></span>
         </div>{% endfor %}</div>
-      <div class="lm-barra"><span><b id="lmSoma">R$ 0,00</b> · <span id="lmQtd">nenhuma comissão marcada</span> · Anderson ou Alessandra pagam e o pedido fica registrado</span>
+      <div class="lm-barra"><span><b id="lmSoma">R$ 0,00</b> · <span id="lmQtd">nenhuma comissão marcada</span> · {% if pix.pix_chave %}vai para a sua chave Pix ({{ PIX_TIPOS.get(pix.pix_tipo, '') }}){% else %}<a href="javascript:pxAbrir()" style="color:#fde68a; font-weight:800">cadastre a sua chave Pix</a> para o pedido sair com o Pix pronto{% endif %}</span>
         <button type="submit" id="lmPedir" disabled><i class="fas fa-paper-plane"></i> Pedir pagamento</button></div>
     {% else %}<div class="tx-vazio"><i class="fas fa-hand-holding-dollar"></i>Nenhuma comissão liberada agora: ela libera quando o cliente paga.</div>{% endif %}
     </form>
@@ -252,6 +262,7 @@
       <div class="lm-sec">Seus pedidos <small>{{ pedidos|length }}</small></div>
       {% for f in pedidos %}<div class="lm-pedido"><span class="ic"><i class="fas fa-receipt"></i></span>
         <div class="tx"><b>Pedido nº {{ f.id }}</b><small>{{ f.qtd_itens }} comiss{{ 'ões' if f.qtd_itens != 1 else 'ão' }} · {{ f.criado_em.strftime('%d/%m/%Y') if f.criado_em else '' }}</small></div>
+        <a class="lm-abrir" href="{{ url_for('financeiro.comissao_pedido', fid=f.id) }}"><i class="fas fa-link"></i> Abrir</a>
         <div class="vl">{{ f.total | float | format_currency }}<br><span class="lm-st" style="{{ 'background:#dcfce7;color:#15803d' if f.status == 'PAGO' else 'background:#fef3c7;color:#92400e' }}">{{ {'PAGO': 'pago', 'PAGO_PARCIAL': 'pago em parte', 'CANCELADO': 'cancelado'}.get(f.status, 'aguardando pagamento') }}</span></div></div>
       {% else %}<div class="tx-vazio" style="padding:18px"><i class="fas fa-receipt"></i>Nenhum pedido ainda.</div>{% endfor %}
     {% endif %}
@@ -265,6 +276,7 @@
         <td>{{ a.vigencia_inicio.strftime('%d/%m/%Y') if a.vigencia_inicio else '' }}</td>
         <td><form method="POST" action="{{ url_for('financeiro.acordo_encerrar', aid=a.id) }}" onsubmit="return confirm('Encerrar este acordo?')"><button class="ns-bt" style="padding:4px 10px; font-size:12px"><i class="fas fa-ban"></i> Encerrar</button></form></td></tr>
       {% else %}<tr><td colspan="6" style="color:#94a3b8">Nenhum acordo: sem acordo, a pessoa não ganha comissão (a não ser que quem aprova dê).</td></tr>{% endfor %}</table>
+      <div style="font-size:12px; color:#64748b; margin-top:8px"><i class="fas fa-circle-info"></i> "Serviço lançado" em todos os serviços = a pessoa tem direito a comissão; o % de cada serviço vem da tabela abaixo (sem % no serviço, vale o do acordo).</div>
       <form class="nv" method="POST" action="{{ url_for('financeiro.acordo_novo') }}">
         <select name="usuario_id" required><option value="">Pessoa…</option>{% for p in pessoas %}<option value="{{ p.id }}">{{ p.nome }}</option>{% endfor %}</select>
         <select name="base"><option value="SERVICO">Serviço lançado</option><option value="HONORARIOS">Mensalidade da empresa</option></select>
@@ -275,10 +287,41 @@
         <button><i class="fas fa-plus"></i> Cadastrar</button>
       </form>
     </div>
+    <div class="lm-sec" id="servicos-comissao" style="margin-top:18px">Comissão padrão de cada serviço <small>a sugestão que aparece para quem lança (pode ajustar ao lançar e ao aprovar)</small></div>
+    <div class="lm-acordos lm-serv">
+      {% for s in servicos %}
+      <form method="POST" action="{{ url_for('financeiro.servico_comissao') }}" class="lm-sv">
+        <input type="hidden" name="servico_id" value="{{ s.id }}">
+        <span class="nm">{{ s.nome }}{% if s.valor_padrao %} <small>{{ s.valor_padrao | float | format_currency }}</small>{% endif %}</span>
+        <select name="tipo" onchange="this.form.querySelector('[name=valor]').hidden = !(this.value === 'PCT' || this.value === 'FIXO')">
+          <option value=""{{ ' selected' if not s.comissao_tipo }}>Vale o acordo da pessoa</option>
+          <option value="PCT"{{ ' selected' if s.comissao_tipo == 'PCT' }}>% do serviço</option>
+          <option value="FIXO"{{ ' selected' if s.comissao_tipo == 'FIXO' }}>Valor fixo (R$)</option>
+          <option value="SEM"{{ ' selected' if s.comissao_tipo == 'SEM' }}>Sem comissão (ex.: taxa)</option></select>
+        <input name="valor" inputmode="decimal" value="{{ ('%g' % (s.comissao_valor | float)) | replace('.', ',') if s.comissao_valor else '' }}" placeholder="10"{{ ' hidden' if s.comissao_tipo not in ('PCT', 'FIXO') }}>
+        <button title="Salvar"><i class="fas fa-check"></i></button>
+      </form>
+      {% endfor %}
+    </div>
   {% endif %}
   </div>
 </div>
 </div>
+
+{# ── caixa: Minha chave Pix ── #}
+<div class="ns-fundo" id="pxFundo"><div class="ns peq" role="dialog" aria-modal="true">
+  <header class="ns-cab" style="background:radial-gradient(120% 140% at 0% 0%, #a78bfa 0%, #7c3aed 45%, #4c1d95 100%)"><div class="ns-tit"><b>Minha chave Pix</b><span>Os seus pedidos de comissão saem com ela (Pix copia e cola e QR)</span></div>
+    <button type="button" class="ns-x" onclick="pxFechar()"><i class="fas fa-xmark"></i></button></header>
+  <form method="POST" action="{{ url_for('financeiro.lancamento_minha_pix') }}" style="display:contents">
+  <div class="ns-g"><div class="ns-f"><section class="ns-b"><div class="ns-campos">
+    <div class="ns-campo"><label>Tipo da chave</label><select class="ns-in" name="pix_tipo">{% for k, v in PIX_TIPOS.items() %}<option value="{{ k }}"{{ ' selected' if pix.pix_tipo == k }}>{{ v }}</option>{% endfor %}</select></div>
+    <div class="ns-campo"><label>Chave</label><input class="ns-in" name="pix_chave" value="{{ pix.pix_chave or '' }}" maxlength="120" placeholder="CPF, celular, e-mail…" required></div>
+  </div></section>
+  <div class="ns-aviso"><i class="fas fa-shield-halved"></i><span>A chave aparece só no seu pedido de comissão, para Anderson ou Alessandra pagarem. A troca fica registrada na Auditoria.</span></div></div></div>
+  <footer class="ns-pe"><div class="ns-pe-info"></div><button type="button" class="ns-bt" onclick="pxFechar()">Cancelar</button>
+    <button type="submit" class="ns-bt prim" style="background:linear-gradient(135deg,#7c3aed,#5b21b6)"><i class="fas fa-check"></i> Salvar chave</button></footer>
+  </form>
+</div></div>
 
 {# ── caixa: Nova solicitação ── #}
 <div class="ns-fundo" id="nsFundo"><div class="ns" role="dialog" aria-modal="true" aria-label="Nova solicitação">
@@ -440,8 +483,15 @@
   // ── caixa Nova solicitação ──
   var tsCli = null, tsServ = null, como = 'BOLETO_NOTA', ct = 'PADRAO';
   function acordo(sid) {
-    var a = D.acordos.filter(function (x) { return String(x.servico_id) === String(sid); })[0] || D.acordos.filter(function (x) { return x.servico_id == null; })[0];
-    return a || null;
+    // acordo da pessoa para o serviço > padrão do serviço (para quem tem acordo geral) > acordo geral
+    var esp = D.acordos.filter(function (x) { return String(x.servico_id) === String(sid); })[0];
+    if (esp) return esp;
+    var ger = D.acordos.filter(function (x) { return x.servico_id == null; })[0];
+    if (!ger) return null;
+    var s = D.servicos.filter(function (x) { return String(x.id) === String(sid); })[0];
+    if (s && s.ct === 'SEM') return { tipo: 'FIXO', valor: 0, sem: true };
+    if (s && (s.ct === 'PCT' || s.ct === 'FIXO') && s.cv) return { tipo: s.ct, valor: s.cv };
+    return ger;
   }
   function cliente() { var v = tsCli && tsCli.getValue(); return D.clientes.filter(function (c) { return String(c.id) === String(v); })[0] || null; }
   function servico() { var v = tsServ && tsServ.getValue(); return D.servicos.filter(function (s) { return String(s.id) === String(v); })[0] || null; }
@@ -455,8 +505,9 @@
   }
   function resumo() {
     var c = cliente(), s = servico(), valor = num($('nsValor').value), com = comissao(valor), a = acordo(s ? s.id : null);
-    $('nsComPad').textContent = a ? 'padrão: ' + (a.tipo === 'FIXO' ? brl(a.valor) + ' fixo' : a.valor + '%') : 'você não tem acordo de comissão';
-    $('nsSeg').querySelector('[data-v=PADRAO]').textContent = a ? 'Padrão (' + (a.tipo === 'FIXO' ? brl(a.valor) : a.valor + '%') + ')' : 'Padrão (sem acordo)';
+    var rot = !a ? '' : a.sem ? 'sem comissão' : (a.tipo === 'FIXO' ? brl(a.valor) + ' fixo' : a.valor + '%');
+    $('nsComPad').textContent = a ? 'padrão deste serviço: ' + rot : 'você não tem acordo de comissão';
+    $('nsSeg').querySelector('[data-v=PADRAO]').textContent = a ? 'Padrão (' + (a.sem ? 'sem' : a.tipo === 'FIXO' ? brl(a.valor) : a.valor + '%') + ')' : 'Padrão (sem acordo)';
     $('nsCr').textContent = '= ' + brl(com);
     $('nsPv').textContent = brl(como === 'MENSAL' && c && c.mensal ? c.mensal + valor : valor);
     $('nsPc').textContent = com ? 'sua comissão: ' + brl(com) : (s ? 'sem comissão' : 'escolha o serviço');
@@ -529,9 +580,13 @@
   document.addEventListener('keydown', function (e) {
     if (e.key !== 'Escape') return;
     if ((tsCli && tsCli.isOpen) || (tsServ && tsServ.isOpen)) return;
-    ['nsFundo', 'apFundo', 'rpFundo'].forEach(function (id) { if ($(id).classList.contains('on')) { $(id).classList.remove('on'); document.body.style.overflow = ''; } });
+    ['nsFundo', 'apFundo', 'rpFundo', 'pxFundo'].forEach(function (id) { if ($(id).classList.contains('on')) { $(id).classList.remove('on'); document.body.style.overflow = ''; } });
   });
   ['nsFundo', 'apFundo', 'rpFundo'].forEach(function (id) { $(id).addEventListener('mousedown', function (e) { if (e.target === $(id)) { $(id).classList.remove('on'); document.body.style.overflow = ''; } }); });
+  window.pxAbrir = function () { $('pxFundo').classList.add('on'); document.body.style.overflow = 'hidden'; $('pxFundo').querySelector('[name=pix_chave]').focus(); };
+  window.pxFechar = function () { $('pxFundo').classList.remove('on'); document.body.style.overflow = ''; };
+  $('pxFundo').addEventListener('mousedown', function (e) { if (e.target === $('pxFundo')) pxFechar(); });
+  if (new URLSearchParams(location.search).get('pix') === '1') pxAbrir();
   var acCli = $('acCli');      // acordo de mensalidade (ex.: Guilherme 25%): escolher a empresa pelo nome
   if (acCli) acCli.insertAdjacentHTML('beforeend', D.clientes.map(function (c) { return '<option value="' + c.id + '">' + esc((c.num ? c.num + ' · ' : '') + c.nome) + '</option>'; }).join(''));
   if (new URLSearchParams(location.search).get('nova') === '1') nsAbrir();

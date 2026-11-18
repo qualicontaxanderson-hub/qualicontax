@@ -1,0 +1,114 @@
+{% extends "base.html" %}
+
+{% block title %}Pedido de comissão nº {{ f.id }} - Qualicontax{% endblock %}
+
+{% block extra_css %}
+{# 17/11/2026 — Anderson: "gerar um Documento para receber esse valor e enviar para anderson ou alessandra igual PÁGINA DO
+   CLIENTE, o qual se ele cadastrou a chave dele PIX no CONFIG consigo copiar e pagar... quando pago e o sistema EXTRATO puxar
+   o Pagamento dar a Quitação". #}
+<style>
+.cp { max-width:980px; margin:0 auto; padding:8px 0 40px; color:#0f172a; }
+.cp-cab { display:flex; align-items:center; gap:18px; padding:22px 24px; border-radius:22px; color:#fff;
+  background:radial-gradient(120% 140% at 0% 0%, #a78bfa 0%, #7c3aed 45%, #4c1d95 100%); box-shadow:0 18px 40px rgba(76,29,149,.28); }
+.cp-cab.pago { background:radial-gradient(120% 140% at 0% 0%, #4ade80 0%, #16a34a 45%, #0f3d2e 100%); box-shadow:0 18px 40px rgba(15,61,46,.25); }
+.cp-logo { background:#fff; border-radius:14px; padding:7px 11px; display:inline-flex; } .cp-logo img { height:40px; display:block; }
+.cp-tit { flex:1; min-width:0; } .cp-tit small { font-size:11px; font-weight:800; letter-spacing:.08em; text-transform:uppercase; opacity:.8; }
+.cp-tit b { display:block; font-size:22px; font-weight:800; } .cp-tit span { font-size:13.5px; opacity:.9; }
+.cp-val { text-align:right; } .cp-val b { display:block; font-size:30px; font-weight:800; line-height:1.05; } .cp-val span { font-size:13px; opacity:.9; }
+.cp-st { display:inline-block; margin-top:6px; background:rgba(255,255,255,.2); border-radius:99px; padding:3px 11px; font-size:12px; font-weight:800; }
+.cp-g { display:grid; grid-template-columns:minmax(0,1fr) 340px; gap:16px; margin-top:16px; } .cp-g > * { min-width:0; }
+.cp-b { background:#fff; border:1px solid #e6eeea; border-radius:18px; padding:16px 18px; }
+.cp-h { display:flex; align-items:center; gap:8px; font-size:11.5px; font-weight:800; letter-spacing:.07em; text-transform:uppercase; color:#4c1d95; margin-bottom:12px; }
+.cp-h i { color:#7c3aed; } .cp-h em { margin-left:auto; font-style:normal; text-transform:none; letter-spacing:0; font-weight:600; color:#64748b; font-size:12px; }
+.cp-it { display:flex; gap:12px; align-items:center; padding:10px 0; border-bottom:1px solid #f1f5f4; } .cp-it:last-child { border-bottom:0; }
+.cp-it .n { font-size:11px; font-weight:800; color:#64748b; background:#f1f5f4; border-radius:6px; padding:2px 7px; }
+.cp-it div { flex:1; min-width:0; } .cp-it b { display:block; font-size:13.5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.cp-it small { color:#64748b; font-size:12px; } .cp-it .v { text-align:right; font-weight:800; color:#6d28d9; white-space:nowrap; } .cp-it .v small { display:block; font-weight:600; }
+.cp-tot { display:flex; justify-content:space-between; padding-top:12px; margin-top:4px; border-top:2px solid #ede9fe; font-weight:800; font-size:15px; } .cp-tot b { color:#6d28d9; font-size:18px; }
+.cp-pix { text-align:center; } .cp-pix img { width:220px; max-width:100%; border-radius:14px; border:1px solid #ede9fe; }
+.cp-chave { font-size:13px; color:#334155; margin:10px 0 6px; } .cp-chave b { color:#0f172a; }
+.cp-cod { width:100%; box-sizing:border-box; font:12px/1.4 ui-monospace, Consolas, monospace; color:#334155; background:#faf8ff; border:1px solid #e9e3fb; border-radius:10px; padding:9px 10px; resize:none; height:76px; }
+.cp-bt { width:100%; margin-top:8px; border:0; border-radius:12px; padding:12px; font:inherit; font-weight:800; font-size:14.5px; color:#fff; cursor:pointer;
+  background:linear-gradient(135deg,#7c3aed,#5b21b6); display:inline-flex; gap:8px; align-items:center; justify-content:center; text-decoration:none; }
+.cp-bt.cl { background:#fff; color:#4c1d95; border:1.5px solid #ddd6fe; }
+.cp-aviso { background:#fffbeb; border:1px solid #fde68a; color:#92400e; border-radius:12px; padding:10px 12px; font-size:12.5px; line-height:1.45; }
+.cp-ok { background:#f0fdf4; border:1px solid #bbf7d0; color:#166534; border-radius:12px; padding:10px 12px; font-size:12.5px; line-height:1.45; }
+.cp-pag { display:flex; gap:10px; align-items:center; font-size:12.5px; padding:8px 0; border-bottom:1px solid #f1f5f4; } .cp-pag:last-child { border-bottom:0; }
+.cp-pag i { color:#16a34a; } .cp-pag div { flex:1; } .cp-pag small { color:#64748b; display:block; }
+.cp-form { display:flex; gap:8px; flex-wrap:wrap; margin-top:10px; } .cp-form input { flex:1; min-width:120px; height:38px; border:1px solid #d7e3dc; border-radius:10px; padding:0 10px; font:inherit; }
+.cp-form button { height:38px; border:0; border-radius:10px; background:#16a34a; color:#fff; font:inherit; font-weight:800; padding:0 14px; cursor:pointer; }
+.cp-volta { display:inline-flex; align-items:center; gap:7px; color:#4c1d95; font-weight:700; text-decoration:none; font-size:13.5px; margin-bottom:12px; }
+@media (max-width:860px) { .cp-g { grid-template-columns:minmax(0,1fr); } .cp-cab { flex-wrap:wrap; } .cp-val { width:100%; text-align:left; } }
+</style>
+{% endblock %}
+
+{% block content %}
+{% include 'financeiro/_nav_financeiro.html' %}
+<div class="cp">
+  <a class="cp-volta" href="{{ url_for('financeiro.lancamentos', aba='com') }}"><i class="fas fa-arrow-left"></i> Lançamentos · Comissões</a>
+  <div class="cp-cab{{ ' pago' if f.status == 'PAGO' }}">
+    <span class="cp-logo"><img src="{{ url_for('static', filename='images/logo.png') }}" alt="Qualicontax"></span>
+    <div class="cp-tit"><small>Pedido de pagamento de comissão nº {{ f.id }}</small><b>{{ f.usuario_nome }}</b>
+      <span>{{ f.qtd_itens }} comiss{{ 'ões' if f.qtd_itens != 1 else 'ão' }} de cobranças já pagas pelo cliente · pedido em {{ f.criado_em.strftime('%d/%m/%Y') if f.criado_em else '' }}</span></div>
+    <div class="cp-val"><b>{{ (f.total | float) | format_currency }}</b>
+      <span class="cp-st">{{ {'PAGO': 'pago', 'PAGO_PARCIAL': 'pago em parte · falta ' ~ (falta | format_currency), 'CANCELADO': 'cancelado'}.get(f.status, 'aguardando pagamento') }}</span></div>
+  </div>
+
+  <div class="cp-g">
+    <div>
+      <div class="cp-b">
+        <div class="cp-h"><i class="fas fa-list-check"></i> O que entrou neste pedido <em>{{ itens|length }}</em></div>
+        {% for l in itens %}
+        <div class="cp-it"><span class="n">{{ l.numero_cliente or '—' }}</span>
+          <div><b>{{ l.nome_razao_social }}</b><small>{{ l.descricao or l.servico_nome }} · cobrado {{ l.valor_total | float | format_currency }}{% if l.destino == 'MENSAL' %} na mensalidade de {{ l.competencia.strftime('%m/%Y') }}{% endif %}</small></div>
+          <span class="v">{{ l.comissao_valor | float | format_currency }}<small>{{ '%g%%' % ((l.comissao_valor | float) * 100 / (l.valor_total | float)) if l.valor_total else '' }}</small></span></div>
+        {% endfor %}
+        <div class="cp-tot"><span>Total do pedido</span><b>{{ (f.total | float) | format_currency }}</b></div>
+      </div>
+      {% if pags %}
+      <div class="cp-b" style="margin-top:16px">
+        <div class="cp-h"><i class="fas fa-receipt"></i> Pagamentos</div>
+        {% for p in pags %}<div class="cp-pag"><i class="fas fa-circle-check"></i>
+          <div><b>{{ p.valor | float | format_currency }}</b> em {{ p.data.strftime('%d/%m/%Y') }}
+            <small>{% if p.extrato_id %}quitado sozinho pelo extrato {{ p.extrato_banco or '' }}: "{{ p.extrato_desc }}"{% else %}registrado por {{ p.por_nome or 'quem aprova' }}{% endif %}</small></div></div>{% endfor %}
+      </div>
+      {% endif %}
+    </div>
+
+    <div>
+      <div class="cp-b cp-pix">
+        <div class="cp-h"><i class="fas fa-qrcode"></i> Pagar por Pix</div>
+        {% if f.status == 'PAGO' %}
+          <div class="cp-ok"><i class="fas fa-circle-check"></i> Pedido quitado. Nada a pagar.</div>
+        {% elif codigo %}
+          <img src="{{ qr }}" alt="QR do Pix">
+          <div class="cp-chave">{{ PIX_TIPOS.get(pix.pix_tipo, 'Chave') }}: <b>{{ pix.pix_chave }}</b><br>valor: <b>{{ falta | format_currency }}</b></div>
+          <textarea class="cp-cod" id="cpCod" readonly>{{ codigo }}</textarea>
+          <button type="button" class="cp-bt" onclick="cpCopiar('cpCod', this)"><i class="fas fa-copy"></i> Copiar Pix copia e cola</button>
+          <div class="cp-aviso" style="margin-top:10px; text-align:left"><i class="fas fa-bolt"></i> Depois de pagar, não precisa fazer mais nada: quando o extrato do banco puxar a saída de {{ falta | format_currency }} para {{ f.usuario_nome.split()[0] }}, o pedido fica quitado sozinho.</div>
+        {% else %}
+          <div class="cp-aviso" style="text-align:left"><i class="fas fa-key"></i> {{ f.usuario_nome.split()[0] }} ainda não cadastrou a chave Pix. {% if f.usuario_id == current_user.id %}Cadastre em <a href="{{ url_for('financeiro.lancamentos', aba='com', pix=1) }}"><b>Minha chave Pix</b></a> e o código aparece aqui.{% else %}Peça para cadastrar em Lançamentos → Minha chave Pix.{% endif %}</div>
+        {% endif %}
+        <button type="button" class="cp-bt cl" onclick="cpLink(this)"><i class="fas fa-link"></i> Copiar link deste pedido</button>
+      </div>
+      {% if aprov and f.status not in ('PAGO', 'CANCELADO') and pode_rota('financeiro.fechamento_pagar') %}
+      <div class="cp-b" style="margin-top:16px">
+        <div class="cp-h"><i class="fas fa-hand-holding-dollar"></i> Pagou de outro jeito?</div>
+        <div style="font-size:12.5px; color:#64748b">Dinheiro, outra conta ou o extrato ainda não chegou: registre aqui.</div>
+        <form class="cp-form" method="POST" action="{{ url_for('financeiro.fechamento_pagar', fid=f.id) }}" onsubmit="return confirm('Registrar o pagamento a {{ f.usuario_nome }}?')">
+          <input type="hidden" name="volta" value="pedido"><input type="date" name="data" value="{{ hoje.isoformat() }}">
+          <input name="valor" value="{{ '%.2f'|format(falta) | replace('.', ',') }}" inputmode="decimal"><button><i class="fas fa-check"></i> Registrar pago</button></form>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function cpOk(b, txt) { var h = b.innerHTML; b.innerHTML = '<i class="fas fa-check"></i> ' + txt; setTimeout(function () { b.innerHTML = h; }, 1800); }
+function cpCopiar(id, b) { var t = document.getElementById(id); t.select(); (navigator.clipboard ? navigator.clipboard.writeText(t.value) : Promise.reject()).then(function () { cpOk(b, 'Copiado'); }, function () { document.execCommand('copy'); cpOk(b, 'Copiado'); }); }
+function cpLink(b) { var u = location.href.split('#')[0]; (navigator.clipboard ? navigator.clipboard.writeText(u) : Promise.reject()).then(function () { cpOk(b, 'Link copiado: mande no WhatsApp'); }, function () { prompt('Copie o link:', u); }); }
+</script>
+{% endblock %}

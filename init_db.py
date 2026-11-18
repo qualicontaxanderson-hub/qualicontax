@@ -1816,6 +1816,21 @@ def _apply_migrations():
             if _c.get('cnt', 0) == 0:
                 _migrate(f"ALTER TABLE fin_lancamentos ADD COLUMN {_col_name} {_col_def}")
 
+    # Comissões (17/11/2026, etapa 3): a chave Pix de quem recebe comissão (o pedido de pagamento mostra o Pix
+    # copia e cola) e a comissão padrão de cada serviço do catálogo (PCT / FIXO / SEM + valor).
+    for _tab, _cols in (('usuarios', [('pix_tipo', 'VARCHAR(10) NULL'), ('pix_chave', 'VARCHAR(120) NULL')]),
+                        ('nfse_servicos', [('comissao_tipo', 'VARCHAR(8) NULL'), ('comissao_valor', 'DECIMAL(12,2) NULL')])):
+        _t = execute_query("SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = DATABASE() "
+                           "AND TABLE_NAME = %s", (_tab,), fetch=True, fetch_one=True) or {}
+        if not _t.get('cnt', 0):
+            continue
+        for _col_name, _col_def in _cols:
+            _c = execute_query(
+                "SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() "
+                "AND TABLE_NAME = %s AND COLUMN_NAME = %s", (_tab, _col_name), fetch=True, fetch_one=True) or {}
+            if _c.get('cnt', 0) == 0:
+                _migrate(f"ALTER TABLE {_tab} ADD COLUMN {_col_name} {_col_def}")
+
     print("✓ Migrations concluídas")
 
 
