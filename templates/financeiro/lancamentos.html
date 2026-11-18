@@ -116,6 +116,15 @@
 .ns-seg { display:inline-flex; background:#eef4f0; border-radius:11px; padding:3px; gap:2px; flex-wrap:wrap; }
 .ns-seg button { border:0; background:none; font:inherit; font-size:12.5px; font-weight:700; color:#475569; padding:6px 11px; border-radius:8px; cursor:pointer; }
 .ns-seg button.on { background:#fff; color:#0f3d2e; box-shadow:0 1px 4px rgba(0,0,0,.08); }
+.ns-bancos { display:flex; gap:9px; flex-wrap:wrap; }
+.ns-banco { cursor:pointer; } .ns-banco input { display:none; }
+.ns-banco > span { display:flex; align-items:center; gap:11px; border:1.5px solid #e2e8f0; border-radius:14px; padding:10px 14px; background:#fff; min-width:230px; }
+.ns-banco > span img, .ns-banco > span > span:first-child:not(.nb) { flex-shrink:0; border-radius:8px; }
+.ns-banco .nb { display:flex; flex-direction:column; line-height:1.15; min-width:0; } .ns-banco b { font-size:15px; } .ns-banco small { font-size:11.5px; color:#64748b; }
+.ns-banco .amb { margin-left:auto; font-style:normal; font-size:10.5px; font-weight:800; letter-spacing:.04em; text-transform:uppercase; border-radius:99px; padding:3px 9px; background:#dcfce7; color:#15803d; }
+.ns-banco .teste .amb { background:#fef3c7; color:#b45309; } .ns-banco > span.teste { border-style:dashed; }
+.ns-banco input:checked + span { border-color:#16a34a; background:#f0fdf4; box-shadow:0 0 0 3px #dcfce7; }
+.ns-campo[hidden], .ns-b[hidden] { display:none; }
 .ns-seg button:disabled { opacity:.35; cursor:not-allowed; } .ns-aviso[hidden] { display:none; }
 .ns-com { display:flex; gap:12px; align-items:center; flex-wrap:wrap; } .ns-com .ns-in { max-width:170px; }
 .ns-res div { display:flex; justify-content:space-between; gap:10px; font-size:13px; padding:5px 0; border-bottom:1px solid #f1f5f4; }
@@ -315,6 +324,11 @@
       <div class="ns-campo"><label>Serviço</label><select id="nsServ" name="servico_id" placeholder="Escolha o serviço"></select></div>
       <div class="ns-campo"><label>Valor (R$)</label><input class="ns-in" id="nsValor" name="valor" inputmode="numeric" placeholder="0,00" autocomplete="off"></div>
       <div class="ns-campo" id="nsVencBox"><label>Vencimento do boleto</label><input class="ns-in" type="date" id="nsVenc" name="vencimento"></div>
+      {% if aprov and contas_cobranca %}
+      <div class="ns-campo" id="nsBancoBox" style="grid-column:1/-1"><label>Banco do boleto</label>
+        <div class="ns-bancos">{% for c in contas_cobranca %}<label class="ns-banco"><input type="radio" name="conta_cobranca_id" value="{{ c.id }}"{{ ' checked' if loop.first }}>
+          <span class="{{ 'teste' if c.ambiente != 'producao' }}">{{ logo_banco('364' if c.provedor == 'efi' else '237', none, 30) }}<span class="nb"><b>{{ 'Efí' if c.provedor == 'efi' else 'Bradesco' }}</b><small>{{ c.apelido }}</small></span><em class="amb">{{ 'Produção' if c.ambiente == 'producao' else 'Teste' }}</em></span></label>{% endfor %}</div></div>
+      {% endif %}
       <div class="ns-campo" id="nsCompBox" hidden><label>Mensalidade de</label><select class="ns-in" id="nsComp" name="competencia"></select></div>
       <div class="ns-campo" style="grid-column:1/-1"><label>Texto da nota / do boleto</label><input class="ns-in" id="nsDesc" name="descricao" maxlength="200" placeholder="o nome do serviço"></div>
     </div></section>
@@ -344,6 +358,11 @@
     <section class="ns-b"><div class="ns-h"><i class="fas fa-hand-holding-dollar"></i> Comissão de <span id="apPessoa" style="text-transform:none; letter-spacing:0"></span> <em id="apPedida"></em></div>
       <div class="ns-com"><div class="ns-seg" id="apSeg"><button type="button" data-v="">Como pediu</button><button type="button" data-v="PCT">Outro %</button><button type="button" data-v="FIXO">Valor fixo</button><button type="button" data-v="SEM">Sem comissão</button></div>
         <input class="ns-in" id="apCv" name="comissao_valor" inputmode="decimal" hidden><b id="apCr" style="color:#6d28d9"></b></div></section>
+    {% if contas_cobranca %}
+    <section class="ns-b" id="apBancoBox"><div class="ns-h"><i class="fas fa-building-columns"></i> Banco do boleto</div>
+      <div class="ns-bancos">{% for c in contas_cobranca %}<label class="ns-banco"><input type="radio" name="conta_cobranca_id" value="{{ c.id }}"{{ ' checked' if loop.first }}>
+        <span class="{{ 'teste' if c.ambiente != 'producao' }}">{{ logo_banco('364' if c.provedor == 'efi' else '237', none, 30) }}<span class="nb"><b>{{ 'Efí' if c.provedor == 'efi' else 'Bradesco' }}</b><small>{{ c.apelido }}</small></span><em class="amb">{{ 'Produção' if c.ambiente == 'producao' else 'Teste' }}</em></span></label>{% endfor %}</div></section>
+    {% endif %}
     <div class="ns-aviso" id="apAviso"></div>
   </div></div>
   <footer class="ns-pe"><div class="ns-pe-info"></div><button type="button" class="ns-bt" onclick="apFechar()">Voltar</button>
@@ -437,6 +456,7 @@
     $('apAviso').innerHTML = /Mensalidade/.test(l.como) ? '<i class="fas fa-calendar"></i><span>Entra no boleto da mensalidade: sai junto com o lote do mês.</span>'
                                                         : '<i class="fas fa-bolt"></i><span>Ao aprovar, ' + (/nota/.test(l.como) ? 'a nota e o boleto são emitidos' : 'o boleto é emitido') + ' agora e vão por e-mail ao cliente.</span>';
     $('apCv').value = ''; apSeg('');
+    if ($('apBancoBox')) $('apBancoBox').hidden = /Mensalidade/.test(l.como);
     $('apSeg').querySelectorAll('button').forEach(function (b) { b.disabled = l.trava && b.dataset.v !== 'SEM'; });
     if (l.trava) { apSeg('SEM'); $('apPedida').innerHTML = '<i class="fas fa-lock"></i> serviço que nunca paga comissão'; }
     $('apFundo').classList.add('on'); document.body.style.overflow = 'hidden';
@@ -509,7 +529,9 @@
   function setComo(v) {
     como = v; $('nsComo').value = v;
     $('nsOps').querySelectorAll('.ns-op').forEach(function (b) { b.classList.toggle('on', b.dataset.v === v); });
-    $('nsVencBox').hidden = v === 'MENSAL'; $('nsCompBox').hidden = v !== 'MENSAL'; resumo();
+    $('nsVencBox').hidden = v === 'MENSAL'; $('nsCompBox').hidden = v !== 'MENSAL';
+    if ($('nsBancoBox')) $('nsBancoBox').hidden = v === 'MENSAL';
+    resumo();
   }
   function setCt(v) {
     ct = v; $('nsCt').value = v;

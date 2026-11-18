@@ -171,7 +171,7 @@ def lancamentos():
         caixa_json=json.dumps(caixa, ensure_ascii=False), STATUS=STATUS, COMISSAO=COMISSAO,
         acordos_todos=FinComissaoAcordo.listar(so_ativos=True) if _admin() else [],
         pessoas=ClienteResponsavel.usuarios_disponiveis() if _admin() else [], servicos=_servicos(),
-        pix=_pix_de(current_user.id), PIX_TIPOS=PIX_TIPOS)
+        pix=_pix_de(current_user.id), PIX_TIPOS=PIX_TIPOS, contas_cobranca=_contas_cobranca() if aprov else [])
 
 
 @financeiro.route('/financeiro/lancamentos/minha-pix', methods=['POST'])
@@ -383,7 +383,7 @@ def lancamento_novo():
                       depois={'empresa': l['nome_razao_social'], 'servico': l['servico_nome'], 'valor': str(l['valor_total']),
                               'destino': l['destino'], 'comissao': str(com), 'lancado_por': l['lancado_por_nome'], 'direto': True})
             if l['destino'] == 'AVULSO':
-                ok, msgs = _cobrar_avulso(FinLancamento.get(lid), current_user.id)
+                ok, msgs = _cobrar_avulso(FinLancamento.get(lid), current_user.id, _conta_escolhida(f))
                 for m in msgs:
                     flash(m, 'success' if ok else 'warning')
                 if not ok:
@@ -400,14 +400,30 @@ def lancamento_novo():
 # ---------------------------------------------------------------------------
 # Aprovação (admin) — AVULSO cobra na hora
 # ---------------------------------------------------------------------------
-def _cobrar_avulso(l, usuario_id):
+def _contas_cobranca():
+    """Contas de cobrança que emitem boleto (ativas, não só-consulta) da empresa — a padrão primeiro."""
+    return execute_query("""SELECT id, apelido, provedor, ambiente FROM fin_cobranca_contas
+                             WHERE empresa_id = %s AND ativo = 1 AND so_consulta = 0
+                             ORDER BY (ambiente = 'producao') DESC, id""", (EMP,), fetch=True) or []   # produção primeiro; TESTE aparece marcado
+
+
+def _conta_escolhida(form):
+    """A conta do boleto escolhida na caixa (17/11/2026 — Anderson: "tem que ter a opção de escolher" o banco).
+    Só vale conta de cobrança ativa da empresa; senão None (fica a padrão)."""
+    cid = form.get('conta_cobranca_id', type=int)
+    return next((c['id'] for c in _contas_cobranca() if c['id'] == cid), None) if cid else None
+
+
+def _cobrar_avulso(l, usuario_id, conta_id=None):
     """Nota (se o serviço emite) + boleto Efí + e-mail aos contatos do Financeiro. Devolve (ok, mensagens)."""
     from models.fin_cobranca import FinBoleto, FinCobrancaConta
     from models.nfse_emissao import NfseConfig, NfseEmitida, tomador_do_cliente
     from routes.financeiro_cobranca import _pagador_do_tomador, emitir_boleto_avulso, gerar_boleto_da_nota, sugestao_boleto
     from utils import nfse_emissor
     msgs = []
-    conta = FinCobrancaConta.padrao_da_empresa(l['empresa_id'])
+    conta = FinCobrancaConta.get(conta_id, com_segredos=True) if conta_id else None   # como a padrão: com as credenciais
+    if not conta or conta.get('empresa_id') != l['empresa_id'] or not conta.get('ativo') or conta.get('so_consulta'):
+        conta = FinCobrancaConta.padrao_da_empresa(l['empresa_id'])
     if not conta:
         return False, ['Não há conta de cobrança ativa para emitir o boleto.']
     t = tomador_do_cliente(l['cliente_id'])
@@ -478,7 +494,7 @@ def lancamento_aprovar(lid):
               depois={'empresa': l['nome_razao_social'], 'servico': l['servico_nome'], 'valor': str(l['valor_total']),
                       'destino': l['destino'], 'comissao': str(com), 'lancado_por': l['lancado_por_nome']})
     if l['destino'] == 'AVULSO':
-        ok, msgs = _cobrar_avulso(FinLancamento.get(lid), current_user.id)
+        ok, msgs = _cobrar_avulso(FinLancamento.get(lid), current_user.id, _conta_escolhida(request.form))
         for m in msgs:
             flash(m, 'success' if ok else 'warning')
         if not ok:
