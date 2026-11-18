@@ -270,11 +270,33 @@ def qualificacao(cliente_id):
 
 
 # ---------------------------------------------------------------------------
-# Ficha cadastral em texto — formato de mensagem (WhatsApp): *negrito*, quadros com ícone,
-# linhas curtas. Anderson (17/11/2026): "Ficha seria para enviar pelo WhatsApp… se for sócio de
-# empresas tem que puxar tudo… quero tudo muito elegante". Nada interno do escritório vai
-# (cobrança, responsáveis, nº de cadastro): a ficha sai para fora.
+# Ficha cadastral em texto — formato de mensagem (WhatsApp). Anderson (17/11/2026): "Ficha seria para
+# enviar pelo WhatsApp… se for sócio de empresas tem que puxar tudo… quero tudo muito elegante";
+# "Melhorar muito muito mais". Regras: cabeçalho com resumo, frases em vez de rótulo: valor, nada
+# repetido, empresas numeradas e compactas, endereço limpo, rodapé com separador. Nada interno do
+# escritório vai (cobrança, responsáveis, nº de cadastro, raça/cor, instrução): a ficha sai para fora.
 # ---------------------------------------------------------------------------
+_TRACO = '━━━━━━━━━━━━━━━━━━━━'
+_REGIME = {'SIMPLES': 'Simples Nacional', 'SIMPLES_NACIONAL': 'Simples Nacional', 'MEI': 'MEI',
+           'LUCRO_PRESUMIDO': 'Lucro Presumido', 'LUCRO_REAL': 'Lucro Real', 'IMUNE': 'Imune/Isenta'}
+# acentos que o cadastro em caixa alta perde — só para ENDEREÇO (nome de gente não se mexe)
+_ACENTOS = {'SAO': 'São', 'GOIANIA': 'Goiânia', 'ANAPOLIS': 'Anápolis', 'BRASILIA': 'Brasília', 'ANDRE': 'André',
+            'RIBEIRAO': 'Ribeirão', 'JOSE': 'José', 'FLORIANOPOLIS': 'Florianópolis', 'VITORIA': 'Vitória',
+            'MACEIO': 'Maceió', 'BELEM': 'Belém', 'CUIABA': 'Cuiabá', 'MACAPA': 'Macapá', 'JOAO': 'João',
+            'LUIS': 'Luís', 'GONCALO': 'Gonçalo', 'GONCALVES': 'Gonçalves', 'SEBASTIAO': 'Sebastião',
+            'JUNDIAI': 'Jundiaí', 'UBERLANDIA': 'Uberlândia', 'JACAREI': 'Jacareí', 'NITEROI': 'Niterói',
+            'CAMACARI': 'Camaçari', 'TABOAO': 'Taboão', 'MAUA': 'Mauá', 'GUARUJA': 'Guarujá', 'SANTANA': 'Santana',
+            'PARAISO': 'Paraíso', 'JARDIM': 'Jardim', 'AMERICA': 'América', 'INDUSTRIAL': 'Industrial',
+            'SETIMA': 'Sétima', 'ORQUIDEAS': 'Orquídeas', 'CRISANTEMOS': 'Crisântemos', 'ANTONIO': 'Antônio',
+            'CONCEICAO': 'Conceição', 'ESTACAO': 'Estação', 'AVENIDA': 'Avenida', 'MONICA': 'Mônica', 'CANDIDO': 'Cândido'}
+
+
+def _hoje():
+    """Data de Brasília: o app roda em UTC e, depois das 21h, date.today() já é amanhã."""
+    from utils.titulos_receber import hoje_br
+    return hoje_br()
+
+
 def _tel(t):
     d = _DIG(t)
     if len(d) == 11:
@@ -288,90 +310,192 @@ def _moeda(v):
     return 'R$ ' + f"{float(v):,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.')
 
 
-def _kv(rotulo, valor):
-    v = (str(valor).strip() if valor is not None else '')
-    return f'{rotulo}: {v}' if v and v not in ('—', 'None') else ''
+def _pct(v):
+    return f"{float(v):g}%".replace('.', ',') if v is not None else ''
 
 
-def _bloco(icone, titulo, linhas):
-    linhas = [x for x in linhas if x]
-    return (f'{icone} *{titulo}*\n' + '\n'.join(linhas)) if linhas else ''
+def _lugar(t):
+    """Texto de endereço em caixa normal, com os acentos de sempre e 'QUADRA41' → 'Quadra 41'."""
+    t = ' '.join((t or '').split())
+    if not t:
+        return ''
+    if t == t.upper():
+        t = nome_proprio(t)
+    t = re.sub(r'[A-Za-zÀ-ÿ]+', lambda m: _ACENTOS.get(m.group(0).upper(), m.group(0)), t)
+    t = re.sub(r'(?i)\b(quadra|lote|sala|bloco|apto|apartamento|andar|casa|conjunto|conj|modulo|módulo|galpao|galpão|loja)(\d)', r'\1 \2', t)
+    t = re.sub(r'(?i)\bs/n\b\.?', 's/nº', t)
+    # 'QUADRA 41 Lote 17' (texto misto que o nome_proprio não toca): as palavras de endereço em caixa alta descem
+    t = re.sub(r'\b(QUADRA|LOTE|SALA|BLOCO|APTO|APARTAMENTO|ANDAR|CASA|CONJUNTO|CONJ|GALPAO|GALPÃO|LOJA|FUNDOS|TERREO|TÉRREO|MODULO|MÓDULO|RESIDENCIAL|JARDIM|SETOR|VILA|PARQUE)\b',
+               lambda m: m.group(0).capitalize(), t)
+    return t
 
 
 def _end_linhas(e):
-    """Duas linhas: 'Rua Jaime Taveira, 91, Apartamento 32, Bloco A' / 'Chácara Cruzeiro do Sul · São Paulo/SP · CEP 03732-060'."""
+    """'Rua Jaime Taveira, 91 – Apartamento 32, Bloco A' / 'Chácara Cruzeiro do Sul – São Paulo/SP' / 'CEP 03732-060'."""
     if not e or not e.get('logradouro'):
         return []
-    l1 = nome_proprio(e['logradouro']) + ', ' + (str(e.get('numero') or 's/nº')) + (', ' + _complemento(e['complemento']) if e.get('complemento') else '')
-    l2 = ' · '.join(x for x in (nome_proprio(e.get('bairro')), nome_proprio(e.get('cidade') or '') + ('/' + e['estado'] if e.get('estado') else ''),
-                                ('CEP ' + _cep(e['cep'])) if e.get('cep') else '') if x)
-    return [l1, l2]
-
-
-def _blocos_enderecos(cliente_id, icone='📍'):
-    out = []
-    for e in _enderecos(cliente_id):
-        ls = _end_linhas(e)
-        if ls:
-            tit = 'Endereço ' + (e.get('tipo') or '').lower() + (' · principal' if e.get('principal') and len(_enderecos(cliente_id)) > 1 else '')
-            out.append(_bloco(icone, tit.strip(), ls))
-    return out
-
-
-def _bloco_contatos(cliente_id, icone='📞'):
-    from models.contato_cliente import ContatoCliente
-    linhas = []
-    for ct in ContatoCliente.get_by_cliente(cliente_id) or []:
-        if not ct.get('ativo', 1):
-            continue
-        cab = '*' + nome_proprio(ct.get('nome')) + '*' + (' · ' + ct['cargo'] if ct.get('cargo') else '')
-        meios = []
-        for ce in [ct.get('celular')] + list(ct.get('celulares_extra') or []):
-            if ce:
-                meios.append('📱 ' + _tel(ce))
-        if ct.get('telefone'):
-            meios.append('☎️ ' + _tel(ct['telefone']))
-        for em in [ct.get('email')] + list(ct.get('emails_extra') or []):
-            if em:
-                meios.append('✉️ ' + em.strip().lower())
-        linhas.append(cab + ''.join('\n' + m for m in meios))
-    return _bloco(icone, 'Contatos', linhas)
-
-
-def _linhas_pessoa(c, p, docs, resumo=False):
-    """Os dados pessoais em linhas. ``resumo`` = sócio dentro da ficha da empresa (sem filiação, eSocial, cônjuge)."""
-    sexo = p.get('sexo') or ''
-    idade = _idade(p.get('data_nascimento'))
-    ls = [
-        _kv('CPF', _cpf(c['cpf_cnpj'])),
-        _kv('Nascimento', (_data(p['data_nascimento']) + (f' · {idade} anos' if idade is not None else '')) if p.get('data_nascimento') else ''),
-        _kv('Naturalidade', (nome_proprio(p['naturalidade_cidade']) + ('/' + p['naturalidade_uf'] if p.get('naturalidade_uf') else '')) if p.get('naturalidade_cidade') else ''),
-        _kv('Nacionalidade', _flex(p.get('nacionalidade'), sexo).capitalize() if p.get('nacionalidade') else ''),
-    ]
-    if not resumo:
-        ls += [_kv('Mãe', nome_proprio(p.get('nome_mae'))), _kv('Pai', nome_proprio(p.get('nome_pai')))]
-    ls.append(_kv('Estado civil', (_flex(_rot('estado_civil', p['estado_civil']), sexo).capitalize()
-                                   + (' · ' + _flex(_rot('regime_bens', p['regime_bens']), sexo).lower() if p.get('regime_bens') and p['estado_civil'] in COM_REGIME else ''))
-                  if p.get('estado_civil') else ''))
-    if not resumo:
-        ls.append(_kv('Cônjuge', (nome_proprio(p.get('conjuge_nome')) + (f" · CPF {_cpf(p['conjuge_cpf'])}" if p.get('conjuge_cpf') else '')) if p.get('conjuge_nome') or p.get('conjuge_cpf') else ''))
-    ls.append(_kv('Profissão', _flex(p.get('profissao'), sexo).capitalize() if p.get('profissao') else ''))
-    if not resumo:
-        ls.append(_kv('PIS/NIT', p.get('pis_nit')))
-    ls += [_kv('Celular', _tel(c.get('celular'))), _kv('Telefone', _tel(c.get('telefone'))), _kv('E-mail', (c.get('email') or '').lower())]
+    num = str(e.get('numero') or '').strip()
+    num = 's/nº' if not num or num.upper().replace('/', '').replace('.', '').replace('º', '') in ('SN', 'SNO') else num
+    l1 = _lugar(e['logradouro']) + ', ' + num + (' – ' + _complemento_limpo(e['complemento']) if e.get('complemento') else '')
+    cid = _lugar(e.get('cidade') or '') + ('/' + e['estado'] if e.get('estado') else '')
+    l2 = ' – '.join(x for x in (_lugar(e.get('bairro')), cid) if x)
+    ls = [l1, l2] if l2 else [l1]
+    if e.get('cep'):
+        ls.append('CEP ' + _cep(e['cep']))
     return ls
 
 
-def _linhas_docs(docs):
-    hoje = date.today()
+def _complemento_limpo(c):
+    partes = [p.strip() for p in re.split(r'\s+[-–|/]\s+|,', c or '') if p.strip()]
+    return ', '.join(_lugar(p) for p in partes)
+
+
+def _secao(icone, titulo, linhas):
+    linhas = [x for x in linhas if x]
+    return (f'{icone} *{titulo.upper()}*\n' + '\n'.join(linhas)) if linhas else ''
+
+
+def _b(texto):
+    return ('• ' + texto) if texto else ''
+
+
+def _cabecalho(nome, doc_rotulo, doc, resumo, fantasia=''):
+    ls = ['*FICHA CADASTRAL*', _TRACO, '*' + nome.upper() + '*']
+    if fantasia:
+        ls.append('_' + fantasia + '_')
+    if doc:
+        ls.append(f'{doc_rotulo} {doc}')
+    if resumo:
+        ls.append(resumo)
+    return '\n'.join(ls)
+
+
+def _rodape():
+    return _TRACO + '\n_Qualicontax Assessoria Contábil_\n_Ficha emitida em ' + _hoje().strftime('%d/%m/%Y') + '_'
+
+
+def _meios_da_propria(c):
+    """Celulares, telefones e e-mails da própria pessoa: os do cadastro + os do contato com o nome dela, sem repetir."""
+    from models.contato_cliente import ContatoCliente, _nome_chave
+    cel, tel, em = [], [], []
+
+    def add(lst, v, fmt=lambda x: x):
+        v = (v or '').strip()
+        if v and fmt(v) not in [fmt(x) for x in lst]:
+            lst.append(v)
+    add(cel, c.get('celular'), _DIG); add(tel, c.get('telefone'), _DIG); add(em, (c.get('email') or '').lower())
+    chave = _nome_chave(c.get('nome_razao_social'))
+    for ct in ContatoCliente.get_by_cliente(c['id']) or []:
+        if not ct.get('ativo', 1) or _nome_chave(ct.get('nome')) != chave:
+            continue
+        for v in [ct.get('celular')] + list(ct.get('celulares_extra') or []):
+            add(cel, v, _DIG)
+        add(tel, ct.get('telefone'), _DIG)
+        for v in [ct.get('email')] + list(ct.get('emails_extra') or []):
+            add(em, (v or '').lower())
+    return cel, tel, em
+
+
+def _secao_contato(cel, tel, em, outros=()):
+    """📞 CONTATO: os meios da pessoa/empresa e, abaixo, as pessoas de contato (empresa)."""
+    ls = []
+    if cel:
+        ls.append(_b(('Celular: ' if len(cel) == 1 else 'Celulares: ') + ' · '.join(_tel(x) for x in cel)))
+    if tel:
+        ls.append(_b(('Telefone: ' if len(tel) == 1 else 'Telefones: ') + ' · '.join(_tel(x) for x in tel)))
+    if em:
+        ls.append(_b(('E-mail: ' if len(em) == 1 else 'E-mails: ') + ', '.join(em)))
+    for ct in outros:
+        meios = [_tel(x) for x in [ct.get('celular')] + list(ct.get('celulares_extra') or []) if x]
+        if ct.get('telefone'):
+            meios.append(_tel(ct['telefone']))
+        meios += [x.strip().lower() for x in [ct.get('email')] + list(ct.get('emails_extra') or []) if x]
+        ls.append(_b('*' + nome_proprio(ct.get('nome')) + '*' + (' (' + nome_proprio(ct['cargo']) + ')' if ct.get('cargo') else '')
+                     + (': ' + ' · '.join(meios) if meios else '')))
+    return _secao('📞', 'Contato', ls)
+
+
+def _pessoas_de_contato(cliente_id, pular_nome=None):
+    from models.contato_cliente import ContatoCliente, _nome_chave
+    out = []
+    for ct in ContatoCliente.get_by_cliente(cliente_id) or []:
+        if not ct.get('ativo', 1):
+            continue
+        if pular_nome and _nome_chave(ct.get('nome')) == _nome_chave(pular_nome):
+            continue
+        out.append(ct)
+    return out
+
+
+def _docs_linhas(docs):
+    hoje = _hoje()
     out = []
     for d in docs:
         orgao = '/'.join(x for x in (d.get('orgao'), d.get('uf')) if x)
-        s = f"{d['tipo']} {d['numero']}" + (' · ' + orgao if orgao else '')
+        s = f"{d['tipo']} {d['numero']}" + (' ' + orgao if orgao else '')
         if d.get('validade'):
-            s += (' · ⚠️ vencida em ' if d['validade'] < hoje else ' · válida até ') + _data(d['validade'])
-        out.append(s)
+            s += (' ⚠️ vencida em ' if d['validade'] < hoje else ' (válida até ') + _data(d['validade']) + ('' if d['validade'] < hoje else ')')
+        out.append(_b(s))
     return out
+
+
+def _civil_frase(p, sexo):
+    if not p.get('estado_civil'):
+        return ''
+    if p['estado_civil'] == 'UNIAO_ESTAVEL':
+        ec = 'união estável'
+    else:
+        ec = _flex(_rot('estado_civil', p['estado_civil']), sexo)
+    if p['estado_civil'] in COM_REGIME and p.get('regime_bens'):
+        ec += ', ' + _flex(_rot('regime_bens', p['regime_bens']), sexo).lower()
+    return ec
+
+
+def _linhas_pessoa(c, p, docs, resumo=False):
+    """Os dados pessoais em frases curtas. ``resumo`` = sócio dentro da ficha da empresa."""
+    sexo = p.get('sexo') or ''
+    idade = _idade(p.get('data_nascimento'))
+    ls = []
+    if p.get('data_nascimento'):
+        nat = (', em ' + _lugar(p['naturalidade_cidade']) + ('/' + p['naturalidade_uf'] if p.get('naturalidade_uf') else '')) if p.get('naturalidade_cidade') else ''
+        ls.append(_b(f"Nascimento: {_data(p['data_nascimento'])}{nat}" + (f" ({idade} anos)" if idade is not None else '')))
+    elif p.get('naturalidade_cidade'):
+        ls.append(_b('Natural de ' + _lugar(p['naturalidade_cidade']) + ('/' + p['naturalidade_uf'] if p.get('naturalidade_uf') else '')))
+    if p.get('nacionalidade'):
+        ls.append(_b('Nacionalidade: ' + _flex(p['nacionalidade'], sexo)))
+    if not resumo:
+        pais = [nome_proprio(x) for x in (p.get('nome_pai'), p.get('nome_mae')) if x]
+        if pais:
+            ls.append(_b('Filiação: ' + ' e '.join(pais)))
+    civ = _civil_frase(p, sexo)
+    if civ:
+        ls.append(_b('Estado civil: ' + civ))
+    if not resumo and (p.get('conjuge_nome') or p.get('conjuge_cpf')):
+        ls.append(_b('Cônjuge: ' + nome_proprio(p.get('conjuge_nome') or '') + (f" (CPF {_cpf(p['conjuge_cpf'])})" if p.get('conjuge_cpf') else '')))
+    if p.get('profissao'):
+        ls.append(_b('Profissão: ' + _flex(p['profissao'], sexo)))
+    if not resumo and p.get('pis_nit'):
+        ls.append(_b('PIS/NIT: ' + p['pis_nit']))
+    return ls
+
+
+def _resumo_pessoa(p, sexo):
+    idade = _idade(p.get('data_nascimento'))
+    partes = [_flex(p['profissao'], sexo).capitalize() if p.get('profissao') else '',
+              f'{idade} anos' if idade is not None else '',
+              (_flex(_rot('estado_civil', p['estado_civil']), sexo) if p['estado_civil'] != 'UNIAO_ESTAVEL' else 'união estável') if p.get('estado_civil') else '']
+    return ' · '.join(x for x in partes if x)
+
+
+def _atividade_curta(e):
+    d = (e.get('cnae_fiscal_descricao') or '').strip()
+    if not d:
+        return ''
+    d = d.split(';')[0].strip()
+    d = re.sub(r'\s+não especificad[oa]s? anteriormente$', '', d, flags=re.I)
+    if len(d) > 75:
+        d = d[:72].rsplit(' ', 1)[0] + '…'
+    return d[0].upper() + d[1:]
 
 
 def _fantasia_ok(e):
@@ -379,126 +503,177 @@ def _fantasia_ok(e):
     return bool(re.search(r'[A-Za-zÀ-ÿ]', f)) and nome_proprio(f).lower() != nome_proprio(e.get('nome_razao_social') or '').lower()
 
 
-def _bloco_empresa(cid, participacao, outros=True):
-    """A empresa em que a pessoa é sócia, com os dados dela: identificação, sede, contato,
-    a participação da pessoa e os demais sócios."""
+def _fantasia(e):
+    """'MA PECAS E EQUIPAMENTOS-Matriz' → 'MA Pecas e Equipamentos-Matriz' (texto quase todo em caixa alta desce)."""
+    f = ' '.join((e.get('nome_fantasia') or '').split())
+    letras = [ch for ch in f if ch.isalpha()]
+    if letras and sum(ch.isupper() for ch in letras) > 0.6 * len(letras):
+        return nome_proprio(f.upper())
+    return f
+
+
+def _participacao_frase(s, sexo, quadro):
+    """'Sócio único (100%) e administrador' / 'Sócio com 49% do capital (R$ 4.900,00 de R$ 10.000,00)'."""
+    pct = s.get('percentual_participacao')
+    socio = _g(sexo, 'Sócio', 'Sócia', 'Sócio(a)')
+    adm = _g(sexo, 'administrador', 'administradora', 'administrador(a)')
+    papel = (s.get('qualificacao') or '').strip().lower()
+    if 'titular' in papel:
+        socio = 'Titular'
+    if pct is not None and float(pct) >= 100:
+        txt = f'{socio} {_g(sexo, "único", "única")} (100%)' if socio != 'Titular' else 'Titular (100%)'
+    elif pct is not None:
+        txt = f'{socio} com {_pct(pct)} do capital'
+    else:
+        txt = socio
+    if s.get('responsavel') or 'admin' in papel:
+        txt += f' e {adm}'
+    cap = s.get('capital_valor')
+    total = sum(float(x.get('capital_valor') or 0) for x in quadro)
+    if cap is not None and total and float(cap) < total:
+        txt += f' ({_moeda(cap)} de {_moeda(total)})'
+    elif cap is not None and float(cap) > 0:
+        txt += f' · capital {_moeda(cap)}'
+    if s.get('data_entrada'):
+        txt += ' · desde ' + _data(s['data_entrada'])
+    if s.get('data_saida'):
+        txt += ' · saiu em ' + _data(s['data_saida'])
+    return txt
+
+
+def _bloco_empresa(n, cid, s, sexo):
+    """A empresa em que a pessoa é sócia: identificação, atividade, sede, contato, a participação e os demais sócios."""
     from models.socio_cliente import SocioCliente
     e = _cliente(cid)
     if not e:
         return ''
-    linhas = [_kv('CNPJ', _cnpj(e['cpf_cnpj']))]
+    quadro = SocioCliente.get_by_cliente(cid) or []
+    ls = [f'*{n}. {nome_proprio(e["nome_razao_social"])}*']
     if _fantasia_ok(e):
-        linhas.insert(0, _kv('Nome fantasia', nome_proprio(e['nome_fantasia'])))
-    nat = ' · '.join(x for x in ((e.get('natureza_juridica') or ''), (e.get('porte_empresa') or ''),
-                                 (e.get('regime_tributario') or '').replace('_', ' ').title()) if x)
-    linhas.append(_kv('Natureza', nat))
-    linhas.append(_kv('Atividade', ((e.get('cnae_fiscal') or '') + ' · ' + (e.get('cnae_fiscal_descricao') or '')).strip(' ·')) if e.get('cnae_fiscal_descricao') else '')
-    linhas.append(_kv('Início das atividades', _data(e.get('data_inicio_atividade'))))
-    linhas.append(_kv('NIRE', e.get('nire')))
-    linhas.append(_kv('Situação', (e.get('situacao') or '').capitalize()) if (e.get('situacao') or '').upper() != 'ATIVO' else '')
+        ls.append('_' + _fantasia(e) + '_')
+    ls.append(' · '.join(x for x in ('CNPJ ' + _cnpj(e['cpf_cnpj']) if e.get('cpf_cnpj') else '', e.get('porte_empresa') or '',
+                                     _REGIME.get((e.get('regime_tributario') or '').upper(), (e.get('regime_tributario') or '').replace('_', ' ').title())) if x))
+    nat = (e.get('natureza_juridica') or '').strip()
+    inicio = ('desde ' + _data(e['data_inicio_atividade'])) if e.get('data_inicio_atividade') else ''
+    ls.append(' · '.join(x for x in (nat, inicio) if x))
+    at = _atividade_curta(e)
+    if at:
+        ls.append(at)
+    if e.get('nire'):
+        ls.append('NIRE ' + str(e['nire']))
+    if (e.get('situacao') or '').upper() not in ('', 'ATIVO'):
+        ls.append('Situação: ' + (e.get('situacao') or '').capitalize())
     ends = _enderecos(cid)
-    if ends:
-        ls = _end_linhas(ends[0])
-        if ls:
-            linhas.append('Sede: ' + ls[0] + '\n' + ls[1])
-    linhas += [_kv('Telefone', _tel(e.get('telefone') or e.get('celular'))), _kv('E-mail', (e.get('email') or '').lower())]
-    if participacao:
-        linhas.append('▸ ' + participacao)
+    el = _end_linhas(ends[0]) if ends else []
+    if el:
+        ls.append('📍 ' + el[0] + ('\n' + ' · '.join(el[1:]) if len(el) > 1 else ''))
+    meios = [('☎️ ' + _tel(e['telefone'])) if e.get('telefone') else '', ('📱 ' + _tel(e['celular'])) if e.get('celular') and _DIG(e.get('celular')) != _DIG(e.get('telefone')) else '',
+             ('✉️ ' + e['email'].strip().lower()) if e.get('email') else '']
+    if any(meios):
+        ls.append(' · '.join(x for x in meios if x))
+    ls.append('▸ ' + _participacao_frase(s, sexo, quadro))
+    outros = [x for x in quadro if _DIG(x.get('cpf')) != _DIG(s.get('_cpf_pessoa'))]
     if outros:
-        quadro = SocioCliente.get_by_cliente(cid) or []
-        ls = []
-        for s in quadro:
-            pct = s.get('percentual_participacao')
-            ls.append(nome_proprio(s.get('nome')) + (f" ({float(pct):g}%)" if pct is not None else '') + (' · responsável' if s.get('responsavel') else ''))
-        cap = sum(float(s.get('capital_valor') or 0) for s in quadro)
-        if ls:
-            linhas.append('Quadro societário: ' + '; '.join(ls) + (f' · capital social {_moeda(cap)}' if cap else ''))
-    return _bloco('🏢', nome_proprio(e['nome_razao_social']), linhas)
-
-
-def _participacao(s, sexo=''):
-    pct, cap = s.get('percentual_participacao'), s.get('capital_valor')
-    papel = (s.get('qualificacao') or '').strip()
-    if papel and sexo == 'F':
-        papel = papel.replace('Sócio', 'Sócia').replace('sócio', 'sócia').replace('Administrador', 'Administradora').replace('administrador', 'administradora')
-    partes = [papel, f"{float(pct):g}% do capital" if pct is not None else '', ('capital ' + _moeda(cap)) if cap is not None else '',
-              'responsável pela empresa' if s.get('responsavel') else '',
-              ('desde ' + _data(s['data_entrada'])) if s.get('data_entrada') else '',
-              ('saiu em ' + _data(s['data_saida'])) if s.get('data_saida') else ('' if s.get('ativo', 1) else 'ex-sócio(a)')]
-    return ' · '.join(x for x in partes if x)
+        ls.append('▸ ' + ('Demais sócios: ' if len(outros) > 1 else 'Outro sócio: ')
+                  + '; '.join(nome_proprio(x.get('nome')) + (f" ({_pct(x['percentual_participacao'])}" + (', administrador' if x.get('responsavel') else '') + ')' if x.get('percentual_participacao') is not None else (' (administrador)' if x.get('responsavel') else ''))
+                              for x in outros))
+    return '\n'.join(x for x in ls if x)
 
 
 def _ficha_pf(c):
     p = PessoaDados.get(c['id'])
     docs = Documentos.listar(c['id'])
     sexo = p.get('sexo') or ''
-    cab = ('*FICHA CADASTRAL*\n*' + nome_proprio(c['nome_razao_social']) + '*' + (f"\n_{nome_proprio(p['nome_social'])}_" if p.get('nome_social') else '')
-           + ('\nCPF ' + _cpf(c['cpf_cnpj']) if c.get('cpf_cnpj') else ''))
-    blocos = [cab, _bloco('👤', 'Dados pessoais', _linhas_pessoa(c, p, docs)[1:]), _bloco('🪪', 'Documentos', _linhas_docs(docs))]
-    blocos += _blocos_enderecos(c['id'])
-    blocos.append(_bloco_contatos(c['id']))
+    cab = _cabecalho(nome_proprio(c['nome_razao_social']), 'CPF', _cpf(c['cpf_cnpj']) if c.get('cpf_cnpj') else '',
+                     _resumo_pessoa(p, sexo), nome_proprio(p['nome_social']) if p.get('nome_social') else '')
+    blocos = [cab, _secao('👤', 'Dados pessoais', _linhas_pessoa(c, p, docs)), _secao('🪪', 'Documentos', _docs_linhas(docs))]
+    ends = _enderecos(c['id'])
+    for e in ends:
+        el = _end_linhas(e)
+        if el:
+            tit = 'Endereço ' + (e.get('tipo') or '').lower() + (' (principal)' if e.get('principal') and len(ends) > 1 else '')
+            blocos.append(_secao('📍', tit, el))
+    cel, tel, em = _meios_da_propria(c)
+    blocos.append(_secao_contato(cel, tel, em, _pessoas_de_contato(c['id'], pular_nome=c.get('nome_razao_social'))))
     socs = execute_query(
         """SELECT s.cliente_id, s.qualificacao, s.percentual_participacao, s.responsavel, s.data_entrada, s.data_saida, s.ativo, s.capital_valor
              FROM socios_clientes s JOIN clientes c ON c.id = s.cliente_id
-            WHERE s.pf_cliente_id = %s ORDER BY s.ativo DESC, c.nome_razao_social""", (c['id'],), fetch=True) or []
+            WHERE s.pf_cliente_id = %s ORDER BY s.ativo DESC, s.data_entrada, c.nome_razao_social""", (c['id'],), fetch=True) or []
+    for s in socs:
+        s['_cpf_pessoa'] = c.get('cpf_cnpj')
     atuais = [s for s in socs if s.get('ativo')]
     if atuais:
-        blocos.append(f"*{_g(sexo, 'Sócio', 'Sócia', 'Sócio(a)')} em {len(atuais)} empresa{'s' if len(atuais) > 1 else ''}*")
-        for s in atuais:
-            blocos.append(_bloco_empresa(s['cliente_id'], _participacao(s, sexo)))
+        n = len(atuais)
+        tit = f"Empresas ({_g(sexo, 'sócio', 'sócia', 'sócio(a)')} em {n})" if n > 1 else 'Empresa'
+        blocos.append(_secao('🏢', tit, []) or f'🏢 *{tit.upper()}*')
+        for i, s in enumerate(atuais, 1):
+            blocos.append(_bloco_empresa(i, s['cliente_id'], s, sexo))
     antigas = [s for s in socs if not s.get('ativo')]
     if antigas:
-        blocos.append(_bloco('🕓', 'Sociedades anteriores', [nome_proprio((_cliente(s['cliente_id']) or {}).get('nome_razao_social')) + ' · ' + _participacao(s, sexo) for s in antigas]))
-    blocos.append(f"_Qualicontax · {date.today().strftime('%d/%m/%Y')}_")
+        blocos.append(_secao('🕓', 'Sociedades anteriores', [_b(nome_proprio((_cliente(s['cliente_id']) or {}).get('nome_razao_social')) + ' — ' + _participacao_frase(s, sexo, [])) for s in antigas]))
+    blocos.append(_rodape())
     return '\n\n'.join(b for b in blocos if b)
 
 
 def _ficha_pj(c):
     from models.socio_cliente import SocioCliente
-    cab = ('*FICHA CADASTRAL*\n*' + nome_proprio(c['nome_razao_social']) + '*' + (f"\n_{nome_proprio(c['nome_fantasia'])}_" if _fantasia_ok(c) else '')
-           + ('\nCNPJ ' + _cnpj(c['cpf_cnpj']) if c.get('cpf_cnpj') else ''))
-    ident = [
-        _kv('Natureza jurídica', c.get('natureza_juridica')),
-        _kv('Porte', c.get('porte_empresa')),
-        _kv('Regime tributário', (c.get('regime_tributario') or '').replace('_', ' ').title()),
-        _kv('Atividade principal', ((c.get('cnae_fiscal') or '') + ' · ' + (c.get('cnae_fiscal_descricao') or '')).strip(' ·')),
-        _kv('Início das atividades', _data(c.get('data_inicio_atividade'))),
-        _kv('NIRE', (str(c['nire']) + (f" · registro em {_data(c['nire_data_registro'])}" if c.get('nire_data_registro') else '')) if c.get('nire') else ''),
-        _kv('Inscrição municipal', c.get('inscricao_municipal')),
-        _kv('Situação', (c.get('situacao') or '').capitalize()) if (c.get('situacao') or '').upper() != 'ATIVO' else '',
-        _kv('Telefone', _tel(c.get('telefone'))), _kv('Celular', _tel(c.get('celular'))), _kv('E-mail', (c.get('email') or '').lower()),
+    regime = _REGIME.get((c.get('regime_tributario') or '').upper(), (c.get('regime_tributario') or '').replace('_', ' ').title())
+    resumo = ' · '.join(x for x in ((c.get('natureza_juridica') or ''), c.get('porte_empresa') or '', regime) if x)
+    cab = _cabecalho(nome_proprio(c['nome_razao_social']), 'CNPJ', _cnpj(c['cpf_cnpj']) if c.get('cpf_cnpj') else '', resumo,
+                     _fantasia(c) if _fantasia_ok(c) else '')
+    emp = [
+        _b('Atividade principal: ' + _atividade_curta(c)) if c.get('cnae_fiscal_descricao') else '',
+        _b('Início das atividades: ' + _data(c['data_inicio_atividade'])) if c.get('data_inicio_atividade') else '',
+        _b('NIRE ' + str(c['nire']) + (f", registrado em {_data(c['nire_data_registro'])}" if c.get('nire_data_registro') else '')) if c.get('nire') else '',
+        _b('Inscrição municipal: ' + str(c['inscricao_municipal'])) if c.get('inscricao_municipal') else '',
+        _b('Situação: ' + (c.get('situacao') or '').capitalize()) if (c.get('situacao') or '').upper() not in ('', 'ATIVO') else '',
     ]
-    ies = execute_query("SELECT uf, ie, tipo, situacao FROM clientes_inscricoes_estaduais WHERE cliente_id = %s ORDER BY principal DESC, uf", (c['id'],), fetch=True) or []
+    ies = execute_query("SELECT uf, ie, tipo FROM clientes_inscricoes_estaduais WHERE cliente_id = %s ORDER BY principal DESC, uf", (c['id'],), fetch=True) or []
     for ie in ies:
-        ident.append(_kv('Inscrição estadual ' + (ie.get('uf') or ''), (ie.get('ie') or '') + (' · ' + ie['tipo'].lower() if ie.get('tipo') else '')))
+        emp.append(_b(f"Inscrição estadual {ie.get('uf') or ''}: {ie.get('ie') or ''}" + (f" ({ie['tipo'].lower()})" if ie.get('tipo') else '')))
     if not ies and c.get('inscricao_estadual'):
-        ident.append(_kv('Inscrição estadual', c['inscricao_estadual']))
-    blocos = [cab, _bloco('🏢', 'Empresa', ident)] + _blocos_enderecos(c['id']) + [_bloco_contatos(c['id'])]
+        emp.append(_b('Inscrição estadual: ' + str(c['inscricao_estadual'])))
+    blocos = [cab, _secao('🏢', 'Empresa', emp)]
+    ends = _enderecos(c['id'])
+    for e in ends:
+        el = _end_linhas(e)
+        if el:
+            tit = ('Sede' if (e.get('tipo') or '').upper() in ('COMERCIAL', 'SEDE', '') else 'Endereço ' + (e.get('tipo') or '').lower()) + (' (principal)' if e.get('principal') and len(ends) > 1 else '')
+            blocos.append(_secao('📍', tit, el))
+    cel = [c['celular']] if c.get('celular') else []
+    tel = [c['telefone']] if c.get('telefone') and _DIG(c['telefone']) not in [_DIG(x) for x in cel] else []
+    em = [c['email'].strip().lower()] if c.get('email') else []
+    blocos.append(_secao_contato(cel, tel, em, _pessoas_de_contato(c['id'])))
     quadro = SocioCliente.get_by_cliente(c['id']) or []
-    cap_total = sum(float(s.get('capital_valor') or 0) for s in quadro)
     if quadro:
-        blocos.append('*Quadro societário*' + (f' · capital social {_moeda(cap_total)}' if cap_total else ''))
-        for s in quadro:
+        total = sum(float(s.get('capital_valor') or 0) for s in quadro)
+        blocos.append(f"👥 *QUADRO SOCIETÁRIO*" + (f"\nCapital social {_moeda(total)}" if total else ''))
+        for i, s in enumerate(quadro, 1):
             pfid = s.get('pf_cliente_id')
-            sexo = ''
-            linhas = []
+            sexo, ls = '', []
             if pfid:
                 pc, p, docs = _cliente(pfid), PessoaDados.get(pfid), Documentos.listar(pfid)
                 sexo = p.get('sexo') or ''
                 if pc:
-                    linhas = _linhas_pessoa(pc, p, docs, resumo=True)
-                    dl = _linhas_docs(docs)
-                    if dl:
-                        linhas.append('Documentos: ' + ' | '.join(dl))
-                    ends = _enderecos(pfid)
-                    el = _end_linhas(ends[0]) if ends else []
+                    ls += _linhas_pessoa(pc, p, docs, resumo=True)
+                    if docs:
+                        ls.append(_b('Documento: ' + ' | '.join(x[2:] for x in _docs_linhas(docs))))
+                    pe = _enderecos(pfid)
+                    el = _end_linhas(pe[0]) if pe else []
                     if el:
-                        linhas.append('Endereço: ' + el[0] + '\n' + el[1])
+                        ls.append(_b('Endereço: ' + el[0] + (' – ' + ' · '.join(el[1:]) if len(el) > 1 else '')))
+                    cel2, tel2, em2 = _meios_da_propria(pc)
+                    meios = [_tel(x) for x in cel2] + [_tel(x) for x in tel2 if _DIG(x) not in [_DIG(y) for y in cel2]] + em2
+                    if meios:
+                        ls.append(_b('Contato: ' + ' · '.join(meios)))
             else:
-                linhas = [_kv('CPF/CNPJ', _doc_fmt(s.get('cpf'))), _kv('Telefone', _tel(s.get('telefone'))), _kv('E-mail', (s.get('email') or '').lower())]
-            linhas.insert(0, '▸ ' + _participacao(s, sexo))
-            blocos.append(_bloco('👤', nome_proprio(s.get('nome')), linhas))
-    blocos.append(f"_Qualicontax · {date.today().strftime('%d/%m/%Y')}_")
+                meios = [x for x in (_tel(s.get('telefone')), (s.get('email') or '').lower()) if x]
+                if meios:
+                    ls.append(_b('Contato: ' + ' · '.join(meios)))
+            doc = s.get('cpf')
+            cab_s = f"*{i}. {nome_proprio(s.get('nome'))}*" + (f"\n{'CNPJ' if len(_DIG(doc)) == 14 else 'CPF'} {_doc_fmt(doc)}" if doc else '')
+            blocos.append(cab_s + '\n▸ ' + _participacao_frase(s, sexo, quadro) + (('\n' + '\n'.join(ls)) if ls else ''))
+    blocos.append(_rodape())
     return '\n\n'.join(b for b in blocos if b)
 
 
