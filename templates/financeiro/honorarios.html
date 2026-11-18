@@ -12,71 +12,92 @@
 .ho-plano { font-size:11px; color:#7d968a; display:block; }
 .ho-falta { color:#b91c1c; font-weight:600; }
 .ho-ok { color:#15803d; }
-/* ---- modal do contrato (06/11/2026): MESMO desenho da janela "Responsáveis no escritório" da ficha (rs-*): cabeçalho
-   verde, linhas ícone + rótulo + campo, rodapé com a nota e os botões. "Quero que fique similar." ---- */
-.ho-modal { max-width:760px; border-radius:16px; overflow:hidden; }
-.ho-mhead { display:flex; align-items:center; gap:14px; padding:18px 22px; background:linear-gradient(150deg,#0b3b2b,#147a4b); }
-.ho-mico { flex:0 0 40px; width:40px; height:40px; border-radius:12px; background:rgba(255,255,255,.14); color:#fff; display:flex; align-items:center; justify-content:center; font-size:17px; }
-.ho-mhead h3 { margin:0; font-size:16px; color:#fff; }
-.ho-mhead p { margin:2px 0 0; font-size:12px; color:#bfe8cf; }
-.ho-mhead .modal-close { margin-left:auto; color:#d7f3e2; }
-.ho-mhead .modal-close:hover { background:rgba(255,255,255,.14); color:#fff; }
-.ho-mbody { padding:14px 16px 8px; max-height:calc(100vh - 230px); overflow:auto; }
-.ho-row { display:grid; grid-template-columns:38px 150px 1fr; align-items:center; gap:12px; padding:8px 10px; border-radius:12px; border:1px solid transparent; margin-bottom:4px; transition:background .15s, border-color .15s; }
-.ho-row:hover { background:#f8fbf9; }
-.ho-row-top { align-items:start; }
-.ho-row-top .ho-rico, .ho-row-top .ho-rlbl { margin-top:4px; }
-.ho-rico { width:38px; height:38px; border-radius:11px; background:#eef6f1; color:#15803d; display:flex; align-items:center; justify-content:center; font-size:15px; }
-.ho-rlbl { font-size:13px; font-weight:700; color:#0f172a; margin:0; }
-.ho-rlbl small { display:block; font-size:11px; font-weight:500; color:#94a3b8; }
-.ho-rval { min-width:0; }
-.ho-row-falta { background:#fff7f7; border-color:#fecaca; }
-.ho-row-falta .ho-rico { background:#fee2e2; color:#dc2626; }
-.ho-sel { position:relative; display:flex; align-items:center; margin:0; }
-.ho-sel select { width:100%; appearance:none; -webkit-appearance:none; height:42px; padding:0 36px 0 14px; border:1px solid #dbe7df; border-radius:11px; background:#fff; font-size:13px; font-weight:600; color:#0f172a; cursor:pointer; }
-.ho-sel select:focus { outline:none; border-color:#15803d; box-shadow:0 0 0 3px rgba(21,128,61,.14); }
-.ho-chev { position:absolute; right:14px; font-size:11px; color:#64748b; pointer-events:none; }
-.ho-modal input.form-control, .ho-modal select.form-control { height:42px; border:1px solid #dbe7df; border-radius:11px; font-size:13px; font-weight:600; color:#0f172a; }
-.ho-modal input.form-control:focus, .ho-modal select.form-control:focus { outline:none; border-color:#15803d; box-shadow:0 0 0 3px rgba(21,128,61,.14); }
-.ho-inl { display:flex; align-items:center; gap:8px; flex-wrap:wrap; font-size:13px; color:#475569; }
-.ho-inl .form-control { width:auto; }
-.ho-inl .ho-w90 { width:90px; }
-.ho-inl .ho-w170 { width:170px; }
-.ho-lbl2 { font-size:11px; font-weight:600; color:#94a3b8; margin:8px 0 4px; }
-.ho-itens { width:100%; border-collapse:collapse; }
-.ho-itens td { padding:3px 4px 3px 0; vertical-align:middle; }
-.ho-itens input, .ho-itens select { height:38px !important; }
-.ho-soma { font-weight:700; font-size:14px; color:#0f3d2e; }
-.ho-rede { font-size:12px; color:#5f7f6e; margin:0 0 6px; }
-.ho-rede b { color:#0f3d2e; }
+/* ---- janela do contrato (18/11/2026, "repaginar"): molde ns-* copiado de Lançamentos › Nova solicitação ---- */
+.ns-fundo { position:fixed; inset:0; z-index:1200; background:rgba(15,23,42,.5); backdrop-filter:blur(2px); display:none; }
+.ns { position:absolute; left:50%; top:3vh; transform:translateX(-50%); width:min(1180px, calc(100vw - 32px)); max-height:94vh; display:flex; flex-direction:column;
+  background:#f6faf7; border-radius:22px; box-shadow:0 30px 80px rgba(2,44,22,.35); overflow:hidden; font-size:14px; color:#0f172a; }
+.ns.ho { width:min(1120px, calc(100vw - 32px)); }
+.ns-cab { display:flex; align-items:center; gap:16px; padding:18px 22px; color:#fff; background:radial-gradient(120% 140% at 0% 0%, #22c55e 0%, #15803d 45%, #0f3d2e 100%); }
+.ns-ico { width:46px; height:46px; border-radius:14px; background:rgba(255,255,255,.16); border:1.5px solid rgba(255,255,255,.35); display:inline-flex; align-items:center; justify-content:center; font-size:20px; flex-shrink:0; }
+.ns-tit { flex:1; min-width:0; } .ns-tit b { display:block; font-size:20px; font-weight:800; } .ns-tit span { font-size:13px; opacity:.88; display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.ns-prev { text-align:right; } .ns-prev small { display:block; font-size:10.5px; font-weight:800; letter-spacing:.08em; text-transform:uppercase; opacity:.8; }
+.ns-prev b { display:block; font-size:24px; font-weight:800; line-height:1.1; } .ns-prev span { font-size:12.5px; opacity:.9; }
+.ns-x { width:38px; height:38px; border-radius:99px; border:0; background:rgba(255,255,255,.18); color:#fff; font-size:16px; cursor:pointer; flex-shrink:0; }
+.ns-g { flex:1; min-height:0; display:grid; grid-template-columns:minmax(0,1fr) 330px; }
+.ns-f { padding:16px 18px 18px 22px; display:flex; flex-direction:column; gap:12px; overflow:auto; }
+.ns-r { padding:16px 22px; border-left:1px solid #e6eeea; background:#fff; display:flex; flex-direction:column; gap:12px; overflow:auto; }
+.ns-b { background:#fff; border:1px solid #e6eeea; border-radius:16px; padding:13px 15px; }
+.ns-h { display:flex; align-items:center; gap:8px; font-size:11.5px; font-weight:800; letter-spacing:.07em; text-transform:uppercase; color:#0f3d2e; margin-bottom:10px; }
+.ns-h i { color:#16a34a; } .ns-h em { margin-left:auto; font-style:normal; text-transform:none; letter-spacing:0; font-weight:600; color:#64748b; font-size:12px; }
+.ns-ops { display:grid; grid-template-columns:repeat(3, minmax(0,1fr)); gap:9px; } .ns-ops-2 { grid-template-columns:repeat(2, minmax(0,1fr)); }
+.ns-ops-4 { grid-template-columns:repeat(4, minmax(0,1fr)); } .ns-ops-5 { grid-template-columns:repeat(5, minmax(0,1fr)); }
+.ns-op { text-align:left; border:1.5px solid #e2e8f0; border-radius:14px; padding:11px 12px; background:#fff; cursor:pointer; font:inherit; }
+.ns-op b { display:block; font-size:13.5px; color:#0f172a; } .ns-op small { font-size:11.5px; color:#64748b; display:block; line-height:1.3; }
+.ns-op i { font-size:18px; color:#16a34a; margin-bottom:6px; display:block; }
+.ns-op.on { border-color:#16a34a; background:#f0fdf4; box-shadow:0 0 0 3px #dcfce7; }
+.ns-campos { display:grid; grid-template-columns:repeat(2, minmax(0,1fr)); gap:12px 14px; } .ns-campos > * { min-width:0; }
+.ns-campo { display:block; } .ho-lbl { display:block; font-size:11.5px; font-weight:700; color:#0f3d2e; text-transform:uppercase; letter-spacing:.3px; margin-bottom:6px; }
+.ho-lbl small { text-transform:none; letter-spacing:0; font-weight:500; color:#94a3b8; margin-left:4px; }
+.ns-in { width:100%; box-sizing:border-box; height:40px; border:1px solid #d7e3dc; border-radius:10px; padding:0 12px; background:#fff; font:inherit; font-size:13.5px; color:#0f172a; }
+.ns-in:focus { outline:0; border-color:#22c55e; box-shadow:0 0 0 3px rgba(34,197,94,.14); }
+.ns-seg { display:inline-flex; background:#eef4f0; border-radius:11px; padding:3px; gap:2px; flex-wrap:wrap; }
+.ns-seg button { border:0; background:none; font:inherit; font-size:12.5px; font-weight:700; color:#475569; padding:6px 11px; border-radius:8px; cursor:pointer; }
+.ns-seg button.on { background:#fff; color:#0f3d2e; box-shadow:0 1px 4px rgba(0,0,0,.08); }
+.ns-aviso { background:#fffbeb; border:1px solid #fde68a; color:#92400e; border-radius:11px; padding:9px 12px; font-size:12.5px; display:flex; gap:8px; line-height:1.4; }
+.ns-aviso.ok { background:#f0fdf4; border-color:#bbf7d0; color:#166534; } .ns-aviso.red { background:#fef2f2; border-color:#fecaca; color:#991b1b; }
+.ns-pe { display:flex; align-items:center; gap:10px; padding:13px 22px; background:#fff; border-top:1px solid #e6eeea; }
+.ns-pe-info { flex:1; font-size:12.5px; color:#64748b; min-width:0; }
+.ns-bt { font:inherit; font-weight:800; border-radius:12px; padding:11px 18px; cursor:pointer; border:1.5px solid #e2e8f0; background:#fff; color:#334155; display:inline-flex; gap:8px; align-items:center; }
+.ns-bt.prim { border:0; background:linear-gradient(135deg, #16a34a, #15803d); color:#fff; box-shadow:0 8px 20px rgba(22,163,74,.3); font-size:15px; padding:12px 22px; }
+.ns-bt.red { border:0; background:linear-gradient(135deg, #dc2626, #991b1b); color:#fff; }
+.ns-bt.canc { color:#b91c1c; border-color:#fecaca; } .ns-bt.mini { padding:7px 12px; font-size:12.5px; font-weight:700; border-radius:10px; }
+.ns-bt:disabled { opacity:.55; cursor:not-allowed; box-shadow:none; }
+/* o que é só desta janela */
+.ho-cli { display:flex; align-items:center; gap:12px; }
+.ho-cli-av { width:44px; height:44px; border-radius:13px; background:#eef6f1; color:#15803d; display:inline-flex; align-items:center; justify-content:center; font-weight:800; font-size:15px; flex-shrink:0; }
+.ho-cli-tx { flex:1; min-width:0; } .ho-cli-tx b { display:block; font-size:15px; } .ho-cli-tx small { color:#64748b; font-size:12px; }
+.ho-grupo-l { display:flex; gap:12px; margin-top:12px; } .ho-grupo-l select.ns-in { appearance:auto; }
+.ho-sug { position:absolute; left:0; right:0; top:44px; background:#fff; border:1px solid #d7e3dc; border-radius:12px; box-shadow:0 14px 34px rgba(15,23,42,.16); z-index:5; max-height:260px; overflow:auto; }
+.ho-sug div { padding:9px 12px; cursor:pointer; font-size:13px; border-bottom:1px solid #f1f5f4; } .ho-sug div:hover { background:#f0fdf4; } .ho-sug div:last-child { border-bottom:0; }
+.ho-itens { width:100%; border-collapse:separate; border-spacing:0 6px; }
+.ho-itens td { padding:0 4px 0 0; vertical-align:middle; }
+.ho-itens .form-control { height:40px; border:1px solid #d7e3dc; border-radius:10px; padding:0 12px; font:inherit; font-size:13.5px; width:100%; box-sizing:border-box; background:#fff; }
+.ho-itens .form-control:focus { outline:0; border-color:#22c55e; box-shadow:0 0 0 3px rgba(34,197,94,.14); }
+.ho-itens input[name=item_valor] { text-align:right; font-variant-numeric:tabular-nums; font-weight:700; }
+.ho-itens .btn { height:40px; width:40px; border:1px solid #e2e8f0; background:#fff; border-radius:10px; color:#94a3b8; cursor:pointer; } .ho-itens .btn:hover { color:#b91c1c; border-color:#fecaca; }
+.ho-itens-pe { display:flex; align-items:center; gap:10px; margin-top:4px; }
+.ho-soma { margin-left:auto; font-size:13px; color:#64748b; } .ho-soma b { color:#0f3d2e; font-size:16px; margin-left:6px; font-variant-numeric:tabular-nums; }
+.ho-rede { font-size:12.5px; color:#5f7f6e; margin:0 0 6px; } .ho-rede b { color:#0f3d2e; }
 .ho-chips { display:flex; flex-wrap:wrap; gap:6px; margin:0 0 8px; }
-.ho-chip { border:1px solid #bfe3cd; background:#f0faf3; color:#0f3d2e; border-radius:999px; padding:5px 11px; font-size:12px; cursor:pointer; display:flex; gap:7px; align-items:center; }
-.ho-chip:hover { background:#dcf3e4; }
-.ho-chip b { font-variant-numeric:tabular-nums; }
-.ho-chip span { color:#5f7f6e; font-size:11px; }
-.ho-aviso { font-size:12px; color:#92400e; background:#fff7ed; border:1px solid #fed7aa; border-radius:8px; padding:6px 10px; margin-top:6px; display:none; }
-.ho-chk { display:flex; gap:18px; align-items:center; min-height:42px; }
-.ho-chk label { display:flex; gap:7px; align-items:center; margin:0; font-weight:600; font-size:13px; color:#0f172a; }
-.ho-dec { display:none; }
-.ho-cli { display:flex; align-items:center; gap:10px; min-height:42px; font-size:13px; font-weight:700; color:#0f172a; }
-.ho-cli .btn { margin-left:auto; }
-.ho-sug { position:absolute; z-index:20; background:#fff; border:1px solid #dbe7df; border-radius:10px; box-shadow:0 10px 24px rgba(0,0,0,.12); width:100%; max-height:260px; overflow:auto; }
-.ho-sug div { padding:8px 12px; cursor:pointer; font-size:13px; }
-.ho-sug div:hover { background:#f0f7f3; }
-.ho-mfoot { display:flex; align-items:center; gap:10px; padding:14px 22px; border-top:1px solid #eef2ef; background:#fafcfb; flex-wrap:wrap; }
-.ho-mnote { display:flex; align-items:center; gap:7px; font-size:12px; color:#15803d; margin-right:auto; }
-.ho-mnote-erro { color:#b91c1c; font-weight:600; }
-.ho-mfoot .btn { border-radius:10px; padding:9px 18px; font-weight:600; }
-.modal-body .form-group { margin-bottom:0; }
-@media (max-width:640px) {
-    .ho-busca { margin-left:0; width:100%; } .ho-busca input { width:100%; }
-    .ho-row { grid-template-columns:38px 1fr; } .ho-row .ho-rval { grid-column:1 / -1; }
-    .ho-modal { margin:12px 8px; }
-    .ho-itens, .ho-itens tbody { display:block; }
-    .ho-itens tr { display:grid; grid-template-columns:minmax(0,1fr) 120px 42px; gap:6px; padding:6px 0 8px; border-bottom:1px dashed #e3ece7; }
-    .ho-itens td { display:block; width:auto !important; padding:0; }
-    .ho-itens td:first-child { grid-column:1 / -1; }
+.ho-chip { border:1px solid #bfe3cd; background:#f0faf3; color:#0f3d2e; border-radius:999px; padding:5px 11px; font-size:12.5px; cursor:pointer; display:inline-flex; gap:6px; align-items:center; font:inherit; }
+.ho-chip:hover { background:#dcf3e4; } .ho-chip b { font-variant-numeric:tabular-nums; } .ho-chip span { color:#5f7f6e; font-size:11px; }
+.ho-cob { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:14px; }
+.ho-venc { display:flex; align-items:center; gap:10px; flex-wrap:wrap; } .ho-venc-outro { display:inline-flex; align-items:center; gap:6px; font-size:12.5px; color:#64748b; } .ho-venc-outro .ns-in { width:76px; text-align:center; }
+.ho-dec-rows > div { display:flex; gap:6px; margin-bottom:6px; } .ho-dec-rows .form-control { height:38px; border:1px solid #d7e3dc; border-radius:10px; padding:0 10px; font:inherit; }
+#ho-dec-rows .btn { height:38px; width:38px; border:1px solid #e2e8f0; background:#fff; border-radius:10px; color:#94a3b8; cursor:pointer; }
+.ho-res { margin:0; display:flex; flex-direction:column; gap:7px; } .ho-res > div { display:flex; gap:10px; align-items:baseline; font-size:13px; }
+.ho-res dt { flex:0 0 72px; font-size:11px; font-weight:800; letter-spacing:.05em; text-transform:uppercase; color:#94a3b8; } .ho-res dd { margin:0; color:#0f172a; min-width:0; } .ho-res dd b { color:#0f3d2e; }
+.ho-prox { background:linear-gradient(135deg,#f0fdf4,#fff 70%); border-color:#bbf7d0; }
+.ho-px-val { font-size:24px; font-weight:800; color:#0f3d2e; font-variant-numeric:tabular-nums; }
+.ho-px-l { font-size:12.5px; color:#334155; line-height:1.5; margin-top:4px; } .ho-px-l span { display:flex; justify-content:space-between; gap:8px; } .ho-px-l span.dec { color:#6d28d9; }
+.ho-px-obs { display:block; margin-top:8px; font-size:11px; color:#94a3b8; }
+.ho-enc { margin-top:14px; padding-top:12px; border-top:1px dashed #e2e8f0; }
+.ho-enc-box { margin-top:10px; display:flex; flex-direction:column; gap:10px; } .ho-enc-l { display:flex; align-items:flex-end; gap:8px; flex-wrap:wrap; }
+.ho-row-falta { border-color:#fca5a5 !important; box-shadow:0 0 0 3px #fee2e2; }
+.ho-num { color:#94a3b8; font-size:12px; font-variant-numeric:tabular-nums; }
+@media (max-width:980px) {
+  .ns { top:0; left:0; transform:none; width:100vw !important; max-height:100vh; height:100vh; border-radius:0; }
+  .ns-g { grid-template-columns:minmax(0,1fr); overflow-y:auto; } .ns-f, .ns-r { overflow:visible; } .ns-r { border-left:0; border-top:1px solid #e6eeea; }
+  .ns-ops, .ns-ops-4, .ns-ops-5, .ns-campos, .ho-cob { grid-template-columns:repeat(2, minmax(0,1fr)); } .ns-cab { flex-wrap:wrap; } .ns-prev { width:100%; text-align:left; order:3; }
+  .ns-pe { flex-wrap:wrap; } .ns-pe-info { width:100%; flex:none; } .ns-pe .ns-bt.prim { flex:1; justify-content:center; }
 }
+@media (max-width:560px) { .ns-ops-2, .ns-ops-4, .ns-ops-5, .ns-campos, .ho-cob { grid-template-columns:minmax(0,1fr); } }
+@media (max-width:640px) {   /* discriminações no celular: descrição em cima, serviço + valor + tirar embaixo */
+  .ho-itens, .ho-itens tbody { display:block; } .ho-itens tr { display:grid; grid-template-columns:minmax(0,1fr) 118px 40px; gap:6px; padding:6px 0 8px; border-bottom:1px dashed #e3ece7; }
+  .ho-itens td { display:block; width:auto !important; padding:0; } .ho-itens td:first-child { grid-column:1 / -1; }
+  .ho-itens-pe { flex-wrap:wrap; } .ho-venc { gap:8px; } }
+.modal-body .form-group { margin-bottom:0; }
+@media (max-width:640px) { .ho-busca { margin-left:0; width:100%; } .ho-busca input { width:100%; } }
 </style>
 {% endblock %}
 
@@ -224,145 +245,161 @@
 </div>
 
 <!-- Novo / editar contrato -->
-<div id="hoModal" class="modal" style="display:none;">
-    <div class="modal-content ho-modal">
-        <div class="ho-mhead">
-            <span class="ho-mico"><i class="fas fa-file-signature"></i></span>
-            <div>
-                <h3 id="ho-titulo">Contrato de honorários</h3>
-                <p id="ho-sub">escolha a empresa</p>
+{# 18/11/2026 — Anderson: "Bora repaginar 100000000%". Janela do contrato no molde das caixas do Financeiro (ns-*, a
+   mesma de Lançamentos › Nova solicitação): cabeçalho verde com o valor ao vivo, blocos à esquerda com opções em
+   cartões (sem selects escondidos), resumo e próxima cobrança à direita, Encerrar contrato dentro da janela.
+   Os nomes dos campos e as funções (hoNovo/hoEditar/hoAddItem…) são os mesmos: a rota de salvar não mudou. #}
+<div id="hoModal" class="ns-fundo" style="display:none;">
+  <div class="ns ho" role="dialog" aria-modal="true" aria-labelledby="ho-titulo">
+    <header class="ns-cab">
+      <span class="ns-ico"><i class="fas fa-file-signature"></i></span>
+      <div class="ns-tit"><b id="ho-titulo">Contrato de honorários</b><span id="ho-sub">escolha a empresa</span></div>
+      <div class="ns-prev"><small>Mensal</small><b id="ho-prev">R$ 0,00</b><span id="ho-prev-sub">—</span></div>
+      <button type="button" class="ns-x" onclick="hoFechar()" aria-label="Fechar"><i class="fas fa-xmark"></i></button>
+    </header>
+    <form id="ho-form" method="POST" action="{{ acao_form or url_for('financeiro.honorarios_salvar') }}" novalidate style="display:contents">
+      <input type="hidden" name="contrato_id" id="ho-id">
+      <input type="hidden" name="cliente_id" id="ho-cliente-id">
+      <input type="hidden" name="aba" value="{{ aba }}">
+      <div class="ns-g">
+        <div class="ns-f">
+
+          <section class="ns-b" id="ho-row-cli">
+            <div class="ns-h"><i class="fas fa-building"></i> Empresa <em>quem paga</em></div>
+            <div id="ho-cli-busca" style="position:relative;">
+              <input type="text" id="ho-cli-q" class="ns-in" placeholder="digite o nome, o número ou o CNPJ" autocomplete="off">
+              <div id="ho-sug" class="ho-sug" style="display:none;"></div>
             </div>
-            <button type="button" class="modal-close" onclick="hoFechar()" aria-label="Fechar">&times;</button>
+            <div id="ho-cli" class="ho-cli" style="display:none;">
+              <span class="ho-cli-av" id="ho-cli-av"></span>
+              <div class="ho-cli-tx"><b id="ho-cli-nome"></b><small id="ho-cli-num"></small></div>
+              <button type="button" class="ns-bt mini" id="ho-cli-trocar" onclick="hoTrocarCliente()"><i class="fas fa-rotate"></i> Trocar</button>
+            </div>
+            <div class="ho-grupo-l">
+              <label class="ns-campo" style="flex:1; min-width:200px;"><span class="ho-lbl">Grupo <small>é o do cadastro: trocar aqui troca lá</small></span>
+                <select name="grupo_id" id="ho-grupo" class="ns-in"><option value="">— sem grupo —</option>{% for g in grupos %}<option value="{{ g.id }}">{{ g.nome }}</option>{% endfor %}</select></label>
+            </div>
+            <div class="ns-aviso" id="ho-grupo-aviso" style="display:none; margin-top:8px;"></div>
+          </section>
+
+          <section class="ns-b" id="ho-row-itens">
+            <div class="ns-h"><i class="fas fa-list-ul"></i> O que está contratado <em>a soma é o valor mensal</em></div>
+            <div id="ho-rede" class="ho-rede" style="display:none;"></div>
+            <div id="ho-chips" class="ho-chips"></div>
+            <table class="ho-itens" id="ho-itens"><tbody></tbody></table>
+            <div class="ho-itens-pe">
+              <button type="button" class="ns-bt mini" onclick="hoAddItem()"><i class="fas fa-plus"></i> Outra discriminação</button>
+              <div class="ho-soma">Total mensal <b id="ho-total">R$ 0,00</b></div>
+            </div>
+          </section>
+
+          <section class="ns-b">
+            <div class="ns-h"><i class="fas fa-file-invoice-dollar"></i> Cobrança de cada mês</div>
+            <div class="ho-cob">
+              <div class="ns-campo"><span class="ho-lbl">Vencimento <small>no mês seguinte à competência</small></span>
+                <div class="ho-venc"><span class="ns-seg" id="ho-dias">{% for d in (5, 10, 15, 20, 25) %}<button type="button" data-d="{{ d }}" onclick="hoDia({{ d }})">dia {{ d }}</button>{% endfor %}</span>
+                  <span class="ho-venc-outro">outro <input type="number" name="dia_vencimento" id="ho-dia" class="ns-in" min="1" max="31" required></span></div></div>
+              <div class="ns-campo"><span class="ho-lbl">Emite</span>
+                <div class="ns-ops ns-ops-2" id="ho-emite">
+                  <button type="button" class="ns-op" data-nf="1" onclick="hoEmite(1)"><i class="fas fa-file-invoice"></i><b>Nota + boleto</b><small>NFS-e todo mês, com o boleto</small></button>
+                  <button type="button" class="ns-op" data-nf="0" onclick="hoEmite(0)"><i class="fas fa-barcode"></i><b>Só boleto</b><small>sem nota fiscal</small></button>
+                </div>
+                <span style="display:none"><input type="checkbox" name="gerar_nfse" id="ho-nfse" checked><input type="checkbox" name="gerar_boleto" id="ho-boleto" checked></span></div>
+            </div>
+          </section>
+
+          <section class="ns-b">
+            <div class="ns-h"><i class="fas fa-gift"></i> 13º honorário <em>"Sem 13º" também cancela o de quem negociou</em></div>
+            <div class="ns-ops ns-ops-4" id="ho-dec-ops">
+              <button type="button" class="ns-op" data-v="NENHUM" onclick="hoDecTipo('NENHUM')"><i class="fas fa-ban"></i><b>Sem 13º</b><small>não cobra ou foi cancelado</small></button>
+              <button type="button" class="ns-op" data-v="UNICA" onclick="hoDecTipo('UNICA')"><i class="fas fa-1"></i><b>Parcela única</b><small>vence em dezembro</small></button>
+              <button type="button" class="ns-op" data-v="DUAS" onclick="hoDecTipo('DUAS')"><i class="fas fa-2"></i><b>Duas parcelas</b><small>vencem em novembro e dezembro</small></button>
+              <button type="button" class="ns-op" data-v="PERSONALIZADO" onclick="hoDecTipo('PERSONALIZADO')"><i class="fas fa-sliders"></i><b>Personalizado</b><small>frações por competência</small></button>
+            </div>
+            <span style="display:none"><select name="decimo_tipo" id="ho-decimo" onchange="hoDecimo()">{% for k, v in DECIMO_TIPOS.items() %}<option value="{{ k }}">{{ v }}</option>{% endfor %}</select>
+              <select name="decimo_inicio" id="ho-dec-inicio" onchange="hoDecimo()">{% for k, v in DECIMO_INICIOS.items() %}<option value="{{ k }}">{{ v }}</option>{% endfor %}</select></span>
+            <div class="ho-dec-on" style="margin-top:12px;">
+              <span class="ho-lbl">Começa a cobrar</span>
+              <span class="ns-seg" id="ho-dec-ini-seg">{% for k, v in DECIMO_INICIOS.items() %}<button type="button" data-v="{{ k }}" onclick="hoDecIni('{{ k }}')">{{ v }}</button>{% endfor %}</span>
+            </div>
+            <div class="ho-dec-on" id="ho-dec-desde-box" style="margin-top:10px;">
+              <span class="ho-lbl">Na casa desde <small>base do proporcional: entrou em maio = 8/12</small></span>
+              <input type="date" name="decimo_desde" id="ho-dec-desde" class="ns-in" style="width:190px;">
+            </div>
+            <div class="ho-dec" id="ho-dec-box" style="margin-top:10px;">
+              <span class="ho-lbl">Frações <small>competência · % do 13º</small></span>
+              <div id="ho-dec-rows"></div>
+              <button type="button" class="ns-bt mini" onclick="hoAddDec()"><i class="fas fa-plus"></i> fração</button>
+            </div>
+          </section>
+
+          <section class="ns-b">
+            <div class="ns-h"><i class="fas fa-arrow-trend-up"></i> Reajuste <em>salário mínimo: em branco = 1º janeiro após 12 meses</em></div>
+            <div class="ns-ops ns-ops-5" id="ho-reaj-ops">
+              <button type="button" class="ns-op" data-v="SALARIO_MINIMO" onclick="hoReaj('SALARIO_MINIMO')"><i class="fas fa-calendar-day"></i><b>Salário mínimo</b><small>todo janeiro</small></button>
+              <button type="button" class="ns-op" data-v="INDICE" onclick="hoReaj('INDICE')"><i class="fas fa-percent"></i><b>Índice próprio</b><small>INPC, IGPM…</small></button>
+              <button type="button" class="ns-op" data-v="DATA_PROPRIA" onclick="hoReaj('DATA_PROPRIA')"><i class="fas fa-calendar-check"></i><b>Data própria</b><small>fora de janeiro</small></button>
+              <button type="button" class="ns-op" data-v="ESCALONADO" onclick="hoReaj('ESCALONADO')"><i class="fas fa-stairs"></i><b>Escalonado</b><small>degraus combinados</small></button>
+              <button type="button" class="ns-op" data-v="SEM" onclick="hoReaj('SEM')"><i class="fas fa-pause"></i><b>Sem / adiado</b><small>reajusta quando der</small></button>
+            </div>
+            <span style="display:none"><select name="reajuste_tipo" id="ho-reajuste">{% for k, v in REAJUSTE_TIPOS.items() %}<option value="{{ k }}">{{ v }}</option>{% endfor %}</select></span>
+            <div class="ns-campos" style="margin-top:12px;">
+              <label class="ns-campo"><span class="ho-lbl">Próximo em</span><input type="date" name="proximo_reajuste" id="ho-prox" class="ns-in"></label>
+              <label class="ns-campo"><span class="ho-lbl">Índice, degraus, motivo</span><input type="text" name="reajuste_obs" id="ho-reaj-obs" class="ns-in" placeholder="ex.: INPC · 3.000 → 5.000 em mar/27"></label>
+            </div>
+          </section>
+
+          <section class="ns-b" id="ho-row-vig">
+            <div class="ns-h"><i class="fas fa-hourglass-half"></i> Vigência</div>
+            <div class="ns-campos">
+              <label class="ns-campo"><span class="ho-lbl">Início</span><input type="date" name="inicio" id="ho-inicio" class="ns-in" required></label>
+              <label class="ns-campo"><span class="ho-lbl">Fim <small>em branco = sem fim</small></span><input type="date" name="fim" id="ho-fim" class="ns-in"></label>
+            </div>
+            {% if modo != 'admin' %}
+            <label class="ns-campo" style="margin-top:12px; display:block;"><span class="ho-lbl">Recado <small>para quem aprova</small></span><input type="text" name="observacao" class="ns-in" placeholder="ex.: combinado com o cliente em reunião de 05/11"></label>
+            {% endif %}
+            {% if modo == 'admin' %}
+            <div class="ho-enc" id="ho-enc" style="display:none;">
+              <button type="button" class="ns-bt canc" id="ho-enc-bt" onclick="hoEncAbrir()"><i class="fas fa-ban"></i> Encerrar contrato</button>
+              <div class="ho-enc-box" id="ho-enc-box" style="display:none;">
+                <div class="ns-aviso red"><i class="fas fa-triangle-exclamation"></i><span>A empresa sai do lote a partir da competência seguinte à data do fim, e o 13º sai proporcional aos meses de casa. Empresa que fechou em outubro: fim 31/10.</span></div>
+                <div class="ho-enc-l"><span class="ho-lbl">Último dia como cliente</span><input type="date" id="ho-enc-data" class="ns-in" style="width:190px;">
+                  <button type="button" class="ns-bt" onclick="hoEncFechar()">Voltar</button>
+                  <button type="button" class="ns-bt red" onclick="hoEncConfirmar()"><i class="fas fa-ban"></i> Confirmar encerramento</button></div>
+              </div>
+            </div>
+            {% endif %}
+          </section>
         </div>
-        <form id="ho-form" method="POST" action="{{ acao_form or url_for('financeiro.honorarios_salvar') }}" novalidate>
-            <input type="hidden" name="contrato_id" id="ho-id">
-            <input type="hidden" name="cliente_id" id="ho-cliente-id">
-            <input type="hidden" name="aba" value="{{ aba }}">
-            <div class="ho-mbody">
-                <div class="ho-row" id="ho-row-cli">
-                    <span class="ho-rico"><i class="fas fa-building"></i></span>
-                    <label class="ho-rlbl">Empresa<small id="ho-cli-small">quem paga</small></label>
-                    <div class="ho-rval">
-                        <div id="ho-cli-busca" style="position:relative;">
-                            <input type="text" id="ho-cli-q" class="form-control" placeholder="digite o nome, o número ou o CNPJ" autocomplete="off">
-                            <div id="ho-sug" class="ho-sug" style="display:none;"></div>
-                        </div>
-                        <div id="ho-cli" class="ho-cli" style="display:none;">
-                            <span id="ho-cli-nome"></span><span class="ho-num" id="ho-cli-num"></span>
-                            <button type="button" class="btn btn-outline btn-sm" id="ho-cli-trocar" onclick="hoTrocarCliente()">Trocar</button>
-                        </div>
-                    </div>
-                </div>
 
-                <div class="ho-row ho-row-top" id="ho-row-itens">
-                    <span class="ho-rico"><i class="fas fa-list-ul"></i></span>
-                    <label class="ho-rlbl">Discriminações<small>a soma é o valor mensal</small></label>
-                    <div class="ho-rval">
-                        <div id="ho-rede" class="ho-rede" style="display:none;"></div>
-                        <div id="ho-chips" class="ho-chips"></div>
-                        <table class="ho-itens" id="ho-itens"><tbody></tbody></table>
-                        <div style="display:flex; align-items:center; gap:10px; margin-top:4px;">
-                            <button type="button" class="btn btn-outline btn-sm" onclick="hoAddItem()"><i class="fas fa-plus"></i> Outra discriminação</button>
-                            <div class="ho-soma" style="margin-left:auto;">Total mensal: <span id="ho-total">R$ 0,00</span></div>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="ho-row">
-                    <span class="ho-rico"><i class="fas fa-calendar-check"></i></span>
-                    <label class="ho-rlbl">Vencimento<small>do mês seguinte à competência</small></label>
-                    <div class="ho-rval ho-inl">dia <input type="number" name="dia_vencimento" id="ho-dia" class="form-control ho-w90" min="1" max="31" required> de cada mês</div>
-                </div>
-
-                <div class="ho-row">
-                    <span class="ho-rico"><i class="fas fa-hourglass-half"></i></span>
-                    <label class="ho-rlbl">Vigência<small>início e, se houver, fim</small></label>
-                    <div class="ho-rval ho-inl"><input type="date" name="inicio" id="ho-inicio" class="form-control ho-w170" required> até <input type="date" name="fim" id="ho-fim" class="form-control ho-w170"></div>
-                </div>
-
-                <div class="ho-row">
-                    <span class="ho-rico"><i class="fas fa-layer-group"></i></span>
-                    <label class="ho-rlbl">Grupo<small>é o do cadastro: trocar aqui troca lá</small></label>
-                    <div class="ho-rval">
-                        <span class="ho-sel">
-                            <select name="grupo_id" id="ho-grupo">
-                                <option value="">— sem grupo —</option>
-                                {% for g in grupos %}<option value="{{ g.id }}">{{ g.nome }}</option>{% endfor %}
-                            </select>
-                            <i class="fas fa-chevron-down ho-chev"></i>
-                        </span>
-                        <div class="ho-aviso" id="ho-grupo-aviso"></div>
-                    </div>
-                </div>
-
-                <div class="ho-row">
-                    <span class="ho-rico"><i class="fas fa-file-invoice-dollar"></i></span>
-                    <label class="ho-rlbl">Emite<small>na cobrança de cada mês</small></label>
-                    <div class="ho-rval ho-chk">
-                        <label><input type="checkbox" name="gerar_nfse" id="ho-nfse" checked> Nota fiscal</label>
-                        <label><input type="checkbox" name="gerar_boleto" id="ho-boleto" checked> Boleto</label>
-                    </div>
-                </div>
-
-                <div class="ho-row ho-row-top">
-                    <span class="ho-rico"><i class="fas fa-gift"></i></span>
-                    <label class="ho-rlbl">13º honorário<small>"Sem 13º" também cancela o de quem negociou</small></label>
-                    <div class="ho-rval">
-                        <span class="ho-sel">
-                            <select name="decimo_tipo" id="ho-decimo" onchange="hoDecimo()">
-                                {% for k, v in DECIMO_TIPOS.items() %}<option value="{{ k }}">{{ v }}</option>{% endfor %}
-                            </select>
-                            <i class="fas fa-chevron-down ho-chev"></i>
-                        </span>
-                        <div class="ho-dec-on">
-                            <div class="ho-lbl2">Começa a cobrar</div>
-                            <span class="ho-sel">
-                                <select name="decimo_inicio" id="ho-dec-inicio" onchange="hoDecimo()">
-                                    {% for k, v in DECIMO_INICIOS.items() %}<option value="{{ k }}">{{ v }}</option>{% endfor %}
-                                </select>
-                                <i class="fas fa-chevron-down ho-chev"></i>
-                            </span>
-                        </div>
-                        <div class="ho-dec-on" id="ho-dec-desde-box">
-                            <div class="ho-lbl2">Na casa desde <span class="ho-num">(base do proporcional: entrou em maio = 8/12)</span></div>
-                            <input type="date" name="decimo_desde" id="ho-dec-desde" class="form-control ho-w170">
-                        </div>
-                        <div class="ho-dec" id="ho-dec-box">
-                            <div class="ho-lbl2">Frações (competência · %)</div>
-                            <div id="ho-dec-rows"></div>
-                            <button type="button" class="btn btn-outline btn-sm" onclick="hoAddDec()"><i class="fas fa-plus"></i> fração</button>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="ho-row ho-row-top">
-                    <span class="ho-rico"><i class="fas fa-arrow-trend-up"></i></span>
-                    <label class="ho-rlbl">Reajuste<small>salário mínimo: em branco = 1º janeiro após 12 meses</small></label>
-                    <div class="ho-rval">
-                        <span class="ho-sel">
-                            <select name="reajuste_tipo" id="ho-reajuste">
-                                {% for k, v in REAJUSTE_TIPOS.items() %}<option value="{{ k }}">{{ v }}</option>{% endfor %}
-                            </select>
-                            <i class="fas fa-chevron-down ho-chev"></i>
-                        </span>
-                        <div class="ho-inl" style="margin-top:8px;">próximo em <input type="date" name="proximo_reajuste" id="ho-prox" class="form-control ho-w170"><input type="text" name="reajuste_obs" id="ho-reaj-obs" class="form-control" style="flex:1; min-width:160px;" placeholder="índice, degraus, motivo"></div>
-                    </div>
-                </div>
-                {% if modo != 'admin' %}
-                <div class="ho-row">
-                    <span class="ho-rico"><i class="fas fa-comment-dots"></i></span>
-                    <label class="ho-rlbl">Recado<small>para quem aprova</small></label>
-                    <div class="ho-rval"><input type="text" name="observacao" class="form-control" placeholder="ex.: combinado com o cliente em reunião de 05/11"></div>
-                </div>
-                {% endif %}
-            </div>
-            <div class="ho-mfoot">
-                <span class="ho-mnote" id="ho-nota"></span>
-                <button type="button" class="btn btn-secondary" onclick="hoFechar()">Cancelar</button>
-                <button type="submit" class="btn btn-primary"><i class="fas fa-check"></i> Salvar</button>
-            </div>
-        </form>
-    </div>
+        <aside class="ns-r">
+          <div class="ns-b">
+            <div class="ns-h"><i class="fas fa-receipt"></i> Resumo</div>
+            <dl class="ho-res">
+              <div><dt>Mensal</dt><dd id="ho-r-mensal">—</dd></div>
+              <div><dt>Vence</dt><dd id="ho-r-venc">—</dd></div>
+              <div><dt>Emite</dt><dd id="ho-r-emite">—</dd></div>
+              <div><dt>13º</dt><dd id="ho-r-dec">—</dd></div>
+              <div><dt>Reajuste</dt><dd id="ho-r-reaj">—</dd></div>
+              <div><dt>Vigência</dt><dd id="ho-r-vig">—</dd></div>
+            </dl>
+          </div>
+          <div class="ns-b ho-prox">
+            <div class="ns-h"><i class="fas fa-paper-plane"></i> Próxima cobrança <em id="ho-px-comp"></em></div>
+            <div class="ho-px-val" id="ho-px-val">—</div>
+            <div class="ho-px-l" id="ho-px-lin"></div>
+            <small class="ho-px-obs">previsão pelo contrato; o lote do mês é quem emite</small>
+          </div>
+          <div class="ns-aviso" id="ho-nota"></div>
+        </aside>
+      </div>
+      <footer class="ns-pe">
+        <div class="ns-pe-info" id="ho-pe-info"></div>
+        <button type="button" class="ns-bt" onclick="hoFechar()">Cancelar</button>
+        <button type="submit" class="ns-bt prim"><i class="fas fa-check"></i> Salvar</button>
+      </footer>
+    </form>
+  </div>
 </div>
 
 <form id="ho-form-encerrar" method="POST" style="display:none;"><input type="hidden" name="fim" id="ho-enc-fim"></form>
@@ -393,6 +430,64 @@ var HO_SERVICOS = {{ servicos | tojson }};
 var HO_SERV_HON = {{ SERVICO_HONORARIOS }};
 function brl(v) { return 'R$ ' + (v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
 function hoNum(s) { s = String(s || '').trim(); if (!s) return 0; if (s.indexOf(',') >= 0) s = s.replace(/\./g, '').replace(',', '.'); return parseFloat(s) || 0; }
+// ---- 18/11/2026 (repaginação): cartões de opção ligados aos campos de sempre, resumo à direita, encerrar dentro da janela ----
+var HO_MES = {{ hoje.month }};
+var HO_MESES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
+var HO_REAJ_ROT = {{ REAJUSTE_TIPOS | tojson }}, HO_DEC_ROT = {{ DECIMO_TIPOS | tojson }};
+function hoMarca(sel, v) { document.querySelectorAll(sel).forEach(function (b) { b.classList.toggle('on', String(b.dataset.v !== undefined ? b.dataset.v : (b.dataset.d !== undefined ? b.dataset.d : b.dataset.nf)) === String(v)); }); }
+function hoDia(d) { document.getElementById('ho-dia').value = d; hoSync(); hoResumo(); }
+function hoEmite(nf) { document.getElementById('ho-nfse').checked = !!nf; document.getElementById('ho-boleto').checked = true; hoSync(); hoResumo(); }
+function hoDecTipo(v) { document.getElementById('ho-decimo').value = v; hoDecimo(); hoResumo(); }
+function hoDecIni(v) { document.getElementById('ho-dec-inicio').value = v; hoDecimo(); hoResumo(); }
+function hoReaj(v) { document.getElementById('ho-reajuste').value = v; hoSync(); hoResumo(); }
+function hoSync() {
+    hoMarca('#ho-dias button', document.getElementById('ho-dia').value);
+    hoMarca('#ho-emite .ns-op', document.getElementById('ho-nfse').checked ? 1 : 0);
+    hoMarca('#ho-dec-ops .ns-op', document.getElementById('ho-decimo').value);
+    hoMarca('#ho-dec-ini-seg button', document.getElementById('ho-dec-inicio').value);
+    hoMarca('#ho-reaj-ops .ns-op', document.getElementById('ho-reajuste').value);
+}
+function hoIniciais(nome) { var p = String(nome || '').trim().split(/\s+/); return ((p[0] || '')[0] || '') + ((p.length > 1 ? p[p.length - 1] : '')[0] || ''); }
+function hoDataBr(s) { if (!s) return ''; var p = s.split('-'); return p.length === 3 ? p[2] + '/' + p[1] + '/' + p[0] : s; }
+function hoProxima(t, tipo, modo, ini, desde) {
+    // previsão da cobrança da competência atual: mensal + a parcela do 13º que cai nela
+    var comp = { m: HO_MES, y: HO_ANO }, vencM = comp.m === 12 ? 1 : comp.m + 1, vencY = comp.m === 12 ? comp.y + 1 : comp.y;
+    var dia = parseInt(document.getElementById('ho-dia').value, 10) || 10;
+    var base = ini || { y: HO_ANO, m: 1 };
+    if (modo === 'INTEIRO') base = { y: base.y, m: 1 }; else if (modo === 'PROXIMO') base = { y: base.y + 1, m: 1 }; else if (modo === 'DATA' && desde) base = desde;
+    var meses = base.y > HO_ANO ? 0 : (base.y < HO_ANO ? 12 : 13 - base.m), dec = 0;
+    if (tipo === 'UNICA' && comp.m === 11) dec = t * meses / 12;
+    else if (tipo === 'DUAS' && (comp.m === 10 || comp.m === 11)) dec = t * meses / 12 / 2;
+    else if (tipo === 'PERSONALIZADO') { document.querySelectorAll('#ho-dec-rows > div').forEach(function (r) { var m = parseInt(r.querySelector('[name=dec_mes]').value, 10), p = parseFloat(r.querySelector('[name=dec_pct]').value) || 0; if (m === comp.m) dec += t * meses / 12 * p / 100; }); }
+    return { comp: comp, venc: (dia < 10 ? '0' + dia : dia) + '/' + (vencM < 10 ? '0' + vencM : vencM) + '/' + vencY, dec: dec, total: t + dec };
+}
+function hoResumoLado(t) {
+    var $ = function (i) { return document.getElementById(i); };
+    var tipo = $('ho-decimo').value, modo = $('ho-dec-inicio').value, ini = hoData($('ho-inicio').value), desde = hoData($('ho-dec-desde').value);
+    var rt = $('ho-reajuste').value, prox = $('ho-prox').value, fim = $('ho-fim').value, dia = $('ho-dia').value, nf = $('ho-nfse').checked;
+    $('ho-prev').textContent = brl(t); $('ho-prev-sub').textContent = (nf ? 'nota + boleto' : 'só boleto') + (dia ? ' · vence dia ' + dia : '');
+    $('ho-r-mensal').innerHTML = '<b>' + brl(t) + '</b>' + (document.querySelectorAll('#ho-itens tbody tr').length > 1 ? ' em ' + document.querySelectorAll('#ho-itens tbody tr').length + ' discriminações' : '');
+    $('ho-r-venc').textContent = dia ? 'dia ' + dia + ' do mês seguinte' : '—';
+    $('ho-r-emite').textContent = nf ? 'nota fiscal + boleto' : 'só boleto';
+    var decTxt = HO_DEC_ROT[tipo] || tipo; if (tipo !== 'NENHUM') { var r = hoProxima(t, tipo, modo, ini, desde); decTxt = decTxt.split(' (')[0]; }
+    $('ho-r-dec').textContent = decTxt;
+    var rj = HO_REAJ_ROT[rt] || rt; if (prox) rj += ' · próximo ' + hoDataBr(prox); $('ho-r-reaj').textContent = rj;
+    $('ho-r-vig').textContent = ($('ho-inicio').value ? 'desde ' + hoDataBr($('ho-inicio').value) : '—') + (fim ? ' até ' + hoDataBr(fim) : '');
+    var px = hoProxima(t, tipo, modo, ini, desde);
+    $('ho-px-comp').textContent = (px.comp.m < 10 ? '0' + px.comp.m : px.comp.m) + '/' + px.comp.y + ' · vence ' + px.venc;
+    $('ho-px-val').textContent = brl(px.total);
+    var linhas = []; document.querySelectorAll('#ho-itens tbody tr').forEach(function (tr) { var d = tr.querySelector('[name=item_desc]').value || 'Honorários', v = hoNum(tr.querySelector('[name=item_valor]').value); if (v) linhas.push('<span><i>' + d + '</i><b>' + brl(v) + '</b></span>'); });
+    if (px.dec) linhas.push('<span class="dec"><i>13º honorário (' + (tipo === 'DUAS' ? 'parcela' : 'parcela única') + ')</i><b>' + brl(px.dec) + '</b></span>');
+    $('ho-px-lin').innerHTML = linhas.join('');
+    var enc = document.getElementById('ho-enc'); if (enc) enc.style.display = $('ho-id').value ? 'block' : 'none';
+}
+function hoEncAbrir() { document.getElementById('ho-enc-box').style.display = 'flex'; document.getElementById('ho-enc-bt').style.display = 'none'; var d = document.getElementById('ho-enc-data'); if (!d.value) d.value = '{{ hoje.isoformat() }}'; d.focus(); }
+function hoEncFechar() { document.getElementById('ho-enc-box').style.display = 'none'; document.getElementById('ho-enc-bt').style.display = 'inline-flex'; }
+function hoEncConfirmar() {
+    var fim = document.getElementById('ho-enc-data').value, cid = document.getElementById('ho-id').value; if (!fim || !cid) return;
+    var f = document.getElementById('ho-form-encerrar'); f.action = '/financeiro/honorarios/' + cid + '/encerrar';
+    document.getElementById('ho-enc-fim').value = fim; f.submit();
+}
 function hoSoma() {
     var t = 0; document.querySelectorAll('#ho-itens input[name=item_valor]').forEach(function (i) { t += hoNum(i.value); });
     document.getElementById('ho-total').textContent = brl(t);
@@ -423,6 +518,7 @@ function hoDecimo() {
     document.getElementById('ho-dec-box').style.display = tipo === 'PERSONALIZADO' ? 'block' : 'none';
     document.querySelectorAll('.ho-dec-on').forEach(function (e) { e.style.display = tipo === 'NENHUM' ? 'none' : 'block'; });
     document.getElementById('ho-dec-desde-box').style.display = (tipo !== 'NENHUM' && ini === 'DATA') ? 'block' : 'none';
+    hoSync();
 }
 function hoLimpar() {
     ['ho-id', 'ho-cliente-id', 'ho-cli-q', 'ho-fim', 'ho-prox', 'ho-reaj-obs', 'ho-dec-desde', 'ho-grupo'].forEach(function (i) { document.getElementById(i).value = ''; });
@@ -432,11 +528,13 @@ function hoLimpar() {
     document.getElementById('ho-decimo').value = 'NENHUM'; document.getElementById('ho-dec-inicio').value = 'PROPORCIONAL'; document.getElementById('ho-reajuste').value = 'SALARIO_MINIMO';
     document.getElementById('ho-nfse').checked = true; document.getElementById('ho-boleto').checked = true;
     document.querySelectorAll('.ho-row-falta').forEach(function (r) { r.classList.remove('ho-row-falta'); });
+    if (document.getElementById('ho-enc-box')) hoEncFechar();
     hoDecimo(); hoResumo();
 }
 function hoSetCliente(id, nome, numero) {
     document.getElementById('ho-cliente-id').value = id || '';
     document.getElementById('ho-cli-nome').textContent = nome || ''; document.getElementById('ho-cli-num').textContent = numero ? 'nº ' + numero : '';
+    document.getElementById('ho-cli-av').textContent = hoIniciais(nome);
     document.getElementById('ho-sub').textContent = id ? ((numero ? numero + ' · ' : '') + nome) : 'escolha a empresa';
     document.getElementById('ho-cli').style.display = id ? 'flex' : 'none'; document.getElementById('ho-cli-busca').style.display = id ? 'none' : 'block';
     document.getElementById('ho-row-cli').classList.remove('ho-row-falta');
@@ -484,8 +582,9 @@ function hoData(s) { if (!s) return null; var p = s.split('-'); return p.length 
 function hoResumo() {
     var t = 0; document.querySelectorAll('#ho-itens input[name=item_valor]').forEach(function (i) { t += hoNum(i.value); });
     var nota = document.getElementById('ho-nota'), partes = [];
-    if (!document.getElementById('ho-cliente-id').value) { nota.className = 'ho-mnote ho-mnote-erro'; nota.innerHTML = '<i class="fas fa-circle-exclamation"></i> Falta escolher a empresa'; return; }
-    if (!(t > 0)) { nota.className = 'ho-mnote ho-mnote-erro'; nota.innerHTML = '<i class="fas fa-circle-exclamation"></i> Falta o valor dos honorários'; return; }
+    hoSync(); hoResumoLado(t);
+    if (!document.getElementById('ho-cliente-id').value) { nota.className = 'ns-aviso red'; nota.innerHTML = '<i class="fas fa-circle-exclamation"></i> Falta escolher a empresa'; return; }
+    if (!(t > 0)) { nota.className = 'ns-aviso red'; nota.innerHTML = '<i class="fas fa-circle-exclamation"></i> Falta o valor dos honorários'; return; }
     partes.push('Mensal ' + brl(t));
     var tipo = document.getElementById('ho-decimo').value, modo = document.getElementById('ho-dec-inicio').value;
     var ini = hoData(document.getElementById('ho-inicio').value), desde = hoData(document.getElementById('ho-dec-desde').value);
@@ -499,7 +598,7 @@ function hoResumo() {
     var rt = document.getElementById('ho-reajuste').value, prox = hoData(document.getElementById('ho-prox').value);
     if (prox) partes.push('reajuste ' + ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'][prox.m - 1] + '/' + prox.y);
     else if (rt === 'SALARIO_MINIMO' && ini) partes.push('reajuste jan/' + (ini.m === 1 ? ini.y + 1 : ini.y + 2));
-    nota.className = 'ho-mnote'; nota.innerHTML = '<i class="fas fa-circle-check"></i> ' + partes.join(' · ');
+    nota.className = 'ns-aviso ok'; nota.innerHTML = '<i class="fas fa-circle-check"></i> ' + partes.join(' · ');
 }
 document.getElementById('ho-form').addEventListener('input', hoResumo);
 document.getElementById('ho-form').addEventListener('change', hoResumo);
@@ -528,14 +627,12 @@ function hoEditar(cid) {
         document.getElementById('ho-prox').value = c.proximo_reajuste || ''; document.getElementById('ho-reaj-obs').value = c.reajuste_obs || '';
         document.getElementById('ho-nfse').checked = !!Number(c.gerar_nfse); document.getElementById('ho-boleto').checked = !!Number(c.gerar_boleto);
         hoDecimo(); hoResumo(); document.getElementById('hoModal').style.display = 'block';
+        if (window.HO_ENC_AO_ABRIR) { window.HO_ENC_AO_ABRIR = false; if (document.getElementById('ho-enc-bt')) hoEncAbrir(); }
     });
 }
 function hoFechar() { document.getElementById('hoModal').style.display = 'none'; }
-function hoEncerrar(cid, nome) {
-    var fim = prompt('Encerrar o contrato de ' + nome + '.\nData do fim (AAAA-MM-DD):', '{{ hoje.isoformat() }}');
-    if (!fim) return;
-    var f = document.getElementById('ho-form-encerrar'); f.action = '/financeiro/honorarios/' + cid + '/encerrar';
-    document.getElementById('ho-enc-fim').value = fim; f.submit();
+function hoEncerrar(cid, nome) {   // 18/11/2026: abre o contrato com a caixa de encerrar à mostra (sem prompt do navegador)
+    window.HO_ENC_AO_ABRIR = true; hoEditar(cid);
 }
 function hoConvite(id, nome) { document.getElementById('hc-cliente').value = id; document.getElementById('hc-nome').textContent = nome; document.getElementById('hoConviteModal').style.display = 'block'; }
 function hoReprovar(cid, nome) {
