@@ -6,7 +6,7 @@
         </div>
         <dl class="nd-kv">
             <div><dt>Vencimento</dt><dd>{{ boleto.vencimento.strftime('%d/%m/%Y') }}</dd></div>
-            <div><dt>Nº na Efí</dt><dd>{{ boleto.charge_id or '—' }}</dd></div>
+            <div><dt>Nº no banco</dt><dd>{{ numero_boleto(boleto) if boleto.charge_id else '—' }}</dd></div>
             {% if boleto.pago_em %}<div class="nd-span"><dt>Pago em</dt><dd>{{ boleto.pago_em.strftime('%d/%m/%Y') }} · {{ boleto.valor_pago | float | format_currency }}</dd></div>{% endif %}
             {% if boleto.linha_digitavel %}<div class="nd-span"><dt>Linha digitável</dt><dd><code class="nd-mono" data-copiar data-copiar-rotulo="Linha digitável" title="Clique para copiar">{{ boleto.linha_digitavel }}</code></dd></div>{% endif %}
             {% if boleto.pix_copia_cola %}<div class="nd-span"><dt>Pix copia e cola</dt><dd><code class="nd-mono" data-copiar data-copiar-rotulo="Pix" title="Clique para copiar">{{ boleto.pix_copia_cola }}</code></dd></div>{% endif %}

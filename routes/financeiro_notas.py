@@ -60,6 +60,7 @@ def notas():
 
 def _cartao_do_boleto(b):
     """Boleto SEM nota como cartão da tela Cobranças (mesmos campos que o cartão da nota usa)."""
+    from models.fin_cobranca import FinBoleto
     itens = b.get('itens_json') or []
     if isinstance(itens, str):
         try:
@@ -76,7 +77,7 @@ def _cartao_do_boleto(b):
         'boleto_pago_em': b.get('pago_em'), 'boleto_valor_pago': b.get('valor_pago'), 'boleto_ambiente': b['ambiente'],
         'email_enviado_em': b.get('email_enviado_em'), 'email_visto_em': b.get('email_visto_em'),
         'abriu_boleto_em': b.get('abriu_boleto_em'), 'abriu_nota_em': None, 'pdf_url': b.get('pdf_url'),
-        'charge_id': b.get('charge_id'),
+        'charge_id': b.get('charge_id'), 'numero': FinBoleto.numero(b), 'provedor': b.get('provedor'),
     }
 
 

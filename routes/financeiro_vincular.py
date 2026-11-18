@@ -151,7 +151,7 @@ def tirar_boletos_do_banco(titulo_id):
         if not b:
             continue
         if b['provedor'] != 'efi':
-            avisos.append(f"O boleto {b['charge_id']} é do {b['provedor'].capitalize()}: cancele lá para o cliente não pagar de novo.")
+            avisos.append(f"O boleto {FinBoleto.numero(b)} é do {b['provedor'].capitalize()}: cancele lá para o cliente não pagar de novo.")
             continue
         FinBoleto.atualizar_situacao(b['id'], 'settled')
         try:

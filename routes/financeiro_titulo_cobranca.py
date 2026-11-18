@@ -16,6 +16,7 @@ from datetime import date, datetime, time
 from flask import abort, render_template, request, url_for
 
 from models.fin_empresa import FinEmpresa
+from models.fin_cobranca import FinBoleto
 from routes.financeiro import financeiro
 from utils import cobranca_grupo as CG
 from utils import titulos_receber as TR
@@ -141,7 +142,7 @@ def janela(titulo_id, restrito=None):
               'contrato': 'pelo contrato'}.get((t.get('origem') or '').lower(), t.get('origem') or '')
     add(t.get('criado_em') or t.get('emissao'), 'cinza', 'fa-file-circle-plus', 'Honorário lançado', origem)
     for b in reversed(boletos):
-        num = f"nº {b['charge_id']}" if b.get('charge_id') else f"#{b['id']}"
+        num = f"nº {FinBoleto.numero(b)}" if b.get('charge_id') else f"#{b['id']}"
         if b['situacao'] == 'erro':
             add(b.get('criado_em'), 'verm', 'fa-triangle-exclamation', 'Boleto recusado pelo banco', (b.get('erro') or '')[:80])
             continue

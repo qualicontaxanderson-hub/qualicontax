@@ -213,6 +213,9 @@ from utils.bancos_logo import logo_banco as _logo_banco, logos_banco as _logos_b
 app.jinja_env.globals['logo_banco'] = _logo_banco
 app.jinja_env.globals['logo_banco_url'] = _logo_banco_url
 app.jinja_env.globals['logos_banco'] = _logos_banco
+# Número do boleto para gente ler (18/11/2026): {{ numero_boleto(b) }} — Efí/Bradesco o nº do banco; Cora o Nr. do Documento do PDF
+from models.fin_cobranca import FinBoleto as _FinBoleto
+app.jinja_env.globals['numero_boleto'] = _FinBoleto.numero
 
 
 # Template filters

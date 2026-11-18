@@ -35,7 +35,7 @@
     <div><i class="fas fa-receipt"></i><div><dt>Honorário</dt><dd title="{{ t.descricao }}">{{ desc }}</dd><small>{{ servico }}</small></div></div>
     <div><i class="fas fa-calendar-day"></i><div><dt>Vencimento</dt><dd>{{ t.vencimento.strftime('%d/%m/%Y') if t.vencimento else '—' }}</dd><small>{{ tag }}</small></div></div>
     <div><i class="fas fa-calendar"></i><div><dt>Competência</dt><dd>{{ comp or '—' }}</dd><small>{{ {'aberto': 'em aberto', 'parcial': 'recebido em parte', 'liquidado': 'recebido', 'cancelado': ('perdido' if t.perdido_em else 'cancelado')}.get(t.status, t.status) }}</small></div></div>
-    <div><i class="fas fa-barcode"></i><div><dt>Boleto</dt><dd>{% if boleto %}<span class="nf-pill cb-sit-{{ boleto.situacao }}">{{ SIT_BOLETO.get(boleto.situacao, boleto.situacao) | upper }}</span>{% else %}sem boleto{% endif %}</dd><small>{% if boleto %}nº {{ boleto.charge_id or boleto.id }}{% if boletos|length > 1 %} · {{ boletos|length }} emitidos{% endif %}{% elif nota %}só nota fiscal{% else %}paga por Pix ou transferência{% endif %}</small></div></div>
+    <div><i class="fas fa-barcode"></i><div><dt>Boleto</dt><dd>{% if boleto %}<span class="nf-pill cb-sit-{{ boleto.situacao }}">{{ SIT_BOLETO.get(boleto.situacao, boleto.situacao) | upper }}</span>{% else %}sem boleto{% endif %}</dd><small>{% if boleto %}nº {{ numero_boleto(boleto) }}{% if boletos|length > 1 %} · {{ boletos|length }} emitidos{% endif %}{% elif nota %}só nota fiscal{% else %}paga por Pix ou transferência{% endif %}</small></div></div>
     {% if not restrito %}<div><i class="fas fa-user-clock"></i><div><dt>Cliente deve</dt><dd>{{ cli_tot if cli_n else 'nada' }}</dd><small>{{ cli_n }} honorário{{ 's' if cli_n != 1 }} em aberto</small></div></div>{% endif %}
   </div>
 
@@ -78,7 +78,7 @@
     <section class="tj-sec">
       {% if boleto %}
       {% set vivo = boleto.situacao in ('waiting', 'unpaid', 'new') %}
-      <h4><i class="fas fa-barcode"></i> Boleto nº {{ boleto.charge_id or boleto.id }} <span class="nf-pill cb-sit-{{ boleto.situacao }}">{{ SIT_BOLETO.get(boleto.situacao, boleto.situacao) | upper }}</span>{% if boleto.ambiente != 'producao' %} <span class="nf-pill nf-pill-teste">TESTE</span>{% endif %}</h4>
+      <h4><i class="fas fa-barcode"></i> Boleto nº {{ numero_boleto(boleto) }} <span class="nf-pill cb-sit-{{ boleto.situacao }}">{{ SIT_BOLETO.get(boleto.situacao, boleto.situacao) | upper }}</span>{% if boleto.ambiente != 'producao' %} <span class="nf-pill nf-pill-teste">TESTE</span>{% endif %}</h4>
       <div class="tj-bol-top">
         <div><dt>Valor</dt><dd>{{ boleto.valor | float | format_currency }}</dd></div>
         <div><dt>Vencimento</dt><dd>{{ boleto.vencimento.strftime('%d/%m/%Y') }}</dd></div>

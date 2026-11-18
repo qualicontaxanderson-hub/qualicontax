@@ -386,6 +386,25 @@ class FinBoleto:
                              (provedor, ambiente, str(charge_id)), fetch=True, fetch_one=True)
 
     @staticmethod
+    def numero(b):
+        """Número do boleto para gente ler, em toda tela (18/11/2026 — Anderson, vendo "inv_S8Dg..." na
+        página do cliente: "Boleto número horrível parece vírus"). Efí e Bradesco: o charge_id já é o número
+        (nº na Efí / nosso número). Cora: o charge_id é o código interno da API (inv_...); o que o cliente vê
+        no PDF é o "Nr. do Documento", os 9 últimos dígitos do our_number da resposta."""
+        if not b:
+            return ''
+        if (b.get('provedor') or '') == 'cora':
+            raw = b.get('raw_resposta')
+            try:
+                j = json.loads(raw) if isinstance(raw, str) else (raw or {})
+                nn = ((j.get('payment_options') or {}).get('bank_slip') or {}).get('our_number') or ''
+            except (ValueError, AttributeError):
+                nn = ''
+            nn = ''.join(ch for ch in str(nn) if ch.isdigit())
+            return nn[-9:] if nn else f"#{b.get('id')}"
+        return str(b.get('charge_id') or '') or f"#{b.get('id')}"
+
+    @staticmethod
     def rascunho(empresa_id, conta, titulo_id, nfse_id, valor, vencimento, pagador, itens, mensagem, usuario_id):
         return execute_query(
             """INSERT INTO fin_boletos (empresa_id, conta_cobranca_id, titulo_id, nfse_id, provedor, ambiente,

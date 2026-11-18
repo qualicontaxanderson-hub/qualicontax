@@ -381,6 +381,7 @@ def enviar_email(grupo_id, para, usuario_id=None, ciente=False):
 
 def boletos_da_pagina(d):
     """Para a página pública: cada boleto ativo com Pix, linha, links e o que está sendo cobrado."""
+    from models.fin_cobranca import FinBoleto
     from utils.cobranca_email import links_do_email
     out = []
     for e in d['empresas']:
@@ -393,7 +394,7 @@ def boletos_da_pagina(d):
                 itens = [{'nome': t['desc'], 'valor': _brl(b['valor'])}]
             out.append({'empresa': e['nome'], 'doc': e['doc_txt'], 'numero': e['numero'], 'honorario': t['desc'],
                         'competencia': t['competencia'], 'valor': _brl(b['valor']), 'venc': _data(b['vencimento']),
-                        'vencido': t['vencido'], 'charge_id': b.get('charge_id'), 'itens': itens,
+                        'vencido': t['vencido'], 'charge_id': b.get('charge_id'), 'numero': FinBoleto.numero(b), 'itens': itens,
                         'pix': (b.get('pix_copia_cola') or '').strip(), 'linha': (b.get('linha_digitavel') or '').strip(),
                         'urls': links_do_email(b), 'tem_pdf': bool(b.get('pdf_url') or b.get('link')), 'nfse_id': b.get('nfse_id')})
     return out

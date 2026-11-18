@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Boleto {{ boleto.charge_id or boleto.id }} - Cobrança - Qualicontax{% endblock %}
+{% block title %}Boleto {{ numero_boleto(boleto) }} - Cobrança - Qualicontax{% endblock %}
 
 {% block content %}
 {% include 'financeiro/_nav_financeiro.html' %}
@@ -10,7 +10,7 @@
     <div>
         <h1 class="page-title">
             <i class="fas fa-barcode" style="color: var(--primary-green);"></i>
-            Boleto {{ ('nº ' ~ boleto.charge_id) if boleto.charge_id else ('#' ~ boleto.id) }}
+            Boleto {{ ('nº ' ~ numero_boleto(boleto)) if boleto.charge_id else ('#' ~ boleto.id) }}
             <span class="nf-pill cb-sit-{{ boleto.situacao }}" style="vertical-align:middle; margin-left:6px;">{{ SIT_BOLETO.get(boleto.situacao, boleto.situacao) | upper }}</span>
             {% if boleto.ambiente != 'producao' %}<span class="nf-pill nf-pill-teste" style="vertical-align:middle;">TESTE</span>{% endif %}
         </h1>

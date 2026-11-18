@@ -84,7 +84,7 @@
     <div class="quem">{{ loop.index }} de {{ n }} · {{ b.doc }}</div>
     <div class="nomeemp">{{ b.empresa }}</div>
     <div class="hon"><b>{{ b.honorario }}</b><span class="v">{{ b.valor }}</span></div>
-    <div class="dt">{{ 'Venceu em' if b.vencido else 'Vence em' }} {{ b.venc }}<span class="pill {{ 'vencido' if b.vencido else 'aberto' }}">{{ 'vencido · ainda pode pagar' if b.vencido else 'a vencer' }}</span>{% if b.charge_id %} · boleto nº {{ b.charge_id }}{% endif %}</div>
+    <div class="dt">{{ 'Venceu em' if b.vencido else 'Vence em' }} {{ b.venc }}<span class="pill {{ 'vencido' if b.vencido else 'aberto' }}">{{ 'vencido · ainda pode pagar' if b.vencido else 'a vencer' }}</span>{% if b.charge_id %} · boleto nº {{ b.numero }}{% endif %}</div>
     {% if b.pix %}
     <button type="button" class="btn" data-copiar="{{ b.pix }}" data-ok="Código Pix copiado!">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>

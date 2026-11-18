@@ -216,7 +216,7 @@
         <div class="nfc-meta">
             <div class="nfc-meta-valor">
                 <span class="nfc-valor">{{ n.valor_servico | float | round(2) | format_currency }}{% if n.valor_liquido is not none and n.valor_liquido != n.valor_servico %}<small>líquido {{ n.valor_liquido | float | round(2) | format_currency }}</small>{% endif %}</span>
-                {% if so_boleto %}<span class="fin-fraco" style="font-size:12px;">Boleto {{ {'bradesco': 'Bradesco', 'cora': 'Cora'}.get(n.provedor, 'Efí') }} nº <b style="color:#0f3d2e;">{{ n.charge_id or '—' }}</b></span>
+                {% if so_boleto %}<span class="fin-fraco" style="font-size:12px;">Boleto {{ {'bradesco': 'Bradesco', 'cora': 'Cora'}.get(n.provedor, 'Efí') }} nº <b style="color:#0f3d2e;">{{ n.numero or '—' }}</b></span>
                 {% elif n.numero_nfse %}<span class="fin-fraco" style="font-size:12px;">NFS-e nº <b style="color:#0f3d2e;">{{ n.numero_nfse }}</b></span>{% endif %}
             </div>
             <div class="cli-campo"><span class="cli-rot">Emissão</span><b class="cli-val">{{ (n.dh_emissao or n.criado_em).strftime('%d/%m/%Y') }}</b></div>

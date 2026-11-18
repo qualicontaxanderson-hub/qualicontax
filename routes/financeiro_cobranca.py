@@ -448,7 +448,7 @@ def _emitir_no_cora(conta, boleto_id, itens, pagador, vencimento, mensagem, titu
     registrar('escrita.emitiu_boleto', 'financeiro', tabela='fin_boletos', registro_id=boleto_id,
               depois={'nfse_id': nota_id, 'charge_id': inv, 'valor': str(total), 'provedor': 'cora',
                       'vencimento': vencimento.isoformat(), 'ambiente': conta['ambiente'], 'titulo_id': titulo_id})
-    msg = (f"Boleto emitido no Cora ({inv}) — R$ {total:.2f}, vence {vencimento.strftime('%d/%m/%Y')}"
+    msg = (f"Boleto emitido no Cora (nº {FinBoleto.numero(FinBoleto.get(boleto_id))}) — R$ {total:.2f}, vence {vencimento.strftime('%d/%m/%Y')}"
            .replace('.', ',', 1) + (' (ambiente de teste)' if conta['ambiente'] != 'producao' else '') + '.')
     return True, msg, aviso_email
 
@@ -688,7 +688,7 @@ def boleto_sincronizar(boleto_id):
         except (BradescoErro, CoraErro, ValueError) as exc:
             flash(f"{BANCO_DE[b['provedor']].capitalize()} não respondeu: {exc}", 'danger')
             return redirect(volta)
-        flash(f'Boleto {b["charge_id"]}: {SITUACOES.get(sit, sit)}.' + (' Título baixado.' if feito == 'baixa' else ''), 'success')
+        flash(f'Boleto {FinBoleto.numero(b)}: {SITUACOES.get(sit, sit)}.' + (' Título baixado.' if feito == 'baixa' else ''), 'success')
         return redirect(volta)
     try:
         efi, _ = FinCobrancaConta.cliente_efi(b['conta_cobranca_id'])
@@ -703,7 +703,7 @@ def boleto_sincronizar(boleto_id):
     feito = efi_boletos.aplicar(b, sit, valor_pago, pago_em, credito_em, quando)
     extra = {'baixa': ' Título baixado.', 'baixa-app': ' Título baixado (marcado como pago no app da Efí).',
              'perdido': ' Título foi para Perdidos (boleto cancelado no app da Efí).'}.get(feito, '')
-    flash(f'Boleto {b["charge_id"]}: {SITUACOES.get(sit, sit)}.{extra}', 'success')
+    flash(f'Boleto {FinBoleto.numero(b)}: {SITUACOES.get(sit, sit)}.{extra}', 'success')
     return redirect(volta)
 
 

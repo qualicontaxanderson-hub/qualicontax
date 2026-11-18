@@ -61,7 +61,7 @@
     {% if comp %}<div class="comp">Competência {{ comp }}</div>{% endif %}
     <div class="valor">{{ valor }}</div>
     <span class="pill {{ estado }}">{{ rotulo }}</span>
-    <div class="venc">Vencimento {{ venc }}{% if b.charge_id %} · boleto nº {{ b.charge_id }}{% endif %}</div>
+    <div class="venc">Vencimento {{ venc }}{% if b.charge_id %} · boleto nº {{ numero_boleto(b) }}{% endif %}</div>
   </div>
 
   {% if pagavel and pix %}
