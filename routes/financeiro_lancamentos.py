@@ -370,7 +370,7 @@ def comissao_pedido(fid):
     falta = float(f['total'] or 0) - float(f['valor_pago'] or 0)
     codigo = qr = None
     if pix.get('pix_chave') and falta > 0 and f['status'] != 'CANCELADO':
-        codigo = copia_e_cola(pix['pix_chave'], pix.get('titular') or f['usuario_nome'], falta, txid='COMISSAO%d' % fid, mensagem='Comissao pedido %d' % fid)
+        codigo = copia_e_cola(pix['pix_chave'], pix.get('titular') or f['usuario_nome'], falta, mensagem='Comissao pedido %d' % fid)
         qr = qr_data_uri(codigo)
     from utils.comissao_pedido_doc import frase_resumo, link_whatsapp, texto_whatsapp
     ctx = {'f': f, 'itens': itens, 'pix': pix, 'falta': falta, 'codigo': codigo,
@@ -401,7 +401,7 @@ def comissao_pedido_arquivo(fid, fmt):
                          (fid,), fetch=True) or []
     pix = _pix_de(f['usuario_id'])
     falta = float(f['total'] or 0) - float(f['valor_pago'] or 0)
-    codigo = copia_e_cola(pix['pix_chave'], pix.get('titular') or f['usuario_nome'], falta, txid='COMISSAO%d' % fid, mensagem='Comissao pedido %d' % fid) if pix.get('pix_chave') and falta > 0 else None
+    codigo = copia_e_cola(pix['pix_chave'], pix.get('titular') or f['usuario_nome'], falta, mensagem='Comissao pedido %d' % fid) if pix.get('pix_chave') and falta > 0 else None
     logo = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'static', 'images', 'logo.png')
     ctx = {'f': f, 'itens': itens, 'pags': pags, 'pix': pix, 'falta': falta, 'codigo': codigo,
            'link': url_for('financeiro.comissao_pedido', fid=fid, _external=True), 'logo_path': logo if os.path.exists(logo) else None}
