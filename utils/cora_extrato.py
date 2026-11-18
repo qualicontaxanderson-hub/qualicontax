@@ -103,8 +103,17 @@ def ler(j):
         tr = e.get('transaction') or {}
         cp = tr.get('counterParty') or {}
         # 18/11/2026, 1ª leitura real: no Pix a API manda description vazia (o OFX traz "Transf Pix enviada");
-        # sem o rótulo a linha vira só "NOME - CPF" e o crédito não é reconhecido como recebimento
-        partes = [re.sub(r'\s+', ' ', str(tr.get('description') or '')).strip() or _rotulo(tr.get('type'), tipo)]
+        # sem o rótulo a linha vira só "NOME - CPF" e o crédito não é reconhecido como recebimento.
+        # E quando o Pix paga um boleto nosso, a description vem com a "Descrição" do boleto ("Boleto total 5,00 | ...")
+        # ou com o recado que o pagador digitou: no crédito o rótulo entra na frente, no molde do OFX.
+        texto = re.sub(r'\s+', ' ', str(tr.get('description') or '')).strip()
+        rot = _rotulo(tr.get('type'), tipo)
+        if not texto:
+            partes = [rot]
+        elif tipo == 'CREDIT' and not e_recebimento(texto) and (str(tr.get('type') or '').upper(), tipo) in _ROTULO:
+            partes = [rot, texto]
+        else:
+            partes = [texto]
         if cp.get('name'):
             partes.append(re.sub(r'\s+', ' ', str(cp['name'])).strip())
         if _num(cp.get('identity')):
@@ -123,7 +132,11 @@ def documento_da_descricao(desc):
 
 
 def nome_da_descricao(desc):
+    """'Transf Pix recebida - FULANO - 123.456.789-00' -> 'FULANO'. Com o CPF/CNPJ no fim, o nome é a parte
+    anterior a ele (o texto do meio pode ter ' - ' dentro, como a Descrição de um boleto)."""
     partes = [p.strip() for p in str(desc or '').split(' - ')]
+    if len(partes) >= 3 and documento_da_descricao(desc):
+        return partes[-2]
     return partes[1] if len(partes) >= 2 else None
 
 
@@ -256,15 +269,17 @@ def baixar(lanc, seco=True):
     """Decide a baixa de UM crédito. Devolve (situação, detalhe)."""
     valor = Decimal(str(lanc['valor']))
     desc = lanc.get('descricao') or ''
-    if valor <= 0 or not e_recebimento(desc):
+    if valor <= 0:
         return 'ignorado', None
     doc = documento_da_descricao(desc)
     nome = nome_da_descricao(desc)
     if lanc.get('id') and _q('SELECT 1 x FROM fin_titulo_baixas WHERE lancamento_id = %s LIMIT 1', (lanc['id'],), one=True):
         return 'ja-amarrado', None
-    b = _boleto_da_linha(lanc, doc)                  # o boleto é a prova mais forte
-    if b:
+    b = _boleto_da_linha(lanc, doc)                  # o boleto é a prova mais forte: vale seja qual for o texto
+    if b:                                            # (18/11: o Pix do boleto 232 veio com a Descrição do boleto, sem "recebida")
         return _baixar_pelo_boleto(lanc, b, seco)
+    if not e_recebimento(desc):
+        return 'ignorado', None
     clis = clientes_pelo_documento(doc)
     grupo = _do_grupo()
     if clis and all(c in grupo for c in clis):
