@@ -63,6 +63,13 @@ def _nome(n):
 
 def _desc(t):
     d = (t.get('descricao') or '').strip()
+    # 17/11/2026: "Honorários e serviços — Inscrição estadual ST" é SERVIÇO avulso, não o honorário do mês: mostra o
+    # serviço (antes saía "Honorários nov/2026" para a cobrança avulsa da MIDAS).
+    import re as _re
+    m = _re.match(r'(?i)honor[aá]rios e servi[cç]os\s*[—–-]\s*(.+)$', d)
+    if m and not _re.match(r'(?i)honor[aá]rios', m.group(1).strip()):
+        s = m.group(1).strip()
+        return (s[:34] + '…') if len(s) > 35 else s
     if d.lower().startswith('honor'):
         return 'Honorários ' + _comp(t['competencia'])
     return (d[:34] + '…') if len(d) > 35 else (d or _comp(t['competencia']))

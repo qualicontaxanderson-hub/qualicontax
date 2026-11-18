@@ -477,6 +477,17 @@ a.tx-c { text-decoration:none; color:inherit; }
 .tj-bol-top { grid-template-columns:auto auto 1fr; gap:18px; } .tj-bol-top dd { white-space:normal; line-height:1.2; }
 .tj-bol-top > div:first-child dd { white-space:nowrap; font-size:22px; } .tj-bol-top > div:nth-child(2) dd { white-space:nowrap; } .tj-bol-top > div:last-child dd { font-size:15px; }
 @media (max-width:900px) { .tj-corpo { overflow:visible; } .tj-sec { overflow:visible; } }
+/* 17/11/2026 — Anderson: "No móbile está uma bosta". No celular a linha do tempo tinha altura fixa (flex-basis 0 +
+   min-height 140px) e o conteúdo vazava por cima do bloco do boleto. Aqui cada bloco cresce com o que tem dentro. */
+@media (max-width:900px) {
+  .tj-col1 .tj-sec-tl, .tj-col1 .tj-sec-outros, .tj-sec { flex:none !important; height:auto !important; min-height:0 !important; max-height:none !important; }
+  .tj-tl { flex:none; overflow:visible; }
+  .tj-tl li { flex-wrap:wrap; row-gap:2px; } .tj-tl li > div { flex:1 1 calc(100% - 50px); }
+  .tj-tl li time { flex-basis:100%; padding:0 0 0 44px; }
+  .tj-tl li small { white-space:normal; }
+  .tj-bol-top { grid-template-columns:1fr 1fr !important; gap:12px !important; } .tj-bol-top > div:last-child { grid-column:1 / -1; }
+  .tj-bol-top > div:first-child dd { font-size:20px; }
+}
 
 
 /* ── janela do GRUPO (17/11/2026) ── */
