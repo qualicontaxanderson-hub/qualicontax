@@ -28,6 +28,7 @@
 .cp-tot { display:flex; justify-content:space-between; padding-top:12px; margin-top:4px; border-top:2px solid #ede9fe; font-weight:800; font-size:15px; } .cp-tot b { color:#6d28d9; font-size:18px; }
 .cp-pix { text-align:center; } .cp-pix img { width:220px; max-width:100%; border-radius:14px; border:1px solid #ede9fe; }
 .cp-chave { font-size:13px; color:#334155; margin:10px 0 6px; } .cp-chave b { color:#0f172a; }
+.cp-cod.cp-cod-pix { text-align:left; height:auto; word-break:break-all; overflow-wrap:anywhere; white-space:normal; user-select:all; -webkit-user-select:all; }
 .cp-cod { width:100%; box-sizing:border-box; font:12px/1.4 ui-monospace, Consolas, monospace; color:#334155; background:#faf8ff; border:1px solid #e9e3fb; border-radius:10px; padding:9px 10px; resize:none; height:76px; }
 .cp-bt { width:100%; margin-top:8px; border:0; border-radius:12px; padding:12px; font:inherit; font-weight:800; font-size:14.5px; color:#fff; cursor:pointer;
   background:linear-gradient(135deg,#7c3aed,#5b21b6); display:inline-flex; gap:8px; align-items:center; justify-content:center; text-decoration:none; }
@@ -97,7 +98,9 @@
         {% elif codigo %}
           <img src="{{ qr }}" alt="QR do Pix">
           <div class="cp-chave">{{ PIX_TIPOS.get(pix.pix_tipo, 'Chave') }}: <b>{{ pix.pix_chave }}</b><br>valor: <b>{{ falta | format_currency }}</b></div>
-          <textarea class="cp-cod" id="cpCod" readonly>{{ codigo }}</textarea>
+          {# 18/11/2026: no iPhone a caixinha de 76px cortava o código e o "selecionar tudo" deixava a seleção azul por cima
+             (print do Anderson: "está quebrado isso"). Agora o código aparece inteiro e o botão copia sem selecionar. #}
+          <div class="cp-cod cp-cod-pix" id="cpCod">{{ codigo }}</div>
           <button type="button" class="cp-bt" onclick="cpCopiar('cpCod', this)"><i class="fas fa-copy"></i> Copiar Pix copia e cola</button>
           <div class="cp-aviso" style="margin-top:10px; text-align:left"><i class="fas fa-bolt"></i> Depois de pagar, não precisa fazer mais nada: quando o extrato do banco puxar a saída de {{ falta | format_currency }} para {{ f.usuario_nome.split()[0] }}, o pedido fica quitado sozinho.</div>
         {% else %}
@@ -148,7 +151,13 @@
 {% block extra_js %}
 <script>
 function cpOk(b, txt) { var h = b.innerHTML; b.innerHTML = '<i class="fas fa-check"></i> ' + txt; setTimeout(function () { b.innerHTML = h; }, 1800); }
-function cpCopiar(id, b) { var t = document.getElementById(id); t.select(); (navigator.clipboard ? navigator.clipboard.writeText(t.value) : Promise.reject()).then(function () { cpOk(b, 'Copiado'); }, function () { document.execCommand('copy'); cpOk(b, 'Copiado'); }); }
+function cpCopiar(id, b) {
+  var el = document.getElementById(id), v = (el.value !== undefined ? el.value : el.textContent).trim();
+  function velho() { var t = document.createElement('textarea'); t.value = v; t.setAttribute('readonly', ''); t.style.cssText = 'position:fixed;left:-9999px;top:0';
+    document.body.appendChild(t); t.select(); try { document.execCommand('copy'); } catch (e) {} document.body.removeChild(t); cpOk(b, 'Copiado'); }
+  if (navigator.clipboard && window.isSecureContext) navigator.clipboard.writeText(v).then(function () { cpOk(b, 'Copiado'); }, velho); else velho();
+  if (window.getSelection) window.getSelection().removeAllRanges();
+}
 function cpLink(b) { var u = location.href.split('#')[0]; (navigator.clipboard ? navigator.clipboard.writeText(u) : Promise.reject()).then(function () { cpOk(b, 'Link copiado: mande no WhatsApp'); }, function () { prompt('Copie o link:', u); }); }
 </script>
 {% endblock %}
