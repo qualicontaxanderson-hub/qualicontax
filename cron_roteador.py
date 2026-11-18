@@ -1036,6 +1036,19 @@ def main() -> int:
         logger.exception('[roteador] varredura de EXTRATO falhou; os .xml desta '
                          'rodada VALEM.')
 
+    # Imposto de Renda PF (18/11/2026): os .DEC/.REC que o Q-Colabore deixa na _ENTRADA
+    # (pasta "transmitidas" do programa IRPF nos PCs do escritório) viram declaração lida.
+    # Só .dec/.rec: o PDF da declaração fica para a fase 2 (hoje o leitor de extrato pega .pdf).
+    try:
+        from utils.irpf import ingest as _irpf
+        _r = _irpf.varrer_entrada()
+        if any(_r[k] for k in ('dec_novas', 'dec_repetidas', 'rec_ok', 'rec_aguardando', 'erros', 'vinculadas')):
+            logger.info('[roteador] IRPF: %s declaração(ões) nova(s), %s repetida(s), %s recibo(s), '
+                        '%s recibo(s) esperando o .DEC, %s vinculada(s), %s erro(s)',
+                        _r['dec_novas'], _r['dec_repetidas'], _r['rec_ok'], _r['rec_aguardando'], _r['vinculadas'], _r['erros'])
+    except Exception:
+        logger.exception('[roteador] varredura do IRPF falhou; os .xml desta rodada VALEM.')
+
     # Boletos da Efí de hora em hora, 7h-22h (14/11/2026), nossos e os do Conexa: pago,
     # marcado como pago no app da Efí ou cancelado no app vira baixa / Perdidos aqui —
     # Anderson: "Consultar de hora em hora". ANTES do extrato: a baixa já existe quando o

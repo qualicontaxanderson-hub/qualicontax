@@ -227,6 +227,16 @@ MAPA = {
     'contabil.importar_ofx':           'contabil.importar_ofx',
     'contabil.importar_pdf':           'contabil.importar_pdf',
     'contabil.confirmar_importacao_pdf': 'contabil.importar_pdf',
+    'contabil.api_home_destaques':     'contabil.index',
+    # Imposto de Renda PF (18/11/2026)
+    'contabil.irpf':                   'contabil.irpf',
+    'contabil.irpf_declaracao':        'contabil.irpf',
+    'contabil.irpf_arquivo':           'contabil.irpf',
+    'contabil.irpf_enviar':            'contabil.irpf.incluir',
+    'contabil.irpf_vincular':          'contabil.irpf.alterar',
+    'contabil.irpf_criar_avulso':      'contabil.irpf.alterar',
+    'contabil.irpf_reler':             'contabil.irpf.alterar',
+    'contabil.irpf_excluir':           'contabil.irpf.excluir',
 
     # --- Financeiro ---------------------------------------------------------
     'financeiro.recebimento_excluir':      'financeiro.recebimento.excluir',

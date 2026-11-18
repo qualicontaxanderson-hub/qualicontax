@@ -1,85 +1,100 @@
 {% extends "base.html" %}
-
 {% block title %}Contábil - Qualicontax{% endblock %}
-
 {% block content %}
-<div class="page-header">
-    <div>
-        <h1 class="page-title">Contábil</h1>
-        <p class="page-subtitle">Gestão de conciliações bancárias e classificações contábeis</p>
+{% include 'contabil/_nav_contabil.html' %}
+{# Mesmo padrão da home do Fiscal/Cadastros/Financeiro: hero, carrossel e tiles vêm de
+   static/css/identidade.css; carrossel+contadores de static/js/home_destaques.js.
+   18/11/2026: a home antiga (module-tiles) tinha 7 cartões, dois deles sem tela por trás.
+   Agora o IMPOSTO DE RENDA PF é a tela principal; o resto fica em "Contabilidade". #}
+
+<!-- ===== HERO verde ===== -->
+<div class="ef-hero">
+    <div class="ef-hero-inner">
+        <div class="ef-hero-head">
+            <div>
+                <h1 class="ef-hero-title">Contábil</h1>
+                <p class="ef-hero-sub">Imposto de Renda das pessoas físicas, plano de contas e conciliações</p>
+            </div>
+            <div class="ef-hero-actions">
+                {% if pode_rota('contabil.irpf') %}
+                <a href="{{ url_for('contabil.irpf') }}" class="ef-btn ef-btn-primary">
+                    <i class="fas fa-file-invoice"></i> Imposto de Renda PF
+                </a>
+                {% endif %}
+            </div>
+        </div>
+        <div class="ef-car-skel" id="efCarSkel" aria-hidden="true">
+            <div class="ef-skel-card"></div><div class="ef-skel-card"></div><div class="ef-skel-card"></div>
+        </div>
+        <div class="ef-carousel" id="efCarousel" hidden
+             data-endpoint="{{ url_for('contabil.api_home_destaques') }}"></div>
     </div>
 </div>
 
-<div class="module-tiles">
+<!-- ===== CORPO branco ===== -->
+<div class="ef-body">
 
-    <!-- Plano de Contas -->
-    <a href="{{ url_for('contabil.plano_contas') }}" class="module-tile">
-        <div class="module-tile-icon" style="background: linear-gradient(135deg, #4f46e5, #7c3aed);">
-            <i class="fas fa-sitemap"></i>
-        </div>
-        <h3 class="module-tile-title">Plano de Contas</h3>
-        <p class="module-tile-desc">Estrutura hierárquica de contas contábeis</p>
-    </a>
+    <div class="ef-section-label">Imposto de Renda</div>
+    <div class="ef-grid">
+        {% if pode_rota('contabil.irpf') %}
+        <a href="{{ url_for('contabil.irpf') }}" class="ef-card">
+            <div class="ef-card-ico" style="background:#dcfce7;color:#15803d;"><i class="fas fa-file-invoice"></i></div>
+            <h3 class="ef-card-title">Imposto de Renda PF</h3>
+            <div class="ef-card-num" data-counter="irpf"></div>
+            <p class="ef-card-desc">Declarações lidas do programa da Receita: quem entregou, resultado, recibo, rendimentos e bens</p>
+        </a>
+        {% endif %}
+    </div>
 
-    <!-- Conciliações Bancárias -->
-    <a href="{{ url_for('contabil.conciliacoes') }}" class="module-tile">
-        <div class="module-tile-icon" style="background: linear-gradient(135deg, #0ea5e9, #0284c7);">
-            <i class="fas fa-file-invoice-dollar"></i>
-        </div>
-        <h3 class="module-tile-title">Conciliações Bancárias</h3>
-        <p class="module-tile-desc">Conciliações abertas e histórico de lançamentos</p>
-        <span class="module-tile-action">
-            <i class="fas fa-plus-circle"></i> Nova Conciliação
-        </span>
-    </a>
-
-    <!-- Contas Correntes -->
-    <a href="{{ url_for('contabil.contas_correntes') }}" class="module-tile">
-        <div class="module-tile-icon" style="background: linear-gradient(135deg, #059669, #047857);">
-            <i class="fas fa-university"></i>
-        </div>
-        <h3 class="module-tile-title">Contas Correntes</h3>
-        <p class="module-tile-desc">Contas bancárias cadastradas por cliente</p>
-    </a>
-
-    <!-- Importar OFX -->
-    <a href="{{ url_for('contabil.importar_ofx') }}" class="module-tile">
-        <div class="module-tile-icon" style="background: linear-gradient(135deg, #f59e0b, #d97706);">
-            <i class="fas fa-file-upload"></i>
-        </div>
-        <h3 class="module-tile-title">Importar OFX</h3>
-        <p class="module-tile-desc">Carregue extratos bancários no formato OFX</p>
-    </a>
-
-    <!-- Importar PDF -->
-    <a href="{{ url_for('contabil.importar_pdf') }}" class="module-tile">
-        <div class="module-tile-icon" style="background: linear-gradient(135deg, #ef4444, #dc2626);">
-            <i class="fas fa-file-pdf"></i>
-        </div>
-        <h3 class="module-tile-title">Importar PDF</h3>
-        <p class="module-tile-desc">Carregue extratos bancários em PDF</p>
-    </a>
-
-    <!-- Extrato -->
-    <a href="{{ url_for('contabil.extrato_conciliacao') }}" class="module-tile">
-        <div class="module-tile-icon" style="background: linear-gradient(135deg, #06b6d4, #0891b2);">
-            <i class="fas fa-chart-line"></i>
-        </div>
-        <h3 class="module-tile-title">Extrato</h3>
-        <p class="module-tile-desc">Visualize o extrato de conciliação classificado</p>
-    </a>
-
-    <!-- Memorizações -->
-    <a href="{{ url_for('contabil.memorizacoes') }}" class="module-tile">
-        <div class="module-tile-icon" style="background: linear-gradient(135deg, #ec4899, #db2777);">
-            <i class="fas fa-brain"></i>
-        </div>
-        <h3 class="module-tile-title">Memorizações</h3>
-        <p class="module-tile-desc">Regras de classificação automática por grupo ou individual</p>
-        <span class="module-tile-action">
-            <i class="fas fa-plus-circle"></i> Nova Memorização
-        </span>
-    </a>
+    <div class="ef-section-label">Contabilidade</div>
+    <div class="ef-grid">
+        <a href="{{ url_for('contabil.plano_contas') }}" class="ef-card">
+            <div class="ef-card-ico" style="background:#ede9fe;color:#6d28d9;"><i class="fas fa-sitemap"></i></div>
+            <h3 class="ef-card-title">Plano de Contas</h3>
+            <div class="ef-card-num" data-counter="planos"></div>
+            <p class="ef-card-desc">Grupos e contas contábeis por grupo de clientes</p>
+        </a>
+        <a href="{{ url_for('contabil.conciliacoes') }}" class="ef-card">
+            <div class="ef-card-ico" style="background:#dbeafe;color:#1d4ed8;"><i class="fas fa-file-invoice-dollar"></i></div>
+            <h3 class="ef-card-title">Conciliações Bancárias</h3>
+            <div class="ef-card-num"></div>
+            <p class="ef-card-desc">Conciliações abertas e histórico de lançamentos</p>
+        </a>
+        <a href="{{ url_for('contabil.contas_correntes') }}" class="ef-card">
+            <div class="ef-card-ico" style="background:#d1fae5;color:#047857;"><i class="fas fa-university"></i></div>
+            <h3 class="ef-card-title">Contas Correntes</h3>
+            <div class="ef-card-num" data-counter="contas"></div>
+            <p class="ef-card-desc">Contas bancárias cadastradas por cliente</p>
+        </a>
+        <a href="{{ url_for('contabil.importar_ofx') }}" class="ef-card">
+            <div class="ef-card-ico" style="background:#fef3c7;color:#b45309;"><i class="fas fa-file-upload"></i></div>
+            <h3 class="ef-card-title">Importar OFX</h3>
+            <div class="ef-card-num"></div>
+            <p class="ef-card-desc">Extrato bancário no formato OFX</p>
+        </a>
+        <a href="{{ url_for('contabil.importar_pdf') }}" class="ef-card">
+            <div class="ef-card-ico" style="background:#fee2e2;color:#b91c1c;"><i class="fas fa-file-pdf"></i></div>
+            <h3 class="ef-card-title">Importar PDF</h3>
+            <div class="ef-card-num"></div>
+            <p class="ef-card-desc">Extrato bancário em PDF</p>
+        </a>
+        <a href="{{ url_for('contabil.extrato_conciliacao') }}" class="ef-card">
+            <div class="ef-card-ico" style="background:#cffafe;color:#0e7490;"><i class="fas fa-chart-line"></i></div>
+            <h3 class="ef-card-title">Extrato</h3>
+            <div class="ef-card-num"></div>
+            <p class="ef-card-desc">Extrato de conciliação classificado</p>
+        </a>
+        <a href="{{ url_for('escrita_fiscal.memorizacoes') }}" class="ef-card">
+            <div class="ef-card-ico" style="background:#fce7f3;color:#be185d;"><i class="fas fa-brain"></i></div>
+            <h3 class="ef-card-title">Memorizações</h3>
+            <div class="ef-card-num"></div>
+            <p class="ef-card-desc">As regras de classificação moram no Fiscal › Memorizações</p>
+        </a>
+    </div>
 
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/home_destaques.js') }}" defer></script>
 {% endblock %}

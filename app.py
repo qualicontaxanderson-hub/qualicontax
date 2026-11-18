@@ -117,6 +117,7 @@ from routes.relatorios import relatorios
 from routes.documentos import documentos
 from routes.api import api
 from routes.contabil import contabil
+import routes.contabil_irpf  # noqa: F401  — rotas do Imposto de Renda PF no blueprint 'contabil'
 from routes.municipios import municipios
 from routes.financeiro import financeiro
 from routes.dropbox import dropbox_bp

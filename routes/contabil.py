@@ -3,6 +3,8 @@ from flask import Blueprint, render_template, request, redirect, url_for, flash,
 from flask_login import login_required, current_user
 from utils.auth_helper import permission_required
 import os
+import logging
+logger_ct = logging.getLogger(__name__)
 
 # Cria Blueprint primeiro (antes de importar models)
 contabil = Blueprint('contabil', __name__, url_prefix='/contabil')
@@ -92,8 +94,57 @@ except Exception as e:
 @contabil.route('/')
 @permission_required('contabil.index')
 def index():
-    """Página principal do módulo contábil"""
+    """Home do Contábil (18/11/2026: molde ef-hero dos outros departamentos; IRPF PF em destaque)."""
     return render_template('contabil/index.html')
+
+
+# ---------------------------------------------------------------------------
+# Home: números do carrossel e dos contadores (mesmo contrato do Financeiro e do
+# Cadastros: {'cards': [...], 'counters': {...}, 'gerado_em_ms': ...}). Só dado real;
+# sem declaração lida não há cartão de IRPF, e a home fica como está.
+# ---------------------------------------------------------------------------
+import threading as _threading
+from datetime import datetime as _dt, timezone as _tz
+_CT_HOME_CACHE, _CT_HOME_LOCK, _CT_HOME_TTL_S = {}, _threading.Lock(), 60
+
+
+def _ct_q1(sql, params=None):
+    from utils.db_helper import execute_query
+    try:
+        return execute_query(sql, params, fetch=True, fetch_one=True) or {}
+    except Exception:
+        return {}
+
+
+def _contabil_home_payload():
+    from routes.contabil_irpf import resumo_para_home
+    c = _ct_q1("SELECT (SELECT COUNT(*) FROM planos_contas) planos, (SELECT COUNT(*) FROM contas_correntes) contas")
+    counters = {'planos': int(c.get('planos') or 0), 'contas': int(c.get('contas') or 0)}
+    cards = []
+    try:
+        irpf = resumo_para_home()
+        counters['irpf'] = irpf['counter']
+        cards.extend(irpf['cards'])
+    except Exception:
+        logger_ct.exception('[contabil] resumo do IRPF para a home falhou')
+    return {'cards': cards, 'counters': counters,
+            'gerado_em_ms': int(_dt.now(_tz.utc).timestamp() * 1000)}
+
+
+@contabil.route('/api/home-destaques')
+@permission_required('contabil.index')
+def api_home_destaques():
+    """Números da home (carrossel + contadores). Cache de 60s por usuário."""
+    uid = getattr(current_user, 'id', None)
+    agora = _dt.now(_tz.utc).timestamp()
+    with _CT_HOME_LOCK:
+        hit = _CT_HOME_CACHE.get(uid)
+        if hit and (agora - hit[0]) < _CT_HOME_TTL_S:
+            return jsonify(hit[1])
+    payload = _contabil_home_payload()
+    with _CT_HOME_LOCK:
+        _CT_HOME_CACHE[uid] = (agora, payload)
+    return jsonify(payload)
 
 
 @contabil.route('/plano_contas')
@@ -579,7 +630,10 @@ def extrato_conciliacao():
 @contabil.route('/memorizacoes')
 @login_required
 def memorizacoes():
-    """Lista todas as memorizações de conciliação"""
+    """Lista todas as memorizações de conciliação.
+    18/11/2026: a tabela memorizacoes_conciliacao e o template contabil/memorizacoes.html nunca
+    existiram em produção (a tela dava erro 500). As memorizações de verdade moram no Fiscal."""
+    return redirect(url_for('escrita_fiscal.memorizacoes'))
     tipo = request.args.get('tipo')
     grupo_id = request.args.get('grupo_id')
     cliente_id = request.args.get('cliente_id')

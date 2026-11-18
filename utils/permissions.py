@@ -121,6 +121,11 @@ DEPARTAMENTOS_PERMISSOES = [
          'exc': [('contabil.conciliacoes.excluir', 'excluir memorização')]},
         {'id': 'ofx', 'nome': 'Importar OFX', 'ver': ('contabil.importar_ofx', 'importar extrato OFX')},
         {'id': 'pdf', 'nome': 'Importar PDF', 'ver': ('contabil.importar_pdf', 'importar extrato PDF')},
+        {'id': 'irpf', 'nome': 'Imposto de Renda PF',
+         'ver': ('contabil.irpf', 'declarações, resultado, recibo, rendimentos e bens'),
+         'inc': ('contabil.irpf.incluir', 'enviar declaração (.DEC/.REC/PDF) pela tela'),
+         'alt': ('contabil.irpf.alterar', 'vincular a pessoa, reler e criar o avulso'),
+         'exc': [('contabil.irpf.excluir', 'excluir declaração lida')]},
     ]},
     {'grupo': 'Financeiro', 'sigla': 'FI', 'cor': 'fin', 'telas': [
         {'id': 'fin', 'nome': 'Acessar o Financeiro', 'ver': ('financeiro.index', 'abrir o painel')},

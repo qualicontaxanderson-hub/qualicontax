@@ -1,0 +1,45 @@
+{# ---------------------------------------------------------------------------
+   Barra de navegação do CONTÁBIL — mesmo padrão do Fiscal (_nav_fiscal.html) e do
+   Financeiro: sticky, abas-pílula, estilos de static/css/identidade.css.
+   NOVA TELA NO FUTURO: acrescente UMA linha em _abas (endpoint, prefixo, rótulo).
+   Aba ativa por request.path, PREFIXO MAIS LONGO vence.
+
+   18/11/2026 (Anderson): "1º já arrumar a tela do Contábil... e já vamos mexer na ABA
+   Imposto de Renda PF". O módulo tinha 7 cartões no molde antigo e nenhuma pessoa além
+   dos admins com acesso. Virou home no molde dos outros departamentos, com o
+   IMPOSTO DE RENDA PF como tela principal. Memorizações daqui não existem mais
+   (as regras moram no Fiscal › MEMORIZAÇÕES); Conciliações seguem na tela antiga.
+--------------------------------------------------------------------------- #}
+{% set _abas = [
+    ('contabil.index',               '/contabil/',                   'INÍCIO'),
+    ('contabil.irpf',                '/contabil/irpf',               'IMPOSTO DE RENDA PF'),
+    ('contabil.plano_contas',        '/contabil/plano_contas',       'PLANO DE CONTAS'),
+    ('contabil.conciliacoes',        '/contabil/conciliacoes',       'CONCILIAÇÕES'),
+    ('contabil.contas_correntes',    '/contabil/contas_correntes',   'CONTAS CORRENTES'),
+    ('contabil.importar_ofx',        '/contabil/importar_ofx',       'IMPORTAR OFX'),
+    ('contabil.importar_pdf',        '/contabil/importar_pdf',       'IMPORTAR PDF'),
+    ('contabil.extrato_conciliacao', '/contabil/extrato_conciliacao', 'EXTRATO'),
+] %}
+{% set _ativa = namespace(pref='') %}
+{% for _ep, _pref, _label in _abas %}
+    {% if request.path.startswith(_pref) and _pref|length > _ativa.pref|length %}
+        {% set _ativa.pref = _pref %}
+    {% endif %}
+{% endfor %}
+<nav class="nav-fiscal" aria-label="Navegação do Contábil">
+    <div class="nav-fiscal-track">
+        {% for _ep, _pref, _label in _abas %}
+        {% if pode_rota(_ep) %}
+        <a class="nff-tab {% if _pref == _ativa.pref %}active{% endif %}"
+           href="{{ url_for(_ep) }}"
+           {% if _pref == _ativa.pref %}aria-current="page"{% endif %}>{{ _label }}</a>
+        {% endif %}
+        {% endfor %}
+    </div>
+</nav>
+<script>
+(function () {
+    var t = document.querySelector('.nav-fiscal .nff-tab.active');
+    if (t && t.scrollIntoView) { try { t.scrollIntoView({ block: 'nearest', inline: 'center' }); } catch (e) {} }
+})();
+</script>

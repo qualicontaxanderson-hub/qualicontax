@@ -1,0 +1,355 @@
+{% extends "base.html" %}
+{% block title %}IRPF {{ d.exercicio }} · {{ d.nome }} - Qualicontax{% endblock %}
+{% block extra_css %}
+{% include 'financeiro/_lanc_tx_css.html' %}
+<style>
+/* Contábil › Imposto de Renda PF › declaração aberta (18/11/2026), no molde da JANELA DA COBRANÇA (tj-*):
+   cabeçalho na cor do resultado, fita de números e, item a item (Anderson: "melhore bem as declarações
+   item a item"), cada bem, rendimento, pagamento e dependente como cartão com ícone, variação e a
+   empresa reconhecida no cadastro. Prefixo id-. */
+.id { --cor:#16a34a; --cor-e:#166534; --cor-f:#ecfdf3; --cor-b:#c9f0d7; --linha:#e6eeea; --tinta:#0f172a; --mudo:#7d968a; color:var(--tinta); }
+.id.r-restituir { --cor:#2563eb; --cor-e:#1e40af; --cor-f:#eff4ff; --cor-b:#cfdefd; }
+.id.r-pagar     { --cor:#f97316; --cor-e:#c2410c; --cor-f:#fff4ec; --cor-b:#fddcc0; }
+.id.r-zero      { --cor:#475569; --cor-e:#1e293b; --cor-f:#f5f7fa; --cor-b:#e2e8f0; }
+.id-volta { display:inline-flex; align-items:center; gap:6px; font-size:12.5px; color:#64748b; text-decoration:none; margin:0 0 10px; }
+.id-volta:hover { color:var(--cor-e); }
+.id-cab { border-radius:20px 20px 0 0; background:linear-gradient(120deg, var(--cor) 0%, var(--cor-e) 100%); color:#fff; padding:20px 24px 18px; display:flex; justify-content:space-between; gap:20px; align-items:center; flex-wrap:wrap; box-shadow:0 10px 24px rgba(15,23,42,.14); }
+.id-cli { display:flex; gap:14px; align-items:center; min-width:0; flex:1 1 420px; }
+.id-avatar { width:58px; height:58px; border-radius:16px; background:rgba(255,255,255,.18); border:1px solid rgba(255,255,255,.25); display:inline-flex; align-items:center; justify-content:center; font-size:19px; font-weight:800; flex-shrink:0; }
+.id-quem { min-width:0; }
+.id-l1 { display:flex; align-items:center; gap:10px; min-width:0; flex-wrap:wrap; }
+.id-l1 b { font-size:21px; letter-spacing:-.01em; line-height:1.15; }
+.id-num { background:#fff; color:var(--cor-e); border-radius:8px; padding:3px 8px; font-size:12px; font-weight:800; font-variant-numeric:tabular-nums; }
+.id-l2 { display:flex; flex-wrap:wrap; gap:4px 12px; margin-top:6px; font-size:12.5px; opacity:.95; align-items:center; }
+.id-l2 i { opacity:.75; margin-right:4px; font-size:11px; }
+.id-l2 a { color:#fff; font-weight:700; text-decoration:none; border-bottom:1px solid rgba(255,255,255,.5); }
+.id-chip { display:inline-flex; align-items:center; gap:5px; background:rgba(255,255,255,.18); border-radius:99px; padding:2px 10px; font-weight:700; font-size:12px; }
+.id-chip.alerta { background:#fff; color:#b45309; }
+.id-val { text-align:right; flex-shrink:0; display:flex; flex-direction:column; align-items:flex-end; gap:5px; }
+.id-val b { font-size:34px; font-weight:800; letter-spacing:-.025em; line-height:1; font-variant-numeric:tabular-nums; }
+.id-val small { font-size:12.5px; opacity:.9; }
+.id-tag { background:#fff; color:var(--cor-e); border-radius:99px; padding:4px 12px; font-size:11.5px; font-weight:800; white-space:nowrap; }
+.id-acoes { display:flex; gap:8px; flex-wrap:wrap; align-items:center; justify-content:flex-end; flex:1 1 100%; margin-top:4px; }
+.id-acoes form { display:inline; }
+.id-btn { display:inline-flex; align-items:center; gap:7px; border-radius:10px; padding:8px 13px; font-size:12.5px; font-weight:800; cursor:pointer; background:rgba(255,255,255,.16); color:#fff; border:1px solid rgba(255,255,255,.4); font-family:inherit; text-decoration:none; }
+.id-btn:hover { background:rgba(255,255,255,.28); color:#fff; }
+.id-kpis { display:grid; grid-template-columns:repeat(5, minmax(0,1fr)); gap:1px; background:var(--linha); border:1px solid var(--linha); border-top:0; border-radius:0 0 20px 20px; overflow:hidden; margin-bottom:16px; box-shadow:0 10px 24px rgba(15,23,42,.06); }
+.id-kpis > div { background:#fff; padding:12px 16px; display:flex; gap:11px; align-items:center; min-width:0; }
+.id-kpis > div > i { width:36px; height:36px; border-radius:10px; background:var(--cor-f); color:var(--cor); display:inline-flex; align-items:center; justify-content:center; font-size:14px; flex-shrink:0; }
+.id-kpis dt { font-size:10px; text-transform:uppercase; letter-spacing:.5px; color:#94a3b8; font-weight:700; }
+.id-kpis dd { margin:1px 0 0; font-size:15px; font-weight:800; color:var(--tinta); white-space:nowrap; font-variant-numeric:tabular-nums; }
+.id-kpis small { display:block; font-size:11px; color:#64748b; line-height:1.3; }
+/* leitura rápida */
+.id-leit { display:grid; grid-template-columns:1.3fr 1fr 1fr 1fr; gap:12px; margin-bottom:16px; }
+.id-leit > div { background:#fff; border:1px solid var(--linha); border-radius:16px; padding:12px 16px; box-shadow:0 6px 18px rgba(15,61,46,.05); min-width:0; }
+.id-leit dt { font-size:10px; text-transform:uppercase; letter-spacing:.5px; color:#94a3b8; font-weight:700; }
+.id-leit dd { margin:2px 0 0; font-size:17px; font-weight:800; font-variant-numeric:tabular-nums; }
+.id-leit small { display:block; font-size:11.5px; color:#64748b; line-height:1.35; margin-top:2px; }
+.id-leit .ok dd { color:#15803d; } .id-leit .al dd { color:#b91c1c; }
+.id-leit .al { border-color:#fecaca; background:#fff7f7; }
+.id-vinc { background:#fff; border:1px solid #fde68a; border-left:5px solid #f59e0b; border-radius:16px; padding:14px 18px; margin-bottom:16px; font-size:13px; color:#78350f; box-shadow:0 6px 18px rgba(15,61,46,.06); }
+.id-vinc form { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-top:8px; }
+/* seções */
+.id-grid { display:grid; grid-template-columns:repeat(2, minmax(0,1fr)); gap:14px; align-items:start; }
+.id-sec { background:#fff; border:1px solid var(--linha); border-radius:16px; padding:14px 16px; min-width:0; box-shadow:0 6px 18px rgba(15,61,46,.05); }
+.id-sec.larga { grid-column:1 / -1; }
+.id-sec h4 { margin:0 0 12px; font-size:11px; font-weight:800; letter-spacing:.6px; text-transform:uppercase; color:#64748b; display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+.id-sec h4 > i { width:26px; height:26px; border-radius:8px; background:var(--cor-f); color:var(--cor); display:inline-flex; align-items:center; justify-content:center; font-size:11px; }
+.id-sec h4 small { text-transform:none; letter-spacing:0; font-weight:600; color:#94a3b8; } .id-sec h4 .tot { margin-left:auto; font-size:15px; font-weight:800; color:var(--cor-e); letter-spacing:0; text-transform:none; font-variant-numeric:tabular-nums; }
+/* composição (barra empilhada + legenda) */
+.id-comp { display:flex; height:12px; border-radius:99px; overflow:hidden; background:#f1f5f4; margin-bottom:8px; }
+.id-comp i { display:block; height:100%; }
+.id-leg { display:flex; flex-wrap:wrap; gap:6px 14px; font-size:12px; color:#475569; margin-bottom:12px; }
+.id-leg span { display:inline-flex; align-items:center; gap:6px; } .id-leg i { width:10px; height:10px; border-radius:3px; display:inline-block; } .id-leg b { color:var(--tinta); font-variant-numeric:tabular-nums; }
+/* grupo de itens */
+.id-gcab { display:flex; align-items:center; gap:10px; margin:14px 0 8px; padding-top:12px; border-top:1px dashed var(--linha); }
+.id-gcab:first-of-type { border-top:0; padding-top:0; margin-top:4px; }
+.id-gcab .ic { width:30px; height:30px; border-radius:9px; display:inline-flex; align-items:center; justify-content:center; color:#fff; font-size:13px; flex-shrink:0; }
+.id-gcab b { font-size:13.5px; color:var(--tinta); } .id-gcab small { color:#64748b; font-size:12px; }
+.id-gcab .gtot { margin-left:auto; text-align:right; font-variant-numeric:tabular-nums; } .id-gcab .gtot b { font-size:14px; } .id-gcab .gtot small { display:block; }
+.id-itens { display:grid; grid-template-columns:repeat(auto-fill, minmax(330px, 1fr)); gap:10px; }
+.id-itens.uma { grid-template-columns:1fr; }
+.id-it { position:relative; background:#fff; border:1px solid var(--linha); border-left:4px solid var(--c, var(--cor)); border-radius:12px; padding:10px 12px 10px 14px; min-width:0; display:flex; flex-direction:column; gap:6px; transition:all .15s; }
+.id-it:hover { box-shadow:0 8px 20px rgba(15,23,42,.08); border-color:var(--c, var(--cor)); }
+.id-it-top { display:flex; align-items:flex-start; gap:10px; }
+.id-it-ic { width:32px; height:32px; border-radius:9px; background:color-mix(in srgb, var(--c, var(--cor)) 14%, #fff); color:var(--c, var(--cor)); display:inline-flex; align-items:center; justify-content:center; font-size:13px; flex-shrink:0; }
+.id-it-tit { flex:1; min-width:0; } .id-it-tit b { display:block; font-size:13px; color:var(--tinta); line-height:1.25; } .id-it-tit small { display:block; color:#64748b; font-size:11.5px; margin-top:1px; }
+.id-it-val { text-align:right; flex-shrink:0; font-variant-numeric:tabular-nums; } .id-it-val b { display:block; font-size:15px; color:var(--tinta); letter-spacing:-.01em; } .id-it-val small { display:block; font-size:11px; color:#64748b; }
+.id-it-desc { font-size:12px; color:#475569; line-height:1.4; background:#f8fafc; border-radius:8px; padding:6px 9px; }
+.id-it-chips { display:flex; flex-wrap:wrap; gap:5px; }
+.id-ch { display:inline-flex; align-items:center; gap:5px; font-size:11px; font-weight:700; color:#475569; background:#f1f5f4; border-radius:99px; padding:3px 9px; white-space:nowrap; max-width:100%; }
+.id-ch i { font-size:10px; opacity:.8; } .id-ch span { overflow:hidden; text-overflow:ellipsis; }
+.id-ch.cli { background:#eff4ff; color:#1e40af; } .id-ch.cli a { color:inherit; text-decoration:none; }
+.id-ch.av { background:#f5f3ff; color:#5b21b6; } .id-ch.av a { color:inherit; text-decoration:none; }
+.id-ch.up { background:#ecfdf3; color:#15803d; } .id-ch.down { background:#fef2f2; color:#b91c1c; } .id-ch.novo { background:#fff7ed; color:#c2410c; } .id-ch.saiu { background:#f1f5f9; color:#475569; }
+.id-ch.dep { background:#fdf2f8; color:#be185d; } .id-ch.tit { background:#eff4ff; color:#1e40af; }
+.id-barra { height:6px; border-radius:99px; background:#f1f5f4; overflow:hidden; } .id-barra i { display:block; height:100%; background:var(--c, var(--cor)); }
+.id-it-linha { display:grid; grid-template-columns:repeat(3, minmax(0,1fr)); gap:6px; }
+.id-it-linha > div { background:#f8fafc; border-radius:8px; padding:5px 8px; min-width:0; } .id-it-linha dt { font-size:9.5px; text-transform:uppercase; letter-spacing:.4px; color:#94a3b8; font-weight:700; } .id-it-linha dd { margin:0; font-size:12.5px; font-weight:800; color:var(--tinta); font-variant-numeric:tabular-nums; white-space:nowrap; }
+.id-it-aa { display:flex; align-items:center; gap:8px; font-size:12px; color:#64748b; font-variant-numeric:tabular-nums; } .id-it-aa b { color:var(--tinta); } .id-it-aa i { font-size:10px; color:#cbd5e1; }
+.id-dep { display:flex; gap:12px; align-items:flex-start; background:#fff; border:1px solid var(--linha); border-radius:12px; padding:10px 12px; }
+.id-dep .av { width:40px; height:40px; border-radius:12px; background:var(--cor-f); color:var(--cor-e); display:inline-flex; align-items:center; justify-content:center; font-weight:800; font-size:14px; flex-shrink:0; }
+.id-dep b { display:block; font-size:13px; } .id-dep small { display:block; color:#64748b; font-size:11.5px; margin-top:1px; }
+.id-dl { display:grid; grid-template-columns:auto 1fr; gap:5px 14px; font-size:13px; margin:0; }
+.id-dl dt { color:#64748b; } .id-dl dd { margin:0; color:var(--tinta); font-weight:600; min-width:0; word-break:break-word; }
+.id-vazio { padding:14px 4px; color:#94a3b8; font-size:13px; }
+.id-tab { width:100%; border-collapse:collapse; font-size:13px; } .id-tab td { padding:7px 6px; border-bottom:1px solid #f1f5f4; } .id-tab .num { text-align:right; white-space:nowrap; font-variant-numeric:tabular-nums; }
+.id-pill { display:inline-block; font-size:10.5px; font-weight:800; border-radius:99px; padding:2px 8px; background:var(--cor-f); color:var(--cor-e); border:1px solid var(--cor-b); }
+@media (max-width:1100px) { .id-kpis { grid-template-columns:repeat(3, minmax(0,1fr)); } .id-grid { grid-template-columns:1fr; } .id-sec.larga { grid-column:auto; } .id-leit { grid-template-columns:repeat(2, minmax(0,1fr)); } }
+@media (max-width:700px)  { .id-kpis, .id-leit { grid-template-columns:1fr; } .id-val { align-items:flex-start; text-align:left; } .id-val b { font-size:26px; } .id-itens { grid-template-columns:1fr; } .id-it-linha { grid-template-columns:repeat(3, minmax(0,1fr)); } }
+</style>
+{% endblock %}
+
+{% macro doc(v) %}{% if v %}{{ v|format_cnpj if v|length == 14 else v|format_cpf }}{% endif %}{% endmacro %}
+{% macro cad_chip(c) %}{% if c %}<span class="id-ch {{ 'av' if c.avulso else 'cli' }}" title="Está no cadastro"><i class="fas fa-{{ 'user' if c.avulso else 'user-tie' }}"></i><a href="{{ url_for('clientes.detalhes', id=c.id) }}"><span>{{ 'avulso' if c.avulso else ('nº ' ~ c.numero_cliente if c.numero_cliente else 'cliente') }} · {{ c.nome_razao_social }}</span></a></span>{% endif %}{% endmacro %}
+{% macro delta(v) %}{% if v > 0 %}<span class="id-ch up"><i class="fas fa-arrow-up"></i>{{ v|format_currency }}</span>{% elif v < 0 %}<span class="id-ch down"><i class="fas fa-arrow-down"></i>{{ (-v)|format_currency }}</span>{% else %}<span class="id-ch"><i class="fas fa-equals"></i>igual</span>{% endif %}{% endmacro %}
+
+{% block content %}
+{% include 'contabil/_nav_contabil.html' %}
+{% set ini = (d.nome or '?').split() %}
+<div class="id r-{{ d.resultado or 'zero' }}">
+<a class="id-volta" href="{{ url_for('contabil.irpf', ex=d.exercicio) }}"><i class="fas fa-arrow-left"></i> Imposto de Renda PF · exercício {{ d.exercicio }}</a>
+
+<div class="id-cab">
+  <div class="id-cli">
+    <span class="id-avatar">{{ ini[0][:1] }}{{ ini[-1][:1] if ini|length > 1 }}</span>
+    <div class="id-quem">
+      <div class="id-l1">{% if d.cliente_id and d.numero_cliente %}<span class="id-num">{{ d.numero_cliente }}</span>{% endif %}<b>{{ d.nome or 'Declarante' }}</b>
+        <span class="id-tag">{{ 'Completa' if d.completa else 'Simplificada' }} · {{ tab.tipo_declaracao(d.tipo_declaracao) }}</span>
+        {% if d.retificadora %}<span class="id-chip"><i class="fas fa-rotate"></i> retificadora</span>{% endif %}
+        {% if not d.vigente %}<span class="id-chip alerta"><i class="fas fa-triangle-exclamation"></i> substituída por outra entrega</span>{% endif %}</div>
+      <div class="id-l2">
+        <span><i class="fas fa-id-card"></i>CPF {{ d.cpf|format_cpf }}</span>
+        {% if d.dt_nascimento %}<span><i class="fas fa-cake-candles"></i>{{ d.dt_nascimento.strftime('%d/%m/%Y') }}</span>{% endif %}
+        {% if d.municipio %}<span><i class="fas fa-location-dot"></i>{{ d.municipio }}/{{ d.uf }}</span>{% endif %}
+        {% if tab.ocupacao(d.ocupacao) %}<span><i class="fas fa-briefcase"></i>{{ tab.ocupacao(d.ocupacao) }}</span>{% endif %}
+        {% if d.cliente_id %}<span class="id-chip"><i class="fas fa-{{ 'user' if d.cad_avulso else 'user-tie' }}"></i> <a href="{{ url_for('clientes.detalhes', id=d.cliente_id) }}">{{ 'avulso' if d.cad_avulso else 'cliente' }}: {{ d.cad_nome }}</a></span>
+        {% else %}<span class="id-chip alerta"><i class="fas fa-user-slash"></i> sem cadastro</span>{% endif %}
+        {% if d.aviso %}<span class="id-chip alerta" title="{{ d.aviso }}"><i class="fas fa-triangle-exclamation"></i> leitura com aviso</span>{% endif %}
+      </div>
+    </div>
+  </div>
+  <div class="id-val">
+    {% if d.resultado == 'restituir' %}<b>{{ d.vr_restituir|format_currency }}</b><small>imposto a restituir{% if d.banco %} · banco {{ d.banco }} ag. {{ d.agencia }} c/c {{ d.conta }}{% endif %}</small>
+    {% elif d.resultado == 'pagar' %}<b>{{ d.vr_pagar|format_currency }}</b><small>imposto a pagar{% if d.quotas and d.quotas > 1 %} · {{ d.quotas }} quotas de {{ d.vr_quota|format_currency }}{% endif %}</small>
+    {% else %}<b>R$ 0,00</b><small>sem imposto a pagar nem a restituir</small>{% endif %}
+  </div>
+  <div class="id-acoes">
+    {% if d.arquivo_dec %}<a class="id-btn" href="{{ url_for('contabil.irpf_arquivo', decl_id=d.id, qual='dec') }}"><i class="fas fa-download"></i> .DEC</a>{% endif %}
+    {% if d.arquivo_rec %}<a class="id-btn" href="{{ url_for('contabil.irpf_arquivo', decl_id=d.id, qual='rec') }}"><i class="fas fa-download"></i> .REC</a>{% endif %}
+    {% if pode_alt %}<form method="POST" action="{{ url_for('contabil.irpf_reler', decl_id=d.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf }}"><button class="id-btn" type="submit" title="Lê o arquivo guardado de novo"><i class="fas fa-rotate"></i> Reler</button></form>{% endif %}
+    {% if pode_exc %}<form method="POST" action="{{ url_for('contabil.irpf_excluir', decl_id=d.id) }}" onsubmit="return confirm('Excluir a leitura desta declaração? O arquivo continua no Dropbox.')"><input type="hidden" name="csrf_token" value="{{ csrf }}"><button class="id-btn" type="submit"><i class="fas fa-trash"></i> Excluir</button></form>{% endif %}
+  </div>
+</div>
+
+<div class="id-kpis">
+  <div><i class="fas fa-briefcase"></i><div><dt>Rendimentos tributáveis</dt><dd>{{ d.vr_tributaveis|format_currency }}</dd><small>isentos {{ d.vr_isentos|format_currency }} · exclusivos {{ d.vr_exclusivos|format_currency }}</small></div></div>
+  <div><i class="fas fa-percent"></i><div><dt>Imposto devido</dt><dd>{{ d.vr_imposto_devido|format_currency }}</dd><small>retido na fonte {{ d.vr_imposto_retido|format_currency }}{% if d.vr_base_calculo %} · base {{ d.vr_base_calculo|format_currency }}{% endif %}</small></div></div>
+  <div><i class="fas fa-house"></i><div><dt>Bens em 31/12/{{ ano_base }}</dt><dd>{{ d.vr_bens_atual|format_currency }}</dd><small>antes {{ d.vr_bens_anterior|format_currency }} · {{ 'cresceu' if d.vr_bens_atual >= d.vr_bens_anterior else 'caiu' }} {{ (d.vr_bens_atual - d.vr_bens_anterior)|abs|format_currency }}</small></div></div>
+  <div><i class="fas fa-hand-holding-dollar"></i><div><dt>Pagamentos e dívidas</dt><dd>{{ d.vr_pagamentos|format_currency }}</dd><small>{{ pags|length }} pagamento{{ 's' if pags|length != 1 }}{% if d.vr_dividas_atual %} · dívidas {{ d.vr_dividas_atual|format_currency }}{% endif %}</small></div></div>
+  <div><i class="fas fa-receipt"></i><div><dt>Recibo</dt><dd>{{ tab.recibo_pontuado(d.recibo) if d.recibo else '—' }}</dd><small>{{ 'entregue em ' ~ d.transmitida_em.strftime('%d/%m/%Y às %H:%M') if d.transmitida_em else 'o .REC ainda não chegou' }}</small></div></div>
+</div>
+
+{# leitura rápida: a conta que o contador faz de cabeça #}
+<div class="id-leit">
+  <div class="{{ 'al' if leitura.alerta else 'ok' }}"><dt>Variação patrimonial x renda</dt>
+    <dd>{{ leitura.liquido|format_currency }}{% if leitura.pct is not none %} <small style="display:inline">= {{ leitura.pct }}% da renda</small>{% endif %}</dd>
+    <small>{% if leitura.alerta %}O patrimônio líquido cresceu mais do que toda a renda declarada ({{ leitura.renda|format_currency }}): vale conferir a origem.{% else %}Bens menos dívidas variaram {{ leitura.liquido|format_currency }} no ano, dentro da renda declarada de {{ leitura.renda|format_currency }}.{% endif %}</small></div>
+  <div><dt>Renda declarada</dt><dd>{{ leitura.renda|format_currency }}</dd><small>tributáveis + isentos + exclusivos</small></div>
+  <div><dt>Bens no ano</dt><dd style="color:{{ '#15803d' if leitura.var_bens >= 0 else '#b91c1c' }}">{{ '+' if leitura.var_bens >= 0 else '−' }}{{ leitura.var_bens|abs|format_currency }}</dd><small>{{ bens|length }} ite{{ 'm' if bens|length == 1 else 'ns' }} em {{ grupos|length }} grupo{{ 's' if grupos|length != 1 }}</small></div>
+  <div><dt>Dívidas no ano</dt><dd style="color:{{ '#b91c1c' if leitura.var_div > 0 else '#15803d' }}">{{ '+' if leitura.var_div > 0 else ('−' if leitura.var_div < 0 else '') }}{{ leitura.var_div|abs|format_currency }}</dd><small>{{ divs|length }} dívida{{ 's' if divs|length != 1 }} · saldo {{ d.vr_dividas_atual|format_currency }}</small></div>
+</div>
+
+{% if not d.cliente_id and pode_alt %}
+<div class="id-vinc">
+  <b><i class="fas fa-user-slash"></i> Este CPF não está no cadastro.</b> Crie o avulso com os dados da declaração (nome, CPF, e-mail e telefone) ou vincule a uma pessoa já cadastrada.
+  <form method="POST" action="{{ url_for('contabil.irpf_criar_avulso', decl_id=d.id) }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf }}">
+    <button class="tx-ref-grupo" type="submit" style="--sec:#16a34a;--sec-e:#166534"><i class="fas fa-user-plus"></i> Criar avulso e vincular</button>
+  </form>
+  {% if sugestoes %}
+  <form method="POST" action="{{ url_for('contabil.irpf_vincular', decl_id=d.id) }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf }}">
+    <label>ou vincular a:</label>
+    <select name="cliente_id" class="form-control" style="width:auto;max-width:420px">
+      {% for s in sugestoes %}<option value="{{ s.id }}">{{ s.nome_razao_social }} · {{ s.cpf_cnpj or 'sem CPF' }}{{ ' · avulso' if s.avulso }}</option>{% endfor %}
+    </select>
+    <label style="font-size:12px"><input type="checkbox" name="confirmo" value="1"> sei que o CPF é diferente</label>
+    <button class="tx-b2" type="submit" style="height:34px;padding:0 14px;border-radius:9px;font-weight:800;cursor:pointer"><i class="fas fa-link"></i> Vincular</button>
+  </form>
+  {% endif %}
+</div>
+{% endif %}
+
+<div class="id-grid">
+  {# ───────── RENDIMENTOS ───────── #}
+  {% for b in blocos %}
+  <div class="id-sec {{ 'larga' if b.itens|length > 3 or b.chave in ('pj_titular','pj_dependente') }}">
+    <h4><i class="fas fa-{{ 'building' if b.chave in ('pj_titular','pj_dependente') else ('calendar' if b.chave == 'pf_exterior' else ('leaf' if b.chave == 'isento' else 'lock')) }}"></i>{{ b.titulo }}<small>{{ b.itens|length }} {{ 'fonte' if b.chave in ('pj_titular','pj_dependente','exclusivo_detalhe') else 'linha' }}{{ 's' if b.itens|length != 1 }}</small><span class="tot">{{ b.total|format_currency }}</span></h4>
+    <div class="id-itens{{ ' uma' if b.chave in ('isento','exclusivo') }}">
+      {% for r in b.itens %}
+      <div class="id-it" style="--c:{{ '#2563eb' if b.chave in ('pj_titular','pj_dependente') else ('#0d9488' if b.chave == 'pf_exterior' else ('#16a34a' if b.chave == 'isento' else '#7c3aed')) }}">
+        <div class="id-it-top">
+          <span class="id-it-ic"><i class="fas fa-{{ 'building' if b.chave in ('pj_titular','pj_dependente') else ('calendar' if b.chave == 'pf_exterior' else ('leaf' if b.chave == 'isento' else 'lock')) }}"></i></span>
+          <div class="id-it-tit"><b>{{ r.rotulo }}</b>{% if r.fonte_doc and b.chave not in ('isento','exclusivo') %}<small>{{ doc(r.fonte_doc) }}{% if b.chave == 'exclusivo_detalhe' and r.fonte_nome %} · {{ r.fonte_nome }}{% endif %}</small>{% endif %}</div>
+          <div class="id-it-val"><b>{{ r.valor|format_currency }}</b><small>{{ r.pct }}% do bloco</small></div>
+        </div>
+        {% if b.chave in ('pj_titular','pj_dependente') %}
+        <dl class="id-it-linha">
+          <div><dt>Previdência</dt><dd>{{ r.previdencia|format_currency if r.previdencia else '—' }}</dd></div>
+          <div><dt>13º salário</dt><dd>{{ r.decimo_terceiro|format_currency if r.decimo_terceiro else '—' }}</dd></div>
+          <div><dt>IR retido{% if r.ret_pct %} · {{ r.ret_pct }}%{% endif %}</dt><dd>{{ r.imposto_retido|format_currency if r.imposto_retido else '—' }}</dd></div>
+        </dl>
+        {% elif b.chave == 'pf_exterior' and (r.imposto_retido or r.previdencia) %}
+        <dl class="id-it-linha"><div><dt>Imposto pago (carnê-leão)</dt><dd>{{ r.imposto_retido|format_currency if r.imposto_retido else '—' }}</dd></div><div><dt>Previdência</dt><dd>{{ r.previdencia|format_currency if r.previdencia else '—' }}</dd></div><div></div></dl>
+        {% endif %}
+        <div class="id-barra"><i style="width:{{ r.pct }}%"></i></div>
+        <div class="id-it-chips">
+          {{ cad_chip(r.cad) }}
+          {% if r.dep %}<span class="id-ch dep"><i class="fas fa-child"></i><span>dependente: {{ r.dep.nome }}</span></span>{% elif r.dependente_cpf %}<span class="id-ch dep"><i class="fas fa-child"></i><span>dependente {{ r.dependente_cpf|format_cpf }}</span></span>{% endif %}
+          {% if r.liquido is not none and (r.previdencia or r.imposto_retido) %}<span class="id-ch" title="valor menos previdência e IR retido"><i class="fas fa-hand-holding-dollar"></i><span>líquido {{ r.liquido|format_currency }}</span></span>{% endif %}
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    {% if b.chave in ('pj_titular','pj_dependente') and b.itens|length > 1 %}
+    <div class="id-it-aa" style="margin-top:10px;justify-content:flex-end">previdência <b>{{ b.prev|format_currency }}</b> <i class="fas fa-circle"></i> 13º <b>{{ b.dec|format_currency }}</b> <i class="fas fa-circle"></i> IR retido <b>{{ b.irrf|format_currency }}</b></div>
+    {% endif %}
+  </div>
+  {% endfor %}
+
+  {# ───────── BENS E DIREITOS ───────── #}
+  <div class="id-sec larga">
+    <h4><i class="fas fa-house"></i>Bens e direitos<small>{{ bens|length }} ite{{ 'm' if bens|length == 1 else 'ns' }} · 31/12/{{ ano_base - 1 }} {{ tot_bens_ant|format_currency }}</small><span class="tot">{{ tot_bens|format_currency }}</span></h4>
+    {% if grupos %}
+    <div class="id-comp">{% for g in grupos %}<i style="width:{{ g.pct }}%;background:{{ g.cor }}" title="{{ g.nome }} · {{ g.pct }}%"></i>{% endfor %}</div>
+    <div class="id-leg">{% for g in grupos %}<span><i style="background:{{ g.cor }}"></i>{{ g.nome }} <b>{{ g.pct }}%</b></span>{% endfor %}</div>
+    {% for g in grupos %}
+    <div class="id-gcab"><span class="ic" style="background:{{ g.cor }}"><i class="fas fa-{{ g.icone }}"></i></span>
+      <div><b>{{ g.nome }}</b><br><small>{{ g.itens|length }} ite{{ 'm' if g.itens|length == 1 else 'ns' }} · {{ g.pct }}% dos bens</small></div>
+      <div class="gtot"><b>{{ g.atual|format_currency }}</b><small>{% if g.delta > 0 %}<span style="color:#15803d">+{{ g.delta|format_currency }}</span>{% elif g.delta < 0 %}<span style="color:#b91c1c">−{{ (-g.delta)|format_currency }}</span>{% else %}sem variação{% endif %} no ano</small></div></div>
+    <div class="id-itens">
+      {% for b in g.itens %}
+      <div class="id-it" style="--c:{{ g.cor }}">
+        <div class="id-it-top">
+          <span class="id-it-ic"><i class="fas fa-{{ b.icone }}"></i></span>
+          <div class="id-it-tit"><b>{{ b.rotulo }}</b><small>{% if b.exterior %}no exterior · {{ b.pais_nome or '' }} · {% endif %}{{ b.pct }}% dos bens{% if b.dt_aquisicao %} · desde {{ b.dt_aquisicao.strftime('%d/%m/%Y') }}{% endif %}</small></div>
+          <div class="id-it-val"><b>{{ b.vr_atual|format_currency }}</b><small>antes {{ b.vr_anterior|format_currency }}</small></div>
+        </div>
+        {% if b.descricao %}<div class="id-it-desc">{{ b.descricao }}</div>{% endif %}
+        <div class="id-barra"><i style="width:{{ b.pct }}%"></i></div>
+        <div class="id-it-chips">
+          {% if b.novo %}<span class="id-ch novo"><i class="fas fa-star"></i>novo no ano</span>{% elif b.saiu %}<span class="id-ch saiu"><i class="fas fa-right-from-bracket"></i>saiu</span>{% else %}{{ delta(b.delta) }}{% endif %}
+          {{ cad_chip(b.cad) }}
+          {% if b.cpf_cnpj and not b.cad %}<span class="id-ch"><i class="fas fa-id-card"></i><span>{{ doc(b.cpf_cnpj) }}</span></span>{% endif %}
+          {% if b.banco %}<span class="id-ch"><i class="fas fa-building-columns"></i><span>banco {{ b.banco }}{% if b.conta %} · c/c {{ b.conta }}{% endif %}</span></span>{% endif %}
+          {% if b.matricula %}<span class="id-ch"><i class="fas fa-file-lines"></i><span>matrícula {{ b.matricula }}</span></span>{% endif %}
+          {% if b.area %}<span class="id-ch"><i class="fas fa-ruler-combined"></i><span>{{ ('%.1f' % b.area)|replace('.0', '')|replace('.', ',') }} m²</span></span>{% endif %}
+          {% if b.renavam %}<span class="id-ch"><i class="fas fa-car"></i><span>Renavam {{ b.renavam }}</span></span>{% endif %}
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    {% endfor %}
+    {% else %}<div class="id-vazio">Nenhum bem declarado.</div>{% endif %}
+  </div>
+
+  {# ───────── PAGAMENTOS ───────── #}
+  <div class="id-sec {{ 'larga' if pags|length > 4 }}">
+    <h4><i class="fas fa-hand-holding-dollar"></i>Pagamentos efetuados<small>{{ pags|length }} pagamento{{ 's' if pags|length != 1 }}{% if pag_grupos|sum(attribute='nao_ded') %} · não dedutível {{ pag_grupos|sum(attribute='nao_ded')|format_currency }}{% endif %}</small><span class="tot">{{ tot_pag|format_currency }}</span></h4>
+    {% if pag_grupos %}
+    {% for g in pag_grupos %}
+    <div class="id-gcab"><span class="ic" style="background:#0d9488"><i class="fas fa-{{ 'graduation-cap' if g.codigo in ('01','02') else ('stethoscope' if g.codigo|int < 30 else ('scale-balanced' if g.codigo in ('30','31','33','34') else 'file-invoice-dollar')) }}"></i></span>
+      <div><b>{{ g.nome }}</b><br><small>{{ g.itens|length }} pagamento{{ 's' if g.itens|length != 1 }} · {{ g.pct }}% do total</small></div>
+      <div class="gtot"><b>{{ g.total|format_currency }}</b>{% if g.nao_ded %}<small>{{ g.nao_ded|format_currency }} não dedutível</small>{% endif %}</div></div>
+    <div class="id-itens">
+      {% for x in g.itens %}
+      <div class="id-it" style="--c:#0d9488">
+        <div class="id-it-top">
+          <span class="id-it-ic"><i class="fas fa-{{ 'graduation-cap' if g.codigo in ('01','02') else ('stethoscope' if g.codigo|int < 30 else 'file-invoice-dollar') }}"></i></span>
+          <div class="id-it-tit"><b>{{ x.beneficiario_nome or x.rotulo }}</b><small>{{ doc(x.beneficiario_doc) }}</small></div>
+          <div class="id-it-val"><b>{{ x.valor|format_currency }}</b>{% if x.vr_nao_dedutivel %}<small>dedutível {{ x.dedutivel|format_currency }}</small>{% endif %}</div>
+        </div>
+        {% if x.descricao %}<div class="id-it-desc">{{ x.descricao }}</div>{% endif %}
+        <div class="id-it-chips">
+          {% if x.tipo == 'D' %}<span class="id-ch dep"><i class="fas fa-child"></i><span>para {{ x.dep.nome if x.dep else 'dependente' }}</span></span>{% elif x.tipo == 'A' %}<span class="id-ch dep"><i class="fas fa-scale-balanced"></i><span>alimentando</span></span>{% else %}<span class="id-ch tit"><i class="fas fa-user"></i><span>titular</span></span>{% endif %}
+          {{ cad_chip(x.cad) }}
+          {% if x.vr_nao_dedutivel %}<span class="id-ch down"><i class="fas fa-ban"></i><span>{{ x.vr_nao_dedutivel|format_currency }} não dedutível</span></span>{% endif %}
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    {% endfor %}
+    {% else %}<div class="id-vazio">Nenhum pagamento informado.</div>{% endif %}
+  </div>
+
+  {# ───────── DEPENDENTES ───────── #}
+  <div class="id-sec">
+    <h4><i class="fas fa-children"></i>Dependentes<span class="tot">{{ deps|length }}</span></h4>
+    {% if deps %}
+    <div style="display:flex;flex-direction:column;gap:8px">
+      {% for x in deps %}
+      <div class="id-dep"><span class="av">{{ x.ini }}</span>
+        <div style="flex:1;min-width:0"><b>{{ x.nome }}</b><small>{{ x.rotulo }}{% if x.idade is not none %} · {{ x.idade }} anos em 31/12/{{ ano_base }}{% endif %}{% if x.nascimento %} · nascimento {{ x.nascimento.strftime('%d/%m/%Y') }}{% endif %}</small>
+          <div class="id-it-chips" style="margin-top:6px">
+            {% if x.cpf %}<span class="id-ch"><i class="fas fa-id-card"></i><span>CPF {{ x.cpf|format_cpf }}</span></span>{% endif %}
+            {% if x.n_pag %}<span class="id-ch"><i class="fas fa-hand-holding-dollar"></i><span>{{ x.n_pag }} pagamento{{ 's' if x.n_pag != 1 }} · {{ x.v_pag|format_currency }}</span></span>{% endif %}
+            {% if x.v_rend %}<span class="id-ch"><i class="fas fa-briefcase"></i><span>rendimentos {{ x.v_rend|format_currency }}</span></span>{% endif %}
+            {{ cad_chip(x.cad) }}
+          </div></div></div>
+      {% endfor %}
+    </div>
+    {% else %}<div class="id-vazio">Sem dependentes.</div>{% endif %}
+  </div>
+
+  {# ───────── DÍVIDAS ───────── #}
+  <div class="id-sec">
+    <h4><i class="fas fa-file-invoice-dollar"></i>Dívidas e ônus<small>{{ divs|length }} dívida{{ 's' if divs|length != 1 }}</small><span class="tot">{{ d.vr_dividas_atual|format_currency }}</span></h4>
+    {% if divs %}
+    <div class="id-itens uma">
+      {% for x in divs %}
+      <div class="id-it" style="--c:#dc2626">
+        <div class="id-it-top">
+          <span class="id-it-ic"><i class="fas fa-{{ 'building-columns' if x.codigo in ('11','12') else ('user' if x.codigo == '14' else 'file-invoice-dollar') }}"></i></span>
+          <div class="id-it-tit"><b>{{ x.rotulo }}</b><small>antes {{ x.vr_anterior|format_currency }}{% if x.vr_pago %} · pagou {{ x.vr_pago|format_currency }} no ano{% endif %}</small></div>
+          <div class="id-it-val"><b>{{ x.vr_atual|format_currency }}</b><small>saldo em 31/12/{{ ano_base }}</small></div>
+        </div>
+        {% if x.descricao %}<div class="id-it-desc">{{ x.descricao }}</div>{% endif %}
+        <div class="id-it-chips">{% if x.delta > 0 %}<span class="id-ch down"><i class="fas fa-arrow-up"></i>aumentou {{ x.delta|format_currency }}</span>{% elif x.delta < 0 %}<span class="id-ch up"><i class="fas fa-arrow-down"></i>diminuiu {{ (-x.delta)|format_currency }}</span>{% else %}<span class="id-ch"><i class="fas fa-equals"></i>igual</span>{% endif %}</div>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}<div class="id-vazio">Sem dívidas declaradas.</div>{% endif %}
+  </div>
+
+  {# ───────── FICHA ───────── #}
+  <div class="id-sec">
+    <h4><i class="fas fa-folder-open"></i>Ficha e arquivos</h4>
+    <dl class="id-dl">
+      <dt>Exercício</dt><dd>{{ d.exercicio }} (ano-base {{ ano_base }})</dd>
+      {% if d.email %}<dt>E-mail</dt><dd>{{ d.email }}</dd>{% endif %}
+      {% if d.telefone %}<dt>Telefone</dt><dd>{{ d.telefone|format_phone }}</dd>{% endif %}
+      {% if d.cep %}<dt>CEP</dt><dd>{{ d.cep }}</dd>{% endif %}
+      {% if d.conjuge_cpf %}<dt>Cônjuge</dt><dd>CPF {{ d.conjuge_cpf|format_cpf }}</dd>{% endif %}
+      {% if d.recibo_anterior %}<dt>Recibo do ano anterior</dt><dd>{{ d.recibo_anterior }}</dd>{% endif %}
+      {% if d.recibo_local %}<dt>Transmitida de</dt><dd>{{ d.recibo_local }}</dd>{% endif %}
+      {% if d.recibo_mensagem %}<dt>Mensagem da Receita</dt><dd style="font-weight:400">{{ d.recibo_mensagem }}</dd>{% endif %}
+      <dt>Origem</dt><dd>{{ {'colabore': 'Q-Colabore (pasta transmitidas)', 'upload': 'enviada pela tela', 'pdf': 'PDF'}.get(d.origem, d.origem) }} · lida em {{ d.lido_em.strftime('%d/%m/%Y %H:%M') if d.lido_em else '—' }}</dd>
+      <dt>Arquivo .DEC</dt><dd style="font-weight:400;font-size:12px">{{ d.arquivo_dec or 'não guardado' }}</dd>
+      <dt>Arquivo .REC</dt><dd style="font-weight:400;font-size:12px">{{ d.arquivo_rec or 'não chegou' }}</dd>
+      {% if d.aviso %}<dt>Aviso da leitura</dt><dd style="color:#92400e">{{ d.aviso }}</dd>{% endif %}
+    </dl>
+  </div>
+
+  {% if outras %}
+  <div class="id-sec">
+    <h4><i class="fas fa-clock-rotate-left"></i>Outras entregas deste CPF</h4>
+    <table class="id-tab"><tbody>
+      {% for o in outras %}<tr><td><a href="{{ url_for('contabil.irpf_declaracao', decl_id=o.id) }}" style="text-decoration:none;color:inherit"><b>IRPF {{ o.exercicio }}</b>{{ ' · retificadora' if o.retificadora }}{{ '' if o.vigente else ' · substituída' }}<br><small style="color:#64748b">{{ o.transmitida_em.strftime('%d/%m/%Y') if o.transmitida_em else 'sem recibo' }} · bens {{ o.vr_bens_atual|format_currency }} · tributáveis {{ o.vr_tributaveis|format_currency }}</small></a></td>
+        <td class="num">{% if o.resultado == 'restituir' %}<span class="id-pill" style="--cor-f:#eff4ff;--cor-e:#1e40af;--cor-b:#cfdefd">restituir {{ o.vr_restituir|format_currency }}</span>{% elif o.resultado == 'pagar' %}<span class="id-pill" style="--cor-f:#fff4ec;--cor-e:#c2410c;--cor-b:#fddcc0">pagar {{ o.vr_pagar|format_currency }}</span>{% else %}<span class="id-pill">sem imposto</span>{% endif %}</td></tr>{% endfor %}
+    </tbody></table>
+  </div>
+  {% endif %}
+</div>
+</div>
+{% endblock %}

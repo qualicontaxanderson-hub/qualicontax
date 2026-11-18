@@ -1,0 +1,179 @@
+{% extends "base.html" %}
+{% block title %}Imposto de Renda PF - Qualicontax{% endblock %}
+{% block extra_css %}
+{% include 'financeiro/_lanc_tx_css.html' %}
+<style>
+/* Contábil › Imposto de Renda PF (18/11/2026) no molde das COBRANÇAS/HONORÁRIOS do Financeiro
+   (Anderson: "fazer o estilo que temos no Financeiro cobranças honorários"): quadros coloridos que
+   filtram, troca de exercício na faixa verde, dias de entrega com total e cartões por pessoa.
+   O CSS vem de financeiro/_lanc_tx_css.html; aqui só o que é desta tela (prefixo ir-). */
+.tx a.tx-aba { text-decoration:none; color:inherit; }
+/* faixa verde: seletor de exercício e botão, copiados de financeiro/honorarios_painel.html (hp-*) */
+.hp-acoes { display:flex; gap:10px; flex-wrap:wrap; justify-content:flex-end; align-items:center; }
+.hp-btn { display:inline-flex; align-items:center; gap:9px; padding:11px 18px; border-radius:14px; border:0; background:#fff; color:#0f3d2e; font:inherit;
+  font-weight:800; font-size:14.5px; box-shadow:0 10px 26px rgba(0,0,0,.18); cursor:pointer; text-decoration:none; }
+.hp-btn i { color:#16a34a; }
+.hp-comp { display:inline-flex; align-items:center; gap:4px; background:rgba(255,255,255,.14); border:1px solid rgba(255,255,255,.35); border-radius:14px; padding:4px; color:#fff; }
+.hp-comp a { width:34px; height:34px; display:inline-flex; align-items:center; justify-content:center; color:#fff; text-decoration:none; border-radius:10px; }
+.hp-comp a:hover { background:rgba(255,255,255,.18); }
+.hp-comp span { padding:0 8px; line-height:1.1; text-align:center; } .hp-comp small { display:block; font-size:10px; font-weight:800; letter-spacing:.08em; text-transform:uppercase; opacity:.8; }
+.hp-comp b { font-size:16px; }
+.tx-abas { grid-template-columns:repeat(5, minmax(0,1fr)); }
+.tx-a-rest { --cor:#2563eb; --cor-e:#1e40af; }
+.tx-a-pag  { --cor:#f97316; --cor-e:#c2410c; }
+.tx-a-zero { --cor:#475569; --cor-e:#1e293b; }
+.tx-a-sem  { --cor:#7c3aed; --cor-e:#5b21b6; }
+.tx-painel[data-p="todas"]      { --sec:#16a34a; --sec-e:#166534; --sec-f:#ecfdf3; --sec-b:#bbf7d0; }
+.tx-painel[data-p="restituir"]  { --sec:#2563eb; --sec-e:#1e40af; --sec-f:#eff4ff; --sec-b:#bfdbfe; }
+.tx-painel[data-p="pagar"]      { --sec:#f97316; --sec-e:#c2410c; --sec-f:#fff4ec; --sec-b:#fed7b5; }
+.tx-painel[data-p="zero"]       { --sec:#475569; --sec-e:#1e293b; --sec-f:#f1f5f9; --sec-b:#e2e8f0; }
+.tx-painel[data-p="avulsos"]    { --sec:#7c3aed; --sec-e:#5b21b6; --sec-f:#f5f3ff; --sec-b:#ddd6fe; }
+.tx-painel[data-p="sem_cadastro"], .tx-painel[data-p="retificadas"] { --sec:#dc2626; --sec-e:#991b1b; --sec-f:#fef1f1; --sec-b:#fecaca; }
+.tx-painel.on { display:block; }
+.tx-f { text-decoration:none; }
+.ir-grade { display:grid; grid-template-columns:repeat(auto-fill, minmax(300px, 1fr)); gap:12px; margin-bottom:22px; }
+.ir-c { padding-bottom:12px; }
+.ir-c .tx-c-meio { align-items:flex-start; }
+.ir-c .tx-c-desc { color:#475569; font-weight:600; }
+.ir-c-cad { font-size:11px; font-weight:800; border-radius:99px; padding:3px 9px; white-space:nowrap; display:inline-flex; align-items:center; gap:5px; }
+.ir-c-cad.cli { background:#eff4ff; color:#1e40af; border:1px solid #bfdbfe; }
+.ir-c-cad.av  { background:#f5f3ff; color:#5b21b6; border:1px solid #ddd6fe; }
+.ir-c-cad.sem { background:#fef1f1; color:#991b1b; border:1px solid #fecaca; }
+.ir-itens { margin-top:2px; display:flex; flex-direction:column; gap:3px; }
+.ir-it { display:flex; justify-content:space-between; gap:10px; font-size:12px; color:#475569; }
+.ir-it b { font-weight:700; color:#334155; font-variant-numeric:tabular-nums; white-space:nowrap; }
+.ir-linha { display:flex; gap:6px; flex-wrap:wrap; margin-top:4px; }
+.ir-chip { display:inline-flex; align-items:center; gap:5px; font-size:11px; font-weight:700; color:#64748b; background:#f1f5f4; border-radius:99px; padding:3px 9px; }
+.ir-chip.retif { background:#f5f3ff; color:#6d28d9; } .ir-chip.aviso { background:#fffbeb; color:#92400e; }
+.ir-up { background:#fff; border:1px solid var(--linha); border-radius:16px; padding:14px 18px; margin-bottom:16px; box-shadow:0 6px 18px rgba(15,61,46,.06); display:none; }
+.ir-up.on { display:block; } .ir-up form { display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+.ir-up small { display:block; color:#64748b; margin-top:8px; line-height:1.4; } .ir-up code { background:#f1f5f4; border-radius:6px; padding:1px 6px; font-size:12px; }
+.ir-como { background:#fff; border:1px solid var(--linha); border-radius:16px; padding:16px 20px; margin-bottom:16px; font-size:13px; color:#334155; box-shadow:0 6px 18px rgba(15,61,46,.06); }
+.ir-como h3 { margin:0 0 8px; font-size:13px; letter-spacing:.5px; text-transform:uppercase; color:var(--verde); display:flex; align-items:center; gap:8px; }
+.ir-como h3 i { width:26px; height:26px; border-radius:8px; background:#ecfdf3; color:#16a34a; display:inline-flex; align-items:center; justify-content:center; font-size:12px; }
+.ir-como ol { margin:0 0 0 18px; padding:0; } .ir-como li { margin:4px 0; } .ir-como code { background:#f1f5f4; border-radius:6px; padding:1px 6px; font-size:12px; }
+.tx-ref-resumo b { margin-left:2px; }
+@media (max-width:1100px) { .tx-abas { grid-template-columns:repeat(3, minmax(0,1fr)); } }
+@media (max-width:700px)  { .tx-abas { grid-template-columns:repeat(2, minmax(0,1fr)); margin-top:0; } .ir-grade { grid-template-columns:1fr; } }
+</style>
+{% endblock %}
+
+{% block content %}
+{% include 'contabil/_nav_contabil.html' %}
+{% set _f = {'modelo': modelo or None, 'cad': cad or None, 'q': busca or None} %}
+<div class="tx">
+<div class="ef-hero">
+  <div class="ef-hero-inner ef-hero-head">
+    <div>
+      <h1 class="ef-hero-title">Imposto de Renda PF</h1>
+      <p class="ef-hero-sub">As declarações entregues, lidas direto do programa da Receita: resultado, recibo, rendimentos, bens e dependentes de cada pessoa</p>
+    </div>
+    <div class="hp-acoes">
+      <div class="hp-comp"><a href="{{ url_for('contabil.irpf', ex=ex - 1, sit=sit, **_f) }}" title="Exercício anterior"><i class="fas fa-chevron-left"></i></a>
+        <span><small>Exercício</small><b>{{ ex }}</b><small style="text-transform:none;letter-spacing:0;opacity:.75">ano-base {{ ex - 1 }}</small></span>
+        {% if ex < hoje.year %}<a href="{{ url_for('contabil.irpf', ex=ex + 1, sit=sit, **_f) }}" title="Próximo exercício"><i class="fas fa-chevron-right"></i></a>{% else %}<a style="opacity:.35;pointer-events:none"><i class="fas fa-chevron-right"></i></a>{% endif %}</div>
+      {% if pode_inc %}<button type="button" class="hp-btn" onclick="document.getElementById('irUp').classList.toggle('on');document.getElementById('irUp').scrollIntoView({block:'nearest'})"><i class="fas fa-upload"></i> Enviar declaração</button>{% endif %}
+    </div>
+  </div>
+</div>
+
+<div class="ef-body">
+  <div class="tx-abas">
+    <a class="tx-aba tx-a-rec{{ ' on' if sit == 'todas' }}" href="{{ url_for('contabil.irpf', ex=ex, **_f) }}"><span class="tx-aba-ico"><i class="fas fa-file-circle-check"></i></span>
+      <span class="tx-aba-txt"><span class="tx-aba-lbl">Entregues</span><span class="tx-aba-val">{{ k.total or 0 }}</span><span class="tx-aba-sub">{{ k.completas or 0 }} completa{{ 's' if (k.completas or 0) != 1 }} · {{ (k.total or 0) - (k.completas or 0) }} simplificada{{ 's' if ((k.total or 0) - (k.completas or 0)) != 1 }}</span></span><span class="tx-aba-n">{{ ex }}</span></a>
+    <a class="tx-aba tx-a-rest{{ ' on' if sit == 'restituir' }}" href="{{ url_for('contabil.irpf', ex=ex, sit='restituir', **_f) }}"><span class="tx-aba-ico"><i class="fas fa-hand-holding-dollar"></i></span>
+      <span class="tx-aba-txt"><span class="tx-aba-lbl">A restituir</span><span class="tx-aba-val">{{ (k.v_rest or 0)|format_currency }}</span><span class="tx-aba-sub">{{ k.n_rest or 0 }} pessoa{{ 's' if (k.n_rest or 0) != 1 }} com restituição</span></span><span class="tx-aba-n">{{ k.n_rest or 0 }}</span></a>
+    <a class="tx-aba tx-a-pag{{ ' on' if sit == 'pagar' }}" href="{{ url_for('contabil.irpf', ex=ex, sit='pagar', **_f) }}"><span class="tx-aba-ico"><i class="fas fa-money-bill-transfer"></i></span>
+      <span class="tx-aba-txt"><span class="tx-aba-lbl">A pagar</span><span class="tx-aba-val">{{ (k.v_pag or 0)|format_currency }}</span><span class="tx-aba-sub">{{ k.n_pag or 0 }} pessoa{{ 's' if (k.n_pag or 0) != 1 }}{% if k.n_quotas %} · {{ k.n_quotas }} em quotas{% endif %}</span></span><span class="tx-aba-n">{{ k.n_pag or 0 }}</span></a>
+    <a class="tx-aba tx-a-zero{{ ' on' if sit == 'zero' }}" href="{{ url_for('contabil.irpf', ex=ex, sit='zero', **_f) }}"><span class="tx-aba-ico"><i class="fas fa-equals"></i></span>
+      <span class="tx-aba-txt"><span class="tx-aba-lbl">Sem imposto</span><span class="tx-aba-val">{{ k.n_zero or 0 }}</span><span class="tx-aba-sub">nem a pagar nem a restituir</span></span><span class="tx-aba-n">{{ k.n_zero or 0 }}</span></a>
+    <a class="tx-aba tx-a-sem{{ ' on' if sit == 'avulsos' }}" href="{{ url_for('contabil.irpf', ex=ex, sit='avulsos', **_f) }}"><span class="tx-aba-ico"><i class="fas fa-user-plus"></i></span>
+      <span class="tx-aba-txt"><span class="tx-aba-lbl">Avulsos do IR</span><span class="tx-aba-val">{{ n_av }}</span><span class="tx-aba-sub">{% if k.sem_cad %}{{ k.sem_cad }} ainda sem cadastro{% else %}cadastro criado pela declaração · {{ k.avulsos_novos or 0 }} nest{{ 'e' if (k.avulsos_novos or 0) == 1 else 'es' }} exercício{% endif %}</span></span><span class="tx-aba-n">{{ n_av }}</span></a>
+  </div>
+
+  {% if pode_inc %}
+  <div class="ir-up" id="irUp">
+    <form method="POST" action="{{ url_for('contabil.irpf_enviar') }}" enctype="multipart/form-data">
+      <input type="hidden" name="csrf_token" value="{{ csrf }}">
+      <b style="color:var(--verde)"><i class="fas fa-file-import"></i> Enviar declaração</b>
+      <input type="file" name="arquivos" class="form-control" multiple accept=".DEC,.REC,.dec,.rec" required style="flex:1 1 320px">
+      <button type="submit" class="tx-ref-grupo" style="--sec:#16a34a;--sec-e:#166534"><i class="fas fa-check"></i> Ler agora</button>
+    </form>
+    <small>Escolha o .DEC e o .REC da mesma declaração (pode mandar vários de uma vez). Eles ficam em <code>C:\Arquivos de Programas RFB\IRPF{{ ex }}\transmitidas</code> no PC onde a declaração foi transmitida.
+      Com o Q-Colabore vigiando essa pasta, nem precisa: a declaração aparece aqui sozinha em até 5 minutos.</small>
+  </div>
+  {% endif %}
+
+  <div class="tx-painel on" data-p="{{ sit }}">
+    <form class="tx-refino" method="GET" id="irFiltro">
+      <input type="hidden" name="ex" value="{{ ex }}"><input type="hidden" name="sit" value="{{ sit }}">
+      <i class="fas fa-sliders"></i>
+      <div class="tx-filtros">
+        <a class="tx-f{{ ' on' if not modelo }}" href="{{ url_for('contabil.irpf', ex=ex, sit=sit, cad=cad or None, q=busca or None) }}">Todas <b>{{ k.total or 0 }}</b></a>
+        <a class="tx-f{{ ' on' if modelo == 'completa' }}" href="{{ url_for('contabil.irpf', ex=ex, sit=sit, modelo='completa', cad=cad or None, q=busca or None) }}">Completa <b>{{ k.completas or 0 }}</b></a>
+        <a class="tx-f{{ ' on' if modelo == 'simplificada' }}" href="{{ url_for('contabil.irpf', ex=ex, sit=sit, modelo='simplificada', cad=cad or None, q=busca or None) }}">Simplificada <b>{{ (k.total or 0) - (k.completas or 0) }}</b></a>
+      </div>
+      <div class="tx-filtros">
+        <a class="tx-f{{ ' on' if cad == 'cliente' }}" href="{{ url_for('contabil.irpf', ex=ex, sit=sit, modelo=modelo or None, cad=(None if cad == 'cliente' else 'cliente'), q=busca or None) }}"><i class="fas fa-user-tie"></i> Clientes <b>{{ n_cli }}</b></a>
+        <a class="tx-f{{ ' on' if cad == 'avulso' }}" href="{{ url_for('contabil.irpf', ex=ex, sit=sit, modelo=modelo or None, cad=(None if cad == 'avulso' else 'avulso'), q=busca or None) }}"><i class="fas fa-user"></i> Avulsos <b>{{ n_av }}</b></a>
+        {% if k.sem_cad %}<a class="tx-f{{ ' on' if sit == 'sem_cadastro' }}" href="{{ url_for('contabil.irpf', ex=ex, sit='sem_cadastro', **_f) }}"><i class="fas fa-user-slash"></i> Sem cadastro <b>{{ k.sem_cad }}</b></a>{% endif %}
+        {% if retificadas %}<a class="tx-f{{ ' on' if sit == 'retificadas' }}" href="{{ url_for('contabil.irpf', ex=ex, sit='retificadas', **_f) }}"><i class="fas fa-rotate"></i> Substituídas <b>{{ retificadas }}</b></a>{% endif %}
+      </div>
+      <div class="tx-busca"><i class="fas fa-magnifying-glass"></i><input type="search" name="q" value="{{ busca }}" placeholder="Nome ou CPF"></div>
+      <div class="tx-ref-resumo{{ ' filtrado' if (modelo or cad or busca or sit != 'todas') }}">{{ n_linhas }} declaraç{{ 'ão' if n_linhas == 1 else 'ões' }}{% if k.sem_recibo %} <span style="opacity:.8">· {{ k.sem_recibo }} sem recibo</span>{% endif %}</div>
+    </form>
+
+    {% if not grupos %}
+      {% if not k.total %}
+      <div class="ir-como">
+        <h3><i class="fas fa-circle-info"></i> Como as declarações chegam aqui</h3>
+        <ol>
+          <li><b>Sozinhas, pelo Q-Colabore:</b> no PC onde o programa da Receita roda, abra o Q-Colabore › Configurar e acrescente a pasta
+              <code>C:\Arquivos de Programas RFB\IRPF{{ ex }}\transmitidas</code> (uma por ano). Toda declaração transmitida ali aparece aqui em até 5 minutos.</li>
+          <li><b>Pela tela:</b> botão <b>Enviar declaração</b> na faixa verde, com o .DEC e o .REC.</li>
+          <li><b>Declaração feita no site ou no aplicativo da Receita</b> não deixa arquivo no PC: o PDF dela entra na próxima etapa.</li>
+        </ol>
+      </div>
+      {% endif %}
+      <div class="tx-vazio"><i class="fas fa-file-invoice"></i>{{ 'Nada encontrado com esse filtro.' if (busca or modelo or cad or sit != 'todas') else 'Nenhuma declaração de ' ~ ex ~ ' lida ainda.' }}</div>
+    {% endif %}
+
+    {% for g in grupos %}
+    <div class="tx-dia"><div class="tx-data"><b>{{ g.data }}</b><em>{{ g.sub }}</em></div>
+      <small><b>{{ g.n }}</b> declaraç{{ 'ão' if g.n == 1 else 'ões' }}{% if g.rest %} · <span style="color:#1e40af">{{ g.rest|format_currency }} a restituir</span>{% endif %}{% if g.pag %} · <span style="color:#c2410c">{{ g.pag|format_currency }} a pagar</span>{% endif %}</small><span></span></div>
+    <div class="ir-grade">
+      {% for d in g.itens %}
+      {% set cls = 'tx-ok' if d.resultado == 'restituir' else ('tx-venc' if d.resultado == 'pagar' else 'tx-perd') %}
+      <a class="tx-c ir-c {{ cls }}" href="{{ url_for('contabil.irpf_declaracao', decl_id=d.id) }}" title="Abrir a declaração">
+        <div class="tx-c-top"><span class="tx-c-num">{{ d.numero_cliente if (d.cliente_id and d.numero_cliente) else ('AV' if d.cad_avulso else 'PF') }}</span><span class="tx-c-nome" title="{{ d.nome }}">{{ d.nome or '—' }}</span></div>
+        <div class="tx-c-meio">
+          <div><div class="tx-c-val">{{ (d.vr_restituir if d.resultado == 'restituir' else d.vr_pagar if d.resultado == 'pagar' else 0)|format_currency }}</div>
+            <div class="tx-c-desc">{% if d.resultado == 'restituir' %}a restituir{% elif d.resultado == 'pagar' %}a pagar{% if d.quotas and d.quotas > 1 %} em {{ d.quotas }} quotas de {{ d.vr_quota|format_currency }}{% endif %}{% else %}sem imposto{% endif %} · {{ 'completa' if d.completa else 'simplificada' }}</div></div>
+          {% if d.cliente_id %}<span class="ir-c-cad {{ 'av' if d.cad_avulso else 'cli' }}" title="{{ d.cad_nome }}"><i class="fas fa-{{ 'user' if d.cad_avulso else 'user-tie' }}"></i> {{ 'avulso' if d.cad_avulso else 'cliente' }}</span>
+          {% else %}<span class="ir-c-cad sem"><i class="fas fa-user-slash"></i> sem cadastro</span>{% endif %}
+        </div>
+        <div class="ir-itens">
+          <div class="ir-it"><span>Rendimentos tributáveis</span><b>{{ d.vr_tributaveis|format_currency }}</b></div>
+          <div class="ir-it"><span>Bens em 31/12/{{ d.ano_base or ex - 1 }}</span><b>{{ d.vr_bens_atual|format_currency }}</b></div>
+          {% if d.vr_isentos %}<div class="ir-it"><span>Isentos</span><b>{{ d.vr_isentos|format_currency }}</b></div>{% endif %}
+        </div>
+        <div class="ir-linha">
+          <span class="ir-chip" title="CPF">{{ d.cpf|format_cpf }}</span>
+          {% if d.n_dep %}<span class="ir-chip"><i class="fas fa-children"></i> {{ d.n_dep }} dependente{{ 's' if d.n_dep != 1 }}</span>{% endif %}
+          {% if d.recibo %}<span class="ir-chip" title="Recibo"><i class="fas fa-receipt"></i> {{ tab.recibo_pontuado(d.recibo) }}</span>{% endif %}
+          {% if d.retificadora %}<span class="ir-chip retif"><i class="fas fa-rotate"></i> retificadora</span>{% endif %}
+          {% if not d.vigente %}<span class="ir-chip retif">substituída</span>{% endif %}
+          {% if d.aviso %}<span class="ir-chip aviso" title="{{ d.aviso }}"><i class="fas fa-triangle-exclamation"></i> aviso</span>{% endif %}
+        </div>
+      </a>
+      {% endfor %}
+    </div>
+    {% endfor %}
+  </div>
+</div>
+</div>
+<script>
+// a busca manda o formulário ao dar Enter; os outros filtros são links
+document.getElementById('irFiltro') && document.getElementById('irFiltro').addEventListener('submit', function () {});
+</script>
+{% endblock %}
