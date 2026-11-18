@@ -111,7 +111,10 @@
 .hp-links { display:inline-flex; gap:6px; flex-wrap:wrap; }
 .hp-links a { display:inline-flex; align-items:center; gap:6px; height:46px; font-size:12.5px; font-weight:700; color:#475569; background:#fff; border:1px solid #e6eeea; border-radius:13px; padding:0 10px; text-decoration:none; white-space:nowrap; }
 .hp-links a b { color:#0f3d2e; } .hp-links a i { color:#16a34a; } .hp-links a:hover { border-color:#9fc9b3; } .hp-links a.al { border-color:#fde68a; background:#fffbeb; color:#92400e; } .hp-links a.al i { color:#d97706; }
-.hp-refino .tx-ref-pop { min-width:300px; max-width:380px; }
+.hp-refino .tx-ref-pop { min-width:320px; max-width:400px; }
+.hp-refino .pop-busca { display:flex; align-items:center; gap:8px; margin:0 8px 8px; height:36px; border:1px solid #e6eeea; border-radius:10px; padding:0 10px; background:#f8fafc; }
+.hp-refino .pop-busca i { color:#94a3b8; font-size:12px; } .hp-refino .pop-busca input { border:0; outline:0; background:none; font:inherit; font-size:13px; width:100%; }
+.hp-refino .tx-ref-pop .lista { max-height:340px; } .hp-refino .tx-ref-pop .rodape span { display:inline-flex; gap:4px; }
 .hp-refino .tx-ref-pop .op { position:relative; } .hp-refino .tx-ref-pop .op::before { content:""; position:absolute; left:0; top:0; bottom:0; width:var(--p, 0%); background:#ecfdf3; border-radius:9px; z-index:0; }
 .hp-refino .tx-ref-pop .op > * { position:relative; z-index:1; } .hp-refino .tx-ref-pop .op.on::before { background:#dcfce7; }
 @media (max-width:1100px) { .hp-ref-t b { max-width:110px; } .hp-links a span { display:none; } }
@@ -178,7 +181,7 @@ span.hp-bco, span.hp-nf { cursor:default; }
 {% set marca = f in ('emitir', 'erro') and pode_emitir %}
 {% set muda = f in ('emitir', 'erro') and pode_esc %}
 <div class="tx-c hp-c {{ cls }}{{ ' marcavel' if marca }}" data-banco="{{ l.banco.id if l.banco else '' }}" data-nota="{{ 1 if l.nota else 0 }}" data-v="{{ l.total | float }}" data-cli="{{ l.cliente_id }}" data-grupo="{{ l.grupo or '' }}" data-dec="{{ 1 if l.decimo else 0 }}"
-     data-busca="{{ l.numero or '' }} {{ l.empresa }} {{ l.contrato.nome_fantasia or '' }}"{% if marca %} onclick="hpMarcar(event, this)"{% endif %}>
+     data-busca="{{ l.numero or '' }} {{ l.empresa }} {{ l.contrato.nome_fantasia or '' }} {{ l.contrato.cpf_cnpj or '' }} {{ l.grupo or '' }}"{% if marca %} onclick="hpMarcar(event, this)"{% endif %}>
   {% if marca %}<input type="checkbox" name="cliente" value="{{ l.cliente_id }}" hidden form="hpForm"><span class="hp-ck"><i class="fas fa-check"></i></span>{% endif %}
   <div class="tx-c-top"><span class="tx-c-num">{{ l.numero or '—' }}</span><span class="tx-c-nome" title="{{ l.empresa }}">{{ l.empresa }}</span></div>
   <div class="tx-c-meio">
@@ -280,7 +283,7 @@ span.hp-bco, span.hp-nf { cursor:default; }
     {% for dim, ico, rot in [('banco', 'fa-building-columns', 'Banco'), ('nota', 'fa-file-invoice', 'Nota fiscal'), ('grupo', 'fa-layer-group', 'Grupo'), ('dec', 'fa-gift', '13º'), ('valor', 'fa-coins', 'Valor')] %}
     <div class="tx-ref hp-ref" data-dim="{{ dim }}"><button type="button"><i class="fas {{ ico }} ico"></i><span class="hp-ref-t"><small>{{ rot }}</small><b class="hp-ref-v">Todos</b></span><i class="fas fa-chevron-down"></i></button><div class="tx-ref-pop"></div></div>
     {% endfor %}
-    <label class="hp-ref-busca"><i class="fas fa-magnifying-glass"></i><input type="search" id="hpBuscaG" placeholder="Empresa, número ou nome fantasia" oninput="hpFiltrar()"></label>
+    <label class="hp-ref-busca"><i class="fas fa-magnifying-glass"></i><input type="search" id="hpBuscaG" placeholder="Buscar empresa, nº, CNPJ ou grupo" oninput="hpFiltrar()"></label>
     <button type="button" class="tx-ref-limpar" id="hpRefLimpar" onclick="hpLimpar()"><i class="fas fa-xmark"></i> Limpar</button>
     <span class="hp-links">
       <a href="{{ url_for('financeiro.honorarios', aba='com') }}" title="Lista de contratos"><i class="fas fa-list"></i> Contratos <b>{{ resumo.n or 0 }}</b></a>
@@ -382,9 +385,10 @@ function hpPassa(c, menos) {
 function hpPainelAtivo() { return document.querySelector('.tx-painel.on') || document.querySelector('.tx-painel'); }
 function hpFiltrar() {
   document.querySelectorAll('.tx-painel').forEach(function (p) {
-    var q = ((document.getElementById('hpBuscaG') || {}).value || '').trim().toLowerCase();
+    var q = ((document.getElementById('hpBuscaG') || {}).value || '').trim().toLowerCase(), qd = q.replace(/\D/g, '');
     p.querySelectorAll('.hp-c').forEach(function (c) {
-      var ok = hpPassa(c) && (!q || c.dataset.busca.toLowerCase().indexOf(q) >= 0);
+      var bu = c.dataset.busca.toLowerCase();
+      var ok = hpPassa(c) && (!q || bu.indexOf(q) >= 0 || (qd.length >= 4 && bu.replace(/\D/g, '').indexOf(qd) >= 0));   // CNPJ com ou sem pontos
       c.style.display = ok ? '' : 'none';
     });
   });
@@ -415,7 +419,9 @@ function hpOpcoes(dim) {
 }
 function hpPop(ref) {
   var dim = ref.dataset.dim, pop = ref.querySelector('.tx-ref-pop'), ops = hpOpcoes(dim);
-  var h = '<h5>' + HP_DIM_NOME[dim] + '</h5><div class="lista">';
+  var h = '<h5>' + HP_DIM_NOME[dim] + '</h5>';
+  if (ops.length > 6) h += '<label class="pop-busca"><i class="fas fa-magnifying-glass"></i><input type="search" placeholder="Buscar ' + HP_DIM_NOME[dim].toLowerCase() + '…" autocomplete="off"></label>';
+  h += '<div class="lista">';
   var maior = ops.reduce(function (m, o) { return Math.max(m, o.n); }, 0);
   ops.forEach(function (o) {
     var on = F[dim].indexOf(o.v) >= 0, logo = '', pct = maior ? Math.round(o.n * 100 / maior) : 0;
@@ -423,11 +429,30 @@ function hpPop(ref) {
     h += '<div class="op' + (on ? ' on' : '') + (o.n ? '' : ' zero') + '" style="--p:' + pct + '%" data-v="' + String(o.v).replace(/"/g, '&quot;') + '"><span class="cx"><i class="fas fa-check"></i></span>' + logo + '<span>' + hpRotulo(dim, o.v) + '</span><small>' + o.n + ' · ' + brl(o.soma) + '</small></div>';
   });
   if (!ops.length) h += '<div class="dica">Nada para filtrar neste quadro.</div>';
-  h += '</div><div class="rodape"><button type="button" data-acao="limpar">Limpar</button><button type="button" data-acao="fechar">Fechar</button></div>';
+  h += '</div><div class="rodape"><span><button type="button" data-acao="todas">Marcar todas</button><button type="button" data-acao="limpar">Limpar</button></span><button type="button" data-acao="fechar">Fechar</button></div>';
   pop.innerHTML = h; pop.classList.add('hp-pop');
-  pop.querySelectorAll('.op').forEach(function (op) { op.addEventListener('click', function () {
-    var v = op.dataset.v, i = F[dim].indexOf(v); if (i >= 0) F[dim].splice(i, 1); else F[dim].push(v);
+  var bq = pop.querySelector('.pop-busca input');
+  if (bq) {
+    bq.addEventListener('click', function (e) { e.stopPropagation(); });
+    bq.addEventListener('input', function () {
+      var q = bq.value.trim().toLowerCase(), vis = 0;
+      pop.querySelectorAll('.op').forEach(function (op) { var ok = !q || op.textContent.toLowerCase().indexOf(q) >= 0; op.style.display = ok ? '' : 'none'; if (ok) vis++; });
+      var nada = pop.querySelector('.pop-nada'); if (!vis && !nada) { nada = document.createElement('div'); nada.className = 'dica pop-nada'; nada.textContent = 'Nada com esse nome.'; pop.querySelector('.lista').appendChild(nada); } else if (vis && nada) nada.remove();
+    });
+    bq.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); var pri = pop.querySelector('.op:not([style*=none])'); if (pri) pri.click(); } });
+    setTimeout(function () { bq.focus(); }, 30);
+  }
+  pop.addEventListener('click', function (e) { e.stopPropagation(); });
+  pop.querySelector('[data-acao=todas]').addEventListener('click', function () {
+    pop.querySelectorAll('.op:not([style*=none])').forEach(function (op) { if (F[dim].indexOf(op.dataset.v) < 0) F[dim].push(op.dataset.v); });
     hpFiltrar(); hpPop(ref); hpSincroniza();
+  });
+  pop.querySelectorAll('.op').forEach(function (op) { op.addEventListener('click', function (e) {
+    e.stopPropagation();          // a lista se redesenha aqui; sem isto o clique chega ao documento já "fora" e fecha a lista
+    var v = op.dataset.v, i = F[dim].indexOf(v); if (i >= 0) F[dim].splice(i, 1); else F[dim].push(v);
+    var q = bq ? bq.value : '';
+    hpFiltrar(); hpPop(ref); hpSincroniza();
+    var nb = ref.querySelector('.pop-busca input'); if (nb && q) { nb.value = q; nb.dispatchEvent(new Event('input')); }
   }); });
   pop.querySelector('[data-acao=limpar]').addEventListener('click', function () { F[dim] = []; hpFiltrar(); hpPop(ref); hpSincroniza(); });
   pop.querySelector('[data-acao=fechar]').addEventListener('click', function () { hpFechaPops(); });
@@ -439,7 +464,7 @@ document.querySelectorAll('#hpRefino .tx-ref > button').forEach(function (bt) {
     if (abrir) { hpPop(ref); ref.classList.add('aberto'); ref.querySelector('.tx-ref-pop').classList.add('on'); }
   });
 });
-document.addEventListener('click', function (e) { if (!e.target.closest('#hpRefino')) hpFechaPops(); });
+document.addEventListener('click', function (e) { if (e.target.isConnected && !e.target.closest('#hpRefino')) hpFechaPops(); });
 document.addEventListener('keydown', function (e) { if (e.key === 'Escape') hpFechaPops(); });
 function hpRefinoPinta() {
   var algum = false;
