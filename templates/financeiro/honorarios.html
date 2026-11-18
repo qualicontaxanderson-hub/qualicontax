@@ -72,6 +72,8 @@
 .ho-chip { border:1px solid #bfe3cd; background:#f0faf3; color:#0f3d2e; border-radius:999px; padding:5px 11px; font-size:12.5px; cursor:pointer; display:inline-flex; gap:6px; align-items:center; font:inherit; }
 .ho-chip:hover { background:#dcf3e4; } .ho-chip b { font-variant-numeric:tabular-nums; } .ho-chip span { color:#5f7f6e; font-size:11px; }
 .ho-cob { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:14px; }
+.ho-bancos { grid-template-columns:repeat(4, minmax(0,1fr)); } .ho-bancos .ns-op i { font-size:16px; color:#f59e0b; }
+.ho-bco-logo { display:block; height:24px; margin-bottom:6px; } .ho-bco-logo img { height:22px; width:auto; border-radius:6px; }
 .ho-venc { display:flex; align-items:center; gap:10px; flex-wrap:wrap; } .ho-venc-outro { display:inline-flex; align-items:center; gap:6px; font-size:12.5px; color:#64748b; } .ho-venc-outro .ns-in { width:76px; text-align:center; }
 .ho-dec-rows > div { display:flex; gap:6px; margin-bottom:6px; } .ho-dec-rows .form-control { height:38px; border:1px solid #d7e3dc; border-radius:10px; padding:0 10px; font:inherit; }
 #ho-dec-rows .btn { height:38px; width:38px; border:1px solid #e2e8f0; background:#fff; border-radius:10px; color:#94a3b8; cursor:pointer; }
@@ -299,6 +301,14 @@
               <div class="ns-campo"><span class="ho-lbl">Vencimento <small>no mês seguinte à competência</small></span>
                 <div class="ho-venc"><span class="ns-seg" id="ho-dias">{% for d in (5, 10, 15, 20, 25) %}<button type="button" data-d="{{ d }}" onclick="hoDia({{ d }})">dia {{ d }}</button>{% endfor %}</span>
                   <span class="ho-venc-outro">outro <input type="number" name="dia_vencimento" id="ho-dia" class="ns-in" min="1" max="31" required></span></div></div>
+              {% if bancos %}
+              <div class="ns-campo" style="grid-column:1 / -1;"><span class="ho-lbl">Banco do boleto <small>em qual banco a cobrança dela sai</small></span>
+                <div class="ns-ops ho-bancos" id="ho-banco-ops">
+                  <button type="button" class="ns-op" data-v="" onclick="hoBanco('')"><i class="fas fa-star"></i><b>Padrão do escritório</b><small>hoje: {% for b in bancos if b.padrao %}{{ b.nome }}{% endfor %}</small></button>
+                  {% for b in bancos %}<button type="button" class="ns-op" data-v="{{ b.id }}" onclick="hoBanco('{{ b.id }}')"><span class="ho-bco-logo">{{ logo_banco(b.cod, tam=22, titulo=b.nome) if b.cod }}</span><b>{{ b.nome }}</b><small>{{ 'é o padrão hoje' if b.padrao else 'sempre por aqui' }}</small></button>{% endfor %}
+                </div>
+                <input type="hidden" name="banco_boleto" id="ho-banco" value=""></div>
+              {% endif %}
               <div class="ns-campo"><span class="ho-lbl">Emite</span>
                 <div class="ns-ops ns-ops-2" id="ho-emite">
                   <button type="button" class="ns-op" data-nf="1" onclick="hoEmite(1)"><i class="fas fa-file-invoice"></i><b>Nota + boleto</b><small>NFS-e todo mês, com o boleto</small></button>
@@ -379,6 +389,7 @@
               <div><dt>Mensal</dt><dd id="ho-r-mensal">—</dd></div>
               <div><dt>Vence</dt><dd id="ho-r-venc">—</dd></div>
               <div><dt>Emite</dt><dd id="ho-r-emite">—</dd></div>
+              <div><dt>Banco</dt><dd id="ho-r-banco">—</dd></div>
               <div><dt>13º</dt><dd id="ho-r-dec">—</dd></div>
               <div><dt>Reajuste</dt><dd id="ho-r-reaj">—</dd></div>
               <div><dt>Vigência</dt><dd id="ho-r-vig">—</dd></div>
@@ -440,12 +451,19 @@ function hoEmite(nf) { document.getElementById('ho-nfse').checked = !!nf; docume
 function hoDecTipo(v) { document.getElementById('ho-decimo').value = v; hoDecimo(); hoResumo(); }
 function hoDecIni(v) { document.getElementById('ho-dec-inicio').value = v; hoDecimo(); hoResumo(); }
 function hoReaj(v) { document.getElementById('ho-reajuste').value = v; hoSync(); hoResumo(); }
+function hoBanco(v) { var b = document.getElementById('ho-banco'); if (b) { b.value = v; hoSync(); hoResumo(); } }
+function hoBancoNome() {
+    var b = document.getElementById('ho-banco'); if (!b) return '';
+    var op = document.querySelector('#ho-banco-ops .ns-op[data-v="' + b.value + '"]'); if (!op) return '';
+    return op.querySelector('b').textContent + (b.value ? '' : ' (' + op.querySelector('small').textContent.replace('hoje: ', '') + ')');
+}
 function hoSync() {
     hoMarca('#ho-dias button', document.getElementById('ho-dia').value);
     hoMarca('#ho-emite .ns-op', document.getElementById('ho-nfse').checked ? 1 : 0);
     hoMarca('#ho-dec-ops .ns-op', document.getElementById('ho-decimo').value);
     hoMarca('#ho-dec-ini-seg button', document.getElementById('ho-dec-inicio').value);
     hoMarca('#ho-reaj-ops .ns-op', document.getElementById('ho-reajuste').value);
+    if (document.getElementById('ho-banco')) hoMarca('#ho-banco-ops .ns-op', document.getElementById('ho-banco').value);
 }
 function hoIniciais(nome) { var p = String(nome || '').trim().split(/\s+/); return ((p[0] || '')[0] || '') + ((p.length > 1 ? p[p.length - 1] : '')[0] || ''); }
 function hoDataBr(s) { if (!s) return ''; var p = s.split('-'); return p.length === 3 ? p[2] + '/' + p[1] + '/' + p[0] : s; }
@@ -469,6 +487,7 @@ function hoResumoLado(t) {
     $('ho-r-mensal').innerHTML = '<b>' + brl(t) + '</b>' + (document.querySelectorAll('#ho-itens tbody tr').length > 1 ? ' em ' + document.querySelectorAll('#ho-itens tbody tr').length + ' discriminações' : '');
     $('ho-r-venc').textContent = dia ? 'dia ' + dia + ' do mês seguinte' : '—';
     $('ho-r-emite').textContent = nf ? 'nota fiscal + boleto' : 'só boleto';
+    if ($('ho-r-banco')) $('ho-r-banco').textContent = hoBancoNome() || '—';
     var decTxt = HO_DEC_ROT[tipo] || tipo; if (tipo !== 'NENHUM') { var r = hoProxima(t, tipo, modo, ini, desde); decTxt = decTxt.split(' (')[0]; }
     $('ho-r-dec').textContent = decTxt;
     var rj = HO_REAJ_ROT[rt] || rt; if (prox) rj += ' · próximo ' + hoDataBr(prox); $('ho-r-reaj').textContent = rj;
@@ -521,7 +540,7 @@ function hoDecimo() {
     hoSync();
 }
 function hoLimpar() {
-    ['ho-id', 'ho-cliente-id', 'ho-cli-q', 'ho-fim', 'ho-prox', 'ho-reaj-obs', 'ho-dec-desde', 'ho-grupo'].forEach(function (i) { document.getElementById(i).value = ''; });
+    ['ho-id', 'ho-cliente-id', 'ho-cli-q', 'ho-fim', 'ho-prox', 'ho-reaj-obs', 'ho-dec-desde', 'ho-grupo', 'ho-banco'].forEach(function (i) { var e = document.getElementById(i); if (e) e.value = ''; });
     document.querySelector('#ho-itens tbody').innerHTML = ''; document.getElementById('ho-dec-rows').innerHTML = '';
     document.getElementById('ho-chips').innerHTML = ''; document.getElementById('ho-rede').style.display = 'none'; document.getElementById('ho-grupo-aviso').style.display = 'none';
     document.getElementById('ho-dia').value = 10; document.getElementById('ho-inicio').value = '{{ hoje.strftime("%Y-%m") }}-01';
@@ -626,6 +645,7 @@ function hoEditar(cid) {
         document.getElementById('ho-reajuste').value = c.reajuste_tipo || 'SALARIO_MINIMO';
         document.getElementById('ho-prox').value = c.proximo_reajuste || ''; document.getElementById('ho-reaj-obs').value = c.reajuste_obs || '';
         document.getElementById('ho-nfse').checked = !!Number(c.gerar_nfse); document.getElementById('ho-boleto').checked = !!Number(c.gerar_boleto);
+        if (document.getElementById('ho-banco')) document.getElementById('ho-banco').value = /^\d+$/.test(String(c.banco_boleto || '')) ? String(c.banco_boleto) : '';
         hoDecimo(); hoResumo(); document.getElementById('hoModal').style.display = 'block';
         if (window.HO_ENC_AO_ABRIR) { window.HO_ENC_AO_ABRIR = false; if (document.getElementById('ho-enc-bt')) hoEncAbrir(); }
     });

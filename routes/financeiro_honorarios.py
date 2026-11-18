@@ -70,7 +70,8 @@ def _foto(c):
             'inicio': str(c.get('inicio') or ''), 'fim': str(c.get('fim') or ''), 'plano': c.get('plano'),
             'decimo_tipo': c.get('decimo_tipo'), 'decimo_parcelas': c.get('decimo_parcelas'), 'decimo_desde': str(c.get('decimo_desde') or ''),
             'reajuste_tipo': c.get('reajuste_tipo'), 'proximo_reajuste': str(c.get('proximo_reajuste') or ''),
-            'reajuste_obs': c.get('reajuste_obs'), 'situacao': c.get('situacao'),
+            'reajuste_obs': c.get('reajuste_obs'), 'situacao': c.get('situacao'), 'banco_boleto': c.get('banco_boleto'),
+            'gerar_nfse': c.get('gerar_nfse'),
             'itens': ['%s = %s' % (i['descricao'], i['valor']) for i in FinContrato.itens(c['id'])] if c.get('id') else None}
 
 
@@ -125,7 +126,18 @@ def honorarios():
     return render_template('financeiro/honorarios.html', modo='admin', aba=aba, busca=busca, contratos=contratos, sem_contrato=sem,
                            pendentes=pendentes, convites=convites, pessoas=ClienteResponsavel.usuarios_disponiveis(),
                            resumo=FinContrato.resumo(), servicos=_servicos(), grupos=_grupos(), DECIMO_TIPOS=DECIMO_TIPOS, DECIMO_INICIOS=DECIMO_INICIOS,
-                           REAJUSTE_TIPOS=REAJUSTE_TIPOS, hoje=date.today(), SERVICO_HONORARIOS=SERVICO_HONORARIOS)
+                           REAJUSTE_TIPOS=REAJUSTE_TIPOS, hoje=date.today(), SERVICO_HONORARIOS=SERVICO_HONORARIOS,
+                           bancos=_bancos_cobranca())
+
+
+def _bancos_cobranca():
+    """Bancos que emitem boleto, com o padrão marcado (a janela do contrato mostra e deixa trocar — 18/11/2026)."""
+    try:
+        from utils.honorarios_painel import contas
+        return contas()
+    except Exception:
+        logger.exception('[honorarios] bancos da cobrança')
+        return []
 
 
 @financeiro.route('/financeiro/honorarios/<int:cid>/json')
@@ -195,6 +207,8 @@ def honorarios_salvar():
                      reajuste_tipo=reajuste_tipo, proximo_reajuste=prox,
                      reajuste_obs=(f.get('reajuste_obs') or '').strip() or None,
                      gerar_nfse=1 if f.get('gerar_nfse') else 0, gerar_boleto=1 if f.get('gerar_boleto') else 0)
+        if 'banco_boleto' in f:        # 18/11/2026 — Anderson: "incluir em qual banco está cadastrado e permitir alterar"; vazio = o padrão
+            dados['banco_boleto'] = f.get('banco_boleto') if (f.get('banco_boleto') or '').isdigit() else None
         if cid:
             antes = FinContrato.get(cid)
             if not antes:
@@ -209,8 +223,11 @@ def honorarios_salvar():
             cliente_id = f.get('cliente_id', type=int)
             if not cliente_id:
                 raise ValueError('Escolha a empresa.')
+            banco_novo = dados.pop('banco_boleto', None)
             cid = FinContrato.criar(cliente_id=cliente_id, itens=itens, criado_por=current_user.id,
                                     aprovado_por=current_user.id, situacao='ATIVO', **dados)
+            if banco_novo:
+                FinContrato.atualizar(cid, {'banco_boleto': banco_novo})
             _gravar_grupo(cliente_id, f)
             novo = FinContrato.get(cid)
             registrar('escrita.criou_contrato_honorarios', 'financeiro', tabela='fin_contratos', registro_id=cid,

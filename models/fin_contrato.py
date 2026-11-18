@@ -194,7 +194,7 @@ class FinContrato:
         precisam somar o valor."""
         permitidas = ('valor', 'dia_vencimento', 'inicio', 'fim', 'plano', 'decimo_tipo', 'decimo_parcelas', 'decimo_desde', 'observacao',
                       'reajuste_tipo', 'proximo_reajuste', 'reajuste_obs', 'situacao', 'gerar_nfse', 'gerar_boleto',
-                      'servico_id', 'descricao', 'aprovado_por')
+                      'servico_id', 'descricao', 'aprovado_por', 'banco_boleto')   # banco_boleto: id da conta de cobrança (18/11/2026)
         sets, params = [], []
         for k in permitidas:
             if k in dados:
