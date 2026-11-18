@@ -7,6 +7,7 @@ Aprovar um lançamento AVULSO cobra na hora: nota (se o serviço emite nota) + b
 contatos do Financeiro. Aprovar um MENSAL só o deixa pronto para o lote da competência.
 """
 import logging
+import re
 from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
 
@@ -40,6 +41,12 @@ def _dec(raw):
 def _data(raw):
     s = (raw or '').strip()
     return datetime.strptime(s, '%Y-%m-%d').date() if s else None
+
+
+def _hoje_br():
+    """Hoje no Brasil (o app roda em UTC: depois das 21h o date.today() já é amanhã)."""
+    from zoneinfo import ZoneInfo
+    return datetime.now(ZoneInfo('America/Sao_Paulo')).date()
 
 
 def _admin():
@@ -136,9 +143,34 @@ def lancamentos():
     for l in grupos['apr']:      # quanto a comissão dá se aprovar como foi pedida (e se o serviço é travado)
         l['com_prev'] = float(FinLancamento.comissao_calculada(l)[1])
         l['com_trava'] = FinLancamento.servico_travado(l['servico_id'])
+    # CARTEIRA DE MENSALIDADE (17/11/2026 — Anderson: "Não pode colocar dentro dos lançamentos? E deixar junto com os
+    # outros?"): a mensalidade de cada empresa da carteira da pessoa (Guilherme 25%) vira um cartão nos mesmos quadros
+    # (em cobrança / pagos / atrasados) e, paga, entra nas comissões a pedir. Mês passado e este mês, pelo vencimento.
+    from models.fin_lancamento import FinCarteira
+    cart = []
+    ini = hoje.replace(day=1)
+    for ref in (date(ini.year - (ini.month == 1), (ini.month - 2) % 12 + 1, 1), ini):
+        for ln in FinCarteira.mes(current_user.id, ref.year, ref.month):
+            t, a = ln['titulo'], ln['acordo']
+            if not t or t.get('lanc_id'):        # já virou lançamento de verdade: aparece por ele
+                continue
+            pago = t['status'] == 'liquidado'
+            com = ln['comissao'] if pago else (FinComissaoAcordo.calcular(a, t['valor']) if a['tipo'] == 'PCT' else Decimal(str(a['valor'])))
+            c = {'id': 'c%d_%d' % (a['id'], t['id']), 'carteira': True, 'numero_cliente': a['numero_cliente'],
+                 'nome_razao_social': a['nome_razao_social'], 'servico_nome': 'Honorário',
+                 'descricao': ('Honorário pago %s' % t['pago_em'].strftime('%d/%m')) if pago and t.get('pago_em') else ('Honorário vence %s' % t['vencimento'].strftime('%d/%m')),
+                 'valor_total': t['valor'], 'destino': 'MENSAL', 'competencia': t['vencimento'].replace(day=1),
+                 'vencimento': t['vencimento'], 'titulo_vencimento': t['vencimento'], 'titulo_status': t['status'],
+                 'status': 'FATURADO', 'lancado_por': current_user.id, 'lancado_por_nome': getattr(current_user, 'nome', ''),
+                 'comissao_status': 'LIBERADA' if pago else 'AGUARDANDO', 'comissao_valor': com,
+                 'como': 'Mensalidade'}
+            c['fase'] = 'pag' if pago else ('atr' if t['vencimento'] < hoje else 'cob')
+            c['situacao_com'] = 'Pago · a pedir' if pago else ('Vencido' if c['fase'] == 'atr' else 'Aguardando pagamento')
+            grupos[c['fase']].append(c)
+            cart.append(c)
     soma = lambda ls: sum(float(x['valor_total'] or 0) for x in ls)
     meus_com = [l for l in todos if l.get('comissao_status') in ('LIBERADA', 'FECHADA', 'PAGA', 'AGUARDANDO')
-                and (aprov is False or l['lancado_por'] == current_user.id)]
+                and (aprov is False or l['lancado_por'] == current_user.id)] + cart
     liberadas = [l for l in meus_com if l['comissao_status'] == 'LIBERADA' and l['lancado_por'] == current_user.id]
     pedidos = FinComissaoFechamento.listar(usuario_id=None if aprov else current_user.id)
     a_pagar = [f for f in pedidos if f['status'] not in ('PAGO', 'CANCELADO')]
@@ -294,7 +326,7 @@ def comissao_regra_pessoa():
         for a in atuais:
             FinComissaoAcordo.encerrar(a['id'])
         if recebe:
-            FinComissaoAcordo.criar(uid, 'SERVICO', tipo, valor, date.today(), criado_por=current_user.id, aprovado_por=current_user.id)
+            FinComissaoAcordo.criar(uid, 'SERVICO', tipo, valor, _hoje_br(), criado_por=current_user.id, aprovado_por=current_user.id)
         nome = (execute_query('SELECT nome FROM usuarios WHERE id = %s', (uid,), fetch=True, fetch_one=True) or {}).get('nome')
         registrar('escrita.alterou_regra_comissao', 'financeiro', tabela='fin_comissao_acordos', registro_id=uid,
                   antes={'recebe': bool(atuais), 'tipo': atuais[0]['tipo'] if atuais else None, 'valor': str(atuais[0]['valor']) if atuais else None},
@@ -543,7 +575,17 @@ def lancamento_cancelar(lid):
 @permission_required(PERM)
 def comissoes_fechar():
     try:
-        fid = FinComissaoFechamento.criar(current_user.id, request.form.getlist('lanc'), (request.form.get('observacao') or '').strip() or None)
+        from models.fin_lancamento import FinCarteira
+        ids = []
+        for v in request.form.getlist('lanc'):
+            m = re.fullmatch(r'c(\d+)_(\d+)', v or '')
+            if m:      # mensalidade da carteira paga: grava a comissão (uma vez) e entra no pedido
+                lid = FinCarteira.liberar_um(current_user.id, int(m.group(1)), int(m.group(2)))
+                if lid:
+                    ids.append(lid)
+            elif str(v).isdigit():
+                ids.append(int(v))
+        fid = FinComissaoFechamento.criar(current_user.id, ids, (request.form.get('observacao') or '').strip() or None)
         f = FinComissaoFechamento.get(fid)
         registrar('escrita.fechou_comissoes', 'financeiro', tabela='fin_comissao_fechamentos', registro_id=fid,
                   depois={'total': str(f['total']), 'itens': f['qtd_itens']})
@@ -584,7 +626,8 @@ def acordo_novo():
     try:
         aid = FinComissaoAcordo.criar(
             f.get('usuario_id', type=int), f.get('base') or 'SERVICO', f.get('tipo') or 'PCT', _dec(f.get('valor')),
-            _data(f.get('vigencia_inicio')) or date.today(), servico_id=f.get('servico_id', type=int) or None,
+            _data(f.get('vigencia_inicio')) or (_data((f.get('a_partir') or '') + '-01') if f.get('a_partir') else None) or _hoje_br(),
+            servico_id=f.get('servico_id', type=int) or None,
             cliente_id=f.get('cliente_id', type=int) or None, parcelas=f.get('parcelas', type=int) or 1,
             observacao=(f.get('observacao') or '').strip() or None, criado_por=current_user.id, aprovado_por=current_user.id)
         registrar('escrita.criou_acordo_comissao', 'financeiro', tabela='fin_comissao_acordos', registro_id=aid,

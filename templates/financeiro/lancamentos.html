@@ -175,7 +175,7 @@
   {% if fase == 'apr' and aprov %}
     <div class="lm-ac"><button type="button" class="no" onclick="lmReprovar({{ l.id }})"><i class="fas fa-xmark"></i> Reprovar</button>
       <button type="button" class="ok" onclick="lmAprovar({{ l.id }})"><i class="fas fa-check"></i> Aprovar</button></div>
-  {% elif fase == 'apr' and l.lancado_por == current_user.id and pode_rota('financeiro.lancamento_cancelar') %}
+  {% elif fase == 'apr' and l.lancado_por == current_user.id and not l.carteira and pode_rota('financeiro.lancamento_cancelar') %}
     <div class="lm-ac"><button type="button" class="no" onclick="lmCancelar({{ l.id }})"><i class="fas fa-ban"></i> Cancelar pedido</button></div>
   {% endif %}
 </div>
@@ -187,8 +187,8 @@
     <div>
       <h1 class="ef-hero-title">Lançamentos</h1>
       <p class="ef-hero-sub">{{ 'Solicitações da equipe, aprovação e pagamento das comissões' if aprov else 'Suas solicitações de cobrança e as suas comissões' }}</p>
-      <span class="lm-quem"><b>{{ (current_user.nome or '?').split()[0][:1] }}{{ ((current_user.nome or '').split()[-1][:1]) if (current_user.nome or '').split()|length > 1 else '' }}</b>
-        {{ (current_user.nome or '').split()[0] }}{% if aprov %} · aprova as solicitações e paga as comissões{% else %} · você vê só o que é seu{% endif %}</span>
+      {% if aprov %}<span class="lm-quem"><b>{{ (current_user.nome or '?').split()[0][:1] }}{{ ((current_user.nome or '').split()[-1][:1]) if (current_user.nome or '').split()|length > 1 else '' }}</b>
+        {{ (current_user.nome or '').split()[0] }} · aprova as solicitações e paga as comissões</span>{% endif %}
     </div>
     <div class="lm-hero-actions">
       {% if aprov %}

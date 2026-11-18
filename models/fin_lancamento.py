@@ -364,6 +364,115 @@ class FinLancamento:
             (empresa_id, usuario_id), fetch=True, fetch_one=True) or {}
 
 
+class FinCarteira:
+    """Comissão sobre a MENSALIDADE das empresas da carteira de uma pessoa (17/11/2026 — Guilherme Rocha, 25%).
+
+    Anderson: "uma linha por empresa, com a mensalidade, o %, a comissão e se o cliente já pagou; 25% da mensalidade
+    está correto". O mês é o do VENCIMENTO da mensalidade; a comissão é o % sobre o que o cliente pagou e só conta
+    pago. A empresa entra na carteira "a partir de" um mês (vigencia_inicio): cliente novo pode começar no mês seguinte.
+    O título é achado pelo cliente_id OU pelo CNPJ/CPF (muito honorário pago chegou pelo extrato sem cliente_id)."""
+
+    @staticmethod
+    def mes(usuario_id, ano, mes):
+        ini = date(ano, mes, 1)
+        fim = mes_seguinte(ini)
+        acordos = execute_query(
+            """SELECT a.*, c.numero_cliente, c.nome_razao_social, c.cpf_cnpj
+                 FROM fin_comissao_acordos a JOIN clientes c ON c.id = a.cliente_id
+                WHERE a.usuario_id = %s AND a.base = 'HONORARIOS' AND a.ativo = 1 AND a.vigencia_inicio < %s
+                  AND (a.vigencia_fim IS NULL OR a.vigencia_fim >= %s)
+                ORDER BY c.nome_razao_social""", (usuario_id, fim, ini), fetch=True) or []
+        linhas = []
+        for a in acordos:
+            doc = ''.join(ch for ch in (a['cpf_cnpj'] or '') if ch.isdigit())
+            tits = execute_query(
+                """SELECT t.id, t.valor, t.valor_baixado, t.status, t.vencimento, t.competencia, t.descricao,
+                          (SELECT MAX(b.data_baixa) FROM fin_titulo_baixas b WHERE b.titulo_id = t.id) AS pago_em,
+                          (SELECT l.id FROM fin_lancamentos l WHERE l.comissao_acordo_id = %s AND l.titulo_id = t.id LIMIT 1) AS lanc_id,
+                          (SELECT l.comissao_status FROM fin_lancamentos l WHERE l.comissao_acordo_id = %s AND l.titulo_id = t.id LIMIT 1) AS lanc_st
+                     FROM fin_titulos t LEFT JOIN fin_categorias cat ON cat.id = t.categoria_id
+                    WHERE t.tipo = 'R' AND t.status <> 'cancelado' AND t.vencimento >= %s AND t.vencimento < %s
+                      AND (t.cliente_id = %s OR (%s <> '' AND REPLACE(REPLACE(REPLACE(t.contraparte_doc, '.', ''), '/', ''), '-', '') = %s))
+                      AND (cat.nome LIKE 'Honor%%' OR t.descricao LIKE 'Honor%%')
+                      AND t.descricao NOT LIKE 'Honorários e serviços —%%'
+                    ORDER BY t.vencimento, t.id""",
+                (a['id'], a['id'], ini, fim, a['cliente_id'], doc, doc), fetch=True) or []
+            if a['vigencia_inicio'] and a['vigencia_inicio'] >= ini and a['vigencia_inicio'] < fim:
+                novo = True
+            else:
+                novo = False
+            if not tits:
+                linhas.append({'acordo': a, 'titulo': None, 'mensal': None, 'pago': Decimal('0'), 'comissao': Decimal('0'),
+                               'situacao': 'sem', 'novo': novo})
+                continue
+            for t in tits:
+                pago = _d(t['valor_baixado'])
+                com = FinComissaoAcordo.calcular(a, pago) if pago > 0 else Decimal('0')
+                if a['tipo'] == 'FIXO':
+                    com = _d(a['valor']) if t['status'] == 'liquidado' else Decimal('0')
+                sit = ('pedida' if t['lanc_st'] in ('FECHADA', 'PAGA') else
+                       'pago' if t['status'] == 'liquidado' else 'parcial' if pago > 0 else
+                       'atrasado' if t['vencimento'] < date.today() else 'aberto')
+                linhas.append({'acordo': a, 'titulo': t, 'mensal': _d(t['valor']), 'pago': pago, 'comissao': com,
+                               'situacao': sit, 'lanc_st': t['lanc_st'], 'novo': novo})
+        return linhas
+
+    @staticmethod
+    def liberar_um(usuario_id, acordo_id, titulo_id):
+        """A comissão de UMA mensalidade paga da carteira (o cartão marcado): confere que o acordo é da pessoa e o
+        título é da empresa da carteira, pago; grava o lançamento LIBERADO uma vez só. Devolve o id ou None."""
+        a = execute_query("SELECT * FROM fin_comissao_acordos WHERE id = %s AND usuario_id = %s AND base = 'HONORARIOS' AND ativo = 1",
+                          (acordo_id, usuario_id), fetch=True, fetch_one=True)
+        t = execute_query('SELECT vencimento FROM fin_titulos WHERE id = %s', (titulo_id,), fetch=True, fetch_one=True)
+        if not a or not t:
+            return None
+        for ln in FinCarteira.mes(usuario_id, t['vencimento'].year, t['vencimento'].month):
+            if ln['acordo']['id'] == acordo_id and ln['titulo'] and ln['titulo']['id'] == titulo_id:
+                return (FinCarteira._gravar(usuario_id, ln) or None)
+        return None
+
+    @staticmethod
+    def _gravar(usuario_id, ln):
+        t, a = ln['titulo'], ln['acordo']
+        if not t or t['status'] != 'liquidado' or ln['comissao'] <= 0:
+            return None
+        if t['lanc_id']:
+            return t['lanc_id'] if t['lanc_st'] == 'LIBERADA' else None
+        return execute_query(
+            """INSERT INTO fin_lancamentos (empresa_id, cliente_id, servico_id, descricao, quantidade, valor_unitario, valor_total,
+                   destino, origem, competencia, vencimento, status, lancado_por, aprovado_por, aprovado_em, titulo_id,
+                   comissao_acordo_id, comissao_valor, comissao_status)
+               VALUES (2, %s, 1, %s, 1, %s, %s, 'MENSAL', 'HONORARIOS', %s, %s, 'FATURADO', %s, %s, NOW(), %s, %s, %s, 'LIBERADA')""",
+            (a['cliente_id'], ('Mensalidade · carteira · venc. %s' % t['vencimento'].strftime('%m/%Y'))[:200], ln['pago'], ln['pago'],
+             t['vencimento'].replace(day=1), t['vencimento'], usuario_id, a.get('aprovado_por') or usuario_id, t['id'], a['id'],
+             ln['comissao']), fetch=False)
+
+    @staticmethod
+    def liberar(usuario_id, ano, mes, aprovado_por=None):
+        """Grava (uma vez por acordo × título) a comissão das mensalidades JÁ PAGAS do mês como lançamento LIBERADO,
+        para entrar no pedido de pagamento (com Pix e quitação pelo extrato). Devolve os ids de lançamento liberados
+        (novos ou já existentes ainda não pedidos)."""
+        ids = []
+        for ln in FinCarteira.mes(usuario_id, ano, mes):
+            t, a = ln['titulo'], ln['acordo']
+            if not t or t['status'] != 'liquidado' or ln['comissao'] <= 0:
+                continue
+            if t['lanc_id']:
+                if t['lanc_st'] == 'LIBERADA':
+                    ids.append(t['lanc_id'])
+                continue
+            lid = execute_query(
+                """INSERT INTO fin_lancamentos (empresa_id, cliente_id, servico_id, descricao, quantidade, valor_unitario, valor_total,
+                       destino, origem, competencia, vencimento, status, lancado_por, aprovado_por, aprovado_em, titulo_id,
+                       comissao_acordo_id, comissao_valor, comissao_status)
+                   VALUES (2, %s, 1, %s, 1, %s, %s, 'MENSAL', 'HONORARIOS', %s, %s, 'FATURADO', %s, %s, NOW(), %s, %s, %s, 'LIBERADA')""",
+                (a['cliente_id'], ('Comissão sobre a mensalidade · %s' % t['vencimento'].strftime('%m/%Y'))[:200], ln['pago'], ln['pago'],
+                 date(ano, mes, 1), t['vencimento'], usuario_id, aprovado_por or a.get('aprovado_por') or usuario_id, t['id'], a['id'],
+                 ln['comissao']), fetch=False)
+            ids.append(lid)
+        return ids
+
+
 class FinComissaoFechamento:
 
     @staticmethod
