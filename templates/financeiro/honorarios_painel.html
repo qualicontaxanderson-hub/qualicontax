@@ -96,10 +96,28 @@
 .hp-barra .pb { display:inline-flex; align-items:center; gap:6px; background:rgba(255,255,255,.18); border-radius:99px; padding:3px 10px 3px 4px; font-weight:800; font-size:12.5px; margin-left:6px; }
 .hp-barra .pb img { border-radius:99px; background:#fff; }
 .hp-barra button { border:0; background:#fff; color:#c2410c; font:inherit; font-weight:800; border-radius:11px; padding:11px 18px; display:inline-flex; gap:8px; align-items:center; cursor:pointer; font-size:14px; }
-.hp-refino { margin:0 0 10px; padding:8px 10px; } .hp-refino .tx-ref-resumo.filtrado { padding:5px 12px; }
+.hp-refino { margin:0 0 16px; padding:8px 10px; gap:5px; } .hp-refino > i.fa-sliders { display:none; } .hp-refino .tx-ref-resumo.filtrado { padding:6px 12px; } .hp-refino .tx-ref-resumo { margin-left:auto; }
+.hp-ref > button { height:46px; border-radius:13px; padding:0 11px 0 10px; gap:9px; background:#fff; }
+.hp-ref > button .ico { width:28px; height:28px; border-radius:9px; background:#eef6f1; color:#15803d !important; display:inline-flex; align-items:center; justify-content:center; font-size:12.5px !important; }
+.hp-ref-t { display:flex; flex-direction:column; align-items:flex-start; line-height:1.15; min-width:0; }
+.hp-ref-t small { font-size:9.5px; font-weight:800; letter-spacing:.07em; text-transform:uppercase; color:#94a3b8; }
+.hp-ref-t b { display:block !important; min-width:0; height:auto; background:none; border-radius:0; font-size:13px; font-weight:800; color:#0f172a; max-width:120px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.hp-ref > button > b { display:none !important; }
+.hp-ref.on > button { background:#f0fdf4; border-color:#16a34a; color:inherit; box-shadow:0 0 0 3px #dcfce7; }
+.hp-ref.on > button .ico { background:#16a34a; color:#fff !important; } .hp-ref.on .hp-ref-t b { color:#15803d; } .hp-ref.on .hp-ref-t small { color:#15803d; }
+.hp-ref.on > button i.fa-chevron-down { color:#15803d; }
+.hp-ref-busca { display:inline-flex; align-items:center; gap:8px; height:46px; border:1px solid #e6eeea; border-radius:13px; padding:0 12px; background:#fff; flex:1 1 160px; min-width:150px; max-width:240px; }
+.hp-ref-busca i { color:#94a3b8; font-size:12.5px; } .hp-ref-busca input { border:0; outline:0; font:inherit; font-size:13px; width:100%; background:none; color:#0f172a; }
+.hp-links { display:inline-flex; gap:6px; flex-wrap:wrap; }
+.hp-links a { display:inline-flex; align-items:center; gap:6px; height:46px; font-size:12.5px; font-weight:700; color:#475569; background:#fff; border:1px solid #e6eeea; border-radius:13px; padding:0 10px; text-decoration:none; white-space:nowrap; }
+.hp-links a b { color:#0f3d2e; } .hp-links a i { color:#16a34a; } .hp-links a:hover { border-color:#9fc9b3; } .hp-links a.al { border-color:#fde68a; background:#fffbeb; color:#92400e; } .hp-links a.al i { color:#d97706; }
+.hp-refino .tx-ref-pop { min-width:300px; max-width:380px; }
+.hp-refino .tx-ref-pop .op { position:relative; } .hp-refino .tx-ref-pop .op::before { content:""; position:absolute; left:0; top:0; bottom:0; width:var(--p, 0%); background:#ecfdf3; border-radius:9px; z-index:0; }
+.hp-refino .tx-ref-pop .op > * { position:relative; z-index:1; } .hp-refino .tx-ref-pop .op.on::before { background:#dcfce7; }
+@media (max-width:1100px) { .hp-ref-t b { max-width:110px; } .hp-links a span { display:none; } }
 .hp-refino, .tx-ref-pop.hp-pop { --sec:#0f3d2e; --sec-e:#0b2d22; --sec-f:#ecfdf3; --sec-b:#bbf7d0; }
 .hp-refino .tx-ref-pop .op .logo { width:22px; height:22px; display:inline-flex; align-items:center; justify-content:center; } .hp-refino .tx-ref-pop .op .logo img { width:20px; height:20px; border-radius:5px; }
-.hp-mais { display:flex; gap:8px; flex-wrap:wrap; margin:0 0 18px; }
+.hp-mais { display:none; }
 .hp-mais a { display:inline-flex; align-items:center; gap:7px; font-size:12.5px; font-weight:700; color:#475569; background:#fff; border:1px solid #e6eeea; border-radius:99px; padding:6px 13px; text-decoration:none; }
 .hp-mais a b { color:#0f3d2e; } .hp-mais a i { color:#16a34a; } .hp-mais a.al { border-color:#fde68a; background:#fffbeb; color:#92400e; } .hp-mais a.al i { color:#d97706; }
 /* caixa: escolher o banco */
@@ -259,19 +277,18 @@ span.hp-bco, span.hp-nf { cursor:default; }
   {# 18/11/2026 — Anderson: "melhore essas caixas de filtro": a mesma barra de refino de Cobranças (tx-refino) #}
   <div class="tx-refino hp-refino" id="hpRefino">
     <i class="fas fa-sliders"></i>
-    <div class="tx-ref" data-dim="banco"><button type="button"><i class="fas fa-building-columns"></i> Banco <b></b><i class="fas fa-chevron-down"></i></button><div class="tx-ref-pop"></div></div>
-    <div class="tx-ref" data-dim="nota"><button type="button"><i class="fas fa-file-invoice"></i> Nota <b></b><i class="fas fa-chevron-down"></i></button><div class="tx-ref-pop"></div></div>
-    <div class="tx-ref" data-dim="grupo"><button type="button"><i class="fas fa-layer-group"></i> Grupo <b></b><i class="fas fa-chevron-down"></i></button><div class="tx-ref-pop"></div></div>
-    <div class="tx-ref" data-dim="dec"><button type="button"><i class="fas fa-gift"></i> 13º <b></b><i class="fas fa-chevron-down"></i></button><div class="tx-ref-pop"></div></div>
-    <div class="tx-ref" data-dim="valor"><button type="button"><i class="fas fa-coins"></i> Valor <b></b><i class="fas fa-chevron-down"></i></button><div class="tx-ref-pop"></div></div>
+    {% for dim, ico, rot in [('banco', 'fa-building-columns', 'Banco'), ('nota', 'fa-file-invoice', 'Nota fiscal'), ('grupo', 'fa-layer-group', 'Grupo'), ('dec', 'fa-gift', '13º'), ('valor', 'fa-coins', 'Valor')] %}
+    <div class="tx-ref hp-ref" data-dim="{{ dim }}"><button type="button"><i class="fas {{ ico }} ico"></i><span class="hp-ref-t"><small>{{ rot }}</small><b class="hp-ref-v">Todos</b></span><i class="fas fa-chevron-down"></i></button><div class="tx-ref-pop"></div></div>
+    {% endfor %}
+    <label class="hp-ref-busca"><i class="fas fa-magnifying-glass"></i><input type="search" id="hpBuscaG" placeholder="Empresa, número ou nome fantasia" oninput="hpFiltrar()"></label>
     <button type="button" class="tx-ref-limpar" id="hpRefLimpar" onclick="hpLimpar()"><i class="fas fa-xmark"></i> Limpar</button>
+    <span class="hp-links">
+      <a href="{{ url_for('financeiro.honorarios', aba='com') }}" title="Lista de contratos"><i class="fas fa-list"></i> Contratos <b>{{ resumo.n or 0 }}</b></a>
+      <a href="{{ url_for('financeiro.honorarios', aba='sem') }}" title="Empresas sem honorários"><i class="fas fa-building-circle-xmark"></i> Sem honorários <b>{{ resumo.sem_contrato or 0 }}</b></a>
+      <a href="{{ url_for('financeiro.honorarios', aba='pendentes') }}"{% if resumo.pendentes %} class="al"{% endif %} title="Aguardando aprovação"><i class="fas fa-stamp"></i> Aprovar <b>{{ resumo.pendentes or 0 }}</b></a>
+    </span>
     <div class="tx-ref-resumo" id="hpRefResumo"></div>
     <div class="tx-ref-chips" id="hpRefChips"></div>
-  </div>
-  <div class="hp-mais">
-    <a href="{{ url_for('financeiro.honorarios', aba='com') }}"><i class="fas fa-list"></i> Lista de contratos <b>{{ resumo.n or 0 }}</b></a>
-    <a href="{{ url_for('financeiro.honorarios', aba='sem') }}"><i class="fas fa-building-circle-xmark"></i> Sem honorários <b>{{ resumo.sem_contrato or 0 }}</b></a>
-    <a href="{{ url_for('financeiro.honorarios', aba='pendentes') }}"{% if resumo.pendentes %} class="al"{% endif %}><i class="fas fa-stamp"></i> Aguardando aprovação <b>{{ resumo.pendentes or 0 }}</b></a>
   </div>
 
   <form id="hpForm" method="POST" action="{{ url_for('financeiro.lote_emitir') }}" onsubmit="return hpConfirmar()"><input type="hidden" name="competencia" value="{{ competencia.strftime('%Y-%m') }}"></form>
@@ -282,7 +299,6 @@ span.hp-bco, span.hp-nf { cursor:default; }
     <div class="tx-faixa">
       {% if fase == 'emitir' and pode_emitir and grupos.emitir %}<label class="hp-marcar" onclick="event.preventDefault(); hpTodas()"><input type="checkbox" id="hpTodas"> marcar todas</label>{% endif %}
       <div class="hp-sec">{{ titulo }} <small>{{ grupos[fase] | length }} empresa{{ 's' if grupos[fase]|length != 1 }}</small></div>
-      <div class="tx-busca"><i class="fas fa-magnifying-glass"></i><input type="search" placeholder="Empresa, número ou nome fantasia" oninput="hpBusca(this)"></div>
     </div>
     {% if loop.first %}<div class="hp-legenda"><span><i style="background:#22c55e"></i>pago</span><span><i style="background:#3b82f6"></i>a vencer</span><span><i style="background:#ef4444"></i>atrasado</span>
       <span><i style="background:repeating-linear-gradient(90deg,#fdba74 0 5px,#fed7aa 5px 10px)"></i>a emitir</span><span><i style="background:#e2e8f0"></i>sem cobrança</span>
@@ -366,7 +382,7 @@ function hpPassa(c, menos) {
 function hpPainelAtivo() { return document.querySelector('.tx-painel.on') || document.querySelector('.tx-painel'); }
 function hpFiltrar() {
   document.querySelectorAll('.tx-painel').forEach(function (p) {
-    var q = ((p.querySelector('.tx-busca input') || {}).value || '').trim().toLowerCase();
+    var q = ((document.getElementById('hpBuscaG') || {}).value || '').trim().toLowerCase();
     p.querySelectorAll('.hp-c').forEach(function (c) {
       var ok = hpPassa(c) && (!q || c.dataset.busca.toLowerCase().indexOf(q) >= 0);
       c.style.display = ok ? '' : 'none';
@@ -400,10 +416,11 @@ function hpOpcoes(dim) {
 function hpPop(ref) {
   var dim = ref.dataset.dim, pop = ref.querySelector('.tx-ref-pop'), ops = hpOpcoes(dim);
   var h = '<h5>' + HP_DIM_NOME[dim] + '</h5><div class="lista">';
+  var maior = ops.reduce(function (m, o) { return Math.max(m, o.n); }, 0);
   ops.forEach(function (o) {
-    var on = F[dim].indexOf(o.v) >= 0, logo = '';
+    var on = F[dim].indexOf(o.v) >= 0, logo = '', pct = maior ? Math.round(o.n * 100 / maior) : 0;
     if (dim === 'banco') { var i = HP_BANCO_ID.indexOf(parseInt(o.v, 10)); if (i >= 0 && HP_BANCO_LOGO[i]) logo = '<span class="logo">' + HP_BANCO_LOGO[i] + '</span>'; }
-    h += '<div class="op' + (on ? ' on' : '') + (o.n ? '' : ' zero') + '" data-v="' + String(o.v).replace(/"/g, '&quot;') + '"><span class="cx"><i class="fas fa-check"></i></span>' + logo + '<span>' + hpRotulo(dim, o.v) + '</span><small>' + o.n + ' · ' + brl(o.soma) + '</small></div>';
+    h += '<div class="op' + (on ? ' on' : '') + (o.n ? '' : ' zero') + '" style="--p:' + pct + '%" data-v="' + String(o.v).replace(/"/g, '&quot;') + '"><span class="cx"><i class="fas fa-check"></i></span>' + logo + '<span>' + hpRotulo(dim, o.v) + '</span><small>' + o.n + ' · ' + brl(o.soma) + '</small></div>';
   });
   if (!ops.length) h += '<div class="dica">Nada para filtrar neste quadro.</div>';
   h += '</div><div class="rodape"><button type="button" data-acao="limpar">Limpar</button><button type="button" data-acao="fechar">Fechar</button></div>';
@@ -426,10 +443,13 @@ document.addEventListener('click', function (e) { if (!e.target.closest('#hpRefi
 document.addEventListener('keydown', function (e) { if (e.key === 'Escape') hpFechaPops(); });
 function hpRefinoPinta() {
   var algum = false;
-  document.querySelectorAll('#hpRefino .tx-ref').forEach(function (r) { var n = F[r.dataset.dim].length; r.classList.toggle('on', n > 0); r.querySelector('button b').textContent = n || ''; if (n) algum = true; });
+  document.querySelectorAll('#hpRefino .tx-ref').forEach(function (r) {
+    var dim = r.dataset.dim, n = F[dim].length; r.classList.toggle('on', n > 0); if (n) algum = true;
+    var v = r.querySelector('.hp-ref-v'); if (v) v.textContent = n ? (F[dim].slice(0, 2).map(function (x) { return hpRotulo(dim, x); }).join(', ') + (n > 2 ? ' +' + (n - 2) : '')) : 'Todos';
+  });
   var p = hpPainelAtivo(), n = 0, soma = 0, total = 0;
   p.querySelectorAll('.hp-c').forEach(function (c) { total++; if (c.style.display !== 'none') { n++; soma += parseFloat(c.dataset.v || 0); } });
-  var q = ((p.querySelector('.tx-busca input') || {}).value || '').trim();
+  var q = ((document.getElementById('hpBuscaG') || {}).value || '').trim();
   var res = document.getElementById('hpRefResumo');
   res.innerHTML = (algum || q ? '<i class="fas fa-filter"></i> ' : '') + n + ' de ' + total + ' empresa' + (total === 1 ? '' : 's') + ' · <b>' + brl(soma) + '</b>';
   res.classList.toggle('filtrado', algum || !!q);
@@ -439,7 +459,7 @@ function hpRefinoPinta() {
   chips.innerHTML = h; chips.classList.toggle('on', !!h);
 }
 function hpTira(dim, v) { var i = F[dim].indexOf(v); if (i >= 0) F[dim].splice(i, 1); hpFiltrar(); hpSincroniza(); }
-function hpLimpar() { for (var d in F) F[d] = []; document.querySelectorAll('.tx-busca input').forEach(function (i) { i.value = ''; }); hpFiltrar(); hpSincroniza(); }
+function hpLimpar() { for (var d in F) F[d] = []; var g = document.getElementById('hpBuscaG'); if (g) g.value = ''; hpFiltrar(); hpSincroniza(); }
 function hpSincroniza() {   // a faixa dos bancos e o quadro Nota fiscal acompanham o filtro
   document.querySelectorAll('.hp-banco').forEach(function (x) { x.classList.toggle('on', F.banco.length === 1 && F.banco[0] === x.dataset.banco); });
   document.querySelectorAll('.hp-nfq-l').forEach(function (x) { x.classList.toggle('on', F.nota.length === 1 && F.nota[0] === x.dataset.fn); });
