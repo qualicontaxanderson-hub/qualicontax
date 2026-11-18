@@ -239,7 +239,12 @@ def aplicar(b, atual, valor_pago=None, pago_em=None):
     """Aplica a situação do Bradesco ao boleto e ao título. Devolve 'baixa' ou None."""
     from models.fin_cobranca import FinBoleto
     feito = None
-    if atual == 'paid' and b.get('titulo_id') and valor_pago and pago_em:
+    if atual == 'paid' and b.get('titulo_id'):
+        # 17/11/2026: logo após o pagamento o Bradesco já diz "PAGO NO DIA" (codStatus 13) mas dtPagto e vlrPagto
+        # ainda vêm zerados; o boleto não aceita pagamento parcial e está sem juros/multa, então o valor pago é o do
+        # boleto e a data é hoje. Anderson: "o que eu paguei não tem que sumir daqui rapidamente?"
+        valor_pago = valor_pago or Decimal(str(b['valor']))
+        pago_em = pago_em or date.today()
         feito = 'baixa' if _baixa_paga(b, valor_pago, pago_em) else None
     if atual != b.get('situacao') or feito:
         FinBoleto.atualizar_situacao(b['id'], atual, pago_em=pago_em if atual == 'paid' else None,
@@ -254,9 +259,48 @@ def consultar_e_aplicar(b, brad=None):
     if brad is None:
         brad, _ = FinCobrancaConta.cliente_bradesco(b['conta_cobranca_id'])
     sit, valor, pago_em = situacao_da_consulta(brad.consultar(b['charge_id']))
+    if sit == 'waiting' and pix_ja_pago(b):
+        sit = 'paid'                                  # o Pix do QR entrou; a consulta do título ainda não viu
     if sit == 'waiting' and b['vencimento'] and b['vencimento'] < date.today():
         sit = 'unpaid'
     return sit, aplicar(b, sit, valor, pago_em)
+
+
+def _local_do_pix(copia_cola):
+    """URL (sem https://) do QR dinâmico dentro do Pix copia e cola: campo 26, subcampo 25."""
+    def tlv(txt):
+        i, out = 0, {}
+        while i + 4 <= len(txt):
+            t, n = txt[i:i + 2], txt[i + 2:i + 4]
+            if not n.isdigit():
+                break
+            out[t] = txt[i + 4:i + 4 + int(n)]; i += 4 + int(n)
+        return out
+    try:
+        return tlv(tlv(copia_cola or '').get('26') or '').get('25') or ''
+    except Exception:
+        return ''
+
+
+def pix_ja_pago(b):
+    """O Bradesco responde HTTP 410 "O Pagamento para esta cobrança já foi realizado" no endereço do QR assim que o
+    Pix entra, horas antes de a consulta do título mudar (17/11/2026, boleto 227). Só isso vale como pago: 410 por
+    outro motivo (cobrança removida) ou qualquer falha de rede devolve False e a consulta do título manda."""
+    loc = _local_do_pix(b.get('pix_copia_cola'))
+    if 'bradesco.com.br' not in loc:
+        return False
+    try:
+        import requests
+        r = requests.get('https://' + loc, timeout=(5, 10), headers={'Accept': 'application/json, application/jose'})
+    except Exception:
+        return False
+    if r.status_code != 410:
+        return False
+    try:
+        det = str((r.json() or {}).get('detail') or '')
+    except ValueError:
+        det = r.text or ''
+    return 'realizado' in det.lower()
 
 
 def cancelar(b):

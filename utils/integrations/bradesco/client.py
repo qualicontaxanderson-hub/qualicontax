@@ -183,7 +183,12 @@ class Bradesco:
             except requests.RequestException as exc:
                 raise BradescoErro(f'O Bradesco não respondeu ({exc.__class__.__name__}).') from exc
         j = _json(r)
-        if r.status_code != 200 or (isinstance(j, dict) and str(j.get('statusHttp') or j.get('status') or 200) not in ('200', '201')):
+        # 17/11/2026: "status" só conta como HTTP quando é número. Na consulta do título ele é texto
+        # ("A VENCER / VENCIDO") e o sistema lia a resposta de sucesso como recusa.
+        st = j.get('statusHttp') if isinstance(j, dict) else None
+        if st is None and isinstance(j, dict) and str(j.get('status', '')).strip().isdigit():
+            st = j.get('status')
+        if r.status_code != 200 or (st is not None and str(st) not in ('200', '201')):
             raise BradescoErro(_msg(r, 'O Bradesco recusou'), r.status_code, j)
         return j
 
