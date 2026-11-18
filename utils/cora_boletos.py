@@ -67,15 +67,54 @@ def _guardar_config(conta_id, **novos):
 # ---------------------------------------------------------------------------
 # Emitir
 # ---------------------------------------------------------------------------
+LIMITE_TEXTO = 255      # cada um dos dois textos do boleto do Cora (Nome da cobrança e Descrição)
+
+
+def _brl(v):
+    """200,00 / 1.250,00 (sem o R$)."""
+    q = Decimal(str(v or 0)).quantize(Decimal('0.01'))
+    return f'{q:,.2f}'.replace(',', '_').replace('.', ',').replace('_', '.')
+
+
+def textos_do_boleto(itens, total, mensagem=None):
+    """Os dois textos que o Cora imprime no boleto, no formato pedido por Anderson (18/11/2026):
+    "Faça no Cora! Assim: Honorários 200,00 | Alteração 100,00 | Aceo 50,00 / Boleto total 350,00".
+
+    1º (Nome da cobrança): cada item com o valor, separados por " | ". Quando não cabe nas 255 letras,
+    entram os primeiros e o resto vira "+ N serviços 150,00".
+    2º (Descrição): "Boleto total 350,00" e, se couber, a mensagem da cobrança.
+    Devolve (nome, descricao)."""
+    partes = []
+    for i in (itens or []):
+        nome = ' '.join(str(i.get('nome') or '').split())
+        if nome:
+            partes.append((nome, Decimal(str(i.get('valor') or 0))))
+    if not partes:
+        partes = [('Honorários e serviços', Decimal(str(total or 0)))]
+    linhas = [f'{n} {_brl(v)}' for n, v in partes]
+    texto = ' | '.join(linhas)
+    if len(texto) > LIMITE_TEXTO:
+        for k in range(len(partes) - 1, 0, -1):
+            resto = partes[k:]
+            fim = f'+ {len(resto)} serviços {_brl(sum((v for _n, v in resto), Decimal("0")))}'
+            texto = ' | '.join(linhas[:k] + [fim])
+            if len(texto) <= LIMITE_TEXTO:
+                break
+        else:
+            texto = texto[:LIMITE_TEXTO - 1] + '…'
+    descricao = f'Boleto total {_brl(total)}'
+    msg = ' '.join(str(mensagem or '').split())
+    if msg and len(descricao) + 3 + len(msg) <= LIMITE_TEXTO:
+        descricao = f'{descricao} | {msg}'
+    return texto[:LIMITE_TEXTO], descricao[:LIMITE_TEXTO]
+
+
 def emitir(conta, boleto_id, pagador, itens, total, vencimento, mensagem=None):
     """Registra no Cora e grava a resposta no fin_boletos. Devolve (id do Cora, resposta).
     Levanta CoraErro/ValueError com a mensagem para a tela."""
     from models.fin_cobranca import FinCobrancaConta
     cora, c = FinCobrancaConta.cliente_cora(conta['id'])
-    nomes = [str(i.get('nome') or '').strip() for i in (itens or []) if str(i.get('nome') or '').strip()]
-    # o Cora imprime UM serviço: o nome é o 1º item (ou "Honorários e serviços") e a descrição lista os demais
-    nome_servico = nomes[0] if len(nomes) == 1 else 'Honorários e serviços'
-    descricao = ', '.join(nomes) if len(nomes) > 1 else (mensagem or '').replace('\n', ' ').strip()
+    nome_servico, descricao = textos_do_boleto(itens, total, mensagem)
     j = cora.criar_boleto(f'QC-{boleto_id}', pagador, nome_servico, descricao, total, vencimento,
                           juros_mes=c.get('juros_mes'), multa_pct=c.get('multa_pct'), com_pix=True,
                           email_aviso=((pagador.get('email') or '').strip() if c.get('avisa_por') == 'efi' else None))
