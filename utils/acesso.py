@@ -249,11 +249,11 @@ MAPA = {
     # Lançamentos de serviço e comissões (06/11/2026): quem lança vê só o seu; aprovar/pagar/acordos = admin na rota
     'financeiro.lancamentos':              'financeiro.lancamentos',
     'financeiro.lancamento_novo':          'financeiro.lancamentos.incluir',
-    'financeiro.lancamento_aprovar':       'financeiro.lancamentos',
-    'financeiro.lancamento_reprovar':      'financeiro.lancamentos',
+    'financeiro.lancamento_aprovar':       'financeiro.lancamentos.aprovar',
+    'financeiro.lancamento_reprovar':      'financeiro.lancamentos.aprovar',
     'financeiro.lancamento_cancelar':      'financeiro.lancamentos.excluir',
     'financeiro.comissoes_fechar':         'financeiro.lancamentos',
-    'financeiro.fechamento_pagar':         'financeiro.lancamentos',
+    'financeiro.fechamento_pagar':         'financeiro.lancamentos.aprovar',
     'financeiro.acordo_novo':              'financeiro.lancamentos',
     'financeiro.acordo_encerrar':          'financeiro.lancamentos',
     # Lote mensal (06/11/2026): só o Anderson emite o mensal — permissão sem perfil

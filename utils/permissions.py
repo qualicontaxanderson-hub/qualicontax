@@ -180,7 +180,9 @@ DEPARTAMENTOS_PERMISSOES = [
         {'id': 'lan', 'nome': 'Serviço avulso e comissões',
          'ver': ('financeiro.lancamentos', 'meus lançamentos'),
          'inc': ('financeiro.lancamentos.incluir', 'lançar serviço'),
-         'exc': [('financeiro.lancamentos.excluir', 'cancelar lançamento')]},
+         'exc': [('financeiro.lancamentos.excluir', 'cancelar lançamento')],
+         # 17/11/2026 — Anderson: a Alessandra "não será ADMIN mas terá a prerrogativa de autorizar"
+         'outros': [('financeiro.lancamentos.aprovar', 'aprovar solicitações da equipe e pagar comissões', True)]},
         {'id': 'lot', 'nome': 'Lote mensal de honorários',
          'ver': ('financeiro.lote', 'lotes'),
          'inc': ('financeiro.lote.incluir', 'emitir o lote'),

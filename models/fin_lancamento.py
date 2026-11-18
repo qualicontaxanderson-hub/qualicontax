@@ -185,7 +185,7 @@ class FinLancamento:
 
     @staticmethod
     def criar(empresa_id, cliente_id, servico_id, descricao, quantidade, valor_unitario, destino, lancado_por,
-              vencimento=None, observacao=None, competencia=None):
+              vencimento=None, observacao=None, competencia=None, com_nota=None, comissao_tipo=None, comissao_valor=None):
         if destino not in DESTINOS:
             raise ValueError('Escolha se a cobrança é avulsa ou entra no mensal.')
         q = _d(quantidade or 1)
@@ -199,25 +199,51 @@ class FinLancamento:
             competencia = FinLoteMensal.competencia_aberta(empresa_id, competencia)
         else:
             competencia = (competencia or date.today()).replace(day=1)
+        if comissao_tipo not in (None, 'PADRAO', 'PCT', 'FIXO', 'SEM'):
+            raise ValueError('Escolha a comissão: padrão, outro %, valor fixo ou sem comissão.')
+        cv = _d(comissao_valor) if comissao_tipo in ('PCT', 'FIXO') else None
+        if comissao_tipo in ('PCT', 'FIXO') and (cv is None or cv <= 0):
+            raise ValueError('Informe o % ou o valor da comissão.')
+        if comissao_tipo == 'PCT' and cv > 100:
+            raise ValueError('A comissão não pode passar de 100%.')
         return execute_query(
             """INSERT INTO fin_lancamentos (empresa_id, cliente_id, servico_id, descricao, quantidade, valor_unitario,
-                   valor_total, destino, competencia, vencimento, observacao, lancado_por)
-               VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
+                   valor_total, destino, competencia, vencimento, observacao, lancado_por, com_nota,
+                   comissao_pedida_tipo, comissao_pedida_valor)
+               VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
             (empresa_id, cliente_id, servico_id, (descricao or '')[:200], q, vu, (q * vu).quantize(Decimal('0.01')),
-             destino, competencia, vencimento, observacao, lancado_por), fetch=False)
+             destino, competencia, vencimento, observacao, lancado_por,
+             None if com_nota is None else (1 if com_nota else 0), comissao_tipo, cv), fetch=False)
 
     @staticmethod
-    def aprovar(lid, aprovado_por):
+    def comissao_calculada(l, tipo=None, valor=None):
+        """(acordo, valor da comissão) — o que vale ao aprovar. Quem aprova pode mandar tipo/valor (ajuste); senão
+        vale o que a pessoa pediu; "padrão" é o acordo dela para o serviço. Sem acordo (não comissionado, ex.: Jabes)
+        só ganha se quem aprova der."""
+        acordo = FinComissaoAcordo.vigente(l['lancado_por'], l['servico_id'], l['lancado_em'].date() if l.get('lancado_em') else None)
+        tipo = tipo or l.get('comissao_pedida_tipo') or 'PADRAO'
+        valor = valor if valor is not None else l.get('comissao_pedida_valor')
+        if tipo == 'SEM':
+            return acordo, Decimal('0')
+        if tipo == 'PCT':
+            return acordo, (_d(l['valor_total']) * _d(valor) / 100).quantize(Decimal('0.01'))
+        if tipo == 'FIXO':
+            return acordo, _d(valor)
+        return acordo, FinComissaoAcordo.calcular(acordo, l['valor_total'])
+
+    @staticmethod
+    def aprovar(lid, aprovado_por, comissao_tipo=None, comissao_valor=None):
         l = FinLancamento.get(lid)
         if not l or l['status'] != 'LANCADO':
             raise ValueError('Só lançamento aguardando aprovação pode ser aprovado.')
-        acordo = FinComissaoAcordo.vigente(l['lancado_por'], l['servico_id'], l['lancado_em'].date() if l.get('lancado_em') else None)
-        com = FinComissaoAcordo.calcular(acordo, l['valor_total'])
+        acordo, com = FinLancamento.comissao_calculada(l, comissao_tipo, comissao_valor)
+        if com > _d(l['valor_total']):
+            raise ValueError('A comissão não pode ser maior que o valor cobrado.')
         execute_query(
             """UPDATE fin_lancamentos SET status = 'APROVADO', aprovado_por = %s, aprovado_em = NOW(),
                    comissao_acordo_id = %s, comissao_valor = %s, comissao_status = %s WHERE id = %s""",
-            (aprovado_por, acordo['id'] if acordo else None, com if acordo else None,
-             'AGUARDANDO' if acordo and com > 0 else 'SEM', lid), fetch=False)
+            (aprovado_por, acordo['id'] if acordo else None, com if com > 0 else None,
+             'AGUARDANDO' if com > 0 else 'SEM', lid), fetch=False)
         return com
 
     @staticmethod

@@ -3,335 +3,538 @@
 {% block title %}Lançamentos - Financeiro - Qualicontax{% endblock %}
 
 {% block extra_css %}
+{# 17/11/2026 — LANÇAMENTOS refeito no molde aprovado pelo Anderson ("Aprova"): quadros coloridos e cartões como a tela
+   COBRANÇAS. A equipe SOLICITA a cobrança (boleto + nota, só boleto ou na mensalidade) com a comissão; Anderson ou
+   Alessandra aprovam e aí a cobrança sai. Cada um vê só o que é seu. #}
+{% include 'financeiro/_lanc_tx_css.html' %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/tom-select@2.4.3/dist/css/tom-select.default.min.css">
 <style>
-/* Lançamentos de serviço e comissões (06/11/2026) */
-.la-abas { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin:14px 0 10px; }
-.la-busca { margin-left:auto; display:flex; gap:6px; }
-.la-busca input { width:240px; }
-.la-num { color:#94a3b8; font-size:12px; }
-.la-sub { display:block; font-size:11px; color:#7d968a; }
-.la-pos { color:#15803d; font-weight:700; }
-.la-neg { color:#b91c1c; font-weight:700; }
-.la-grid2 { display:grid; grid-template-columns:1fr 1fr; gap:10px 14px; }
-.la-grid3 { display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px 14px; }
-.la-sec { font-size:10px; font-weight:800; letter-spacing:1.2px; text-transform:uppercase; color:#15803d; margin:14px 0 8px; display:flex; align-items:center; gap:10px; }
-.la-sec::after { content:''; flex:1; height:1px; background:#e8f1ec; }
-.la-cli { display:flex; align-items:center; gap:10px; background:#f8fbf9; border:1px solid #e3ece7; border-radius:12px; padding:10px 12px; }
-.la-sug { position:absolute; z-index:20; background:#fff; border:1px solid #dbe7df; border-radius:10px; box-shadow:0 10px 24px rgba(0,0,0,.12); width:100%; max-height:260px; overflow:auto; }
-.la-sug div { padding:8px 12px; cursor:pointer; font-size:13px; }
-.la-sug div:hover { background:#f0f7f3; }
-.la-destino { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
-.la-destino label { display:flex; gap:10px; align-items:flex-start; border:1px solid #e3ece7; border-radius:12px; padding:10px 12px; cursor:pointer; margin:0; font-weight:500; background:#fff; }
-.la-destino label:has(input:checked) { border-color:#15803d; background:#f0f7f3; box-shadow:0 0 0 2px rgba(21,128,61,.12); }
-.la-destino input { margin-top:3px; }
-.la-destino b { display:block; font-size:13px; }
-.la-destino small { color:#64748b; font-size:11px; }
-.la-acoes form { display:inline; }
-.la-caixa { background:#fff; border:1px solid #e3ece7; border-radius:15px; padding:16px 18px; margin-bottom:14px; }
-.la-tot { font-size:15px; font-weight:700; color:#0f3d2e; }
-.modal-body .form-group { margin-bottom:0; }
-@media (max-width:640px) { .la-grid2, .la-grid3, .la-destino { grid-template-columns:1fr; } .la-busca { margin-left:0; width:100%; } .la-busca input { width:100%; } }
+.lm-hero-actions { display:flex; gap:10px; flex-wrap:wrap; justify-content:flex-end; }
+.lm-btn { display:inline-flex; align-items:center; gap:9px; padding:11px 18px; border-radius:14px; border:0; background:#fff; color:#0f3d2e; font:inherit;
+  font-weight:800; font-size:14.5px; box-shadow:0 10px 26px rgba(0,0,0,.18); cursor:pointer; text-decoration:none; }
+.lm-btn i { color:#16a34a; } .lm-btn:hover { transform:translateY(-1px); }
+.lm-btn2 { background:rgba(255,255,255,.14); color:#fff; box-shadow:none; border:1px solid rgba(255,255,255,.35); font-size:13.5px; padding:10px 14px; }
+.lm-btn2 i { color:#bbf7d0; }
+.lm-quem { display:inline-flex; align-items:center; gap:8px; background:rgba(255,255,255,.14); border:1px solid rgba(255,255,255,.25); color:#fff;
+  padding:6px 12px 6px 6px; border-radius:99px; font-size:12.5px; font-weight:700; margin-top:10px; }
+.lm-quem b { min-width:26px; height:26px; border-radius:99px; background:#fff; color:#0f3d2e; display:inline-flex; align-items:center; justify-content:center; font-size:11px; padding:0 4px; }
+.tx-a-com { --cor:#7c3aed; --cor-e:#5b21b6; --fundo:#f5f3ff; }
+.tx-painel[data-p="apr"] { --sec:#f97316; --sec-e:#c2410c; --sec-f:#fff4ec; --sec-b:#fed7b5; }
+.tx-painel[data-p="cob"] { --sec:#2563eb; --sec-e:#1e40af; --sec-f:#eff4ff; --sec-b:#bfdbfe; }
+.tx-painel[data-p="pag"] { --sec:#16a34a; --sec-e:#166534; --sec-f:#ecfdf3; --sec-b:#bbf7d0; }
+.tx-painel[data-p="atr"] { --sec:#dc2626; --sec-e:#991b1b; --sec-f:#fef1f1; --sec-b:#fecaca; }
+.tx-painel[data-p="com"] { --sec:#7c3aed; --sec-e:#5b21b6; --sec-f:#f5f3ff; --sec-b:#ddd6fe; }
+.lm-sec { font-size:11.5px; font-weight:800; letter-spacing:.07em; text-transform:uppercase; color:#475569; margin:4px 2px 10px; display:flex; align-items:center; gap:10px; }
+.lm-sec::after { content:''; flex:1; height:1px; background:#e6eeea; } .lm-sec small { font-weight:700; letter-spacing:0; text-transform:none; color:#94a3b8; }
+.lm-tipo { display:inline-flex; align-items:center; gap:5px; font-size:10.5px; font-weight:800; letter-spacing:.03em; text-transform:uppercase; border-radius:7px; padding:2px 7px; }
+.lm-t-av { background:#eff6ff; color:#1d4ed8; } .lm-t-me { background:#f5f3ff; color:#6d28d9; }
+.lm-com { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-top:9px; padding-top:8px; border-top:1px dashed #e2e8f0; font-size:12px; color:#64748b; }
+.lm-com b { color:#6d28d9; font-weight:800; } .lm-cs { font-size:11px; font-weight:800; border-radius:99px; padding:2px 8px; white-space:nowrap; }
+.lm-cs-ag { background:#f1f5f9; color:#64748b; } .lm-cs-lib { background:#dcfce7; color:#15803d; } .lm-cs-pg { background:#ede9fe; color:#6d28d9; } .lm-cs-sem { background:#f8fafc; color:#94a3b8; }
+.lm-ac { display:flex; gap:6px; margin-top:10px; }
+.lm-ac button { flex:1; height:32px; border-radius:9px; font:inherit; font-size:12px; font-weight:800; border:1px solid #e2e8f0; background:#fff; color:#475569;
+  display:inline-flex; align-items:center; justify-content:center; gap:6px; cursor:pointer; }
+.lm-ac .ok { background:#16a34a; border-color:#16a34a; color:#fff; } .lm-ac .no { color:#b91c1c; border-color:#fecaca; }
+.lm-por { font-size:11.5px; color:#64748b; margin-top:6px; display:flex; align-items:center; gap:6px; } .lm-por i { color:#94a3b8; }
+.lm-ck { position:absolute; right:12px; bottom:12px; width:22px; height:22px; border-radius:7px; border:2px solid #c4b5fd; background:#fff; display:inline-flex;
+  align-items:center; justify-content:center; color:#fff; font-size:11px; cursor:pointer; }
+.tx-c.marcado .lm-ck { background:#7c3aed; border-color:#7c3aed; } .tx-c.marcavel { cursor:pointer; }
+.lm-barra { position:sticky; bottom:14px; z-index:5; margin:6px 0 22px; display:flex; align-items:center; gap:14px; background:linear-gradient(135deg,#7c3aed,#5b21b6); color:#fff;
+  border-radius:16px; padding:12px 14px 12px 20px; box-shadow:0 16px 36px rgba(91,33,182,.35); flex-wrap:wrap; }
+.lm-barra span { flex:1; font-size:13.5px; min-width:200px; } .lm-barra span b { font-size:18px; }
+.lm-barra button { border:0; background:#fff; color:#5b21b6; font:inherit; font-weight:800; border-radius:11px; padding:10px 16px; display:inline-flex; gap:8px; align-items:center; cursor:pointer; }
+.lm-barra button:disabled { opacity:.55; cursor:not-allowed; }
+.lm-pedido { display:flex; gap:12px; align-items:center; background:#fff; border:1px solid #e9e3fb; border-radius:14px; padding:12px 16px; margin-bottom:10px; flex-wrap:wrap; }
+.lm-pedido .ic { width:40px; height:40px; border-radius:12px; background:#f5f3ff; color:#7c3aed; display:inline-flex; align-items:center; justify-content:center; font-size:17px; }
+.lm-pedido .tx { flex:1; min-width:200px; } .lm-pedido .tx b { display:block; font-size:14px; } .lm-pedido .tx small { color:#64748b; font-size:12px; }
+.lm-pedido .vl { font-size:16px; font-weight:800; color:#0f172a; text-align:right; }
+.lm-st { font-size:11px; font-weight:800; border-radius:99px; padding:3px 9px; display:inline-block; margin-top:3px; }
+.lm-pagar { display:flex; gap:6px; align-items:center; } .lm-pagar input { height:34px; border:1px solid #d7e3dc; border-radius:9px; padding:0 9px; font:inherit; font-size:13px; width:130px; }
+.lm-pagar button { height:34px; border:0; border-radius:9px; background:#7c3aed; color:#fff; font:inherit; font-weight:800; font-size:12.5px; padding:0 12px; cursor:pointer; }
+.lm-fora { display:flex; gap:10px; align-items:center; font-size:12.5px; color:#64748b; background:#fff; border:1px solid #eef2f0; border-radius:11px; padding:8px 12px; margin-bottom:6px; }
+.lm-fora b { color:#334155; } .lm-fora em { font-style:normal; color:#b91c1c; font-weight:700; }
+.lm-acordos { background:#fff; border:1px solid #e6eeea; border-radius:14px; padding:14px 16px; margin-top:8px; }
+.lm-acordos table { width:100%; border-collapse:collapse; font-size:12.5px; } .lm-acordos td, .lm-acordos th { padding:7px 8px; border-bottom:1px solid #f1f5f4; text-align:left; }
+.lm-acordos th { font-size:11px; text-transform:uppercase; letter-spacing:.05em; color:#7d968a; }
+.lm-acordos form.nv { display:grid; grid-template-columns:repeat(6, minmax(0,1fr)) auto; gap:8px; margin-top:12px; }
+.lm-acordos form.nv select, .lm-acordos form.nv input { height:36px; border:1px solid #d7e3dc; border-radius:9px; padding:0 8px; font:inherit; font-size:12.5px; min-width:0; }
+.lm-acordos form.nv button { height:36px; border:0; border-radius:9px; background:#0f3d2e; color:#fff; font:inherit; font-weight:800; font-size:12.5px; padding:0 14px; cursor:pointer; }
+/* caixa (molde da caixa do relatório) */
+.ns-fundo { position:fixed; inset:0; z-index:1200; background:rgba(15,23,42,.5); backdrop-filter:blur(2px); display:none; }
+.ns-fundo.on { display:block; }
+.ns { position:absolute; left:50%; top:3vh; transform:translateX(-50%); width:min(1180px, calc(100vw - 32px)); max-height:94vh; display:flex; flex-direction:column;
+  background:#f6faf7; border-radius:22px; box-shadow:0 30px 80px rgba(2,44,22,.35); overflow:hidden; font-size:14px; color:#0f172a; }
+.ns.peq { width:min(620px, calc(100vw - 32px)); }
+.ns-cab { display:flex; align-items:center; gap:16px; padding:18px 22px; color:#fff; background:radial-gradient(120% 140% at 0% 0%, #22c55e 0%, #15803d 45%, #0f3d2e 100%); }
+.ns-cab.lar { background:radial-gradient(120% 140% at 0% 0%, #fb923c 0%, #ea580c 45%, #7c2d12 100%); }
+.ns-cab.red { background:radial-gradient(120% 140% at 0% 0%, #f87171 0%, #dc2626 45%, #7f1d1d 100%); }
+.ns-logo { background:#fff; border-radius:14px; padding:6px 10px; display:inline-flex; box-shadow:0 6px 16px rgba(0,0,0,.18); } .ns-logo img { height:36px; display:block; }
+.ns-tit { flex:1; min-width:0; } .ns-tit b { display:block; font-size:20px; font-weight:800; } .ns-tit span { font-size:13px; opacity:.88; }
+.ns-prev { text-align:right; } .ns-prev small { display:block; font-size:10.5px; font-weight:800; letter-spacing:.08em; text-transform:uppercase; opacity:.8; }
+.ns-prev b { display:block; font-size:24px; font-weight:800; line-height:1.1; } .ns-prev span { font-size:12.5px; opacity:.9; }
+.ns-x { width:38px; height:38px; border-radius:99px; border:0; background:rgba(255,255,255,.18); color:#fff; font-size:16px; cursor:pointer; flex-shrink:0; }
+.ns-g { flex:1; min-height:0; display:grid; grid-template-columns:minmax(0,1fr) 340px; }
+.ns.peq .ns-g { grid-template-columns:minmax(0,1fr); }
+.ns-f { padding:16px 18px 18px 22px; display:flex; flex-direction:column; gap:12px; overflow:auto; }
+.ns-r { padding:16px 22px; border-left:1px solid #e6eeea; background:#fff; display:flex; flex-direction:column; gap:12px; overflow:auto; }
+.ns-b { background:#fff; border:1px solid #e6eeea; border-radius:16px; padding:13px 15px; }
+.ns-h { display:flex; align-items:center; gap:8px; font-size:11.5px; font-weight:800; letter-spacing:.07em; text-transform:uppercase; color:#0f3d2e; margin-bottom:10px; }
+.ns-h i { color:#16a34a; } .ns-h em { margin-left:auto; font-style:normal; text-transform:none; letter-spacing:0; font-weight:600; color:#64748b; font-size:12px; }
+.ns-ops { display:grid; grid-template-columns:repeat(3, minmax(0,1fr)); gap:9px; }
+.ns-op { text-align:left; border:1.5px solid #e2e8f0; border-radius:14px; padding:11px 12px; background:#fff; cursor:pointer; font:inherit; }
+.ns-op b { display:block; font-size:13.5px; color:#0f172a; } .ns-op small { font-size:11.5px; color:#64748b; }
+.ns-op i { font-size:18px; color:#16a34a; margin-bottom:6px; display:block; }
+.ns-op.on { border-color:#16a34a; background:#f0fdf4; box-shadow:0 0 0 3px #dcfce7; }
+.ns-campos { display:grid; grid-template-columns:repeat(2, minmax(0,1fr)); gap:12px 14px; } .ns-campos > * { min-width:0; }
+.ns-campo label { display:block; font-size:11.5px; font-weight:700; color:#0f3d2e; text-transform:uppercase; letter-spacing:.3px; margin-bottom:6px; }
+.ns-in { width:100%; box-sizing:border-box; height:40px; border:1px solid #d7e3dc; border-radius:10px; padding:0 12px; background:#fff; font:inherit; font-size:13.5px; color:#0f172a; }
+.ns-in:focus { outline:0; border-color:#22c55e; box-shadow:0 0 0 3px rgba(34,197,94,.14); }
+.ns-campo .ts-control { min-height:40px; border:1px solid #d7e3dc; border-radius:10px; padding:6px 10px; font-size:13.5px; box-shadow:none; }
+.ns-campo .ts-wrapper.focus .ts-control { border-color:#22c55e; box-shadow:0 0 0 3px rgba(34,197,94,.14); }
+.ts-dropdown.ns-dd { z-index:1300; font-size:13px; border:1px solid #d7e3dc; border-radius:10px; box-shadow:0 12px 28px rgba(15,23,42,.18); }
+.ts-dropdown.ns-dd .active { background:#ecfdf5; color:#0f3d2e; }
+.ns-o { display:flex; gap:8px; align-items:center; } .ns-o span { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.ns-o em { font-style:normal; color:#94a3b8; font-weight:700; } .ns-o small { color:#94a3b8; font-size:11.5px; } .ns-o .av { font-size:10px; font-weight:800; color:#b45309; background:#fffbeb; border-radius:6px; padding:1px 5px; }
+.ns-seg { display:inline-flex; background:#eef4f0; border-radius:11px; padding:3px; gap:2px; flex-wrap:wrap; }
+.ns-seg button { border:0; background:none; font:inherit; font-size:12.5px; font-weight:700; color:#475569; padding:6px 11px; border-radius:8px; cursor:pointer; }
+.ns-seg button.on { background:#fff; color:#0f3d2e; box-shadow:0 1px 4px rgba(0,0,0,.08); }
+.ns-com { display:flex; gap:12px; align-items:center; flex-wrap:wrap; } .ns-com .ns-in { max-width:170px; }
+.ns-res div { display:flex; justify-content:space-between; gap:10px; font-size:13px; padding:5px 0; border-bottom:1px solid #f1f5f4; }
+.ns-res div span { color:#64748b; } .ns-res div b { color:#0f172a; text-align:right; }
+.ns-res .big { border:0; padding-top:10px; } .ns-res .big b { font-size:20px; color:#15803d; }
+.ns-aviso { background:#fffbeb; border:1px solid #fde68a; color:#92400e; border-radius:11px; padding:9px 12px; font-size:12.5px; display:flex; gap:8px; line-height:1.4; }
+.ns-msg { color:#b91c1c; font-size:12.5px; font-weight:700; min-height:16px; }
+.ns-pe { display:flex; align-items:center; gap:10px; padding:13px 22px; background:#fff; border-top:1px solid #e6eeea; }
+.ns-pe-info { flex:1; font-size:12.5px; color:#64748b; min-width:0; }
+.ns-bt { font:inherit; font-weight:800; border-radius:12px; padding:11px 18px; cursor:pointer; border:1.5px solid #e2e8f0; background:#fff; color:#334155; display:inline-flex; gap:8px; align-items:center; }
+.ns-bt.prim { border:0; background:linear-gradient(135deg, #16a34a, #15803d); color:#fff; box-shadow:0 8px 20px rgba(22,163,74,.3); font-size:15px; padding:12px 22px; }
+.ns-bt.red { border:0; background:linear-gradient(135deg, #dc2626, #991b1b); color:#fff; }
+.ns-bt:disabled { opacity:.55; cursor:not-allowed; box-shadow:none; }
+@media (max-width:980px) {
+  .ns { top:0; left:0; transform:none; width:100vw !important; max-height:100vh; height:100vh; border-radius:0; }
+  .ns-g { grid-template-columns:minmax(0,1fr); overflow-y:auto; } .ns-f, .ns-r { overflow:visible; } .ns-r { border-left:0; border-top:1px solid #e6eeea; }
+  .ns-ops, .ns-campos { grid-template-columns:minmax(0,1fr); } .ns-cab { flex-wrap:wrap; } .ns-prev { width:100%; text-align:left; order:3; }
+  .ns-pe { flex-wrap:wrap; } .ns-pe-info { width:100%; flex:none; } .ns-pe .ns-bt.prim { flex:1; justify-content:center; }
+  .lm-acordos form.nv { grid-template-columns:minmax(0,1fr); }
+}
 </style>
 {% endblock %}
 
 {% block content %}
 {% include 'financeiro/_nav_financeiro.html' %}
 
-<div class="page-header">
+{% macro cartao(l, fase) %}
+{% set cls = {'apr': 'tx-venc', 'cob': ('tx-fut' if l.destino == 'MENSAL' and l.status == 'APROVADO' else 'tx-hoje'), 'pag': 'tx-ok', 'atr': 'tx-ina'}[fase] %}
+<div class="tx-c {{ cls }}" data-busca="{{ l.numero_cliente or '' }} {{ l.nome_razao_social }} {{ l.servico_nome }} {{ l.lancado_por_nome }}">
+  <div class="tx-c-top"><span class="tx-c-num">{{ l.numero_cliente or '—' }}</span><span class="tx-c-nome" title="{{ l.nome_razao_social }}">{{ l.nome_razao_social }}</span></div>
+  <div class="tx-c-meio"><div><div class="tx-c-val">{{ l.valor_total | float | format_currency }}</div>
+    <div class="tx-c-desc">{{ l.descricao or l.servico_nome }} · {% if l.destino == 'MENSAL' %}mensalidade de {{ l.competencia.strftime('%m/%Y') }}{% elif l.titulo_vencimento or l.vencimento %}vence {{ (l.titulo_vencimento or l.vencimento).strftime('%d/%m/%Y') }}{% endif %}</div></div>
+    <span class="tx-c-st">{% if fase == 'apr' %}<i class="fas fa-hourglass-half"></i> {{ 'pedido ' ~ l.lancado_em.strftime('%d/%m') if l.lancado_em else 'aguardando' }}
+      {% elif fase == 'pag' %}<i class="fas fa-circle-check"></i> pago
+      {% elif fase == 'atr' %}<i class="fas fa-clock"></i> atrasado
+      {% elif l.status == 'APROVADO' and l.destino == 'MENSAL' %}<i class="fas fa-calendar"></i> no lote de {{ l.competencia.strftime('%m/%Y') }}
+      {% else %}<i class="fas fa-paper-plane"></i> cobrado{% endif %}</span></div>
+  <div style="margin-top:8px"><span class="lm-tipo {{ 'lm-t-me' if l.destino == 'MENSAL' else 'lm-t-av' }}"><i class="fas {{ 'fa-calendar' if l.destino == 'MENSAL' else 'fa-barcode' }}"></i> {{ l.como }}</span></div>
+  {% if aprov and l.lancado_por != current_user.id %}<div class="lm-por"><i class="fas fa-user"></i> {{ l.lancado_por_nome }}</div>{% endif %}
+  {% if fase == 'apr' %}
+    {% set pt = l.comissao_pedida_tipo or 'PADRAO' %}
+    <div class="lm-com"><span>Comissão {% if pt == 'SEM' %}<b>não pediu</b>{% else %}<b>{{ ('%g' % (l.comissao_pedida_valor | float)) ~ '%' if pt == 'PCT' else ('fixo' if pt == 'FIXO' else 'padrão') }} · {{ l.com_prev | float | format_currency }}</b>{% endif %}</span>
+      <span class="lm-cs lm-cs-ag">{{ 'pedido' if pt != 'PADRAO' else ('do acordo' if l.com_prev else 'sem acordo') }}</span></div>
+  {% elif l.comissao_status and l.comissao_status != 'SEM' %}
+    <div class="lm-com"><span>Comissão <b>{{ l.comissao_valor | float | format_currency }}</b></span>
+      <span class="lm-cs {{ {'AGUARDANDO': 'lm-cs-ag', 'LIBERADA': 'lm-cs-lib', 'FECHADA': 'lm-cs-pg', 'PAGA': 'lm-cs-pg'}.get(l.comissao_status, 'lm-cs-ag') }}">{{ l.situacao_com }}</span></div>
+  {% endif %}
+  {% if fase == 'apr' and aprov %}
+    <div class="lm-ac"><button type="button" class="no" onclick="lmReprovar({{ l.id }})"><i class="fas fa-xmark"></i> Reprovar</button>
+      <button type="button" class="ok" onclick="lmAprovar({{ l.id }})"><i class="fas fa-check"></i> Aprovar</button></div>
+  {% elif fase == 'apr' and l.lancado_por == current_user.id and pode_rota('financeiro.lancamento_cancelar') %}
+    <div class="lm-ac"><button type="button" class="no" onclick="lmCancelar({{ l.id }})"><i class="fas fa-ban"></i> Cancelar pedido</button></div>
+  {% endif %}
+</div>
+{% endmacro %}
+
+<div class="tx">
+<div class="ef-hero">
+  <div class="ef-hero-inner ef-hero-head">
     <div>
-        <h1 class="page-title"><i class="fas fa-receipt" style="color: var(--primary-green);"></i> Lançamentos</h1>
-        <p class="page-subtitle">Serviço lançado numa empresa: sai como cobrança avulsa ou entra na mensal{% if not admin %} · você vê só o que é seu{% endif %}</p>
+      <h1 class="ef-hero-title">Lançamentos</h1>
+      <p class="ef-hero-sub">{{ 'Solicitações da equipe, aprovação e pagamento das comissões' if aprov else 'Suas solicitações de cobrança e as suas comissões' }}</p>
+      <span class="lm-quem"><b>{{ (current_user.nome or '?').split()[0][:1] }}{{ ((current_user.nome or '').split()[-1][:1]) if (current_user.nome or '').split()|length > 1 else '' }}</b>
+        {{ (current_user.nome or '').split()[0] }}{% if aprov %} · aprova as solicitações e paga as comissões{% else %} · você vê só o que é seu{% endif %}</span>
     </div>
-    <div class="page-actions">
-        {# 17/11/2026: vieram da antiga aba Cobranças (que virou o nome da tela de Títulos) #}
-        {% if pode_rota('financeiro.notas_config') %}<a class="btn btn-outline" href="{{ url_for('financeiro.notas_config') }}"><i class="fas fa-sliders-h"></i> Configuração fiscal</a>{% endif %}
-        {% if pode_rota('financeiro.cobrancas') %}<a class="btn btn-outline" href="{{ url_for('financeiro.cobrancas') }}"><i class="fas fa-barcode"></i> Notas e boletos emitidos</a>{% endif %}
-        {% if pode_rota('financeiro.nota_nova') %}<a class="btn btn-outline" href="{{ url_for('financeiro.nota_nova') }}"><i class="fas fa-file-invoice-dollar"></i> Nova cobrança</a>{% endif %}
-        <button class="btn btn-primary" onclick="laNovo()"><i class="fas fa-plus"></i> Lançar serviço</button>
+    <div class="lm-hero-actions">
+      {% if aprov %}
+        {% if pode_rota('financeiro.cobrancas') %}<a class="lm-btn lm-btn2" href="{{ url_for('financeiro.cobrancas') }}"><i class="fas fa-file-invoice"></i> Notas e boletos</a>{% endif %}
+        {% if pode_rota('financeiro.notas_config') %}<a class="lm-btn lm-btn2" href="{{ url_for('financeiro.notas_config') }}"><i class="fas fa-sliders-h"></i> Configuração fiscal</a>{% endif %}
+        {% if pode_rota('financeiro.nota_nova') %}<a class="lm-btn lm-btn2" href="{{ url_for('financeiro.nota_nova') }}" title="Emite agora, sem passar por aprovação"><i class="fas fa-bolt"></i> Emitir direto</a>{% endif %}
+      {% endif %}
+      {% if pode_rota('financeiro.lancamento_novo') %}<button type="button" class="lm-btn" onclick="nsAbrir()"><i class="fas fa-plus"></i> Nova solicitação</button>{% endif %}
     </div>
+  </div>
 </div>
 
-{% if resumo and not admin %}
-<div class="fin-kpis">
-    <div class="fin-kpi"><div class="fin-kpi-lbl">Aguardando aprovação</div><div class="fin-kpi-val">{{ resumo.aguardando_aprovacao or 0 }}</div><div class="fin-kpi-pe">lançamentos seus</div></div>
-    <div class="fin-kpi"><div class="fin-kpi-lbl">Comissão a liberar</div><div class="fin-kpi-val">{{ (resumo.v_aguardando or 0) | float | format_currency }}</div><div class="fin-kpi-pe">{{ resumo.aguardando_pagamento or 0 }} cobrança(s) ainda não pagas</div></div>
-    <div class="fin-kpi"><div class="fin-kpi-lbl">Liberada para fechar</div><div class="fin-kpi-val">{{ (resumo.v_liberadas or 0) | float | format_currency }}</div><div class="fin-kpi-pe">{{ resumo.liberadas or 0 }} cobrança(s) pagas</div></div>
-    <div class="fin-kpi"><div class="fin-kpi-lbl">Já paga a você</div><div class="fin-kpi-val">{{ (resumo.v_pagas or 0) | float | format_currency }}</div><div class="fin-kpi-pe">em fechamento: {{ (resumo.v_fechadas or 0) | float | format_currency }}</div></div>
-</div>
-{% endif %}
+<div class="ef-body">
+  <div class="tx-abas">
+    <button type="button" class="tx-aba tx-a-atr{{ ' on' if aba == 'apr' }}" data-p="apr"><span class="tx-aba-ico"><i class="fas {{ 'fa-stamp' if aprov else 'fa-hourglass-half' }}"></i></span>
+      <span class="tx-aba-txt"><span class="tx-aba-lbl">{{ 'Para aprovar' if aprov else 'Aguardando aprovação' }}</span><span class="tx-aba-val">{{ tot.apr | format_currency }}</span>
+      <span class="tx-aba-sub">{{ 'solicitações da equipe' if aprov else 'com Anderson ou Alessandra' }}</span></span><span class="tx-aba-n">{{ grupos.apr|length }}</span></button>
+    <button type="button" class="tx-aba tx-a-abe{{ ' on' if aba == 'cob' }}" data-p="cob"><span class="tx-aba-ico"><i class="fas fa-paper-plane"></i></span>
+      <span class="tx-aba-txt"><span class="tx-aba-lbl">Em cobrança</span><span class="tx-aba-val">{{ tot.cob | format_currency }}</span><span class="tx-aba-sub">aprovados · a vencer</span></span><span class="tx-aba-n">{{ grupos.cob|length }}</span></button>
+    <button type="button" class="tx-aba tx-a-rec{{ ' on' if aba == 'pag' }}" data-p="pag"><span class="tx-aba-ico"><i class="fas fa-circle-check"></i></span>
+      <span class="tx-aba-txt"><span class="tx-aba-lbl">Pagos</span><span class="tx-aba-val">{{ tot.pag | format_currency }}</span><span class="tx-aba-sub">o cliente já pagou</span></span><span class="tx-aba-n">{{ grupos.pag|length }}</span></button>
+    <button type="button" class="tx-aba tx-a-ina{{ ' on' if aba == 'atr' }}" data-p="atr"><span class="tx-aba-ico"><i class="fas fa-clock"></i></span>
+      <span class="tx-aba-txt"><span class="tx-aba-lbl">Atrasados</span><span class="tx-aba-val">{{ tot.atr | format_currency }}</span><span class="tx-aba-sub">cliente ainda não pagou</span></span><span class="tx-aba-n">{{ grupos.atr|length }}</span></button>
+    <button type="button" class="tx-aba tx-a-com{{ ' on' if aba == 'com' }}" data-p="com"><span class="tx-aba-ico"><i class="fas {{ 'fa-money-bill-transfer' if aprov else 'fa-hand-holding-dollar' }}"></i></span>
+      <span class="tx-aba-txt"><span class="tx-aba-lbl">{{ 'Comissões a pagar' if aprov else 'Comissões a receber' }}</span>
+      <span class="tx-aba-val">{{ (tot_a_pagar if aprov else tot_liberadas) | format_currency }}</span>
+      <span class="tx-aba-sub">{{ (a_pagar|length ~ ' pedido' ~ ('s' if a_pagar|length != 1 else '') ~ ' da equipe') if aprov else (liberadas|length ~ ' paga' ~ ('s' if liberadas|length != 1 else '') ~ ' · prontas para pedir') }}</span></span>
+      <span class="tx-aba-n">{{ a_pagar|length if aprov else liberadas|length }}</span></button>
+  </div>
 
-<div class="la-abas">
-    <a class="fin-chip {{ 'ativo' if aba == 'lancamentos' }}" href="{{ url_for('financeiro.lancamentos') }}">{{ 'Todos os lançamentos' if admin else 'Meus lançamentos' }}</a>
-    {% if admin %}<a class="fin-chip {{ 'ativo' if aba == 'aprovar' }}" href="{{ url_for('financeiro.lancamentos', aba='aprovar') }}">Aguardando aprovação <strong>{{ n_aprovar }}</strong></a>{% endif %}
-    <a class="fin-chip {{ 'ativo' if aba == 'comissoes' }}" href="{{ url_for('financeiro.lancamentos', aba='comissoes') }}">{{ 'Comissões' if admin else 'Minhas comissões' }}</a>
-    <a class="fin-chip {{ 'ativo' if aba == 'fechamentos' }}" href="{{ url_for('financeiro.lancamentos', aba='fechamentos') }}">Fechamentos</a>
-    {% if admin %}<a class="fin-chip {{ 'ativo' if aba == 'acordos' }}" href="{{ url_for('financeiro.lancamentos', aba='acordos') }}">Acordos de comissão</a>{% endif %}
-    {% if aba in ('lancamentos', 'aprovar') %}
-    <form class="la-busca" method="GET" action="{{ url_for('financeiro.lancamentos') }}">
-        <input type="hidden" name="aba" value="{{ aba }}">
-        <input type="text" name="busca" class="form-control" placeholder="empresa, número ou serviço" value="{{ busca or '' }}">
-        <button class="btn btn-outline" type="submit"><i class="fas fa-search"></i></button>
+  {% for fase, titulo, vazio in [('apr', 'Para aprovar' if aprov else 'Aguardando aprovação', 'Nada esperando aprovação.'), ('cob', 'Em cobrança', 'Nada em cobrança agora.'),
+                                ('pag', 'Pagos', 'Nenhum pago ainda.'), ('atr', 'Atrasados', 'Nenhum atrasado.')] %}
+  <div class="tx-painel{{ ' on' if aba == fase }}" data-p="{{ fase }}">
+    <div class="tx-faixa"><div class="lm-sec" style="margin:0; flex:1">{{ titulo }} <small>{{ grupos[fase]|length }} lançamento{{ 's' if grupos[fase]|length != 1 }}</small></div>
+      <div class="tx-busca"><i class="fas fa-magnifying-glass"></i><input type="search" placeholder="Cliente, serviço{{ ' ou quem pediu' if aprov else '' }}"></div></div>
+    {% if grupos[fase] %}<div class="tx-grade">{% for l in grupos[fase] %}{{ cartao(l, fase) }}{% endfor %}</div>
+    {% else %}<div class="tx-vazio"><i class="fas fa-mug-hot"></i>{{ vazio }}</div>{% endif %}
+    {% if fase == 'apr' and fora %}
+      <div class="lm-sec" style="margin-top:8px">Reprovados e cancelados <small>os últimos</small></div>
+      {% for l in fora %}<div class="lm-fora"><i class="fas {{ 'fa-xmark' if l.status == 'REPROVADO' else 'fa-ban' }}"></i>
+        <span style="flex:1"><b>{{ l.nome_razao_social }}</b> · {{ l.servico_nome }} · {{ l.valor_total | float | format_currency }}{% if aprov %} · {{ l.lancado_por_nome }}{% endif %}{% if l.motivo %} — <em>{{ l.motivo }}</em>{% endif %}</span>
+        <span>{{ 'reprovado' if l.status == 'REPROVADO' else 'cancelado' }}</span></div>{% endfor %}
+    {% endif %}
+  </div>
+  {% endfor %}
+
+  {# ── COMISSÕES ── #}
+  <div class="tx-painel{{ ' on' if aba == 'com' }}" data-p="com">
+  {% if aprov %}
+    <div class="lm-sec">Pedidos de pagamento de comissão <small>{{ pedidos|length }}</small></div>
+    {% for f in pedidos %}
+      {% set falta = (f.total | float) - (f.valor_pago | float) %}
+      <div class="lm-pedido"><span class="ic"><i class="fas fa-user"></i></span>
+        <div class="tx"><b>{{ f.usuario_nome }}</b><small>Pedido nº {{ f.id }} · {{ f.qtd_itens }} comiss{{ 'ões' if f.qtd_itens != 1 else 'ão' }} · {{ f.criado_em.strftime('%d/%m/%Y') if f.criado_em else '' }}</small></div>
+        <div class="vl">{{ f.total | float | format_currency }}<br>
+          {% if f.status == 'PAGO' %}<span class="lm-st" style="background:#dcfce7;color:#15803d">pago</span>
+          {% elif f.status == 'PAGO_PARCIAL' %}<span class="lm-st" style="background:#fef3c7;color:#92400e">falta {{ falta | format_currency }}</span>
+          {% elif f.status == 'CANCELADO' %}<span class="lm-st" style="background:#f1f5f9;color:#64748b">cancelado</span>
+          {% else %}<span class="lm-st" style="background:#fef3c7;color:#92400e">a pagar</span>{% endif %}</div>
+        {% if f.status not in ('PAGO', 'CANCELADO') and pode_rota('financeiro.fechamento_pagar') %}
+        <form class="lm-pagar" method="POST" action="{{ url_for('financeiro.fechamento_pagar', fid=f.id) }}" onsubmit="return confirm('Registrar o pagamento a {{ f.usuario_nome }}?')">
+          <input type="date" name="data" value="{{ hoje.isoformat() }}"><input name="valor" value="{{ '%.2f'|format(falta) | replace('.', ',') }}" inputmode="decimal">
+          <button><i class="fas fa-check"></i> Registrar pago</button></form>
+        {% endif %}
+      </div>
+    {% else %}<div class="tx-vazio"><i class="fas fa-hand-holding-dollar"></i>Nenhum pedido de comissão ainda.</div>{% endfor %}
+  {% endif %}
+  {% if not aprov or liberadas or meus_com %}
+    <form method="POST" action="{{ url_for('financeiro.comissoes_fechar') }}" id="lmFormPedir">
+    <div class="lm-sec">{{ 'Suas comissões pagas pelo cliente' if aprov else 'Pagas pelo cliente' }} — marque as que vai pedir <small>{{ liberadas|length }}</small></div>
+    {% if liberadas %}
+      <div class="tx-grade">{% for l in liberadas %}
+        <div class="tx-c tx-ok marcavel" data-v="{{ l.comissao_valor | float }}" onclick="lmMarcar(this)">
+          <input type="checkbox" name="lanc" value="{{ l.id }}" hidden>
+          <div class="tx-c-top"><span class="tx-c-num">{{ l.numero_cliente or '—' }}</span><span class="tx-c-nome">{{ l.nome_razao_social }}</span></div>
+          <div class="tx-c-meio"><div><div class="tx-c-val">{{ l.comissao_valor | float | format_currency }}</div><div class="tx-c-desc">{{ l.descricao or l.servico_nome }} ({{ l.valor_total | float | format_currency }})</div></div>
+            <span class="tx-c-st"><i class="fas fa-circle-check"></i> liberada</span></div>
+          <div style="margin-top:8px"><span class="lm-tipo {{ 'lm-t-me' if l.destino == 'MENSAL' else 'lm-t-av' }}">{{ l.como }}</span></div>
+          <span class="lm-ck"><i class="fas fa-check"></i></span>
+        </div>{% endfor %}</div>
+      <div class="lm-barra"><span><b id="lmSoma">R$ 0,00</b> · <span id="lmQtd">nenhuma comissão marcada</span> · Anderson ou Alessandra pagam e o pedido fica registrado</span>
+        <button type="submit" id="lmPedir" disabled><i class="fas fa-paper-plane"></i> Pedir pagamento</button></div>
+    {% else %}<div class="tx-vazio"><i class="fas fa-hand-holding-dollar"></i>Nenhuma comissão liberada agora: ela libera quando o cliente paga.</div>{% endif %}
     </form>
+    {% set aguard = meus_com | selectattr('comissao_status', 'equalto', 'AGUARDANDO') | list %}
+    {% if aguard %}<div class="lm-sec">Esperando o cliente pagar <small>{{ aguard|length }}</small></div>
+      <div class="tx-grade">{% for l in aguard %}{{ cartao(l, 'atr' if l.fase == 'atr' else 'cob') }}{% endfor %}</div>{% endif %}
+    {% if not aprov %}
+      <div class="lm-sec">Seus pedidos <small>{{ pedidos|length }}</small></div>
+      {% for f in pedidos %}<div class="lm-pedido"><span class="ic"><i class="fas fa-receipt"></i></span>
+        <div class="tx"><b>Pedido nº {{ f.id }}</b><small>{{ f.qtd_itens }} comiss{{ 'ões' if f.qtd_itens != 1 else 'ão' }} · {{ f.criado_em.strftime('%d/%m/%Y') if f.criado_em else '' }}</small></div>
+        <div class="vl">{{ f.total | float | format_currency }}<br><span class="lm-st" style="{{ 'background:#dcfce7;color:#15803d' if f.status == 'PAGO' else 'background:#fef3c7;color:#92400e' }}">{{ {'PAGO': 'pago', 'PAGO_PARCIAL': 'pago em parte', 'CANCELADO': 'cancelado'}.get(f.status, 'aguardando pagamento') }}</span></div></div>
+      {% else %}<div class="tx-vazio" style="padding:18px"><i class="fas fa-receipt"></i>Nenhum pedido ainda.</div>{% endfor %}
     {% endif %}
+  {% endif %}
+  {% if admin %}
+    <div class="lm-sec" id="acordos" style="margin-top:14px">Acordos de comissão <small>quem tem direito e quanto (só o administrador cadastra)</small></div>
+    <div class="lm-acordos">
+      <table><tr><th>Pessoa</th><th>Base</th><th>Serviço / empresa</th><th>Comissão</th><th>Desde</th><th></th></tr>
+      {% for a in acordos_todos %}<tr><td><b>{{ a.usuario_nome }}</b></td><td>{{ {'SERVICO': 'Serviço lançado', 'HONORARIOS': 'Mensalidade da empresa', 'INDICACAO': 'Indicação'}.get(a.base, a.base) }}</td>
+        <td>{{ a.servico_nome or a.cliente_nome or 'todos os serviços' }}</td><td>{{ ('%g' % (a.valor | float)) ~ '%' if a.tipo == 'PCT' else (a.valor | float | format_currency) }}</td>
+        <td>{{ a.vigencia_inicio.strftime('%d/%m/%Y') if a.vigencia_inicio else '' }}</td>
+        <td><form method="POST" action="{{ url_for('financeiro.acordo_encerrar', aid=a.id) }}" onsubmit="return confirm('Encerrar este acordo?')"><button class="ns-bt" style="padding:4px 10px; font-size:12px"><i class="fas fa-ban"></i> Encerrar</button></form></td></tr>
+      {% else %}<tr><td colspan="6" style="color:#94a3b8">Nenhum acordo: sem acordo, a pessoa não ganha comissão (a não ser que quem aprova dê).</td></tr>{% endfor %}</table>
+      <form class="nv" method="POST" action="{{ url_for('financeiro.acordo_novo') }}">
+        <select name="usuario_id" required><option value="">Pessoa…</option>{% for p in pessoas %}<option value="{{ p.id }}">{{ p.nome }}</option>{% endfor %}</select>
+        <select name="base"><option value="SERVICO">Serviço lançado</option><option value="HONORARIOS">Mensalidade da empresa</option></select>
+        <select name="servico_id"><option value="">Todos os serviços</option>{% for s in servicos %}<option value="{{ s.id }}">{{ s.nome }}</option>{% endfor %}</select>
+        <select name="cliente_id" id="acCli"><option value="">Empresa (só na mensalidade)</option></select>
+        <select name="tipo"><option value="PCT">%</option><option value="FIXO">R$ fixo</option></select>
+        <input name="valor" placeholder="10 ou 25,00" required>
+        <button><i class="fas fa-plus"></i> Cadastrar</button>
+      </form>
+    </div>
+  {% endif %}
+  </div>
+</div>
 </div>
 
-{# ─── lançamentos / aprovar ─────────────────────────────────────────────── #}
-{% if aba in ('lancamentos', 'aprovar') %}
-<div class="fin-caixa">
-    {% if lista %}
-    <div class="fin-rolar">
-        <table class="fin-tab" id="la-tab">
-            <thead><tr><th>Data</th><th>Empresa</th><th>Serviço</th><th style="text-align:right;">Valor</th><th>Destino</th><th>Quem lançou</th><th>Situação</th><th>Comissão</th><th>Ações</th></tr></thead>
-            <tbody>
-            {% for l in lista %}
-                <tr>
-                    <td class="fin-num fin-td-meta">{{ l.lancado_em.strftime('%d/%m') }}<span class="la-sub">{{ l.lancado_em.strftime('%Y') }}</span></td>
-                    <td class="fin-td-titulo"><a href="{{ url_for('clientes.detalhes', id=l.cliente_id) }}">{{ l.nome_razao_social }}</a><span class="la-sub">nº {{ l.numero_cliente or '—' }}</span></td>
-                    <td>{{ l.servico_nome }}{% if l.descricao != l.servico_nome %}<span class="la-sub">{{ l.descricao }}</span>{% endif %}{% if l.quantidade != 1 %}<span class="la-sub">{{ l.quantidade }} × {{ l.valor_unitario | float | format_currency }}</span>{% endif %}</td>
-                    <td class="fin-valor fin-td-valor">{{ l.valor_total | float | format_currency }}</td>
-                    <td class="fin-td-oculta">{% if l.destino == 'MENSAL' %}<span class="fin-pilula aberto">mensal {{ l.competencia.strftime('%m/%Y') }}</span>{% else %}<span class="fin-pilula alerta">avulsa</span>{% if l.vencimento %}<span class="la-sub">vence {{ l.vencimento.strftime('%d/%m/%Y') }}</span>{% endif %}{% endif %}</td>
-                    <td class="fin-td-oculta">{{ l.lancado_por_nome }}</td>
-                    <td class="fin-td-extra"><span class="fin-pilula {{ 'liquidado' if l.status in ('APROVADO','FATURADO') else ('alerta' if l.status == 'LANCADO' else 'cancelado') }}">{{ STATUS.get(l.status, l.status) }}</span>
-                        {% if l.status == 'FATURADO' and l.boleto_id %}<a class="la-sub" href="{{ url_for('financeiro.boleto_detalhe', boleto_id=l.boleto_id) }}">boleto nº {{ l.boleto_id }}{% if l.titulo_status %} · {{ l.titulo_status }}{% endif %}</a>{% endif %}
-                        {% if l.motivo %}<span class="la-sub">{{ l.motivo }}</span>{% endif %}</td>
-                    <td class="fin-td-oculta">{% if l.comissao_valor %}<strong>{{ l.comissao_valor | float | format_currency }}</strong><span class="la-sub">{{ situacao(l) }}</span>{% elif l.status in ('APROVADO','FATURADO') %}<span class="la-num">sem acordo</span>{% else %}<span class="la-num">—</span>{% endif %}</td>
-                    <td class="la-acoes">
-                        {% if admin and l.status == 'LANCADO' %}
-                        <form method="POST" action="{{ url_for('financeiro.lancamento_aprovar', lid=l.id) }}" onsubmit="return confirm('Aprovar: {{ l.servico_nome }} de {{ l.nome_razao_social }}, {{ l.valor_total | float | format_currency }}{{ ' — o boleto sai agora' if l.destino == 'AVULSO' else ' — entra no mensal' }}?')"><button class="btn btn-primary btn-sm" title="Aprovar"><i class="fas fa-check"></i></button></form>
-                        <button class="btn btn-outline btn-sm" title="Reprovar" onclick="laReprovar({{ l.id }})"><i class="fas fa-thumbs-down"></i></button>
-                        {% endif %}
-                        {% if l.status == 'LANCADO' or (admin and l.status == 'APROVADO') %}<button class="btn btn-outline btn-sm" title="Cancelar" onclick="laCancelar({{ l.id }})"><i class="fas fa-times"></i></button>{% endif %}
-                    </td>
-                </tr>
-            {% endfor %}
-            </tbody>
-        </table>
-    </div>
-    {% else %}<div class="fin-vazio"><i class="fas fa-receipt"></i> {{ 'Nada aguardando aprovação.' if aba == 'aprovar' else 'Nenhum lançamento ainda.' }}</div>{% endif %}
-</div>
+{# ── caixa: Nova solicitação ── #}
+<div class="ns-fundo" id="nsFundo"><div class="ns" role="dialog" aria-modal="true" aria-label="Nova solicitação">
+  <header class="ns-cab"><span class="ns-logo"><img src="{{ url_for('static', filename='images/logo.png') }}" alt="Qualicontax"></span>
+    <div class="ns-tit"><b>Nova solicitação de cobrança</b><span>{{ (current_user.nome or '').split()[0] }} · {{ 'você aprova as suas e as da equipe' if aprov else 'vai para aprovação de Anderson ou Alessandra' }}</span></div>
+    <div class="ns-prev"><small>cliente vai pagar</small><b id="nsPv">R$ 0,00</b><span id="nsPc">escolha o serviço</span></div>
+    <button type="button" class="ns-x" onclick="nsFechar()" title="Fechar (Esc)"><i class="fas fa-xmark"></i></button></header>
+  <form method="POST" action="{{ url_for('financeiro.lancamento_novo') }}" id="nsForm" style="display:contents">
+  <input type="hidden" name="como" id="nsComo" value="BOLETO_NOTA"><input type="hidden" name="comissao_tipo" id="nsCt" value="PADRAO">
+  <div class="ns-g"><div class="ns-f">
+    <section class="ns-b"><div class="ns-h"><i class="fas fa-building"></i> Cliente</div>
+      <div class="ns-campo"><select id="nsCli" name="cliente_id" placeholder="Nome, número ou CNPJ/CPF"></select></div></section>
+    <section class="ns-b"><div class="ns-h"><i class="fas fa-route"></i> Como cobrar</div><div class="ns-ops" id="nsOps">
+      <button type="button" class="ns-op on" data-v="BOLETO_NOTA"><i class="fas fa-file-invoice-dollar"></i><b>Boleto + nota fiscal</b><small>cobrança própria, sai na aprovação</small></button>
+      <button type="button" class="ns-op" data-v="BOLETO"><i class="fas fa-barcode"></i><b>Só boleto</b><small>sem nota (ex.: taxa que repassamos)</small></button>
+      <button type="button" class="ns-op" data-v="MENSAL"><i class="fas fa-calendar-plus"></i><b>Na mensalidade</b><small>entra no boleto do mês escolhido</small></button></div></section>
+    <section class="ns-b"><div class="ns-h"><i class="fas fa-briefcase"></i> Serviço e valor</div><div class="ns-campos">
+      <div class="ns-campo"><label>Serviço</label><select id="nsServ" name="servico_id" placeholder="Escolha o serviço"></select></div>
+      <div class="ns-campo"><label>Valor (R$)</label><input class="ns-in" id="nsValor" name="valor" inputmode="numeric" placeholder="0,00" autocomplete="off"></div>
+      <div class="ns-campo" id="nsVencBox"><label>Vencimento do boleto</label><input class="ns-in" type="date" id="nsVenc" name="vencimento"></div>
+      <div class="ns-campo" id="nsCompBox" hidden><label>Mensalidade de</label><select class="ns-in" id="nsComp" name="competencia"></select></div>
+      <div class="ns-campo" style="grid-column:1/-1"><label>Texto da nota / do boleto</label><input class="ns-in" id="nsDesc" name="descricao" maxlength="200" placeholder="o nome do serviço"></div>
+    </div></section>
+    <section class="ns-b" id="nsComBox"><div class="ns-h"><i class="fas fa-hand-holding-dollar"></i> Sua comissão <em id="nsComPad"></em></div>
+      <div class="ns-com"><div class="ns-seg" id="nsSeg"><button type="button" data-v="PADRAO" class="on">Padrão</button><button type="button" data-v="PCT">Outro %</button><button type="button" data-v="FIXO">Valor fixo</button><button type="button" data-v="SEM">Sem comissão</button></div>
+        <input class="ns-in" id="nsCv" name="comissao_valor" inputmode="decimal" placeholder="%" hidden><b id="nsCr" style="color:#6d28d9"></b></div>
+      <div class="ns-aviso" style="margin-top:10px"><i class="fas fa-circle-info"></i><span>A comissão é liberada quando o cliente pagar. Quem aprova pode ajustar; vale o valor aprovado. Taxa que só repassamos (ex.: Junta Comercial) não tem comissão.</span></div></section>
+    <section class="ns-b"><div class="ns-h"><i class="fas fa-comment"></i> Observação para quem aprova <em>opcional</em></div><input class="ns-in" name="observacao" maxlength="250" placeholder="ex.: combinado com o cliente por telefone"></section>
+  </div><aside class="ns-r">
+    <section class="ns-b ns-res" id="nsRes"></section>
+    <div class="ns-aviso"><i class="fas fa-stamp"></i><span id="nsAviso"></span></div>
+  </aside></div>
+  <footer class="ns-pe"><div class="ns-pe-info ns-msg" id="nsMsg"></div><button type="button" class="ns-bt" onclick="nsFechar()">Cancelar</button>
+    <button type="submit" class="ns-bt prim" id="nsEnviar"><i class="fas fa-paper-plane"></i> Enviar para aprovação</button></footer>
+  </form>
+</div></div>
 
-{# ─── comissões ────────────────────────────────────────────────────────── #}
-{% elif aba == 'comissoes' %}
-{% if admin %}
-<form method="GET" class="la-caixa" style="display:flex; gap:10px; align-items:center;">
-    <input type="hidden" name="aba" value="comissoes">
-    <label style="margin:0;">Pessoa</label>
-    <select name="u" class="form-control" style="width:auto;" onchange="this.form.submit()">
-        <option value="">— escolha —</option>
-        {% for p in pessoas %}<option value="{{ p.id }}" {{ 'selected' if p.id == uid }}>{{ p.nome }}</option>{% endfor %}
-    </select>
-</form>
-{% endif %}
-{% if uid %}
-<div class="fin-kpis">
-    <div class="fin-kpi"><div class="fin-kpi-lbl">Aguardando pagamento</div><div class="fin-kpi-val">{{ (resumo.v_aguardando or 0) | float | format_currency }}</div><div class="fin-kpi-pe">{{ resumo.aguardando_pagamento or 0 }} cobrança(s)</div></div>
-    <div class="fin-kpi"><div class="fin-kpi-lbl">Liberada (pago)</div><div class="fin-kpi-val">{{ (resumo.v_liberadas or 0) | float | format_currency }}</div><div class="fin-kpi-pe">pronta para fechar</div></div>
-    <div class="fin-kpi"><div class="fin-kpi-lbl">Em fechamento</div><div class="fin-kpi-val">{{ (resumo.v_fechadas or 0) | float | format_currency }}</div><div class="fin-kpi-pe">enviado, aguardando pagamento</div></div>
-    <div class="fin-kpi"><div class="fin-kpi-lbl">Já paga</div><div class="fin-kpi-val">{{ (resumo.v_pagas or 0) | float | format_currency }}</div><div class="fin-kpi-pe">fechamentos quitados</div></div>
-</div>
-<form method="POST" action="{{ url_for('financeiro.comissoes_fechar') }}" class="fin-caixa" id="la-form-fechar">
-    {% if lista %}
-    <div class="fin-rolar">
-        <table class="fin-tab" id="la-tab-com">
-            <thead><tr><th></th><th>Empresa</th><th>Serviço</th><th style="text-align:right;">Valor cobrado</th><th>Cobrança</th><th style="text-align:right;">Comissão</th><th>Situação</th></tr></thead>
-            <tbody>
-            {% for l in lista %}
-                <tr>
-                    <td>{% if l.comissao_status == 'LIBERADA' and not admin %}<input type="checkbox" name="lanc" value="{{ l.id }}" onchange="laSomaFechar()" data-v="{{ l.comissao_valor }}">{% endif %}</td>
-                    <td class="fin-td-titulo">{{ l.nome_razao_social }}</td>
-                    <td>{% if l.origem == 'HONORARIOS' %}<strong>Honorários do cliente</strong>{% elif l.origem == 'INDICACAO' %}<strong>Indicação</strong>{% else %}{{ l.servico_nome }}{% endif %}<span class="la-sub">{{ l.descricao if l.origem != 'SERVICO' else l.lancado_em.strftime('%d/%m/%Y') ~ ' · ' ~ ('mensal' if l.destino == 'MENSAL' else 'avulsa') }}</span></td>
-                    <td class="fin-valor fin-td-valor">{{ l.valor_total | float | format_currency }}</td>
-                    <td class="fin-td-oculta">{% if l.titulo_vencimento %}vence {{ l.titulo_vencimento.strftime('%d/%m/%Y') }}{% elif l.destino == 'MENSAL' %}<span class="la-num">no lote de {{ l.competencia.strftime('%m/%Y') }}</span>{% else %}—{% endif %}</td>
-                    <td class="fin-valor fin-td-valor"><strong>{{ l.comissao_valor | float | format_currency }}</strong></td>
-                    <td><span class="fin-pilula {{ 'liquidado' if l.comissao_status in ('LIBERADA','PAGA') else ('cancelado' if situacao(l) == 'Vencido' else 'aberto') }}">{{ situacao(l) }}</span>{% if l.fechamento_id %}<span class="la-sub"><a href="{{ url_for('financeiro.lancamentos', aba='fechamentos', f=l.fechamento_id) }}">fechamento nº {{ l.fechamento_id }}</a></span>{% endif %}</td>
-                </tr>
-            {% endfor %}
-            </tbody>
-        </table>
-    </div>
-    {% if not admin %}
-    <div style="display:flex; gap:12px; align-items:center; justify-content:flex-end; margin-top:12px;">
-        <span class="la-tot">Selecionado: <span id="la-fechar-total">R$ 0,00</span></span>
-        <input type="text" name="observacao" class="form-control" style="width:260px;" placeholder="observação (opcional)">
-        <button class="btn btn-primary" type="submit" id="la-btn-fechar" disabled><i class="fas fa-paper-plane"></i> Fechar e enviar para pagamento</button>
-    </div>
-    {% endif %}
-    {% else %}<div class="fin-vazio"><i class="fas fa-coins"></i> Nenhuma comissão ainda.</div>{% endif %}
-</form>
-{% else %}<div class="fin-vazio">Escolha a pessoa.</div>{% endif %}
+{# ── caixa: Aprovar (confere e, se quiser, ajusta a comissão) ── #}
+<div class="ns-fundo" id="apFundo"><div class="ns peq" role="dialog" aria-modal="true">
+  <header class="ns-cab"><div class="ns-tit"><b>Aprovar solicitação</b><span id="apQuem"></span></div>
+    <div class="ns-prev"><small>cliente vai pagar</small><b id="apV"></b><span id="apComo"></span></div>
+    <button type="button" class="ns-x" onclick="apFechar()"><i class="fas fa-xmark"></i></button></header>
+  <form method="POST" id="apForm" style="display:contents"><input type="hidden" name="comissao_tipo" id="apCt">
+  <div class="ns-g"><div class="ns-f">
+    <section class="ns-b ns-res" id="apRes"></section>
+    <section class="ns-b"><div class="ns-h"><i class="fas fa-hand-holding-dollar"></i> Comissão de <span id="apPessoa" style="text-transform:none; letter-spacing:0"></span> <em id="apPedida"></em></div>
+      <div class="ns-com"><div class="ns-seg" id="apSeg"><button type="button" data-v="">Como pediu</button><button type="button" data-v="PCT">Outro %</button><button type="button" data-v="FIXO">Valor fixo</button><button type="button" data-v="SEM">Sem comissão</button></div>
+        <input class="ns-in" id="apCv" name="comissao_valor" inputmode="decimal" hidden><b id="apCr" style="color:#6d28d9"></b></div></section>
+    <div class="ns-aviso" id="apAviso"></div>
+  </div></div>
+  <footer class="ns-pe"><div class="ns-pe-info"></div><button type="button" class="ns-bt" onclick="apFechar()">Voltar</button>
+    <button type="submit" class="ns-bt prim"><i class="fas fa-check"></i> Aprovar</button></footer>
+  </form>
+</div></div>
 
-{# ─── fechamentos ──────────────────────────────────────────────────────── #}
-{% elif aba == 'fechamentos' %}
-{% if fechamento %}
-<div class="la-caixa">
-    <div style="display:flex; gap:14px; align-items:center; flex-wrap:wrap;">
-        <h3 style="margin:0;">Fechamento nº {{ fechamento.id }} · {{ fechamento.usuario_nome }}</h3>
-        <span class="fin-pilula {{ 'liquidado' if fechamento.status == 'PAGO' else ('alerta' if fechamento.status == 'PAGO_PARCIAL' else 'aberto') }}">{{ fechamento.status | replace('_', ' ') | capitalize }}</span>
-        <span class="la-tot" style="margin-left:auto;">Total {{ fechamento.total | float | format_currency }} · pago {{ fechamento.valor_pago | float | format_currency }}</span>
-    </div>
-    <table class="fin-tab" style="margin-top:10px;">
-        <thead><tr><th>Empresa</th><th>Serviço</th><th style="text-align:right;">Cobrado</th><th style="text-align:right;">Comissão</th></tr></thead>
-        <tbody>{% for l in fech_itens %}<tr><td>{{ l.nome_razao_social }}</td><td>{{ l.servico_nome }} <span class="la-num">{{ l.lancado_em.strftime('%d/%m/%Y') }}</span></td><td class="fin-valor">{{ l.valor_total | float | format_currency }}</td><td class="fin-valor"><strong>{{ l.comissao_valor | float | format_currency }}</strong></td></tr>{% endfor %}</tbody>
-    </table>
-    <p class="la-sec">Pagamentos</p>
-    {% if fech_pagamentos %}<ul style="margin:0 0 10px 18px;">{% for p in fech_pagamentos %}<li>{{ p.data.strftime('%d/%m/%Y') }} · {{ p.valor | float | format_currency }}</li>{% endfor %}</ul>{% else %}<p class="la-num">Nenhum pagamento ainda.</p>{% endif %}
-    {% if admin and fechamento.status not in ('PAGO', 'CANCELADO') %}
-    <form method="POST" action="{{ url_for('financeiro.fechamento_pagar', fid=fechamento.id) }}" style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
-        <input type="date" name="data" class="form-control" style="width:auto;" value="{{ hoje.isoformat() }}">
-        <input type="text" name="valor" class="form-control dinheiro" style="width:140px;" value="{{ (fechamento.total - fechamento.valor_pago) | float | round(2) }}">
-        <button class="btn btn-primary"><i class="fas fa-money-bill-wave"></i> Registrar pagamento</button>
-        <span class="la-num">pode ser em partes: 2.500 hoje, o resto depois</span>
-    </form>
-    {% endif %}
-</div>
-{% endif %}
-<div class="fin-caixa">
-    {% if fechamentos %}
-    <table class="fin-tab">
-        <thead><tr><th>Nº</th><th>Pessoa</th><th>Data</th><th style="text-align:right;">Total</th><th style="text-align:right;">Pago</th><th>Situação</th><th></th></tr></thead>
-        <tbody>{% for f in fechamentos %}<tr><td class="fin-num">{{ f.id }}</td><td>{{ f.usuario_nome }}</td><td>{{ f.criado_em.strftime('%d/%m/%Y') }}</td><td class="fin-valor">{{ f.total | float | format_currency }}</td><td class="fin-valor">{{ f.valor_pago | float | format_currency }}</td><td><span class="fin-pilula {{ 'liquidado' if f.status == 'PAGO' else ('alerta' if f.status == 'PAGO_PARCIAL' else 'aberto') }}">{{ f.status | replace('_', ' ') | capitalize }}</span></td><td><a class="btn btn-outline btn-sm" href="{{ url_for('financeiro.lancamentos', aba='fechamentos', f=f.id) }}">Abrir</a></td></tr>{% endfor %}</tbody>
-    </table>
-    {% else %}<div class="fin-vazio"><i class="fas fa-paper-plane"></i> Nenhum fechamento ainda.</div>{% endif %}
-</div>
+{# ── caixa: Reprovar / Cancelar (motivo) ── #}
+<div class="ns-fundo" id="rpFundo"><div class="ns peq" role="dialog" aria-modal="true">
+  <header class="ns-cab red"><div class="ns-tit"><b id="rpTit">Reprovar solicitação</b><span id="rpQuem"></span></div>
+    <button type="button" class="ns-x" onclick="rpFechar()"><i class="fas fa-xmark"></i></button></header>
+  <form method="POST" id="rpForm" style="display:contents">
+  <div class="ns-g"><div class="ns-f"><section class="ns-b"><div class="ns-h"><i class="fas fa-comment"></i> Motivo <em>quem pediu vê</em></div>
+    <input class="ns-in" name="motivo" id="rpMotivo" maxlength="250" placeholder="ex.: valor diferente do combinado"></section></div></div>
+  <footer class="ns-pe"><div class="ns-pe-info"></div><button type="button" class="ns-bt" onclick="rpFechar()">Voltar</button>
+    <button type="submit" class="ns-bt red" id="rpBt"><i class="fas fa-xmark"></i> Reprovar</button></footer>
+  </form>
+</div></div>
 
-{# ─── acordos (admin) ──────────────────────────────────────────────────── #}
-{% elif aba == 'acordos' %}
-<form method="POST" action="{{ url_for('financeiro.acordo_novo') }}" class="la-caixa">
-    <p class="la-sec" style="margin-top:0;">Novo acordo</p>
-    <div class="la-grid3">
-        <div class="form-group"><label>Pessoa</label><select name="usuario_id" class="form-control" required><option value="">—</option>{% for p in pessoas %}<option value="{{ p.id }}">{{ p.nome }}</option>{% endfor %}</select></div>
-        <div class="form-group"><label>Base</label><select name="base" id="ac-base" class="form-control" onchange="acBase()"><option value="SERVICO">Serviço avulso (quem lança)</option><option value="HONORARIOS">Honorários de um cliente dele</option><option value="INDICACAO">Indicação de cliente</option></select></div>
-        <div class="form-group" id="ac-serv"><label>Serviço</label><select name="servico_id" class="form-control"><option value="">qualquer serviço</option>{% for s in servicos %}<option value="{{ s.id }}">{{ s.nome }}</option>{% endfor %}</select></div>
-        <div class="form-group" id="ac-cli" style="display:none; position:relative;"><label>Empresa</label><input type="text" id="ac-cli-q" class="form-control" placeholder="nome ou número" autocomplete="off"><input type="hidden" name="cliente_id" id="ac-cli-id"><div id="ac-sug" class="la-sug" style="display:none;"></div></div>
-        <div class="form-group"><label>Tipo</label><select name="tipo" class="form-control"><option value="PCT">% do valor</option><option value="FIXO">valor fixo (R$)</option></select></div>
-        <div class="form-group"><label>Valor</label><input type="text" name="valor" class="form-control" placeholder="10 (%) ou 50,00 (R$)" required></div>
-        <div class="form-group"><label>Vale desde</label><input type="date" name="vigencia_inicio" class="form-control" value="{{ hoje.isoformat() }}"></div>
-        <div class="form-group" id="ac-parc" style="display:none;"><label>Parcelas (indicação)</label><select name="parcelas" class="form-control"><option value="1">à vista</option><option value="2">em 2 vezes</option></select></div>
-        <div class="form-group"><label>Observação</label><input type="text" name="observacao" class="form-control"></div>
-    </div>
-    <div style="margin-top:10px; text-align:right;"><button class="btn btn-primary"><i class="fas fa-plus"></i> Cadastrar acordo</button></div>
-</form>
-<div class="fin-caixa">
-    {% if acordos %}
-    <table class="fin-tab">
-        <thead><tr><th>Pessoa</th><th>Base</th><th>Serviço / empresa</th><th>Comissão</th><th>Vigência</th><th>Situação</th><th></th></tr></thead>
-        <tbody>{% for a in acordos %}<tr>
-            <td>{{ a.usuario_nome }}</td><td>{{ a.base | capitalize }}</td>
-            <td>{{ a.servico_nome or a.cliente_nome or 'qualquer serviço' }}</td>
-            <td><strong>{% if a.tipo == 'PCT' %}{{ a.valor | float }}%{% else %}{{ a.valor | float | format_currency }}{% endif %}</strong>{% if a.base == 'INDICACAO' %} <span class="la-num">{{ 'à vista' if a.parcelas == 1 else 'em %dx' % a.parcelas }}</span>{% endif %}</td>
-            <td>{{ a.vigencia_inicio.strftime('%d/%m/%Y') }}{% if a.vigencia_fim %} a {{ a.vigencia_fim.strftime('%d/%m/%Y') }}{% endif %}</td>
-            <td><span class="fin-pilula {{ 'liquidado' if a.ativo else 'cancelado' }}">{{ 'Ativo' if a.ativo else 'Encerrado' }}</span></td>
-            <td>{% if a.ativo %}<form method="POST" action="{{ url_for('financeiro.acordo_encerrar', aid=a.id) }}" onsubmit="return confirm('Encerrar este acordo?')"><button class="btn btn-outline btn-sm"><i class="fas fa-ban"></i></button></form>{% endif %}</td>
-        </tr>{% endfor %}</tbody>
-    </table>
-    {% else %}<div class="fin-vazio"><i class="fas fa-handshake"></i> Nenhum acordo cadastrado.</div>{% endif %}
-</div>
-{% endif %}
-
-<!-- Lançar serviço -->
-<div id="laModal" class="modal" style="display:none;">
-    <div class="modal-content" style="max-width:680px;">
-        <div class="modal-header"><h3>Lançar serviço</h3><button class="modal-close" type="button" onclick="laFechar()">&times;</button></div>
-        <form id="la-form" method="POST" action="{{ url_for('financeiro.lancamento_novo') }}">
-            <input type="hidden" name="cliente_id" id="la-cliente-id">
-            <div class="modal-body">
-                <div id="la-cli-busca" class="form-group" style="position:relative;">
-                    <label>Empresa</label>
-                    <input type="text" id="la-cli-q" class="form-control" placeholder="digite o nome, o número ou o CNPJ" autocomplete="off">
-                    <div id="la-sug" class="la-sug" style="display:none;"></div>
-                </div>
-                <div id="la-cli" class="la-cli" style="display:none;">
-                    <i class="fas fa-building" style="color:#15803d;"></i>
-                    <div><strong id="la-cli-nome"></strong><div class="la-num" id="la-cli-num"></div></div>
-                    <button type="button" class="btn btn-outline btn-sm" style="margin-left:auto;" onclick="laSetCliente(null); document.getElementById('la-cli-q').focus();">Trocar</button>
-                </div>
-                <p class="la-sec">Serviço</p>
-                <div class="la-grid3">
-                    <div class="form-group" style="grid-column:span 3;"><label>Serviço</label>
-                        <select name="servico_id" id="la-servico" class="form-control" required onchange="laServico()">
-                            <option value="">— escolha —</option>
-                            {% for s in servicos %}<option value="{{ s.id }}" data-valor="{{ s.valor_padrao or '' }}" data-nota="{{ s.emite_nota }}">{{ s.nome }}{% if not s.emite_nota %} (só boleto){% endif %}</option>{% endfor %}
-                        </select></div>
-                    <div class="form-group"><label>Quantidade</label><input type="text" name="quantidade" id="la-qtd" class="form-control" value="1" oninput="laTotal()"></div>
-                    <div class="form-group"><label>Valor unitário</label><input type="text" name="valor_unitario" id="la-valor" class="form-control dinheiro" oninput="laTotal()" required></div>
-                    <div class="form-group"><label>Total</label><div class="la-tot" id="la-total" style="padding-top:9px;">R$ 0,00</div></div>
-                    <div class="form-group" style="grid-column:span 3;"><label>Descrição na cobrança (opcional)</label><input type="text" name="descricao" id="la-desc" class="form-control" placeholder="o nome do serviço, se vazio"></div>
-                </div>
-                <p class="la-sec">Como cobrar</p>
-                <div class="la-destino">
-                    <label><input type="radio" name="destino" value="MENSAL" checked onchange="laDestino()"><span><b>Entra na cobrança mensal</b><small>junto com os honorários de {{ competencia_aberta.strftime('%m/%Y') }}, no boleto da empresa</small></span></label>
-                    <label><input type="radio" name="destino" value="AVULSO" onchange="laDestino()"><span><b>Cobrança avulsa</b><small>boleto só deste serviço, assim que for aprovado</small></span></label>
-                </div>
-                <div class="la-grid2" style="margin-top:10px;">
-                    <div class="form-group" id="la-venc-box" style="display:none;"><label>Vencimento do boleto</label><input type="date" name="vencimento" id="la-venc" class="form-control"></div>
-                    <div class="form-group"><label>Observação</label><input type="text" name="observacao" class="form-control" placeholder="para quem aprova"></div>
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" onclick="laFechar()">Cancelar</button>
-                <button type="submit" class="btn btn-primary"><i class="fas fa-paper-plane"></i> Lançar para aprovação</button>
-            </div>
-        </form>
-    </div>
-</div>
-<form id="la-form-acao" method="POST" style="display:none;"><input type="hidden" name="motivo" id="la-motivo"></form>
+<script id="lmDados" type="application/json">{{ caixa_json | safe }}</script>
+<script id="lmApr" type="application/json">{{ (grupos.apr | map(attribute='id') | list) | tojson }}</script>
 {% endblock %}
 
 {% block extra_js %}
-<script src="{{ url_for('static', filename='js/dinheiro.js') }}"></script>
+<script src="https://cdn.jsdelivr.net/npm/tom-select@2.4.3/dist/js/tom-select.complete.min.js"></script>
 <script>
-function brl(v) { return 'R$ ' + (v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
-function laNum(s) { s = String(s || '').trim(); if (!s) return 0; if (s.indexOf(',') >= 0) s = s.replace(/\./g, '').replace(',', '.'); return parseFloat(s) || 0; }
-function laTotal() { document.getElementById('la-total').textContent = brl(laNum(document.getElementById('la-qtd').value) * laNum(document.getElementById('la-valor').value)); }
-function laServico() {
-    var o = document.getElementById('la-servico').selectedOptions[0]; if (!o) return;
-    var v = document.getElementById('la-valor'); if (!laNum(v.value) && o.dataset.valor) { v.value = Number(o.dataset.valor).toLocaleString('pt-BR', { minimumFractionDigits: 2 }); }
-    laTotal();
-}
-function laDestino() { document.getElementById('la-venc-box').style.display = document.querySelector('input[name=destino]:checked').value === 'AVULSO' ? 'block' : 'none'; }
-function laSetCliente(id, nome, numero) {
-    document.getElementById('la-cliente-id').value = id || '';
-    document.getElementById('la-cli-nome').textContent = nome || ''; document.getElementById('la-cli-num').textContent = numero ? 'nº ' + numero : '';
-    document.getElementById('la-cli').style.display = id ? 'flex' : 'none'; document.getElementById('la-cli-busca').style.display = id ? 'none' : 'block';
-}
-function laNovo() {
-    laSetCliente(null); document.getElementById('la-form').reset(); document.getElementById('la-qtd').value = '1'; laTotal(); laDestino();
-    var d = new Date(); d.setDate(d.getDate() + 7); document.getElementById('la-venc').value = d.toISOString().slice(0, 10);
-    document.getElementById('laModal').style.display = 'block'; setTimeout(function () { document.getElementById('la-cli-q').focus(); }, 60);
-}
-function laFechar() { document.getElementById('laModal').style.display = 'none'; }
-function laAcao(url, motivo) { var f = document.getElementById('la-form-acao'); f.action = url; document.getElementById('la-motivo').value = motivo || ''; f.submit(); }
-function laReprovar(id) { var m = prompt('Motivo da reprovação (vai para quem lançou):'); if (m === null) return; laAcao('/financeiro/lancamentos/' + id + '/reprovar', m); }
-function laCancelar(id) { var m = prompt('Cancelar este lançamento. Motivo:'); if (m === null) return; laAcao('/financeiro/lancamentos/' + id + '/cancelar', m); }
-function laSomaFechar() {
-    var t = 0, n = 0; document.querySelectorAll('#la-tab-com input[name=lanc]:checked').forEach(function (c) { t += parseFloat(c.dataset.v || 0); n++; });
-    document.getElementById('la-fechar-total').textContent = brl(t); document.getElementById('la-btn-fechar').disabled = !n;
-}
-function acBase() {
-    var b = document.getElementById('ac-base').value;
-    document.getElementById('ac-serv').style.display = b === 'SERVICO' ? 'block' : 'none';
-    document.getElementById('ac-cli').style.display = b === 'SERVICO' ? 'none' : 'block';
-    document.getElementById('ac-parc').style.display = b === 'INDICACAO' ? 'block' : 'none';
-}
-function laBusca(inputId, sugId, aoEscolher) {
-    var q = document.getElementById(inputId), sug = document.getElementById(sugId), t; if (!q) return;
-    q.addEventListener('input', function () {
-        clearTimeout(t); var v = q.value.trim(); if (v.length < 2) { sug.style.display = 'none'; return; }
-        t = setTimeout(function () {
-            fetch('/financeiro/notas/buscar?q=' + encodeURIComponent(v)).then(function (r) { return r.json(); }).then(function (lista) {
-                sug.innerHTML = ''; (lista || []).forEach(function (c) {
-                    var d = document.createElement('div'); d.innerHTML = '<strong>' + (c.numero_cliente ? c.numero_cliente + ' · ' : '') + c.nome + '</strong> <span class="la-num">' + (c.cpf_cnpj || '') + '</span>';
-                    d.onclick = function () { aoEscolher(c); sug.style.display = 'none'; }; sug.appendChild(d);
-                });
-                sug.style.display = sug.children.length ? 'block' : 'none';
-            });
-        }, 250);
+(function () {
+  var D = JSON.parse(document.getElementById('lmDados').textContent);
+  var APR = {
+    {% for l in grupos.apr %}{{ l.id }}: { cli: {{ l.nome_razao_social | tojson }}, num: {{ (l.numero_cliente or '') | string | tojson }}, serv: {{ (l.descricao or l.servico_nome) | tojson }},
+      valor: {{ l.valor_total | float }}, como: {{ l.como | tojson }}, por: {{ l.lancado_por_nome | tojson }}, venc: {{ ((l.vencimento.strftime('%d/%m/%Y')) if l.vencimento else '') | tojson }},
+      pt: {{ (l.comissao_pedida_tipo or 'PADRAO') | tojson }}, pv: {{ (l.comissao_pedida_valor | float) if l.comissao_pedida_valor else 0 }}, prev: {{ l.com_prev | float }},
+      obs: {{ (l.observacao or '') | tojson }} }{{ ',' if not loop.last }}{% endfor %}
+  };
+  var URL_APROVAR = {{ url_for('financeiro.lancamento_aprovar', lid=999999) | tojson }}, URL_REPROVAR = {{ url_for('financeiro.lancamento_reprovar', lid=999999) | tojson }},
+      URL_CANCELAR = {{ url_for('financeiro.lancamento_cancelar', lid=999999) | tojson }};
+  function $(id) { return document.getElementById(id); }
+  function esc(s) { var d = document.createElement('div'); d.textContent = s == null ? '' : String(s); return d.innerHTML; }
+  function brl(v) { return 'R$ ' + Number(v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+  function num(s) { s = String(s || '').replace(/[^\d,.-]/g, ''); if (s.indexOf(',') >= 0) s = s.replace(/\./g, '').replace(',', '.'); var n = parseFloat(s); return isNaN(n) ? 0 : n; }
+  function dbr(iso) { var p = String(iso || '').split('-'); return p.length === 3 ? p[2] + '/' + p[1] + '/' + p[0] : ''; }
+  function docf(d) { d = String(d || '').replace(/\D/g, ''); return d.length === 14 ? d.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, '$1.$2.$3/$4-$5') : d.length === 11 ? d.replace(/^(\d{3})(\d{3})(\d{3})(\d{2})$/, '$1.$2.$3-$4') : d; }
+
+  // ── quadros (abas) e busca ──
+  document.querySelectorAll('.tx-aba').forEach(function (b) {
+    b.addEventListener('click', function () {
+      document.querySelectorAll('.tx-aba').forEach(function (x) { x.classList.toggle('on', x === b); });
+      document.querySelectorAll('.tx-painel').forEach(function (x) { x.classList.toggle('on', x.dataset.p === b.dataset.p); });
+      try { var u = new URL(location.href); u.searchParams.set('aba', b.dataset.p); history.replaceState(null, '', u); } catch (e) {}
     });
-    document.addEventListener('click', function (e) { if (!sug.contains(e.target) && e.target !== q) sug.style.display = 'none'; });
-}
-laBusca('la-cli-q', 'la-sug', function (c) { laSetCliente(c.id, c.nome, c.numero_cliente); });
-laBusca('ac-cli-q', 'ac-sug', function (c) { document.getElementById('ac-cli-id').value = c.id; document.getElementById('ac-cli-q').value = (c.numero_cliente ? c.numero_cliente + ' · ' : '') + c.nome; });
-document.addEventListener('keydown', function (e) { if (e.key === 'Escape') laFechar(); });
-var _f = document.getElementById('la-form'); if (_f) _f.addEventListener('submit', function (e) { if (!document.getElementById('la-cliente-id').value) { e.preventDefault(); alert('Escolha a empresa.'); } });
+  });
+  function semAc(s) { return String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase(); }
+  document.querySelectorAll('.tx-painel .tx-busca input').forEach(function (inp) {
+    inp.addEventListener('input', function () {
+      var q = semAc(inp.value.trim()), pn = inp.closest('.tx-painel');
+      pn.querySelectorAll('.tx-c[data-busca]').forEach(function (c) { c.style.display = !q || semAc(c.dataset.busca).indexOf(q) >= 0 ? '' : 'none'; });
+    });
+  });
+
+  // ── comissões: marcar e pedir ──
+  window.lmMarcar = function (c) {
+    var cx = c.querySelector('input[name=lanc]'); cx.checked = !cx.checked; c.classList.toggle('marcado', cx.checked);
+    var tot = 0, n = 0; document.querySelectorAll('.tx-c.marcavel.marcado').forEach(function (x) { tot += parseFloat(x.dataset.v || 0); n++; });
+    $('lmSoma').textContent = brl(tot); $('lmQtd').textContent = n ? n + ' comiss' + (n === 1 ? 'ão marcada' : 'ões marcadas') : 'nenhuma comissão marcada';
+    $('lmPedir').disabled = !n;
+  };
+
+  // ── aprovar / reprovar / cancelar ──
+  var apL = null, apTipo = '';
+  function apCalc() {
+    var l = apL, v = num($('apCv').value), com;
+    if (apTipo === 'SEM') com = 0; else if (apTipo === 'PCT') com = l.valor * v / 100; else if (apTipo === 'FIXO') com = v; else com = l.prev;
+    $('apCr').textContent = '= ' + brl(com);
+  }
+  function apSeg(t) {
+    apTipo = t; $('apCt').value = t;
+    $('apSeg').querySelectorAll('button').forEach(function (b) { b.classList.toggle('on', b.dataset.v === t); });
+    $('apCv').hidden = !(t === 'PCT' || t === 'FIXO'); $('apCv').placeholder = t === 'PCT' ? '%' : 'R$';
+    if (!$('apCv').hidden) $('apCv').focus(); apCalc();
+  }
+  window.lmAprovar = function (id) {
+    apL = APR[id]; var l = apL;
+    $('apForm').action = URL_APROVAR.replace('999999', id);
+    $('apQuem').textContent = 'pedido de ' + l.por; $('apV').textContent = brl(l.valor); $('apComo').textContent = l.como;
+    $('apPessoa').textContent = l.por.split(' ')[0];
+    $('apPedida').textContent = 'pediu: ' + ({ PADRAO: 'o padrão do acordo', PCT: l.pv + '%', FIXO: brl(l.pv) + ' fixo', SEM: 'sem comissão' }[l.pt] || l.pt);
+    $('apRes').innerHTML = '<div class="ns-h"><i class="fas fa-eye"></i> O que vai sair</div><div><span>Cliente</span><b>' + esc((l.num ? l.num + ' · ' : '') + l.cli) + '</b></div>'
+      + '<div><span>Serviço</span><b>' + esc(l.serv) + '</b></div><div><span>Cobrança</span><b>' + esc(l.como) + '</b></div>'
+      + (l.venc ? '<div><span>Vencimento</span><b>' + l.venc + '</b></div>' : '') + (l.obs ? '<div><span>Observação</span><b>' + esc(l.obs) + '</b></div>' : '')
+      + '<div class="big"><span>Valor</span><b>' + brl(l.valor) + '</b></div>';
+    $('apAviso').innerHTML = /Mensalidade/.test(l.como) ? '<i class="fas fa-calendar"></i><span>Entra no boleto da mensalidade: sai junto com o lote do mês.</span>'
+                                                        : '<i class="fas fa-bolt"></i><span>Ao aprovar, ' + (/nota/.test(l.como) ? 'a nota e o boleto são emitidos' : 'o boleto é emitido') + ' agora e vão por e-mail ao cliente.</span>';
+    $('apCv').value = ''; apSeg('');
+    $('apFundo').classList.add('on'); document.body.style.overflow = 'hidden';
+  };
+  window.apFechar = function () { $('apFundo').classList.remove('on'); document.body.style.overflow = ''; };
+  $('apSeg').addEventListener('click', function (e) { var b = e.target.closest('button'); if (b) apSeg(b.dataset.v); });
+  $('apCv').addEventListener('input', apCalc);
+  function rpAbrir(id, cancelar) {
+    var l = APR[id] || {};
+    $('rpForm').action = (cancelar ? URL_CANCELAR : URL_REPROVAR).replace('999999', id);
+    $('rpTit').textContent = cancelar ? 'Cancelar o pedido' : 'Reprovar solicitação';
+    $('rpQuem').textContent = (l.cli || '') + (l.valor ? ' · ' + brl(l.valor) : '');
+    $('rpBt').innerHTML = cancelar ? '<i class="fas fa-ban"></i> Cancelar pedido' : '<i class="fas fa-xmark"></i> Reprovar';
+    $('rpMotivo').value = ''; $('rpFundo').classList.add('on'); document.body.style.overflow = 'hidden'; $('rpMotivo').focus();
+  }
+  window.lmReprovar = function (id) { rpAbrir(id, false); };
+  window.lmCancelar = function (id) { rpAbrir(id, true); };
+  window.rpFechar = function () { $('rpFundo').classList.remove('on'); document.body.style.overflow = ''; };
+
+  // ── caixa Nova solicitação ──
+  var tsCli = null, tsServ = null, como = 'BOLETO_NOTA', ct = 'PADRAO';
+  function acordo(sid) {
+    var a = D.acordos.filter(function (x) { return String(x.servico_id) === String(sid); })[0] || D.acordos.filter(function (x) { return x.servico_id == null; })[0];
+    return a || null;
+  }
+  function cliente() { var v = tsCli && tsCli.getValue(); return D.clientes.filter(function (c) { return String(c.id) === String(v); })[0] || null; }
+  function servico() { var v = tsServ && tsServ.getValue(); return D.servicos.filter(function (s) { return String(s.id) === String(v); })[0] || null; }
+  function comissao(valor) {
+    var a = acordo(servico() ? servico().id : null), v = num($('nsCv').value);
+    if (ct === 'SEM') return 0;
+    if (ct === 'PCT') return valor * v / 100;
+    if (ct === 'FIXO') return v;
+    if (!a) return 0;
+    return a.tipo === 'FIXO' ? a.valor : valor * a.valor / 100;
+  }
+  function resumo() {
+    var c = cliente(), s = servico(), valor = num($('nsValor').value), com = comissao(valor), a = acordo(s ? s.id : null);
+    $('nsComPad').textContent = a ? 'padrão: ' + (a.tipo === 'FIXO' ? brl(a.valor) + ' fixo' : a.valor + '%') : 'você não tem acordo de comissão';
+    $('nsSeg').querySelector('[data-v=PADRAO]').textContent = a ? 'Padrão (' + (a.tipo === 'FIXO' ? brl(a.valor) : a.valor + '%') + ')' : 'Padrão (sem acordo)';
+    $('nsCr').textContent = '= ' + brl(com);
+    $('nsPv').textContent = brl(como === 'MENSAL' && c && c.mensal ? c.mensal + valor : valor);
+    $('nsPc').textContent = com ? 'sua comissão: ' + brl(com) : (s ? 'sem comissão' : 'escolha o serviço');
+    var comp = $('nsComp').selectedOptions[0];
+    var linhas = [['Cliente', c ? (c.num ? c.num + ' · ' : '') + c.nome : '—'], ['Cobrança', { BOLETO_NOTA: 'Boleto + nota fiscal', BOLETO: 'Só boleto', MENSAL: 'Na mensalidade' + (comp ? ' de ' + comp.textContent : '') }[como]],
+                  ['Serviço', s ? s.nome : '—']];
+    if (como !== 'MENSAL') linhas.push(['Vencimento', dbr($('nsVenc').value) || '—']);
+    linhas.push(['Comissão', com ? brl(com) + (ct === 'PCT' ? ' (' + num($('nsCv').value) + '%)' : '') : 'sem']);
+    var h = '<div class="ns-h"><i class="fas fa-eye"></i> Resumo</div>' + linhas.map(function (x) { return '<div><span>' + x[0] + '</span><b>' + esc(x[1]) + '</b></div>'; }).join('');
+    if (como === 'MENSAL' && c) h += '<div><span>Mensalidade</span><b>' + (c.mensal ? brl(c.mensal) : 'sem contrato') + '</b></div><div class="big"><span>Boleto do mês</span><b>' + brl((c.mensal || 0) + valor) + '</b></div>';
+    else h += '<div class="big"><span>Total do boleto</span><b>' + brl(valor) + '</b></div>';
+    $('nsRes').innerHTML = h;
+    $('nsAviso').innerHTML = como === 'MENSAL' ? 'Entra no boleto da mensalidade' + (comp ? ' de <b>' + comp.textContent + '</b>' : '') + ' depois da aprovação. Você vê só a sua parte (' + brl(valor) + ').'
+      : (D.aprovador ? 'Você aprova a sua solicitação no quadro <b>Para aprovar</b>: é ali que ' : 'Nada sai agora: ') + (como === 'BOLETO' ? 'o boleto é emitido' : 'a nota e o boleto são emitidos') + (D.aprovador ? '.' : ' quando Anderson ou Alessandra aprovarem. Você acompanha em <b>Aguardando aprovação</b>.');
+  }
+  function setComo(v) {
+    como = v; $('nsComo').value = v;
+    $('nsOps').querySelectorAll('.ns-op').forEach(function (b) { b.classList.toggle('on', b.dataset.v === v); });
+    $('nsVencBox').hidden = v === 'MENSAL'; $('nsCompBox').hidden = v !== 'MENSAL'; resumo();
+  }
+  function setCt(v) {
+    ct = v; $('nsCt').value = v;
+    $('nsSeg').querySelectorAll('button').forEach(function (b) { b.classList.toggle('on', b.dataset.v === v); });
+    $('nsCv').hidden = !(v === 'PCT' || v === 'FIXO'); $('nsCv').placeholder = v === 'PCT' ? '%' : 'R$'; if (!$('nsCv').hidden) $('nsCv').focus();
+    resumo();
+  }
+  function criar() {
+    tsCli = new TomSelect('#nsCli', {
+      options: D.clientes.map(function (c) { return { value: String(c.id), text: (c.num ? c.num + ' · ' : '') + c.nome, busca: c.num + ' ' + c.nome + ' ' + c.doc, c: c }; }),
+      searchField: ['text', 'busca'], maxOptions: 60, dropdownParent: 'body', dropdownClass: 'ts-dropdown ns-dd', closeAfterSelect: true,
+      render: { option: function (o) { return '<div class="ns-o"><span>' + esc(o.text) + (o.c.av ? ' <span class="av">AVULSO</span>' : '') + '</span><small>' + esc(docf(o.c.doc)) + '</small></div>'; },
+                no_results: function () { return '<div class="no-results">Nenhum cadastro com esse nome</div>'; } },
+      onChange: resumo
+    });
+    tsServ = new TomSelect('#nsServ', {
+      options: D.servicos.map(function (s) { return { value: String(s.id), text: s.nome, s: s }; }), searchField: ['text'], maxOptions: 200,
+      dropdownParent: 'body', dropdownClass: 'ts-dropdown ns-dd',
+      render: { option: function (o) { return '<div class="ns-o"><span>' + esc(o.text) + '</span><small>' + (o.s.valor ? brl(o.s.valor) : '') + (o.s.nota ? '' : ' · sem nota') + '</small></div>'; } },
+      onChange: function () {
+        var s = servico();
+        if (s) { if (s.valor && !num($('nsValor').value)) $('nsValor').value = brl(s.valor).replace('R$ ', ''); if (!$('nsDesc').value) $('nsDesc').placeholder = s.nome;
+                 if (como !== 'MENSAL') setComo(s.nota ? 'BOLETO_NOTA' : 'BOLETO'); }
+        resumo();
+      }
+    });
+    $('nsComp').innerHTML = D.comps.map(function (c) { return '<option value="' + c.v + '">' + c.rot + '</option>'; }).join('');
+    var amanha = new Date(); amanha.setDate(amanha.getDate() + 1);       // amanhã no relógio daqui (não em UTC)
+    $('nsVenc').value = amanha.getFullYear() + '-' + String(amanha.getMonth() + 1).padStart(2, '0') + '-' + String(amanha.getDate()).padStart(2, '0'); $('nsVenc').min = D.hoje;
+    $('nsOps').addEventListener('click', function (e) { var b = e.target.closest('.ns-op'); if (b) setComo(b.dataset.v); });
+    $('nsSeg').addEventListener('click', function (e) { var b = e.target.closest('button'); if (b) setCt(b.dataset.v); });
+    ['nsVenc', 'nsComp', 'nsCv'].forEach(function (id) { $(id).addEventListener('input', resumo); $(id).addEventListener('change', resumo); });
+    $('nsValor').addEventListener('input', function () {     // como na maquininha: 100000 vira 1.000,00
+      var d = this.value.replace(/\D/g, '').replace(/^0+/, '').slice(0, 11);
+      this.value = d ? (parseInt(d, 10) / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : ''; resumo();
+    });
+    $('nsForm').addEventListener('submit', function (e) {
+      var m = !tsCli.getValue() ? 'Escolha o cliente.' : !tsServ.getValue() ? 'Escolha o serviço.' : !num($('nsValor').value) ? 'Informe o valor.'
+            : (como !== 'MENSAL' && !$('nsVenc').value) ? 'Informe o vencimento.' : ((ct === 'PCT' || ct === 'FIXO') && !num($('nsCv').value)) ? 'Informe a comissão.' : '';
+      if (m) { e.preventDefault(); $('nsMsg').textContent = m; return; }
+      $('nsEnviar').disabled = true; $('nsEnviar').innerHTML = '<i class="fas fa-spinner fa-spin"></i> Enviando…';
+    });
+  }
+  window.nsAbrir = function () {
+    if (typeof TomSelect === 'undefined') { alert('Não consegui carregar a caixa. Recarregue a página.'); return; }
+    if (!tsCli) criar();
+    $('nsMsg').textContent = ''; setComo(como); setCt(ct);
+    $('nsFundo').classList.add('on'); document.body.style.overflow = 'hidden';
+  };
+  window.nsFechar = function () { $('nsFundo').classList.remove('on'); document.body.style.overflow = ''; };
+  document.addEventListener('keydown', function (e) {
+    if (e.key !== 'Escape') return;
+    if ((tsCli && tsCli.isOpen) || (tsServ && tsServ.isOpen)) return;
+    ['nsFundo', 'apFundo', 'rpFundo'].forEach(function (id) { if ($(id).classList.contains('on')) { $(id).classList.remove('on'); document.body.style.overflow = ''; } });
+  });
+  ['nsFundo', 'apFundo', 'rpFundo'].forEach(function (id) { $(id).addEventListener('mousedown', function (e) { if (e.target === $(id)) { $(id).classList.remove('on'); document.body.style.overflow = ''; } }); });
+  var acCli = $('acCli');      // acordo de mensalidade (ex.: Guilherme 25%): escolher a empresa pelo nome
+  if (acCli) acCli.insertAdjacentHTML('beforeend', D.clientes.map(function (c) { return '<option value="' + c.id + '">' + esc((c.num ? c.num + ' · ' : '') + c.nome) + '</option>'; }).join(''));
+  if (new URLSearchParams(location.search).get('nova') === '1') nsAbrir();
+})();
 </script>
 {% endblock %}

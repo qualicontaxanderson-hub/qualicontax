@@ -1803,6 +1803,19 @@ def _apply_migrations():
         if _c.get('cnt', 0) == 0:
             _migrate("ALTER TABLE nfse_emitidas ADD COLUMN recibo_numero VARCHAR(20) NULL AFTER descricao")
 
+    # Lançamentos (17/11/2026): quem solicita escolhe boleto + nota ou só boleto (com_nota: NULL = o que o
+    # serviço manda) e a comissão que pede (PADRAO / PCT / FIXO / SEM + valor); quem aprova confirma ou ajusta.
+    _t = execute_query("SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = DATABASE() "
+                       "AND TABLE_NAME = 'fin_lancamentos'", fetch=True, fetch_one=True) or {}
+    if _t.get('cnt', 0):
+        for _col_name, _col_def in [('com_nota', 'TINYINT(1) NULL'), ('comissao_pedida_tipo', 'VARCHAR(8) NULL'),
+                                    ('comissao_pedida_valor', 'DECIMAL(12,2) NULL')]:
+            _c = execute_query(
+                "SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() "
+                "AND TABLE_NAME = 'fin_lancamentos' AND COLUMN_NAME = %s", (_col_name,), fetch=True, fetch_one=True) or {}
+            if _c.get('cnt', 0) == 0:
+                _migrate(f"ALTER TABLE fin_lancamentos ADD COLUMN {_col_name} {_col_def}")
+
     print("✓ Migrations concluídas")
 
 

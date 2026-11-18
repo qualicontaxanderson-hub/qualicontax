@@ -46,8 +46,14 @@ def _admin():
     return bool(getattr(current_user, 'is_admin', lambda: False)())
 
 
+def _aprovador():
+    """Aprova as solicitações e paga as comissões: o admin ou quem tem a permissão (17/11/2026 — a Alessandra,
+    que "não será ADMIN mas terá a prerrogativa de autorizar")."""
+    return _admin() or current_user.has_permission('financeiro.lancamentos.aprovar')
+
+
 def _meu_ou_admin(l):
-    if not l or (not _admin() and l['lancado_por'] != current_user.id):
+    if not l or (not _aprovador() and l['lancado_por'] != current_user.id):
         abort(404)
     return l
 
@@ -60,75 +66,121 @@ def _servicos():
 # ---------------------------------------------------------------------------
 # Tela
 # ---------------------------------------------------------------------------
+FASES = ('apr', 'cob', 'pag', 'atr')
+
+
+def _fase(l, hoje):
+    """Em que quadro o lançamento fica: aguardando aprovação, em cobrança, pago ou atrasado (None = reprovado/cancelado)."""
+    if l['status'] == 'LANCADO':
+        return 'apr'
+    if l['status'] in ('REPROVADO', 'CANCELADO'):
+        return None
+    if l.get('titulo_status') == 'liquidado':
+        return 'pag'
+    if l['status'] == 'FATURADO' and l.get('titulo_vencimento') and l['titulo_vencimento'] < hoje:
+        return 'atr'
+    return 'cob'
+
+
+def _como(l):
+    """Como o cliente é cobrado: 'Boleto + nota', 'Só boleto' ou 'Mensalidade 11/2026'."""
+    if l['destino'] == 'MENSAL':
+        return 'Mensalidade ' + l['competencia'].strftime('%m/%Y')
+    nota = l['com_nota'] if l.get('com_nota') is not None else l.get('emite_nota')
+    return 'Boleto + nota' if nota else 'Só boleto'
+
+
 @financeiro.route('/financeiro/lancamentos')
 @permission_required(PERM)
 def lancamentos():
-    admin = _admin()
-    aba = request.args.get('aba') or 'lancamentos'
-    if aba in ('aprovar', 'acordos') and not admin:
-        aba = 'lancamentos'
-    busca = (request.args.get('busca') or '').strip() or None
-    status = request.args.get('status') or None
-    quem = None if admin else current_user.id
+    """LANÇAMENTOS (17/11/2026, modelo aprovado pelo Anderson): a equipe SOLICITA a cobrança (boleto + nota, só
+    boleto ou na mensalidade) com a comissão; Anderson ou Alessandra aprovam e aí a cobrança sai. Cada um vê só o
+    que é seu; quem aprova vê tudo. Quadros: aguardando aprovação, em cobrança, pagos, atrasados e comissões."""
+    import json
+    aprov = _aprovador()
+    hoje = date.today()
     FinLancamento.liberar_comissoes_pagas()
-    ctx = dict(aba=aba, admin=admin, busca=busca, status=status, STATUS=STATUS, DESTINOS=DESTINOS, COMISSAO=COMISSAO,
-               servicos=_servicos(), hoje=date.today(), competencia_aberta=FinLoteMensal.competencia_aberta(EMP),
-               n_aprovar=len(FinLancamento.listar(EMP, status='LANCADO')) if admin else 0,
-               situacao=FinLancamento.situacao_comissao)
-    if aba == 'aprovar':
-        ctx['lista'] = FinLancamento.listar(EMP, status='LANCADO', busca=busca, origem='SERVICO')
-    elif aba == 'comissoes':
-        uid = request.args.get('u', type=int) if admin else current_user.id
-        ctx['uid'] = uid
-        ctx['pessoas'] = ClienteResponsavel.usuarios_disponiveis() if admin else []
-        ctx['resumo'] = FinLancamento.resumo_pessoa(EMP, uid) if uid else {}
-        ctx['lista'] = [l for l in FinLancamento.listar(EMP, lancado_por=uid, status=('APROVADO', 'FATURADO'))
-                        if l.get('comissao_status') and l['comissao_status'] != 'SEM'] if uid else []
-    elif aba == 'fechamentos':
-        ctx['fechamentos'] = FinComissaoFechamento.listar(usuario_id=quem)
-        fid = request.args.get('f', type=int)
-        if fid:
-            f = FinComissaoFechamento.get(fid)
-            if f and (admin or f['usuario_id'] == current_user.id):
-                ctx['fechamento'] = f
-                ctx['fech_itens'] = FinComissaoFechamento.itens(fid)
-                ctx['fech_pagamentos'] = FinComissaoFechamento.pagamentos(fid)
-    elif aba == 'acordos':
-        ctx['acordos'] = FinComissaoAcordo.listar(so_ativos=False)
-        ctx['pessoas'] = ClienteResponsavel.usuarios_disponiveis()
-    else:
-        ctx['lista'] = FinLancamento.listar(EMP, lancado_por=quem, status=status, busca=busca, origem='SERVICO')
-        ctx['resumo'] = FinLancamento.resumo_pessoa(EMP, current_user.id) if not admin else None
-    return render_template('financeiro/lancamentos.html', **ctx)
+    quem = None if aprov else current_user.id
+    todos = FinLancamento.listar(EMP, lancado_por=quem, origem=None if not aprov else 'SERVICO', limite=1500)
+    grupos = {k: [] for k in FASES}
+    fora = []
+    for l in todos:
+        l['fase'] = _fase(l, hoje)
+        l['como'] = _como(l)
+        l['situacao_com'] = FinLancamento.situacao_comissao(l)
+        (grupos[l['fase']] if l['fase'] else fora).append(l)
+    for l in grupos['apr']:      # quanto a comissão dá se aprovar como foi pedida
+        l['com_prev'] = float(FinLancamento.comissao_calculada(l)[1])
+    soma = lambda ls: sum(float(x['valor_total'] or 0) for x in ls)
+    meus_com = [l for l in todos if l.get('comissao_status') in ('LIBERADA', 'FECHADA', 'PAGA', 'AGUARDANDO')
+                and (aprov is False or l['lancado_por'] == current_user.id)]
+    liberadas = [l for l in meus_com if l['comissao_status'] == 'LIBERADA' and l['lancado_por'] == current_user.id]
+    pedidos = FinComissaoFechamento.listar(usuario_id=None if aprov else current_user.id)
+    a_pagar = [f for f in pedidos if f['status'] not in ('PAGO', 'CANCELADO')]
+    acordos = [a for a in FinComissaoAcordo.listar(usuario_id=current_user.id) if a['base'] == 'SERVICO']
+    clientes = execute_query(
+        """SELECT id, numero_cliente AS num, nome_razao_social AS nome, cpf_cnpj AS doc, COALESCE(avulso, 0) AS av
+             FROM clientes WHERE COALESCE(situacao, 'ATIVO') <> 'INATIVO' ORDER BY nome_razao_social""", fetch=True) or []
+    mensal = {r['cliente_id']: float(r['v'] or 0) for r in execute_query(
+        """SELECT cliente_id, SUM(valor) v FROM fin_contratos WHERE ativo = 1 AND COALESCE(situacao, 'ATIVO') = 'ATIVO'
+            GROUP BY cliente_id""", fetch=True) or []}
+    comp0 = FinLoteMensal.competencia_aberta(EMP)
+    comps = [comp0]
+    while len(comps) < 3:
+        comps.append(date(comps[-1].year + (comps[-1].month == 12), comps[-1].month % 12 + 1, 1))
+    caixa = {
+        'clientes': [{'id': c['id'], 'num': str(c['num'] or ''), 'nome': c['nome'], 'doc': c['doc'] or '', 'av': bool(c['av']),
+                      'mensal': mensal.get(c['id'], 0)} for c in clientes],
+        'servicos': [{'id': s['id'], 'nome': s['nome'], 'valor': float(s['valor_padrao'] or 0), 'nota': bool(s['emite_nota'])} for s in _servicos()],
+        'acordos': [{'servico_id': a['servico_id'], 'tipo': a['tipo'], 'valor': float(a['valor'])} for a in acordos],
+        'comps': [{'v': c.isoformat(), 'rot': c.strftime('%m/%Y')} for c in comps],
+        'hoje': hoje.isoformat(), 'eu': getattr(current_user, 'nome', ''), 'aprovador': aprov,
+    }
+    return render_template(
+        'financeiro/lancamentos.html', aprov=aprov, admin=_admin(), hoje=hoje, grupos=grupos, fora=fora[:30],
+        tot={k: soma(v) for k, v in grupos.items()}, liberadas=liberadas, meus_com=meus_com,
+        tot_liberadas=sum(float(l['comissao_valor'] or 0) for l in liberadas),
+        pedidos=pedidos, a_pagar=a_pagar, tot_a_pagar=sum(float(f['total'] or 0) - float(f['valor_pago'] or 0) for f in a_pagar),
+        aba=request.args.get('aba') if request.args.get('aba') in FASES + ('com',) else ('apr' if (aprov or grupos['apr']) else 'cob'),
+        caixa_json=json.dumps(caixa, ensure_ascii=False), STATUS=STATUS, COMISSAO=COMISSAO,
+        acordos_todos=FinComissaoAcordo.listar(so_ativos=True) if _admin() else [],
+        pessoas=ClienteResponsavel.usuarios_disponiveis() if _admin() else [], servicos=_servicos())
 
 
 @financeiro.route('/financeiro/lancamentos/novo', methods=['POST'])
 @permission_required(PERM)
 def lancamento_novo():
+    """Solicitação da caixa "Nova solicitação": como cobrar (boleto + nota / só boleto / na mensalidade), serviço,
+    valor, vencimento e a comissão pedida. Nada sai agora: a cobrança é emitida na aprovação."""
     f = request.form
     try:
         cliente_id = f.get('cliente_id', type=int)
         servico_id = f.get('servico_id', type=int)
         if not cliente_id or not servico_id:
-            raise ValueError('Escolha a empresa e o serviço.')
+            raise ValueError('Escolha o cliente e o serviço.')
         s = execute_query('SELECT nome FROM nfse_servicos WHERE id = %s AND empresa_id = %s', (servico_id, EMP), fetch=True, fetch_one=True)
         if not s:
             raise ValueError('Serviço inválido.')
+        como = f.get('como') or 'BOLETO_NOTA'
+        if como not in ('BOLETO_NOTA', 'BOLETO', 'MENSAL'):
+            raise ValueError('Escolha como cobrar.')
+        destino = 'MENSAL' if como == 'MENSAL' else 'AVULSO'
+        comp = _data(f.get('competencia')) if destino == 'MENSAL' else None
         lid = FinLancamento.criar(EMP, cliente_id, servico_id, (f.get('descricao') or s['nome']).strip() or s['nome'],
-                                  _dec(f.get('quantidade') or '1'), _dec(f.get('valor_unitario')), f.get('destino'),
-                                  current_user.id, vencimento=_data(f.get('vencimento')),
-                                  observacao=(f.get('observacao') or '').strip() or None)
+                                  Decimal('1'), _dec(f.get('valor')), destino, current_user.id,
+                                  vencimento=_data(f.get('vencimento')) if destino == 'AVULSO' else None,
+                                  observacao=(f.get('observacao') or '').strip() or None, competencia=comp,
+                                  com_nota=None if destino == 'MENSAL' else (como == 'BOLETO_NOTA'),
+                                  comissao_tipo=f.get('comissao_tipo') or 'PADRAO', comissao_valor=f.get('comissao_valor') or None)
         l = FinLancamento.get(lid)
         registrar('escrita.lancou_servico', 'financeiro', tabela='fin_lancamentos', registro_id=lid,
                   depois={'empresa': l['nome_razao_social'], 'servico': l['servico_nome'], 'valor': str(l['valor_total']),
-                          'destino': l['destino'], 'competencia': str(l['competencia']), 'vencimento': str(l['vencimento'] or '')})
-        if l['destino'] == 'MENSAL':
-            flash('Lançado para a cobrança mensal de %s. Aguarda aprovação.' % l['competencia'].strftime('%m/%Y'), 'success')
-        else:
-            flash('Lançado como cobrança avulsa. Aguarda aprovação para o boleto sair.', 'success')
+                          'como': _como(l), 'vencimento': str(l['vencimento'] or ''),
+                          'comissao_pedida': (l.get('comissao_pedida_tipo') or '') + (' ' + str(l['comissao_pedida_valor']) if l.get('comissao_pedida_valor') else '')})
+        flash('Solicitação enviada: %s · %s. Anderson ou Alessandra aprovam e a cobrança sai.' % (l['nome_razao_social'], _como(l)), 'success')
     except (ValueError, InvalidOperation) as e:
         flash(str(e) if isinstance(e, ValueError) else 'Valor inválido.', 'danger')
-    return redirect(url_for('financeiro.lancamentos'))
+    return redirect(url_for('financeiro.lancamentos', aba='apr'))
 
 
 # ---------------------------------------------------------------------------
@@ -153,7 +205,7 @@ def _cobrar_avulso(l, usuario_id):
     competencia = l['competencia']
     _venc, mensagem = sugestao_boleto(conta, competencia)
     itens = [{'servico_id': l['servico_id'], 'nome': l['descricao'] or l['servico_nome'], 'valor': Decimal(str(l['valor_total'])),
-              'emite_nota': bool(l.get('emite_nota'))}]
+              'emite_nota': bool(l['com_nota'] if l.get('com_nota') is not None else l.get('emite_nota'))}]
     cfg = NfseConfig.get(l['empresa_id']) if itens[0]['emite_nota'] else None
     nfse_id = boleto_id = titulo_id = None
     if cfg:
@@ -196,16 +248,18 @@ def _cobrar_avulso(l, usuario_id):
 @financeiro.route('/financeiro/lancamentos/<int:lid>/aprovar', methods=['POST'])
 @permission_required(PERM)
 def lancamento_aprovar(lid):
-    if not _admin():
+    if not _aprovador():
         abort(403)
     l = FinLancamento.get(lid)
     if not l:
         abort(404)
+    ct = request.form.get('comissao_tipo') or None
     try:
-        com = FinLancamento.aprovar(lid, current_user.id)
-    except ValueError as e:
-        flash(str(e), 'danger')
-        return redirect(url_for('financeiro.lancamentos', aba='aprovar'))
+        com = FinLancamento.aprovar(lid, current_user.id, comissao_tipo=ct,
+                                    comissao_valor=_dec(request.form.get('comissao_valor')) if ct in ('PCT', 'FIXO') else None)
+    except (ValueError, InvalidOperation) as e:
+        flash(str(e) if isinstance(e, ValueError) else 'Valor da comissão inválido.', 'danger')
+        return redirect(url_for('financeiro.lancamentos', aba='apr'))
     registrar('escrita.aprovou_lancamento', 'financeiro', tabela='fin_lancamentos', registro_id=lid,
               depois={'empresa': l['nome_razao_social'], 'servico': l['servico_nome'], 'valor': str(l['valor_total']),
                       'destino': l['destino'], 'comissao': str(com), 'lancado_por': l['lancado_por_nome']})
@@ -217,13 +271,13 @@ def lancamento_aprovar(lid):
             flash('Aprovado, mas a cobrança não saiu. Corrija e cobre pela tela Cobranças.', 'danger')
     else:
         flash('Aprovado: entra na cobrança mensal de %s.' % l['competencia'].strftime('%m/%Y'), 'success')
-    return redirect(url_for('financeiro.lancamentos', aba='aprovar'))
+    return redirect(url_for('financeiro.lancamentos', aba='apr'))
 
 
 @financeiro.route('/financeiro/lancamentos/<int:lid>/reprovar', methods=['POST'])
 @permission_required(PERM)
 def lancamento_reprovar(lid):
-    if not _admin():
+    if not _aprovador():
         abort(403)
     l = FinLancamento.get(lid)
     try:
@@ -233,7 +287,7 @@ def lancamento_reprovar(lid):
         flash('Lançamento reprovado.', 'info')
     except ValueError as e:
         flash(str(e), 'danger')
-    return redirect(url_for('financeiro.lancamentos', aba='aprovar'))
+    return redirect(url_for('financeiro.lancamentos', aba='apr'))
 
 
 @financeiro.route('/financeiro/lancamentos/<int:lid>/cancelar', methods=['POST'])
@@ -241,7 +295,7 @@ def lancamento_reprovar(lid):
 def lancamento_cancelar(lid):
     l = _meu_ou_admin(FinLancamento.get(lid))
     try:
-        if not _admin() and l['status'] != 'LANCADO':
+        if not _aprovador() and l['status'] != 'LANCADO':
             raise ValueError('Só o que ainda aguarda aprovação pode ser cancelado por você.')
         FinLancamento.cancelar(lid, request.form.get('motivo'))
         registrar('escrita.cancelou_lancamento', 'financeiro', tabela='fin_lancamentos', registro_id=lid,
@@ -263,27 +317,26 @@ def comissoes_fechar():
         f = FinComissaoFechamento.get(fid)
         registrar('escrita.fechou_comissoes', 'financeiro', tabela='fin_comissao_fechamentos', registro_id=fid,
                   depois={'total': str(f['total']), 'itens': f['qtd_itens']})
-        flash('Fechamento nº %d gerado: R$ %s em %d comissão(ões). Enviado para pagamento.' % (fid, f['total'], f['qtd_itens']), 'success')
-        return redirect(url_for('financeiro.lancamentos', aba='fechamentos', f=fid))
+        flash('Pedido nº %d enviado: R$ %s em %d comissão(ões). Anderson ou Alessandra pagam na sua chave Pix.' % (fid, f['total'], f['qtd_itens']), 'success')
     except ValueError as e:
         flash(str(e), 'danger')
-        return redirect(url_for('financeiro.lancamentos', aba='comissoes'))
+    return redirect(url_for('financeiro.lancamentos', aba='com'))
 
 
 @financeiro.route('/financeiro/lancamentos/fechamentos/<int:fid>/pagar', methods=['POST'])
 @permission_required(PERM)
 def fechamento_pagar(fid):
-    if not _admin():
+    if not _aprovador():
         abort(403)
     try:
         st = FinComissaoFechamento.registrar_pagamento(fid, _data(request.form.get('data')) or date.today(),
                                                       _dec(request.form.get('valor')), current_user.id)
         registrar('escrita.pagou_comissao', 'financeiro', tabela='fin_comissao_fechamentos', registro_id=fid,
                   depois={'data': request.form.get('data'), 'valor': request.form.get('valor'), 'status': st})
-        flash('Pagamento registrado. Fechamento %s.' % ('quitado' if st == 'PAGO' else 'pago em parte'), 'success')
+        flash('Pagamento registrado. Pedido %s.' % ('quitado' if st == 'PAGO' else 'pago em parte'), 'success')
     except (ValueError, InvalidOperation) as e:
         flash(str(e) if isinstance(e, ValueError) else 'Valor inválido.', 'danger')
-    return redirect(url_for('financeiro.lancamentos', aba='fechamentos', f=fid))
+    return redirect(url_for('financeiro.lancamentos', aba='com'))
 
 
 # ---------------------------------------------------------------------------
@@ -306,7 +359,7 @@ def acordo_novo():
         flash('Acordo de comissão cadastrado.', 'success')
     except (ValueError, InvalidOperation) as e:
         flash(str(e) if isinstance(e, ValueError) else 'Valor inválido.', 'danger')
-    return redirect(url_for('financeiro.lancamentos', aba='acordos'))
+    return redirect(url_for('financeiro.lancamentos', aba='com') + '#acordos')
 
 
 @financeiro.route('/financeiro/lancamentos/acordos/<int:aid>/encerrar', methods=['POST'])
@@ -320,4 +373,4 @@ def acordo_encerrar(aid):
         registrar('escrita.encerrou_acordo_comissao', 'financeiro', tabela='fin_comissao_acordos', registro_id=aid,
                   antes={'usuario_id': a['usuario_id'], 'base': a['base'], 'valor': str(a['valor'])}, depois={'ativo': 0})
         flash('Acordo encerrado.', 'info')
-    return redirect(url_for('financeiro.lancamentos', aba='acordos'))
+    return redirect(url_for('financeiro.lancamentos', aba='com') + '#acordos')
