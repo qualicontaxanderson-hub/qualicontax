@@ -167,6 +167,9 @@ def lancamentos():
     for l in grupos['apr']:      # quanto a comissão dá se aprovar como foi pedida (e se o serviço é travado)
         l['com_prev'] = float(FinLancamento.comissao_calculada(l)[1])
         l['com_trava'] = FinLancamento.servico_travado(l['servico_id'])
+    for l in grupos['cob']:      # 18/11/2026: aprovado e sem título = a cobrança não saiu (nota rejeitada, boleto recusado)
+        if _sem_cobranca(l):
+            l['motivo_falha'] = _motivo_da_falha(l)
     # CARTEIRA DE MENSALIDADE (17/11/2026 — Anderson: "Não pode colocar dentro dos lançamentos? E deixar junto com os
     # outros?"): a mensalidade de cada empresa da carteira da pessoa (Guilherme 25%) vira um cartão nos mesmos quadros
     # (em cobrança / pagos / atrasados) e, paga, entra nas comissões a pedir. Mês passado e este mês, pelo vencimento.
@@ -526,6 +529,24 @@ def _contas_cobranca():
                              ORDER BY id""", (EMP,), fetch=True) or []   # só Efí e Bradesco de verdade (Anderson: "nada de teste ou produção")
 
 
+def _sem_cobranca(l):
+    """Lançamento avulso aprovado que ficou sem cobrança: a nota foi rejeitada ou o boleto não saiu na aprovação."""
+    return l.get('status') == 'APROVADO' and l.get('destino') == 'AVULSO' and not l.get('titulo_id') and not l.get('carteira')
+
+
+def _motivo_da_falha(l):
+    """O erro da última nota rejeitada desse cliente e valor, emitida por lançamento (ex.: E0240, CEP do tomador)."""
+    doc = re.sub(r'\D', '', l.get('cpf_cnpj') or '')
+    if not doc:
+        return None
+    r = execute_query("""SELECT erro_ultimo, xmotivo FROM nfse_emitidas
+                          WHERE situacao = 'rejeitada' AND origem = 'lancamento' AND tomador_doc = %s
+                            AND ABS(valor_servico - %s) < 0.005 AND criado_em >= %s
+                          ORDER BY id DESC LIMIT 1""",
+                      (doc, l['valor_total'], l.get('aprovado_em') or l.get('criado_em')), fetch=True, fetch_one=True) or {}
+    return (r.get('erro_ultimo') or r.get('xmotivo') or '')[:300] or None
+
+
 def _conta_escolhida(form):
     """A conta do boleto escolhida na caixa (17/11/2026 — Anderson: "tem que ter a opção de escolher" o banco).
     Só vale conta de cobrança ativa da empresa; senão None (fica a padrão)."""
@@ -624,6 +645,35 @@ def lancamento_aprovar(lid):
     else:
         flash('Aprovado: entra na cobrança mensal de %s.' % l['competencia'].strftime('%m/%Y'), 'success')
     return redirect(url_for('financeiro.lancamentos', aba='apr'))
+
+
+@financeiro.route('/financeiro/lancamentos/<int:lid>/cobrar', methods=['POST'])
+@permission_required(PERM)
+def lancamento_cobrar(lid):
+    """Cobrar de novo um lançamento aprovado que ficou sem cobrança (18/11/2026 — a nota da Infinity Aragarças foi
+    rejeitada pelo CEP do cadastro e o lançamento ficou "aprovado" sem título, sem caminho de volta). Quem aprova
+    corrige o cadastro e cobra daqui: assim a nota, o boleto, o título e a comissão de quem lançou ficam presos ao
+    lançamento. Reemitir pela tela Cobranças criaria tudo solto, e a comissão nunca liberaria."""
+    if _vendo_como():
+        flash('Você está vendo como outra pessoa: volte a ser você para cobrar.', 'warning')
+        return redirect(url_for('financeiro.lancamentos'))
+    if not _aprovador():
+        abort(403)
+    l = FinLancamento.get(lid)
+    if not l:
+        abort(404)
+    if not _sem_cobranca(l):
+        flash('Este lançamento já tem cobrança ou não está aprovado.', 'warning')
+        return redirect(url_for('financeiro.lancamentos', aba='cob'))
+    ok, msgs = _cobrar_avulso(l, current_user.id, _conta_escolhida(request.form))
+    registrar('escrita.cobrou_lancamento_de_novo', 'financeiro', tabela='fin_lancamentos', registro_id=lid,
+              depois={'empresa': l['nome_razao_social'], 'servico': l['servico_nome'], 'valor': str(l['valor_total']),
+                      'saiu': ok, 'mensagens': msgs})
+    for m in msgs:
+        flash(m, 'success' if ok else 'warning')
+    flash('Cobrança emitida: o lançamento está em cobrança.' if ok else 'A cobrança ainda não saiu. Corrija o que o aviso pede e cobre de novo.',
+          'success' if ok else 'danger')
+    return redirect(url_for('financeiro.lancamentos', aba='cob'))
 
 
 @financeiro.route('/financeiro/lancamentos/<int:lid>/reprovar', methods=['POST'])

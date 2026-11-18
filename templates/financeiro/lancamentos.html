@@ -46,6 +46,8 @@
 .lm-acs em.no i { text-decoration:none; }
 .lm-adm { display:inline-flex; align-items:center; gap:6px; margin-top:6px; font-size:11px; font-weight:800; color:#92400e; background:#fef3c7; border-radius:7px; padding:2px 8px; }
 .lm-ac .cob { color:#1d4ed8; border-color:#bfdbfe; background:#eff6ff; }
+.lm-falha { margin-top:8px; padding:7px 9px; border-radius:9px; background:#fffbeb; border:1px solid #fde68a; color:#92400e; font-size:12px; line-height:1.4; }
+.lm-falha i { margin-right:4px; }
 .lm-ac .ok { background:#16a34a; border-color:#16a34a; color:#fff; } .lm-ac .no { color:#b91c1c; border-color:#fecaca; }
 .lm-por { font-size:11.5px; color:#64748b; margin-top:6px; display:flex; align-items:center; gap:6px; } .lm-por i { color:#94a3b8; }
 .lm-ck { position:absolute; right:12px; bottom:12px; width:22px; height:22px; border-radius:7px; border:2px solid #c4b5fd; background:#fff; display:inline-flex;
@@ -164,7 +166,8 @@
 {% include 'financeiro/_nav_financeiro.html' %}
 
 {% macro cartao(l, fase) %}
-{% set cls = {'apr': 'tx-venc', 'cob': ('tx-fut' if l.destino == 'MENSAL' and l.status == 'APROVADO' else 'tx-hoje'), 'pag': 'tx-ok', 'atr': 'tx-ina'}[fase] %}
+{% set falhou = l.status == 'APROVADO' and l.destino == 'AVULSO' and not l.titulo_id and not l.carteira %}
+{% set cls = {'apr': 'tx-venc', 'cob': ('tx-fut' if l.destino == 'MENSAL' and l.status == 'APROVADO' else ('tx-venc' if falhou else 'tx-hoje')), 'pag': 'tx-ok', 'atr': 'tx-ina'}[fase] %}
 <div class="tx-c {{ cls }}" data-busca="{{ l.numero_cliente or '' }} {{ l.nome_razao_social }} {{ l.servico_nome }} {{ l.lancado_por_nome }}">
   <div class="tx-c-top"><span class="tx-c-num">{{ l.numero_cliente or '—' }}</span><span class="tx-c-nome" title="{{ l.nome_razao_social }}">{{ l.nome_razao_social }}</span></div>
   <div class="tx-c-meio"><div><div class="tx-c-val">{{ l.valor_total | float | format_currency }}</div>
@@ -173,7 +176,9 @@
       {% elif fase == 'pag' %}<i class="fas fa-circle-check"></i> pago
       {% elif fase == 'atr' %}<i class="fas fa-clock"></i> atrasado
       {% elif l.status == 'APROVADO' and l.destino == 'MENSAL' %}<i class="fas fa-calendar"></i> no lote de {{ l.competencia.strftime('%m/%Y') }}
+      {% elif falhou %}<i class="fas fa-triangle-exclamation"></i> a cobrança não saiu
       {% else %}<i class="fas fa-paper-plane"></i> cobrado{% endif %}</span></div>
+  {% if falhou %}<div class="lm-falha"><i class="fas fa-circle-exclamation"></i> {{ l.motivo_falha or 'A nota ou o boleto não saíram na aprovação.' }}{% if aprov %} Corrija o cadastro e cobre de novo.{% else %} Quem aprova vai cobrar de novo.{% endif %}</div>{% endif %}
   <div style="margin-top:8px"><span class="lm-tipo {{ 'lm-t-me' if l.destino == 'MENSAL' else 'lm-t-av' }}"><i class="fas {{ 'fa-calendar' if l.destino == 'MENSAL' else 'fa-barcode' }}"></i> {{ l.como }}</span></div>
   {% if l.lancado_pelo_admin %}<div class="lm-adm"><i class="fas fa-user-shield"></i> Lançado pelo administrador</div>{% endif %}
   {% if aprov and l.lancado_por != eu.id %}<div class="lm-por"><i class="fas fa-user"></i> {{ l.lancado_por_nome }}</div>{% endif %}
@@ -192,6 +197,8 @@
     <div class="lm-ac"><button type="button" class="no" onclick="lmCancelar({{ l.id }})"><i class="fas fa-ban"></i> Cancelar pedido</button></div>
   {% elif l.titulo_id and not l.carteira and fase in ('cob', 'atr', 'pag') %}
     <div class="lm-ac"><button type="button" class="cob" onclick="lmCob({{ l.id }})"><i class="fas fa-barcode"></i> Cobrança</button></div>
+  {% elif falhou and aprov %}
+    <div class="lm-ac"><button type="button" class="ok" onclick="lmCobrar({{ l.id }}, this)" data-cli="{{ (l.numero_cliente ~ ' · ' if l.numero_cliente else '') ~ l.nome_razao_social }}" data-v="{{ l.valor_total | float }}" data-como="{{ l.como }}"><i class="fas fa-rotate-right"></i> Cobrar de novo</button></div>
   {% endif %}
 </div>
 {% endmacro %}
@@ -416,6 +423,25 @@
   </form>
 </div></div>
 
+{% if aprov %}
+<div class="ns-fundo" id="cbFundo"><div class="ns peq" role="dialog" aria-modal="true">
+  <header class="ns-cab"><div class="ns-tit"><b>Cobrar de novo</b><span id="cbQuem"></span></div>
+    <button type="button" class="ns-x" onclick="cbFechar()"><i class="fas fa-xmark"></i></button></header>
+  <form method="POST" id="cbForm" style="display:contents">
+  <div class="ns-g"><div class="ns-f">
+    {% if contas_cobranca %}
+    <section class="ns-b"><div class="ns-h"><i class="fas fa-building-columns"></i> Banco do boleto</div>
+      <div class="ns-bancos">{% for c in contas_cobranca %}<label class="ns-banco"><input type="radio" name="conta_cobranca_id" value="{{ c.id }}"{{ ' checked' if loop.first }}>
+        <span>{{ logo_banco({'efi': '364', 'bradesco': '237', 'cora': '403'}.get(c.provedor, '364'), none, 30) }}<span class="nb"><b>{{ {'efi': 'Efí', 'bradesco': 'Bradesco', 'cora': 'Cora'}.get(c.provedor, c.provedor) }}</b></span></span></label>{% endfor %}</div></section>
+    {% endif %}
+    <div class="ns-aviso" id="cbAviso"></div>
+  </div></div>
+  <footer class="ns-pe"><div class="ns-pe-info"></div><button type="button" class="ns-bt" onclick="cbFechar()">Voltar</button>
+    <button type="submit" class="ns-bt prim"><i class="fas fa-rotate-right"></i> Cobrar agora</button></footer>
+  </form>
+</div></div>
+{% endif %}
+
 <script id="lmDados" type="application/json">{{ caixa_json | safe }}</script>
 <script id="lmApr" type="application/json">{{ (grupos.apr | map(attribute='id') | list) | tojson }}</script>
 {% endblock %}
@@ -456,7 +482,8 @@
       obs: {{ (l.observacao or '') | tojson }} }{{ ',' if not loop.last }}{% endfor %}
   };
   var URL_APROVAR = {{ url_for('financeiro.lancamento_aprovar', lid=999999) | tojson }}, URL_REPROVAR = {{ url_for('financeiro.lancamento_reprovar', lid=999999) | tojson }},
-      URL_CANCELAR = {{ url_for('financeiro.lancamento_cancelar', lid=999999) | tojson }};
+      URL_CANCELAR = {{ url_for('financeiro.lancamento_cancelar', lid=999999) | tojson }},
+      URL_COBRAR = {{ url_for('financeiro.lancamento_cobrar', lid=999999) | tojson }};
   function $(id) { return document.getElementById(id); }
   function esc(s) { var d = document.createElement('div'); d.textContent = s == null ? '' : String(s); return d.innerHTML; }
   function brl(v) { return 'R$ ' + Number(v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
@@ -530,6 +557,15 @@
     $('rpBt').innerHTML = cancelar ? '<i class="fas fa-ban"></i> Cancelar pedido' : '<i class="fas fa-xmark"></i> Reprovar';
     $('rpMotivo').value = ''; $('rpFundo').classList.add('on'); document.body.style.overflow = 'hidden'; $('rpMotivo').focus();
   }
+  // 18/11/2026: lançamento aprovado cuja cobrança não saiu (nota rejeitada) — quem aprova corrige o cadastro e cobra daqui
+  window.lmCobrar = function (id, bt) {
+    var d = bt.dataset, f = $('cbFundo'); if (!f) return;
+    $('cbForm').action = URL_COBRAR.replace('999999', id);
+    $('cbQuem').textContent = d.cli + ' · ' + brl(+d.v);
+    $('cbAviso').innerHTML = '<i class="fas fa-bolt"></i><span>' + (/nota/i.test(d.como) ? 'A nota e o boleto são emitidos' : 'O boleto é emitido') + ' agora com o cadastro atual e vão por e-mail ao cliente. Se o cadastro ainda estiver errado, a nota volta rejeitada.</span>';
+    f.classList.add('on'); document.body.style.overflow = 'hidden';
+  };
+  window.cbFechar = function () { $('cbFundo').classList.remove('on'); document.body.style.overflow = ''; };
   window.lmReprovar = function (id) { rpAbrir(id, false); };
   window.lmCancelar = function (id) { rpAbrir(id, true); };
   window.rpFechar = function () { $('rpFundo').classList.remove('on'); document.body.style.overflow = ''; };
