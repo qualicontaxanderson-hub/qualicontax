@@ -43,6 +43,18 @@ def chave_normalizada(tipo, chave):
     return c
 
 
+def codigo_pedido(fid):
+    """Código curto e fixo do pedido que vai no Pix (18/11/2026 — Anderson: "sair só Pedido e alguma sigla sem ser
+    sequencial"). Sempre o mesmo para o mesmo pedido, sem letras que confundem (0/O, 1/I)."""
+    import hashlib
+    alf = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
+    n = int(hashlib.sha256(('qualicontax-pedido-%d' % int(fid)).encode()).hexdigest(), 16)
+    s = ''
+    for _ in range(6):
+        n, r = divmod(n, len(alf)); s += alf[r]
+    return s
+
+
 def copia_e_cola(chave, nome, valor=None, cidade='BRASIL', txid='***', mensagem=''):
     gui = _campo('00', 'br.gov.bcb.pix') + _campo('01', chave)
     if mensagem:

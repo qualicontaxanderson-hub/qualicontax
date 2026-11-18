@@ -352,7 +352,7 @@ def comissao_pedido(fid):
     """Pedido de pagamento de comissão (17/11/2026 — Anderson: "gerar um Documento para receber esse valor e enviar
     para anderson ou alessandra igual PÁGINA DO CLIENTE, o qual se ele cadastrou a chave dele PIX no CONFIG consigo
     copiar e pagar"). Quem pediu e quem aprova abrem; o Pix já vem com o valor que falta."""
-    from utils.pix_brcode import copia_e_cola, qr_data_uri
+    from utils.pix_brcode import copia_e_cola, codigo_pedido, qr_data_uri
     FinLancamento.liberar_comissoes_pagas()
     try:
         FinComissaoFechamento.quitar_pelo_extrato()
@@ -370,14 +370,14 @@ def comissao_pedido(fid):
     falta = float(f['total'] or 0) - float(f['valor_pago'] or 0)
     codigo = qr = None
     if pix.get('pix_chave') and falta > 0 and f['status'] != 'CANCELADO':
-        codigo = copia_e_cola(pix['pix_chave'], pix.get('titular') or f['usuario_nome'], falta, mensagem='Comissao pedido %d' % fid)
+        codigo = copia_e_cola(pix['pix_chave'], pix.get('titular') or f['usuario_nome'], falta, mensagem='Pedido ' + codigo_pedido(fid))
         qr = qr_data_uri(codigo)
     from utils.comissao_pedido_doc import frase_resumo, link_whatsapp, texto_whatsapp
     ctx = {'f': f, 'itens': itens, 'pix': pix, 'falta': falta, 'codigo': codigo,
            'link': url_for('financeiro.comissao_pedido', fid=fid, _external=True)}
     texto = texto_whatsapp(ctx)
     return render_template('financeiro/comissao_pedido.html', f=f, itens=itens, pags=pags, pix=pix, PIX_TIPOS=PIX_TIPOS,
-                           falta=falta, codigo=codigo, qr=qr, aprov=_aprovador(), hoje=date.today(),
+                           falta=falta, codigo=codigo, qr=qr, sigla=codigo_pedido(fid), aprov=_aprovador(), hoje=date.today(),
                            resumo=frase_resumo(itens), texto_wa=texto, link_wa=link_whatsapp(texto))
 
 
@@ -388,7 +388,7 @@ def comissao_pedido_arquivo(fid, fmt):
     whatsapp a ser enviado para o financeiro"). Mesmas pessoas que abrem a página."""
     import os
     from utils.comissao_pedido_doc import gerar_pdf, gerar_png
-    from utils.pix_brcode import copia_e_cola
+    from utils.pix_brcode import copia_e_cola, codigo_pedido
     if fmt not in ('pdf', 'png'):
         abort(404)
     f = FinComissaoFechamento.get(fid)
@@ -401,7 +401,7 @@ def comissao_pedido_arquivo(fid, fmt):
                          (fid,), fetch=True) or []
     pix = _pix_de(f['usuario_id'])
     falta = float(f['total'] or 0) - float(f['valor_pago'] or 0)
-    codigo = copia_e_cola(pix['pix_chave'], pix.get('titular') or f['usuario_nome'], falta, mensagem='Comissao pedido %d' % fid) if pix.get('pix_chave') and falta > 0 else None
+    codigo = copia_e_cola(pix['pix_chave'], pix.get('titular') or f['usuario_nome'], falta, mensagem='Pedido ' + codigo_pedido(fid)) if pix.get('pix_chave') and falta > 0 else None
     logo = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'static', 'images', 'logo.png')
     ctx = {'f': f, 'itens': itens, 'pags': pags, 'pix': pix, 'falta': falta, 'codigo': codigo,
            'link': url_for('financeiro.comissao_pedido', fid=fid, _external=True), 'logo_path': logo if os.path.exists(logo) else None}

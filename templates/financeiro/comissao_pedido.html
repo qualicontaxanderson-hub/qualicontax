@@ -98,7 +98,8 @@
         {% elif codigo %}
           <img src="{{ qr }}" alt="QR do Pix">
           <div class="cp-chave">{{ PIX_TIPOS.get(pix.pix_tipo, 'Chave') }}: <b>{{ pix.pix_chave }}</b><br>valor: <b>{{ falta | format_currency }}</b>
-            {% if pix.titular %}<br><small>em nome de <b>{{ pix.titular }}</b>{% if pix.banco %} · {{ pix.banco }}{% endif %}{% if pix.outro %} <span style="color:#92400e">(conta de outra pessoa ou empresa, escolhida por {{ f.usuario_nome.split()[0] }})</span>{% endif %}</small>{% endif %}</div>
+            {% if pix.titular %}<br><small>em nome de <b>{{ pix.titular }}</b>{% if pix.banco %} · {{ pix.banco }}{% endif %}{% if pix.outro %} <span style="color:#92400e">(conta de outra pessoa ou empresa, escolhida por {{ f.usuario_nome.split()[0] }})</span>{% endif %}</small>{% endif %}
+            <br><small>no comprovante aparece <b>PEDIDO {{ sigla }}</b></small></div>
           {# 18/11/2026: no iPhone a caixinha de 76px cortava o código e o "selecionar tudo" deixava a seleção azul por cima
              (print do Anderson: "está quebrado isso"). Agora o código aparece inteiro e o botão copia sem selecionar. #}
           <div class="cp-cod cp-cod-pix" id="cpCod">{{ codigo }}</div>
