@@ -189,6 +189,9 @@
 .lm-fg > em { font-style:normal; font-size:12px; font-weight:800; letter-spacing:.05em; text-transform:uppercase; color:#94a3b8; margin-right:2px; }
 .lm-filtros .tx-f { font-size:13.5px; padding:7px 14px; display:inline-flex; align-items:center; gap:6px; }
 .lm-filtros .tx-f i { font-size:12px; opacity:.8; }
+.lm-per { display:inline-flex; align-items:center; gap:6px; font-size:13px; color:#64748b; } .lm-per[hidden] { display:none; }
+.lm-per input { height:34px; border:1px solid #d7e3dc; border-radius:9px; padding:0 8px; font:inherit; font-size:13px; }
+.lm-fdt .tx-f.zero { display:none; }
 .lm-nada { display:none; padding:18px; text-align:center; color:#64748b; font-size:13.5px; background:#fff; border:1px dashed #d7e3dc; border-radius:14px; margin-bottom:20px; }
 .lm-pagar.lm-pagar-c input { font-size:13.5px; } .lm-pagar.lm-pagar-c button { font-size:13.5px; height:36px; }
 @media (max-width:700px) { .lm-filtros { gap:8px; } .lm-fg > em { white-space:nowrap; } .lm-fg { flex-wrap:nowrap; overflow-x:auto; max-width:100%; padding-bottom:2px; } .lm-filtros .tx-f { white-space:nowrap; } }
@@ -207,8 +210,13 @@
     {% set _ = quem.update({(l.lancado_por_nome or ''): quem.get(l.lancado_por_nome or '', 0) + 1}) %}
   {% endfor %}
   {% set tipos = (ns.n > 0) | int + (ns.b > 0) | int + (ns.m > 0) | int %}
-  {% if lista and (tipos > 1 or ns.p or (aprov and quem|length > 1)) %}
+  {% if lista %}
   <div class="lm-filtros">
+    <div class="lm-fg lm-fdt" data-g="dt"><em>Vencimento</em><button type="button" class="tx-f on" data-v="">Todos</button>
+      <button type="button" class="tx-f" data-v="sem">Esta semana <b></b></button><button type="button" class="tx-f" data-v="mes">Este mês <b></b></button>
+      <button type="button" class="tx-f" data-v="prox">Mês que vem <b></b></button><button type="button" class="tx-f" data-v="ant">Mês passado <b></b></button>
+      <button type="button" class="tx-f" data-v="per"><i class="fas fa-calendar-days"></i> Período</button>
+      <span class="lm-per" hidden><input type="date" class="lm-de" title="de"> até <input type="date" class="lm-ate" title="até"></span></div>
     {% if tipos > 1 or ns.p %}<div class="lm-fg" data-g="cc"><em>Cobrança</em><button type="button" class="tx-f on" data-v="">Todos <b>{{ lista|length }}</b></button>
       {% if ns.n %}<button type="button" class="tx-f" data-v="N"><i class="fas fa-file-invoice-dollar"></i> Boleto + nota <b>{{ ns.n }}</b></button>{% endif %}
       {% if ns.b %}<button type="button" class="tx-f" data-v="B"><i class="fas fa-barcode"></i> Só boleto <b>{{ ns.b }}</b></button>{% endif %}
@@ -225,7 +233,7 @@
 {% set cls = {'apr': 'tx-venc', 'cob': ('tx-fut' if l.destino == 'MENSAL' and l.status == 'APROVADO' else ('tx-venc' if falhou else 'tx-hoje')), 'pag': 'tx-ok', 'atr': 'tx-ina'}[fase] %}
 {% set adiantado = l.comissao_adiantada and not l.desconto_de and l.titulo_status != 'liquidado' %}{% set adiantavel = pedir and l.adiantavel %}
 {% set cc_ = 'M' if l.destino == 'MENSAL' else ('N' if 'nota' in (l.como or '') else 'B') %}
-<div class="tx-c {{ cls }}{% if adiantavel %} marcavel adi{% endif %}" data-cc="{{ cc_ }}" data-parc="{{ '1' if (l.parcelas and l.parcelas > 1) or l.parcela else '' }}" data-quem="{{ l.lancado_por_nome or '' }}" data-busca="{{ l.numero_cliente or '' }} {{ l.nome_razao_social }} {{ l.servico_nome }} {{ l.lancado_por_nome }}"{% if adiantavel %} data-v="{{ l.comissao_valor | float }}" onclick="lmMarcar(this)"{% endif %}>
+<div class="tx-c {{ cls }}{% if adiantavel %} marcavel adi{% endif %}" data-cc="{{ cc_ }}" data-parc="{{ '1' if (l.parcelas and l.parcelas > 1) or l.parcela else '' }}" data-quem="{{ l.lancado_por_nome or '' }}" data-dt="{{ (l.titulo_vencimento or l.vencimento or l.competencia).isoformat() if (l.titulo_vencimento or l.vencimento or l.competencia) else '' }}" data-busca="{{ l.numero_cliente or '' }} {{ l.nome_razao_social }} {{ l.servico_nome }} {{ l.lancado_por_nome }}"{% if adiantavel %} data-v="{{ l.comissao_valor | float }}" onclick="lmMarcar(this)"{% endif %}>
   {% if adiantavel %}<input type="checkbox" name="lanc" value="{{ l.id if l.carteira else 'a' ~ l.id }}" hidden><span class="lm-ck"><i class="fas fa-check"></i></span>{% endif %}
   <div class="tx-c-top"><span class="tx-c-num">{{ l.numero_cliente or '—' }}</span><span class="tx-c-nome" title="{{ l.nome_razao_social }}">{{ l.nome_razao_social }}</span></div>
   <div class="tx-c-meio"><div><div class="tx-c-val">{{ l.valor_total | float | format_currency }}</div>
@@ -352,7 +360,7 @@
     {% macro cartao_pedido(f) %}
       {% set falta = (f.total | float) - (f.valor_pago | float) %}
       {% set cls = {'PAGO': 'tx-ok', 'CANCELADO': 'tx-perd', 'PAGO_PARCIAL': 'tx-venc'}.get(f.status, 'tx-fut') %}
-      <div class="tx-c {{ cls }} lm-ped" data-quem="{{ f.usuario_nome or '' }}" data-busca="{{ f.usuario_nome }} {{ f.id }}">
+      <div class="tx-c {{ cls }} lm-ped" data-quem="{{ f.usuario_nome or '' }}" data-dt="{{ f.criado_em.date().isoformat() if f.criado_em else '' }}" data-busca="{{ f.usuario_nome }} {{ f.id }}">
         <div class="tx-c-top"><span class="tx-c-num">nº {{ f.id }}</span><span class="tx-c-nome" title="{{ f.usuario_nome }}">{{ f.usuario_nome }}</span></div>
         <div class="tx-c-meio"><div><div class="tx-c-val">{{ f.total | float | format_currency }}</div>
           <div class="tx-c-desc">{{ f.qtd_itens }} comiss{{ 'ões' if f.qtd_itens != 1 else 'ão' }} · pedido {{ f.criado_em.strftime('%d/%m/%Y') if f.criado_em else '' }}</div></div>
@@ -372,8 +380,13 @@
     <div class="tx-faixa"><div class="lm-sec" style="margin:0; flex:1">Pedidos a pagar <small>{{ ped_abertos|length }} pedido{{ 's' if ped_abertos|length != 1 }}</small></div>
       <div class="tx-busca"><i class="fas fa-magnifying-glass"></i><input type="search" placeholder="Quem pediu ou nº do pedido"></div></div>
     {% set pq = {} %}{% for f in pedidos %}{% set _ = pq.update({(f.usuario_nome or ''): pq.get(f.usuario_nome or '', 0) + 1}) %}{% endfor %}
-    {% if pq|length > 1 %}<div class="lm-filtros"><div class="lm-fg" data-g="quem"><em>Quem pediu</em><button type="button" class="tx-f on" data-v="">Todos <b>{{ pedidos|length }}</b></button>
-      {% for nome, qt in pq|dictsort %}<button type="button" class="tx-f" data-v="{{ nome }}">{{ nome.split()[0] if nome else '—' }} <b>{{ qt }}</b></button>{% endfor %}</div></div>{% endif %}
+    {% if pedidos %}<div class="lm-filtros"><div class="lm-fg lm-fdt" data-g="dt"><em>Pedido</em><button type="button" class="tx-f on" data-v="">Todos</button>
+      <button type="button" class="tx-f" data-v="sem">Esta semana <b></b></button><button type="button" class="tx-f" data-v="mes">Este mês <b></b></button>
+      <button type="button" class="tx-f" data-v="prox">Mês que vem <b></b></button><button type="button" class="tx-f" data-v="ant">Mês passado <b></b></button>
+      <button type="button" class="tx-f" data-v="per"><i class="fas fa-calendar-days"></i> Período</button>
+      <span class="lm-per" hidden><input type="date" class="lm-de" title="de"> até <input type="date" class="lm-ate" title="até"></span></div>
+      {% if pq|length > 1 %}<div class="lm-fg" data-g="quem"><em>Quem pediu</em><button type="button" class="tx-f on" data-v="">Todos <b>{{ pedidos|length }}</b></button>
+      {% for nome, qt in pq|dictsort %}<button type="button" class="tx-f" data-v="{{ nome }}">{{ nome.split()[0] if nome else '—' }} <b>{{ qt }}</b></button>{% endfor %}</div>{% endif %}</div>{% endif %}
     {% if ped_abertos %}<div class="tx-grade">{% for f in ped_abertos %}{{ cartao_pedido(f) }}{% endfor %}</div>
     {% else %}<div class="tx-vazio"><i class="fas fa-mug-hot"></i>Nenhum pedido de comissão esperando pagamento.</div>{% endif %}
     {% if ped_fechados %}
@@ -609,15 +622,39 @@
   });
   function semAc(s) { return String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase(); }
   // 18/11/2026: a busca e os filtros (cobrança, parcelados, quem pediu) valem juntos
+  // 18/11/2026 — Anderson: "Falta o filtro de datas" (vencimento do título; mensalidade pelo mês; pedido pela data)
+  function iso(d) { return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
+  function faixa(v, fg) {
+    var h = new Date(); h.setHours(0, 0, 0, 0);
+    if (v === 'sem') { var a = new Date(h); a.setDate(h.getDate() - ((h.getDay() + 6) % 7)); var b = new Date(a); b.setDate(a.getDate() + 6); return [iso(a), iso(b)]; }
+    if (v === 'mes') return [iso(new Date(h.getFullYear(), h.getMonth(), 1)), iso(new Date(h.getFullYear(), h.getMonth() + 1, 0))];
+    if (v === 'prox') return [iso(new Date(h.getFullYear(), h.getMonth() + 1, 1)), iso(new Date(h.getFullYear(), h.getMonth() + 2, 0))];
+    if (v === 'ant') return [iso(new Date(h.getFullYear(), h.getMonth() - 1, 1)), iso(new Date(h.getFullYear(), h.getMonth(), 0))];
+    if (v === 'per' && fg) return [fg.querySelector('.lm-de').value || '0000-00-00', fg.querySelector('.lm-ate').value || '9999-99-99'];
+    return null;
+  }
+  function naFaixa(c, f) { if (!f || !('dt' in c.dataset)) return true; var d = c.dataset.dt || ''; return !!d && d >= f[0] && d <= f[1]; }
+  // conta quantos cartões há em cada período e esconde o que está vazio
+  document.querySelectorAll('.lm-fdt').forEach(function (fg) {
+    var cs = fg.closest('.tx-painel').querySelectorAll('.tx-c[data-dt]');
+    fg.querySelectorAll('.tx-f[data-v]').forEach(function (b) {
+      var v = b.dataset.v; if (!v || v === 'per') return;
+      var f = faixa(v), n = [].filter.call(cs, function (c) { return naFaixa(c, f); }).length;
+      b.querySelector('b').textContent = n; b.classList.toggle('zero', !n);
+    });
+    fg.querySelectorAll('.lm-per input').forEach(function (i) { i.addEventListener('change', function () { lmFiltrar(fg.closest('.tx-painel')); }); });
+  });
   function lmFiltrar(pn) {
     var inp = pn.querySelector('.tx-busca input'), q = inp ? semAc(inp.value.trim()) : '';
+    var fdt = pn.querySelector('.lm-fdt'), on = fdt && fdt.querySelector('.tx-f.on'), fx = on ? faixa(on.dataset.v, fdt) : null;
+    if (fdt) fdt.querySelector('.lm-per').hidden = !(on && on.dataset.v === 'per');
     var g = {}; pn.querySelectorAll('.lm-fg').forEach(function (x) { var on = x.querySelector('.tx-f.on'); g[x.dataset.g] = on ? on.dataset.v : ''; });
     pn.querySelectorAll('.tx-grade').forEach(function (gr) {
       var vis = 0;
       gr.querySelectorAll('.tx-c[data-busca]').forEach(function (c) {
         var ok = (!q || semAc(c.dataset.busca).indexOf(q) >= 0)
-          && (!g.cc || (g.cc === 'P' ? c.dataset.parc === '1' : c.dataset.cc === g.cc))
-          && (!g.quem || c.dataset.quem === g.quem);
+          && (!g.cc || !('cc' in c.dataset) || (g.cc === 'P' ? c.dataset.parc === '1' : c.dataset.cc === g.cc))
+          && (!g.quem || !('quem' in c.dataset) || c.dataset.quem === g.quem) && naFaixa(c, fx);
         c.style.display = ok ? '' : 'none'; if (ok) vis++;
       });
       var nada = gr.nextElementSibling;
