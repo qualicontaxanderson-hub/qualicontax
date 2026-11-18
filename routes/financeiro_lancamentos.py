@@ -133,8 +133,9 @@ def lancamentos():
         l['como'] = _como(l)
         l['situacao_com'] = FinLancamento.situacao_comissao(l)
         (grupos[l['fase']] if l['fase'] else fora).append(l)
-    for l in grupos['apr']:      # quanto a comissão dá se aprovar como foi pedida
+    for l in grupos['apr']:      # quanto a comissão dá se aprovar como foi pedida (e se o serviço é travado)
         l['com_prev'] = float(FinLancamento.comissao_calculada(l)[1])
+        l['com_trava'] = FinLancamento.servico_travado(l['servico_id'])
     soma = lambda ls: sum(float(x['valor_total'] or 0) for x in ls)
     meus_com = [l for l in todos if l.get('comissao_status') in ('LIBERADA', 'FECHADA', 'PAGA', 'AGUARDANDO')
                 and (aprov is False or l['lancado_por'] == current_user.id)]
@@ -356,7 +357,8 @@ def lancamento_novo():
                                   vencimento=_data(f.get('vencimento')) if destino == 'AVULSO' else None,
                                   observacao=(f.get('observacao') or '').strip() or None, competencia=comp,
                                   com_nota=None if destino == 'MENSAL' else (como == 'BOLETO_NOTA'),
-                                  comissao_tipo=f.get('comissao_tipo') or 'PADRAO', comissao_valor=f.get('comissao_valor') or None)
+                                  comissao_tipo='SEM' if FinLancamento.servico_travado(servico_id) else (f.get('comissao_tipo') or 'PADRAO'),
+                                  comissao_valor=None if FinLancamento.servico_travado(servico_id) else (f.get('comissao_valor') or None))
         l = FinLancamento.get(lid)
         registrar('escrita.lancou_servico', 'financeiro', tabela='fin_lancamentos', registro_id=lid,
                   depois={'empresa': l['nome_razao_social'], 'servico': l['servico_nome'], 'valor': str(l['valor_total']),

@@ -76,7 +76,7 @@
       <span class="tx-aba-sub">recebem comissão de serviço · {{ n_carteira }} empresa{{ 's' if n_carteira != 1 }} em carteira de mensalidade</span></span></button>
     <button type="button" class="tx-aba tx-a-ser{{ ' on' if aba == 'servicos' }}" data-p="servicos"><span class="tx-aba-ico"><i class="fas fa-briefcase"></i></span>
       <span class="tx-aba-txt"><span class="tx-aba-lbl">Serviços</span><span class="tx-aba-val">{{ servicos|length }} serviços</span>
-      <span class="tx-aba-sub">{{ n_serv_regra - n_serv_sem }} com comissão própria · {{ n_serv_sem }} sem comissão · o resto segue o padrão da pessoa</span></span></button>
+      <span class="tx-aba-sub">{{ n_serv_regra - n_serv_sem }} com comissão própria · {{ n_serv_sem }} travado{{ 's' if n_serv_sem != 1 }} (nunca paga) · o resto segue o padrão da pessoa</span></span></button>
   </div>
 
   {# ── QUEM RECEBE ── #}
@@ -129,12 +129,12 @@
   {# ── SERVIÇOS ── #}
   <div class="tx-painel{{ ' on' if aba == 'servicos' }}" data-p="servicos">
     <div class="rg-ajuda"><i class="fas fa-circle-info" style="color:#0f766e"></i><span><b>Segue o padrão da pessoa</b> = vale o % de quem lançou (ex.: 10%). <b>% do serviço</b> ou <b>R$ fixo</b> = este serviço tem comissão própria, para todos que recebem.
-      <b>Sem comissão</b> = ninguém ganha (taxa que só repassamos: Junta Comercial, cartório, urgência).</span></div>
+      <b><i class="fas fa-lock"></i> Nunca</b> = trava: ninguém recebe comissão neste serviço, nem pedindo outro %, nem quem aprova consegue dar (honorário mensal, 13º, taxas da Junta e de cartório). A comissão da <b>carteira de mensalidade</b> (Guilherme) é separada e não muda.</span></div>
     <div class="rg-faixa">
       <div class="tx-filtros" id="rgFil"><button type="button" class="tx-f on" data-v="">Todos <b>{{ servicos|length }}</b></button>
         <button type="button" class="tx-f" data-v="acordo">Seguem a pessoa <b>{{ servicos|length - n_serv_regra }}</b></button>
         <button type="button" class="tx-f" data-v="propria">Comissão própria <b>{{ n_serv_regra - n_serv_sem }}</b></button>
-        <button type="button" class="tx-f" data-v="SEM">Sem comissão <b>{{ n_serv_sem }}</b></button></div>
+        <button type="button" class="tx-f" data-v="SEM"><i class="fas fa-lock" style="font-size:10px"></i> Nunca pagam <b>{{ n_serv_sem }}</b></button></div>
       <div class="tx-busca"><i class="fas fa-magnifying-glass"></i><input type="search" placeholder="Buscar serviço" data-busca="servicos"></div>
     </div>
     <div class="rg-grade">
@@ -143,15 +143,15 @@
       <form class="rg-c" id="s{{ s.id }}" method="POST" action="{{ url_for('financeiro.servico_comissao') }}" data-b="{{ s.nome }}" data-t="{{ t or 'acordo' }}">
         <input type="hidden" name="servico_id" value="{{ s.id }}"><input type="hidden" name="volta" value="regras">
         <div class="rg-sv">
-          <div class="rg-sv-top"><i class="ic fas {{ {'PCT': 'fa-percent rg-t-pct', 'FIXO': 'fa-coins rg-t-fixo', 'SEM': 'fa-ban rg-t-sem'}.get(t, 'fa-user-check rg-t-acordo') }}"></i>
+          <div class="rg-sv-top"><i class="ic fas {{ {'PCT': 'fa-percent rg-t-pct', 'FIXO': 'fa-coins rg-t-fixo', 'SEM': 'fa-lock rg-t-sem'}.get(t, 'fa-user-check rg-t-acordo') }}"></i>
             <div><b>{{ s.nome }}</b><small>{% if s.valor_padrao %}valor sugerido {{ s.valor_padrao | float | format_currency }}{% else %}sem valor sugerido{% endif %}</small></div>
-            <span class="rg-tag {{ {'PCT': 'rg-t-pct', 'FIXO': 'rg-t-fixo', 'SEM': 'rg-t-sem'}.get(t, 'rg-t-acordo') }}">{{ {'PCT': ('%g%%' % (s.comissao_valor | float)) if s.comissao_valor else '%', 'FIXO': (s.comissao_valor | float | format_currency) if s.comissao_valor else 'fixo', 'SEM': 'sem comissão'}.get(t, 'padrão da pessoa') }}</span></div>
+            <span class="rg-tag {{ {'PCT': 'rg-t-pct', 'FIXO': 'rg-t-fixo', 'SEM': 'rg-t-sem'}.get(t, 'rg-t-acordo') }}">{{ {'PCT': ('%g%%' % (s.comissao_valor | float)) if s.comissao_valor else '%', 'FIXO': (s.comissao_valor | float | format_currency) if s.comissao_valor else 'fixo', 'SEM': 'nunca paga · travado'}.get(t, 'padrão da pessoa') }}</span></div>
           <div class="rg-lin">
             <span class="rg-seg">
               <label><input type="radio" name="tipo" value=""{{ ' checked' if not t }} onchange="rgTipo(this)"><span>Padrão da pessoa</span></label>
               <label><input type="radio" name="tipo" value="PCT"{{ ' checked' if t == 'PCT' }} onchange="rgTipo(this)"><span>%</span></label>
               <label><input type="radio" name="tipo" value="FIXO"{{ ' checked' if t == 'FIXO' }} onchange="rgTipo(this)"><span>R$</span></label>
-              <label><input type="radio" name="tipo" value="SEM"{{ ' checked' if t == 'SEM' }} onchange="rgTipo(this)"><span>Sem</span></label></span>
+              <label title="Trava: ninguém recebe comissão neste serviço, nem pedindo, nem aprovando"><input type="radio" name="tipo" value="SEM"{{ ' checked' if t == 'SEM' }} onchange="rgTipo(this)"><span><i class="fas fa-lock" style="font-size:10px"></i> Nunca</span></label></span>
             <input class="rg-in" name="valor" inputmode="decimal" value="{{ (('%g' % (s.comissao_valor | float)) | replace('.', ',')) if s.comissao_valor else '' }}" placeholder="{{ '%' if t != 'FIXO' else 'R$' }}"{{ ' hidden' if t not in ('PCT', 'FIXO') }}>
             <button class="rg-ok" style="margin-left:auto"><i class="fas fa-check"></i> Salvar</button>
           </div>

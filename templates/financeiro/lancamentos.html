@@ -116,6 +116,7 @@
 .ns-seg { display:inline-flex; background:#eef4f0; border-radius:11px; padding:3px; gap:2px; flex-wrap:wrap; }
 .ns-seg button { border:0; background:none; font:inherit; font-size:12.5px; font-weight:700; color:#475569; padding:6px 11px; border-radius:8px; cursor:pointer; }
 .ns-seg button.on { background:#fff; color:#0f3d2e; box-shadow:0 1px 4px rgba(0,0,0,.08); }
+.ns-seg button:disabled { opacity:.35; cursor:not-allowed; } .ns-aviso[hidden] { display:none; }
 .ns-com { display:flex; gap:12px; align-items:center; flex-wrap:wrap; } .ns-com .ns-in { max-width:170px; }
 .ns-res div { display:flex; justify-content:space-between; gap:10px; font-size:13px; padding:5px 0; border-bottom:1px solid #f1f5f4; }
 .ns-res div span { color:#64748b; } .ns-res div b { color:#0f172a; text-align:right; }
@@ -320,6 +321,7 @@
     <section class="ns-b" id="nsComBox"{{ ' hidden' if aprov }}><div class="ns-h"><i class="fas fa-hand-holding-dollar"></i> Sua comissão <em id="nsComPad"></em></div>
       <div class="ns-com"><div class="ns-seg" id="nsSeg"><button type="button" data-v="PADRAO" class="on">Padrão</button><button type="button" data-v="PCT">Outro %</button><button type="button" data-v="FIXO">Valor fixo</button><button type="button" data-v="SEM">Sem comissão</button></div>
         <input class="ns-in" id="nsCv" name="comissao_valor" inputmode="decimal" placeholder="%" hidden><b id="nsCr" style="color:#6d28d9"></b></div>
+      <div class="ns-aviso" id="nsTrava" hidden style="margin-top:10px; background:#fef2f2; border-color:#fecaca; color:#991b1b"><i class="fas fa-lock"></i><span>Este serviço <b>nunca paga comissão</b> (trava das Regras de comissão).</span></div>
       <div class="ns-aviso" style="margin-top:10px"><i class="fas fa-circle-info"></i><span>A comissão é liberada quando o cliente pagar. Quem aprova pode ajustar; vale o valor aprovado. Taxa que só repassamos (ex.: Junta Comercial) não tem comissão.</span></div></section>
     <section class="ns-b"><div class="ns-h"><i class="fas fa-comment"></i> {{ 'Observação' if aprov else 'Observação para quem aprova' }} <em>opcional</em></div><input class="ns-in" name="observacao" maxlength="250" placeholder="ex.: combinado com o cliente por telefone"></section>
   </div><aside class="ns-r">
@@ -373,7 +375,7 @@
   var APR = {
     {% for l in grupos.apr %}{{ l.id }}: { cli: {{ l.nome_razao_social | tojson }}, num: {{ (l.numero_cliente or '') | string | tojson }}, serv: {{ (l.descricao or l.servico_nome) | tojson }},
       valor: {{ l.valor_total | float }}, como: {{ l.como | tojson }}, por: {{ l.lancado_por_nome | tojson }}, venc: {{ ((l.vencimento.strftime('%d/%m/%Y')) if l.vencimento else '') | tojson }},
-      pt: {{ (l.comissao_pedida_tipo or 'PADRAO') | tojson }}, pv: {{ (l.comissao_pedida_valor | float) if l.comissao_pedida_valor else 0 }}, prev: {{ l.com_prev | float }},
+      pt: {{ (l.comissao_pedida_tipo or 'PADRAO') | tojson }}, pv: {{ (l.comissao_pedida_valor | float) if l.comissao_pedida_valor else 0 }}, prev: {{ l.com_prev | float }}, trava: {{ 'true' if l.com_trava else 'false' }},
       obs: {{ (l.observacao or '') | tojson }} }{{ ',' if not loop.last }}{% endfor %}
   };
   var URL_APROVAR = {{ url_for('financeiro.lancamento_aprovar', lid=999999) | tojson }}, URL_REPROVAR = {{ url_for('financeiro.lancamento_reprovar', lid=999999) | tojson }},
@@ -435,6 +437,8 @@
     $('apAviso').innerHTML = /Mensalidade/.test(l.como) ? '<i class="fas fa-calendar"></i><span>Entra no boleto da mensalidade: sai junto com o lote do mês.</span>'
                                                         : '<i class="fas fa-bolt"></i><span>Ao aprovar, ' + (/nota/.test(l.como) ? 'a nota e o boleto são emitidos' : 'o boleto é emitido') + ' agora e vão por e-mail ao cliente.</span>';
     $('apCv').value = ''; apSeg('');
+    $('apSeg').querySelectorAll('button').forEach(function (b) { b.disabled = l.trava && b.dataset.v !== 'SEM'; });
+    if (l.trava) { apSeg('SEM'); $('apPedida').innerHTML = '<i class="fas fa-lock"></i> serviço que nunca paga comissão'; }
     $('apFundo').classList.add('on'); document.body.style.overflow = 'hidden';
   };
   window.apFechar = function () { $('apFundo').classList.remove('on'); document.body.style.overflow = ''; };
@@ -529,6 +533,11 @@
         var s = servico();
         if (s) { if (s.valor && !num($('nsValor').value)) $('nsValor').value = brl(s.valor).replace('R$ ', ''); if (!$('nsDesc').value) $('nsDesc').placeholder = s.nome;
                  if (como !== 'MENSAL') setComo(s.nota ? 'BOLETO_NOTA' : 'BOLETO'); }
+        // serviço travado (nunca paga comissão): só "Sem comissão"
+        var trava = !!(s && s.ct === 'SEM');
+        $('nsSeg').querySelectorAll('button').forEach(function (b) { b.disabled = trava && b.dataset.v !== 'SEM'; });
+        $('nsTrava').hidden = !trava;
+        if (trava) setCt('SEM'); else if (ct === 'SEM' && !D.aprovador) setCt('PADRAO');
         resumo();
       }
     });

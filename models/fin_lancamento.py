@@ -221,6 +221,10 @@ class FinLancamento:
         vale o que a pessoa pediu; "padrão" é o acordo dela para o serviço. Sem acordo (não comissionado, ex.: Jabes)
         só ganha se quem aprova der."""
         acordo = FinComissaoAcordo.vigente(l['lancado_por'], l['servico_id'], l['lancado_em'].date() if l.get('lancado_em') else None)
+        if FinLancamento.servico_travado(l['servico_id']):
+            # 17/11/2026 — Anderson: "é bom ter uma trava das que nunca pagamos comissão". Serviço marcado "Nunca"
+            # (honorário mensal, 13º, taxas) não paga comissão de jeito nenhum: nem pedindo, nem aprovando.
+            return acordo, Decimal('0')
         tipo = tipo or l.get('comissao_pedida_tipo') or 'PADRAO'
         if tipo == 'PADRAO' and acordo and not acordo.get('servico_id'):
             # 17/11/2026: o catálogo de serviços tem a comissão padrão do serviço (ex.: taxa da Junta = sem comissão);
@@ -239,6 +243,12 @@ class FinLancamento:
         if tipo == 'FIXO':
             return acordo, _d(valor)
         return acordo, FinComissaoAcordo.calcular(acordo, l['valor_total'])
+
+    @staticmethod
+    def servico_travado(servico_id):
+        """Serviço que NUNCA paga comissão (comissao_tipo = 'SEM' no catálogo)."""
+        s = execute_query('SELECT comissao_tipo FROM nfse_servicos WHERE id = %s', (servico_id,), fetch=True, fetch_one=True) or {}
+        return s.get('comissao_tipo') == 'SEM'
 
     @staticmethod
     def aprovar(lid, aprovado_por, comissao_tipo=None, comissao_valor=None):
