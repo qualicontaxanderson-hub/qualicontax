@@ -105,6 +105,7 @@
 
 <div class="ho-abas fin-abas-claras">
     {% if modo == 'admin' %}
+    <a class="fin-chip" href="{{ url_for('financeiro.honorarios') }}" style="background:#0f3d2e;color:#fff;border-color:#0f3d2e"><i class="fas fa-arrow-left"></i> Cobrança do mês</a>
     <a class="fin-chip {{ 'ativo' if aba == 'com' }}" href="{{ url_for('financeiro.honorarios', aba='com', busca=busca) }}">Com honorários <strong>{{ contratos | length }}</strong></a>
     <a class="fin-chip {{ 'ativo' if aba == 'sem' }}" href="{{ url_for('financeiro.honorarios', aba='sem', busca=busca) }}">Sem honorários <strong>{{ sem_contrato | length }}</strong></a>
     <a class="fin-chip {{ 'ativo' if aba == 'pendentes' }}" href="{{ url_for('financeiro.honorarios', aba='pendentes') }}">Aguardando aprovação <strong>{{ pendentes | length }}</strong></a>
@@ -575,5 +576,9 @@ document.getElementById('ho-form').addEventListener('submit', function (e) {
     document.addEventListener('click', function (e) { if (!sug.contains(e.target) && e.target !== q) sug.style.display = 'none'; });
     document.addEventListener('keydown', function (e) { if (e.key === 'Escape') hoFechar(); });
 })();
+// 18/11/2026: a tela Honorários (cobrança do mês) abre o contrato aqui: ?novo=1 ou ?editar=<id>
+(function () { var q = new URLSearchParams(location.search);
+  if (q.get('novo') && typeof hoNovo === 'function') hoNovo();
+  else if (q.get('editar') && typeof hoEditar === 'function') hoEditar(parseInt(q.get('editar'), 10)); })();
 </script>
 {% endblock %}

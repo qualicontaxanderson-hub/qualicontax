@@ -66,6 +66,22 @@ def contratos_da_competencia(empresa_id, competencia):
             if (c['inicio'] or competencia) <= fim_mes and (not c['fim'] or c['fim'] >= competencia)]
 
 
+def escolhas(empresa_id, competencia):
+    """Escolhas SÓ DESTA competência, empresa por empresa (18/11/2026): banco e nota. NULL = segue a regra do contrato."""
+    try:
+        r = execute_query('SELECT * FROM fin_honorarios_escolhas WHERE empresa_id = %s AND competencia = %s',
+                          (empresa_id, competencia), fetch=True) or []
+    except Exception:
+        r = []
+    return {x['cliente_id']: x for x in r}
+
+
+def regra_banco(contrato):
+    """Banco gravado no contrato (fin_contratos.banco_boleto guarda o id da conta de cobrança) ou None = o padrão."""
+    v = str(contrato.get('banco_boleto') or '').strip()
+    return int(v) if v.isdigit() else None
+
+
 def previa(empresa_id, competencia, so_clientes=None):
     """Linhas da tela: uma por empresa, com itens, total, vencimento e o que já saiu neste lote."""
     lote = FinLoteMensal.get(empresa_id, competencia)
@@ -84,6 +100,7 @@ def previa(empresa_id, competencia, so_clientes=None):
             por_contrato.setdefault(i['contrato_id'], []).append(i)
         for l in FinLancamento.para_o_mensal(empresa_id, competencia):
             por_cliente.setdefault(l['cliente_id'], []).append(l)
+    esc = escolhas(empresa_id, competencia)
     linhas = []
     for c in contratos:
         itens = itens_da_empresa(c, competencia, por_contrato.get(c['id'], []), por_cliente.get(c['cliente_id'], []))
@@ -92,6 +109,18 @@ def previa(empresa_id, competencia, so_clientes=None):
                        'itens': itens, 'total': total, 'vencimento': vencimento_para(c['dia_vencimento'], competencia),
                        'nota': bool(c.get('gerar_nfse')), 'boleto': bool(c.get('gerar_boleto')),
                        'contatos': c.get('n_contatos_fin') or 0, 'feito': feitos.get(c['cliente_id'])})
+        # 18/11/2026 — Anderson: "teremos o Banco Padrão e poderemos decidir emitir por outro caso necessário" e
+        # "temos que ter o controle dos que fazem NF e ter as opções de selecionar para ser regra e/ou desmarcar".
+        # Ordem: escolha deste mês > regra do contrato > padrão.
+        e = esc.get(c['cliente_id']) or {}
+        l = linhas[-1]
+        l['nota_regra'] = l['nota']
+        l['nota_mes'] = e.get('gerar_nfse') is not None and bool(e['gerar_nfse']) != l['nota_regra']
+        if e.get('gerar_nfse') is not None:
+            l['nota'] = bool(e['gerar_nfse'])
+        l['conta_regra'] = regra_banco(c)
+        l['conta_mes'] = e.get('conta_cobranca_id')
+        l['conta_id'] = l['conta_mes'] or l['conta_regra']      # None = o banco padrão
     return lote, linhas
 
 
@@ -181,6 +210,17 @@ def rodar(app, empresa_id, competencia, usuario_id, so_clientes=None):
     cfg = NfseConfig.get(empresa_id)
     if not conta:
         raise ValueError('Não há conta de cobrança ativa.')
+    contas = {}
+
+    def conta_da(linha):
+        """O banco da empresa (escolha do mês ou regra do contrato) se ainda servir para emitir; senão o padrão."""
+        cid = linha.get('conta_id')
+        if not cid or cid == conta['id']:
+            return conta
+        if cid not in contas:
+            c = FinCobrancaConta.get(cid, com_segredos=True)
+            contas[cid] = c if (c and c.get('ativo') and not c.get('so_consulta') and c.get('empresa_id') == empresa_id) else conta
+        return contas[cid]
 
     def alvo():
         _rodando[lote_id] = True
@@ -191,7 +231,7 @@ def rodar(app, empresa_id, competencia, usuario_id, so_clientes=None):
                     if linha['feito'] and linha['feito']['status'] == 'ok':
                         continue
                     linha['competencia'] = competencia
-                    _cobrar(linha, lote_id, usuario_id, conta, cfg, empresa_id)
+                    _cobrar(linha, lote_id, usuario_id, conta_da(linha), cfg, empresa_id)
                 r = execute_query("SELECT COUNT(*) n, COALESCE(SUM(total), 0) t FROM fin_lote_itens WHERE lote_id = %s AND status = 'ok'",
                                   (lote_id,), fetch=True, fetch_one=True)
                 FinLoteMensal.marcar_emitido(lote_id, usuario_id, r['n'], r['t'])

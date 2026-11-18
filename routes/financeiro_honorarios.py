@@ -74,9 +74,40 @@ def _foto(c):
             'itens': ['%s = %s' % (i['descricao'], i['valor']) for i in FinContrato.itens(c['id'])] if c.get('id') else None}
 
 
+ABAS_CONTRATOS = ('com', 'sem', 'pendentes')
+
+
+def _competencia_painel():
+    from models.fin_lancamento import FinLoteMensal
+    from models.fin_contrato import EMPRESA_QUALICONTAX
+    raw = (request.args.get('competencia') or request.form.get('competencia') or '').strip()
+    try:
+        return datetime.strptime(raw, '%Y-%m').date().replace(day=1) if raw else FinLoteMensal.competencia_aberta(EMPRESA_QUALICONTAX)
+    except ValueError:
+        return FinLoteMensal.competencia_aberta(EMPRESA_QUALICONTAX)
+
+
+def _painel():
+    """Honorários + Lote mensal numa tela só (18/11/2026 — etapa 4). Anderson: "capricha muito no layout, quero algo
+    que mostre as cobranças... e qual banco que está vinculado padrão". A lista antiga de contratos continua nas abas
+    com/sem/pendentes (com a caixa de editar)."""
+    from models.fin_lancamento import mes_seguinte
+    from utils import honorarios_painel as HP, lote_mensal
+    from utils.bancos_logo import url as logo_url
+    comp = _competencia_painel()
+    P = HP.painel(comp)
+    ant = date(comp.year - (comp.month == 1), (comp.month - 2) % 12 + 1, 1)
+    bj = {b['id']: {'nome': b['nome'], 'img': logo_url(b['cod']) if b['cod'] else ''} for b in P['bancos']}
+    st = lote_mensal.status(P['lote']['id']) if P['lote'] else None
+    return render_template('financeiro/honorarios_painel.html', painel=P, competencia=comp, resumo=FinContrato.resumo(), bancos_js=bj,
+                           comp_ant=ant, comp_prox=mes_seguinte(comp), status_lote=st, hoje=date.today())
+
+
 @financeiro.route('/financeiro/honorarios')
 @permission_required(PERM)
 def honorarios():
+    if request.args.get('aba') not in ABAS_CONTRATOS and not request.args.get('busca'):
+        return _painel()
     aba = request.args.get('aba', 'com')
     busca = (request.args.get('busca') or '').strip() or None
     contratos = FinContrato.listar(busca=busca)
@@ -273,7 +304,82 @@ def honorarios_encerrar(cid):
     registrar('escrita.encerrou_contrato_honorarios', 'financeiro', tabela='fin_contratos', registro_id=cid,
               antes=_foto(c), depois={'situacao': 'ENCERRADO', 'fim': str(fim), 'empresa': c['nome_razao_social']})
     flash('Contrato de %s encerrado em %s. O 13º sai proporcional aos meses de casa.' % (c['nome_razao_social'], fim.strftime('%d/%m/%Y')), 'success')
-    return redirect(url_for('financeiro.honorarios'))
+    return redirect(url_for('financeiro.honorarios', aba='com'))
+
+
+# ---------------------------------------------------------------------------
+# 18/11/2026 — banco e nota de cada empresa: "só esta cobrança" (fin_honorarios_escolhas) ou "sempre" (no contrato).
+# Anderson: "temos que ter o controle dos que fazem NF e ter as opções de selecionar para ser regra e/ou para desmarcar"
+# ---------------------------------------------------------------------------
+def _contas_emissoras():
+    from utils.honorarios_painel import contas
+    return {c['id']: c for c in contas()}
+
+
+@financeiro.route('/financeiro/honorarios/escolha', methods=['POST'])
+@permission_required('financeiro.lote')
+def honorarios_escolha():
+    from models.fin_contrato import EMPRESA_QUALICONTAX as EMP
+    f = request.form
+    cliente_id = f.get('cliente_id', type=int)
+    campo = f.get('campo')
+    vale = f.get('vale')
+    comp = _competencia_painel()
+    if campo not in ('banco', 'nota') or vale not in ('mes', 'sempre') or not cliente_id:
+        return jsonify({'ok': False, 'erro': 'pedido inválido'}), 400
+    c = next((x for x in (FinContrato.por_cliente(cliente_id) or []) if x['situacao'] == 'ATIVO'), None)
+    if not c:
+        return jsonify({'ok': False, 'erro': 'empresa sem contrato ativo'}), 404
+    nome = execute_query('SELECT nome_razao_social FROM clientes WHERE id = %s', (cliente_id,), fetch=True, fetch_one=True) or {}
+    quando = 'sempre (no contrato)' if vale == 'sempre' else 'só ' + comp.strftime('%m/%Y')
+    if campo == 'banco':
+        contas = _contas_emissoras()
+        conta_id = f.get('valor', type=int)
+        if conta_id not in contas:
+            return jsonify({'ok': False, 'erro': 'banco inválido'}), 400
+        padrao = next((x['id'] for x in contas.values() if x['padrao']), None)
+        regra = int(c['banco_boleto']) if str(c.get('banco_boleto') or '').isdigit() else None
+        if vale == 'sempre':
+            novo = None if conta_id == padrao else conta_id          # escolher o padrão = seguir o padrão
+            execute_query('UPDATE fin_contratos SET banco_boleto = %s WHERE id = %s', (str(novo) if novo else None, c['id']), fetch=False)
+            mes = None
+        else:
+            mes = None if conta_id == (regra or padrao) else conta_id
+        depois = {'banco': contas[conta_id]['nome'], 'vale': quando}
+        col = 'conta_cobranca_id'
+    else:
+        nota = f.get('valor') == '1'
+        if vale == 'sempre':
+            FinContrato.atualizar(c['id'], {'gerar_nfse': 1 if nota else 0})
+            mes = None
+        else:
+            mes = None if nota == bool(c.get('gerar_nfse')) else (1 if nota else 0)
+        depois = {'nota': 'nota + boleto' if nota else 'só boleto', 'vale': quando}
+        col = 'gerar_nfse'
+    # a escolha do mês: grava/limpa só o campo pedido ("sempre" limpa a do mês, que perderia o sentido)
+    execute_query(
+        f"""INSERT INTO fin_honorarios_escolhas (empresa_id, competencia, cliente_id, {col}, usuario_id) VALUES (%s, %s, %s, %s, %s)
+            ON DUPLICATE KEY UPDATE {col} = VALUES({col}), usuario_id = VALUES(usuario_id)""",
+        (EMP, comp, cliente_id, mes, current_user.id), fetch=False)
+    depois['empresa'] = nome.get('nome_razao_social') or cliente_id
+    registrar('escrita.honorarios_escolha', 'financeiro', tabela='fin_contratos', registro_id=c['id'], depois=depois)
+    return jsonify({'ok': True})
+
+
+@financeiro.route('/financeiro/honorarios/banco-padrao', methods=['POST'])
+@permission_required('financeiro.lote')
+def honorarios_banco_padrao():
+    from models.fin_contrato import EMPRESA_QUALICONTAX as EMP
+    conta_id = request.form.get('conta_id', type=int)
+    contas = _contas_emissoras()
+    if conta_id not in contas:
+        flash('Banco inválido.', 'danger')
+    else:
+        execute_query('UPDATE fin_cobranca_contas SET padrao = (id = %s) WHERE empresa_id = %s', (conta_id, EMP), fetch=False)
+        registrar('escrita.banco_padrao_cobranca', 'financeiro', tabela='fin_cobranca_contas', registro_id=conta_id,
+                  depois={'padrao': contas[conta_id]['nome']})
+        flash('%s agora é o banco padrão: as cobranças sem banco escolhido saem por ele.' % contas[conta_id]['nome'], 'success')
+    return redirect(url_for('financeiro.honorarios', competencia=request.form.get('competencia') or None))
 
 
 # ---------------------------------------------------------------------------

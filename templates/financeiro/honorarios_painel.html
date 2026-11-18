@@ -1,0 +1,436 @@
+{% extends "base.html" %}
+
+{% block title %}Honorários - Financeiro - Qualicontax{% endblock %}
+
+{% block extra_css %}
+{# 18/11/2026 — HONORÁRIOS + LOTE MENSAL numa tela só (etapa 4). Anderson: "capricha muito no layout, quero algo que mostre
+   as cobranças... e qual banco que está vinculado padrão, por que teremos o Banco Padrão e poderemos decidir emitir por
+   outro caso necessário!!". Molde: LANÇAMENTOS/COBRANÇAS (quadros coloridos em cima, cartões embaixo). #}
+{% include 'financeiro/_lanc_tx_css.html' %}
+<style>
+.tx-a-ctr { --cor:#7c3aed; --cor-e:#5b21b6; }
+.tx-painel[data-p="emitir"] { --sec:#f97316; --sec-e:#c2410c; --sec-f:#fff4ec; --sec-b:#fed7b5; }
+.tx-painel[data-p="cobradas"] { --sec:#2563eb; --sec-e:#1e40af; --sec-f:#eff4ff; --sec-b:#bfdbfe; }
+.tx-painel[data-p="pagas"] { --sec:#16a34a; --sec-e:#166534; --sec-f:#ecfdf3; --sec-b:#bbf7d0; }
+.tx-painel[data-p="atrasadas"] { --sec:#dc2626; --sec-e:#991b1b; --sec-f:#fef1f1; --sec-b:#fecaca; }
+.tx-painel[data-p="contratos"] { --sec:#7c3aed; --sec-e:#5b21b6; --sec-f:#f5f3ff; --sec-b:#ddd6fe; }
+.hp-acoes { display:flex; gap:10px; flex-wrap:wrap; justify-content:flex-end; align-items:center; }
+.hp-btn { display:inline-flex; align-items:center; gap:9px; padding:11px 18px; border-radius:14px; border:0; background:#fff; color:#0f3d2e; font:inherit;
+  font-weight:800; font-size:14.5px; box-shadow:0 10px 26px rgba(0,0,0,.18); cursor:pointer; text-decoration:none; }
+.hp-btn i { color:#16a34a; }
+.hp-btn2 { background:rgba(255,255,255,.14); color:#fff; box-shadow:none; border:1px solid rgba(255,255,255,.35); font-size:13.5px; padding:10px 14px; }
+.hp-btn2 i { color:#bbf7d0; }
+.hp-comp { display:inline-flex; align-items:center; gap:4px; background:rgba(255,255,255,.14); border:1px solid rgba(255,255,255,.35); border-radius:14px; padding:4px; color:#fff; }
+.hp-comp a { width:34px; height:34px; display:inline-flex; align-items:center; justify-content:center; color:#fff; text-decoration:none; border-radius:10px; }
+.hp-comp a:hover { background:rgba(255,255,255,.18); }
+.hp-comp span { padding:0 8px; line-height:1.1; text-align:center; } .hp-comp small { display:block; font-size:10px; font-weight:800; letter-spacing:.08em; text-transform:uppercase; opacity:.8; }
+.hp-comp b { font-size:16px; }
+
+/* faixa dos bancos */
+.hp-bancos { display:flex; align-items:stretch; gap:12px; margin:0 0 20px; flex-wrap:wrap; }
+.hp-bancos-tit { display:flex; flex-direction:column; justify-content:center; padding-right:6px; min-width:150px; }
+.hp-bancos-tit b { font-size:12px; font-weight:800; letter-spacing:.07em; text-transform:uppercase; color:#0f3d2e; }
+.hp-bancos-tit small { font-size:12px; color:#64748b; line-height:1.35; margin-top:2px; }
+.hp-banco { position:relative; flex:1; min-width:220px; max-width:360px; display:flex; align-items:center; gap:12px; background:#fff; border:1.5px solid #e6eeea; border-radius:16px;
+  padding:12px 14px; cursor:pointer; font:inherit; text-align:left; transition:all .15s; }
+.hp-banco:hover { border-color:#bbd8c7; box-shadow:0 10px 24px rgba(15,61,46,.08); }
+.hp-banco img { border-radius:10px; flex-shrink:0; }
+.hp-banco .tx { flex:1; min-width:0; line-height:1.2; } .hp-banco .tx b { font-size:15.5px; color:#0f172a; display:block; }
+.hp-banco .tx small { font-size:12px; color:#64748b; }
+.hp-banco .vl { text-align:right; } .hp-banco .vl b { display:block; font-size:15px; color:#0f172a; font-variant-numeric:tabular-nums; } .hp-banco .vl small { font-size:11.5px; color:#64748b; }
+.hp-banco.padrao { border-color:#16a34a; background:linear-gradient(135deg,#f0fdf4,#fff 70%); box-shadow:0 0 0 3px #dcfce7; }
+.hp-tag { display:inline-flex; align-items:center; gap:4px; font-size:10px; font-weight:800; letter-spacing:.05em; text-transform:uppercase; border-radius:99px; padding:2px 8px; vertical-align:2px; margin-left:4px; }
+.hp-tag.pd { background:#16a34a; color:#fff; } .hp-tag.out { background:#fff7ed; color:#c2410c; border:1px solid #fed7aa; }
+.hp-banco .mk { position:absolute; right:10px; bottom:-9px; font-size:11px; font-weight:800; color:#15803d; background:#fff; border:1px solid #bbf7d0; border-radius:99px; padding:1px 9px; text-decoration:none; }
+.hp-banco.on { border-color:#0f3d2e; box-shadow:0 0 0 3px #d1fae5; }
+
+/* cartão da empresa */
+.hp-grade { display:grid; grid-template-columns:repeat(auto-fill, minmax(330px, 1fr)); gap:12px; margin-bottom:22px; }
+.hp-c { padding-bottom:12px; }
+.hp-c .tx-c-meio { margin-top:10px; align-items:flex-start; }
+.hp-venc { text-align:right; font-size:11.5px; color:#64748b; line-height:1.3; } .hp-venc b { display:block; font-size:13px; color:#0f172a; }
+.hp-itens { margin-top:9px; display:flex; flex-direction:column; gap:3px; }
+.hp-it { display:flex; justify-content:space-between; gap:10px; font-size:12px; color:#475569; }
+.hp-it span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0; }
+.hp-it b { font-weight:700; color:#334155; font-variant-numeric:tabular-nums; white-space:nowrap; }
+.hp-it.dec span { color:#7c3aed; } .hp-it.lan span { color:#0369a1; }
+.hp-it.lan span i, .hp-it.dec span i { font-size:10px; margin-right:3px; }
+.hp-linha { display:flex; align-items:center; gap:6px; flex-wrap:wrap; margin-top:10px; }
+.hp-bco { display:inline-flex; align-items:center; gap:6px; border:1px solid #e2e8f0; background:#fff; border-radius:99px; padding:3px 9px 3px 4px; font:inherit; font-size:11.5px;
+  font-weight:800; color:#334155; cursor:pointer; }
+.hp-bco img { border-radius:99px; } .hp-bco i.fa-pen { font-size:9px; color:#94a3b8; }
+.hp-bco.trocado { border-color:#fdba74; background:#fff7ed; color:#9a3412; }
+.hp-chip { display:inline-flex; align-items:center; gap:5px; font-size:11px; font-weight:700; color:#64748b; background:#f1f5f4; border-radius:99px; padding:3px 9px; }
+.hp-chip.semct { background:#fef2f2; color:#b91c1c; }
+.hp-meses { display:grid; grid-template-columns:repeat(6, minmax(0,1fr)); gap:4px; margin-top:11px; padding-top:9px; border-top:1px dashed #e2e8f0; }
+.hp-m { text-align:center; font-size:10px; font-weight:700; color:#94a3b8; text-transform:uppercase; letter-spacing:.03em; }
+.hp-m i { display:block; height:7px; border-radius:99px; margin-top:3px; background:#e2e8f0; }
+.hp-m.pago i { background:#22c55e; } .hp-m.aberto i { background:#3b82f6; } .hp-m.atrasado i { background:#ef4444; } .hp-m.parcial i { background:repeating-linear-gradient(90deg,#22c55e 0 6px,#ef4444 6px 12px); }
+.hp-m.atual { color:#0f3d2e; } .hp-m.atual i { box-shadow:0 0 0 2px #fff, 0 0 0 3.5px #0f3d2e; }
+.hp-m.sem.atual i { background:repeating-linear-gradient(90deg,#fdba74 0 5px,#fed7aa 5px 10px); }
+.hp-deve { margin-top:9px; padding:7px 9px; border-radius:9px; background:#fef2f2; border:1px solid #fecaca; color:#991b1b; font-size:12px; line-height:1.35; }
+.hp-err { margin-top:9px; padding:7px 9px; border-radius:9px; background:#fffbeb; border:1px solid #fde68a; color:#92400e; font-size:12px; line-height:1.35; }
+.hp-ac { display:flex; gap:6px; margin-top:10px; }
+.hp-ac button, .hp-ac a { flex:1; height:32px; border-radius:9px; font:inherit; font-size:12px; font-weight:800; border:1px solid #e2e8f0; background:#fff; color:#475569;
+  display:inline-flex; align-items:center; justify-content:center; gap:6px; cursor:pointer; text-decoration:none; }
+.hp-ac .cob { color:#1d4ed8; border-color:#bfdbfe; background:#eff6ff; }
+.hp-ck { position:absolute; right:12px; top:44px; width:24px; height:24px; border-radius:8px; border:2px solid #fdba74; background:#fff; display:inline-flex;
+  align-items:center; justify-content:center; color:#fff; font-size:12px; }
+.hp-c.marcavel { cursor:pointer; } .hp-c.marcado { box-shadow:0 0 0 2px #f97316, 0 10px 24px rgba(249,115,22,.15); }
+.hp-c.marcado .hp-ck { background:#f97316; border-color:#f97316; }
+.hp-c.marcavel .tx-c-meio { padding-right:34px; }
+.hp-legenda { display:flex; gap:14px; flex-wrap:wrap; font-size:12px; color:#64748b; margin:-6px 2px 14px; }
+.hp-legenda span { display:inline-flex; align-items:center; gap:6px; } .hp-legenda i { width:18px; height:7px; border-radius:99px; display:inline-block; }
+.hp-marcar { display:inline-flex; align-items:center; gap:8px; font-size:13px; font-weight:700; color:#0f3d2e; cursor:pointer; }
+.hp-barra { position:sticky; bottom:14px; z-index:5; margin:6px 0 22px; display:flex; align-items:center; gap:14px; background:linear-gradient(135deg,#f97316,#c2410c); color:#fff;
+  border-radius:16px; padding:12px 14px 12px 20px; box-shadow:0 16px 36px rgba(194,65,12,.35); flex-wrap:wrap; margin-right:170px; }
+.hp-barra > span { flex:1; font-size:13.5px; min-width:220px; } .hp-barra > span b { font-size:18px; }
+.hp-barra .pb { display:inline-flex; align-items:center; gap:6px; background:rgba(255,255,255,.18); border-radius:99px; padding:3px 10px 3px 4px; font-weight:800; font-size:12.5px; margin-left:6px; }
+.hp-barra .pb img { border-radius:99px; background:#fff; }
+.hp-barra button { border:0; background:#fff; color:#c2410c; font:inherit; font-weight:800; border-radius:11px; padding:11px 18px; display:inline-flex; gap:8px; align-items:center; cursor:pointer; font-size:14px; }
+.hp-mais { display:flex; gap:8px; flex-wrap:wrap; margin:-8px 0 18px; }
+.hp-mais a { display:inline-flex; align-items:center; gap:7px; font-size:12.5px; font-weight:700; color:#475569; background:#fff; border:1px solid #e6eeea; border-radius:99px; padding:6px 13px; text-decoration:none; }
+.hp-mais a b { color:#0f3d2e; } .hp-mais a i { color:#16a34a; } .hp-mais a.al { border-color:#fde68a; background:#fffbeb; color:#92400e; } .hp-mais a.al i { color:#d97706; }
+/* caixa: escolher o banco */
+.hp-fundo { position:fixed; inset:0; z-index:1200; background:rgba(15,23,42,.5); backdrop-filter:blur(2px); display:none; align-items:flex-start; justify-content:center; padding-top:8vh; }
+.hp-fundo.on { display:flex; }
+.hp-cx { width:min(560px, calc(100vw - 24px)); background:#f6faf7; border-radius:22px; box-shadow:0 30px 80px rgba(2,44,22,.35); overflow:hidden; }
+.hp-cx-cab { padding:18px 22px; color:#fff; background:radial-gradient(120% 140% at 0% 0%, #22c55e 0%, #15803d 45%, #0f3d2e 100%); display:flex; gap:12px; align-items:center; }
+.hp-cx-cab b { display:block; font-size:18px; } .hp-cx-cab span { font-size:13px; opacity:.9; } .hp-cx-cab > div { flex:1; min-width:0; }
+.hp-cx-cab button { width:36px; height:36px; border-radius:99px; border:0; background:rgba(255,255,255,.18); color:#fff; cursor:pointer; }
+.hp-cx-corpo { padding:16px 20px; display:flex; flex-direction:column; gap:10px; }
+.hp-op { display:flex; align-items:center; gap:12px; background:#fff; border:1.5px solid #e2e8f0; border-radius:14px; padding:11px 14px; cursor:pointer; }
+.hp-op input { display:none; } .hp-op img { border-radius:9px; } .hp-op .tx { flex:1; } .hp-op b { font-size:15px; display:block; } .hp-op small { color:#64748b; font-size:12px; }
+.hp-op.on { border-color:#16a34a; background:#f0fdf4; box-shadow:0 0 0 3px #dcfce7; }
+.hp-seg { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+.hp-seg label { display:block; background:#fff; border:1.5px solid #e2e8f0; border-radius:12px; padding:9px 12px; cursor:pointer; font-size:12.5px; color:#475569; }
+.hp-seg label b { display:block; font-size:13.5px; color:#0f172a; } .hp-seg label.on { border-color:#0f3d2e; box-shadow:0 0 0 3px #d1fae5; }
+.hp-seg input { display:none; }
+.hp-cx-pe { display:flex; justify-content:flex-end; gap:10px; padding:12px 20px 18px; }
+.hp-cx-pe button { font:inherit; font-weight:800; border-radius:12px; padding:10px 18px; cursor:pointer; border:1.5px solid #e2e8f0; background:#fff; color:#334155; }
+.hp-cx-pe .prim { border:0; background:linear-gradient(135deg,#16a34a,#15803d); color:#fff; }
+@media (max-width:900px) {
+  .tx-aba.tx-a-ctr { grid-column:span 2; } .hp-acoes { justify-content:flex-start; } .hp-bancos-tit { min-width:100%; } .hp-banco { max-width:none; min-width:100%; }
+  .hp-grade { grid-template-columns:minmax(0,1fr); }
+  .hp-barra { margin-right:0; bottom:76px; } .hp-barra > span { min-width:100%; } .hp-barra button { flex:1; justify-content:center; }
+  .hp-seg { grid-template-columns:1fr; }
+}
+.hp-bco small, .hp-nf small { font-weight:700; color:#16a34a; font-size:10.5px; }
+.hp-bco.trocado small { color:#c2410c; }
+.hp-bco.mes, .hp-nf.mes { border-style:dashed; border-color:#a78bfa; background:#faf5ff; color:#5b21b6; } .hp-bco.mes small, .hp-nf.mes small { color:#7c3aed; }
+.hp-nf { display:inline-flex; align-items:center; gap:6px; border:1px solid #bbf7d0; background:#f0fdf4; border-radius:99px; padding:3px 9px; font:inherit; font-size:11.5px;
+  font-weight:800; color:#166534; cursor:pointer; } .hp-nf i.fa-pen { font-size:9px; color:#94a3b8; }
+.hp-nf.sem { border-color:#e2e8f0; background:#f8fafc; color:#475569; } .hp-nf.sem small { color:#64748b; }
+span.hp-bco, span.hp-nf { cursor:default; }
+.hp-sec { flex:1; font-size:11.5px; font-weight:800; letter-spacing:.07em; text-transform:uppercase; color:#475569; }
+.hp-sec small { font-weight:700; letter-spacing:0; text-transform:none; color:#94a3b8; margin-left:6px; }
+.hp-filtros { display:inline-flex; gap:6px; margin-left:auto; flex-wrap:wrap; } .hp-filtros .tx-f i { margin-right:4px; }
+.hp-legenda .dir { margin-left:auto; } .hp-legenda b { color:#334155; }
+.hp-rodando { display:flex; align-items:center; gap:12px; background:#eff6ff; border:1px solid #bfdbfe; color:#1e3a8a; border-radius:14px; padding:12px 16px; margin:0 0 30px; font-size:13.5px; position:relative; z-index:3; }
+.hp-rodando > i { font-size:18px; color:#2563eb; }
+.hp-ic { width:34px; height:34px; border-radius:9px; background:#f0fdf4; color:#16a34a; display:inline-flex; align-items:center; justify-content:center; font-size:16px; }
+.hp-msg { color:#b91c1c; font-size:12.5px; font-weight:700; min-height:14px; }
+#hpOpBanco, #hpOpNota { display:flex; flex-direction:column; gap:10px; } #hpOpBanco[hidden], #hpOpNota[hidden] { display:none; }
+.hp-banco { user-select:none; }
+@media (max-width:900px) { .hp-filtros { margin-left:0; width:100%; } .hp-legenda .dir { margin-left:0; } }
+</style>
+{% endblock %}
+
+{% block content %}
+{% include 'financeiro/_nav_financeiro.html' %}
+{% set P = painel %}
+{% set pode_emitir = pode_rota('financeiro.lote_emitir') %}
+{% set pode_esc = pode_rota('financeiro.honorarios_escolha') %}
+{% macro bco_img(b, tam=22) %}{% if b and b.cod %}{{ logo_banco(b.cod, tam=tam, titulo=b.nome) }}{% endif %}{% endmacro %}
+
+{% macro cartao(l) %}
+{% set f = l.fase %}
+{% set cls = {'emitir': 'tx-venc', 'erro': 'tx-venc', 'cobradas': 'tx-hoje', 'pagas': 'tx-ok', 'atrasadas': 'tx-ina'}.get(f, 'tx-fut') %}
+{% set marca = f in ('emitir', 'erro') and pode_emitir %}
+{% set muda = f in ('emitir', 'erro') and pode_esc %}
+<div class="tx-c hp-c {{ cls }}{{ ' marcavel' if marca }}" data-banco="{{ l.banco.id if l.banco else '' }}" data-nota="{{ 1 if l.nota else 0 }}" data-v="{{ l.total | float }}" data-cli="{{ l.cliente_id }}"
+     data-busca="{{ l.numero or '' }} {{ l.empresa }} {{ l.contrato.nome_fantasia or '' }}"{% if marca %} onclick="hpMarcar(event, this)"{% endif %}>
+  {% if marca %}<input type="checkbox" name="cliente" value="{{ l.cliente_id }}" hidden form="hpForm"><span class="hp-ck"><i class="fas fa-check"></i></span>{% endif %}
+  <div class="tx-c-top"><span class="tx-c-num">{{ l.numero or '—' }}</span><span class="tx-c-nome" title="{{ l.empresa }}">{{ l.empresa }}</span></div>
+  <div class="tx-c-meio">
+    <div><div class="tx-c-val">{{ (l.atual.valor if l.atual else l.total) | float | format_currency }}</div>
+      <div class="tx-c-desc">{% if f == 'emitir' %}a emitir · competência {{ competencia.strftime('%m/%Y') }}{% elif f == 'erro' %}a cobrança não saiu{% elif f == 'pagas' %}pago{% elif f == 'atrasadas' %}em atraso{% else %}emitida · aguardando{% endif %}</div></div>
+    <div class="hp-venc">{{ 'venceu' if f == 'pagas' else 'vence' }}<b>{{ (l.atual.venc if l.atual else l.vencimento).strftime('%d/%m/%Y') }}</b></div>
+  </div>
+  <div class="hp-itens">
+    {% for i in l.itens %}<div class="hp-it{{ ' dec' if i.origem == 'decimo' else (' lan' if i.origem == 'lancamento' else '') }}">
+      <span>{% if i.origem == 'decimo' %}<i class="fas fa-gift"></i>{% elif i.origem == 'lancamento' %}<i class="fas fa-plus"></i>{% endif %}{{ i.nome }}</span><b>{{ i.valor | float | format_currency }}</b></div>{% endfor %}
+  </div>
+  {% if f == 'erro' %}{% set mf = motivo_nfse(l.feito.erro) if motivo_nfse is defined else {} %}<div class="hp-err"><i class="fas fa-triangle-exclamation"></i> {% if mf and mf.texto %}<b>{{ mf.texto }}</b>{% if mf.fazer %}<br>{{ mf.fazer }}{% endif %}{% else %}{{ l.feito.erro or 'A nota ou o boleto não saíram.' }}{% endif %} Corrija e emita de novo.</div>{% endif %}
+  <div class="hp-linha">
+    {% if l.banco %}
+      {% set rot = ('só ' ~ competencia.strftime('%m/%Y')) if l.banco_mes else ('regra' if l.banco_trocado else 'padrão') %}
+      {% if muda %}<button type="button" class="hp-bco{{ ' trocado' if l.banco_trocado }}{{ ' mes' if l.banco_mes }}" onclick="event.stopPropagation(); hpEscolher('banco', this)"
+         data-cli="{{ l.cliente_id }}" data-nome="{{ l.empresa }}" data-atual="{{ l.banco.id }}" title="Clique para trocar o banco desta empresa">
+      {%- else %}<span class="hp-bco{{ ' trocado' if l.banco_trocado }}{{ ' mes' if l.banco_mes }}">{% endif -%}
+        {{ bco_img(l.banco, 18) }} {{ l.banco.nome }} <small>{{ rot }}</small>{% if muda %} <i class="fas fa-pen"></i>{% endif %}
+      {%- if muda %}</button>{% else %}</span>{% endif %}
+    {% endif %}
+    {% set rotn = ('só ' ~ competencia.strftime('%m/%Y')) if l.nota_mes else 'regra' %}
+    {% if muda %}<button type="button" class="hp-nf{{ ' sem' if not l.nota }}{{ ' mes' if l.nota_mes }}" onclick="event.stopPropagation(); hpEscolher('nota', this)"
+       data-cli="{{ l.cliente_id }}" data-nome="{{ l.empresa }}" data-atual="{{ 1 if l.nota else 0 }}" title="Clique para emitir ou não a nota desta empresa">
+    {%- else %}<span class="hp-nf{{ ' sem' if not l.nota }}{{ ' mes' if l.nota_mes }}">{% endif -%}
+      <i class="fas {{ 'fa-file-invoice' if l.nota else 'fa-barcode' }}"></i> {{ 'nota + boleto' if l.nota else 'só boleto' }} <small>{{ rotn }}</small>{% if muda %} <i class="fas fa-pen"></i>{% endif %}
+    {%- if muda %}</button>{% else %}</span>{% endif %}
+    <span class="hp-chip{{ ' semct' if not l.contatos }}" title="Contatos do Financeiro que recebem a cobrança por e-mail"><i class="fas fa-envelope"></i> {{ (l.contatos ~ ' contato' ~ ('s' if l.contatos != 1 else '')) if l.contatos else 'sem contato' }}</span>
+  </div>
+  <div class="hp-meses">{% for m in l.meses %}<span class="hp-m {{ m.status }}{{ ' atual' if loop.last }}" title="vencimento {{ m.mes }}/{{ m.ano }}: {{ {'pago': 'pago', 'aberto': 'a vencer', 'atrasado': 'atrasado', 'parcial': 'pago em parte', 'sem': 'a emitir' if loop.last else 'sem cobrança'}[m.status] }}{% if m.valor %} · {{ m.valor | float | format_currency }}{% endif %}">{{ m.mes }}<i></i></span>{% endfor %}</div>
+  {% if l.atrasos and f != 'atrasadas' %}<div class="hp-deve"><i class="fas fa-clock"></i> Deve {{ l.atrasos | map(attribute='mes') | join(', ') }}: {{ (l.atrasos | sum(attribute='valor') - l.atrasos | sum(attribute='pago')) | float | format_currency }}</div>{% endif %}
+  {% if f == 'atrasadas' %}<div class="hp-deve"><i class="fas fa-clock"></i> {% for x in l.atrasos %}{{ x.mes }}/{{ x.ano }} {{ (x.valor - x.pago) | float | format_currency }}{{ ' · ' if not loop.last }}{% endfor %}</div>{% endif %}
+  <div class="hp-ac">
+    {% set tid = l.atual.id if (l.atual and f != 'atrasadas') else (l.atrasos[-1].id if (f == 'atrasadas' and l.atrasos) else None) %}
+    {% if tid and pode_rota('financeiro.titulo_cobranca') %}<button type="button" class="cob" onclick="event.stopPropagation(); hpCob({{ tid }})"><i class="fas fa-barcode"></i> Cobrança</button>{% endif %}
+    <a href="{{ url_for('financeiro.honorarios', aba='com', editar=l.contrato.id) }}" onclick="event.stopPropagation()"><i class="fas fa-file-contract"></i> Contrato</a>
+  </div>
+</div>
+{% endmacro %}
+
+<div class="tx">
+<div class="ef-hero">
+  <div class="ef-hero-inner ef-hero-head">
+    <div>
+      <h1 class="ef-hero-title">Honorários</h1>
+      <p class="ef-hero-sub">Os contratos mensais e a cobrança de cada mês: honorários, 13º e serviços lançados, numa cobrança por empresa</p>
+    </div>
+    <div class="hp-acoes">
+      <div class="hp-comp"><a href="{{ url_for('financeiro.honorarios', competencia=comp_ant.strftime('%Y-%m')) }}" title="Mês anterior"><i class="fas fa-chevron-left"></i></a>
+        <span><small>Competência</small><b>{{ competencia.strftime('%m/%Y') }}</b></span>
+        <a href="{{ url_for('financeiro.honorarios', competencia=comp_prox.strftime('%Y-%m')) }}" title="Próximo mês"><i class="fas fa-chevron-right"></i></a></div>
+      {% if pode_rota('financeiro.honorarios_reajuste') %}<a class="hp-btn hp-btn2" href="{{ url_for('financeiro.honorarios_reajuste') }}"><i class="fas fa-arrow-trend-up"></i> Reajuste de janeiro</a>{% endif %}
+      {% if pode_rota('financeiro.honorarios_salvar') %}<a class="hp-btn" href="{{ url_for('financeiro.honorarios', aba='com', novo=1) }}"><i class="fas fa-plus"></i> Novo contrato</a>{% endif %}
+    </div>
+  </div>
+</div>
+
+<div class="ef-body">
+  {% if status_lote and status_lote.rodando %}
+  <div class="hp-rodando" id="hpRodando" data-url="{{ url_for('financeiro.lote_status', lote_id=P.lote.id) }}"><i class="fas fa-circle-notch fa-spin"></i>
+    <span><b>Emitindo a cobrança de {{ competencia.strftime('%m/%Y') }}…</b> <span id="hpRodTxt">{{ status_lote.ok or 0 }} prontas{% if status_lote.erro %}, {{ status_lote.erro }} com erro{% endif %}</span>. A tela atualiza sozinha quando terminar.</span></div>
+  {% endif %}
+  {% set T = P.tot %}
+  <div class="tx-abas">
+    <button type="button" class="tx-aba tx-a-atr on" data-p="emitir"><span class="tx-aba-ico"><i class="fas fa-paper-plane"></i></span>
+      <span class="tx-aba-txt"><span class="tx-aba-lbl">A emitir</span><span class="tx-aba-val">{{ (T.emitir.valor + T.erro.valor) | float | format_currency }}</span>
+      <span class="tx-aba-sub">competência {{ competencia.strftime('%m/%Y') }} · vence em {{ P.venc_mes.strftime('%m/%Y') }}</span></span><span class="tx-aba-n">{{ T.emitir.n + T.erro.n }}</span></button>
+    <button type="button" class="tx-aba tx-a-abe" data-p="cobradas"><span class="tx-aba-ico"><i class="fas fa-hourglass-half"></i></span>
+      <span class="tx-aba-txt"><span class="tx-aba-lbl">Emitidas</span><span class="tx-aba-val">{{ T.cobradas.valor | float | format_currency }}</span><span class="tx-aba-sub">aguardando o cliente pagar</span></span><span class="tx-aba-n">{{ T.cobradas.n }}</span></button>
+    <button type="button" class="tx-aba tx-a-rec" data-p="pagas"><span class="tx-aba-ico"><i class="fas fa-circle-check"></i></span>
+      <span class="tx-aba-txt"><span class="tx-aba-lbl">Pagas</span><span class="tx-aba-val">{{ T.pagas.valor | float | format_currency }}</span><span class="tx-aba-sub">desta competência</span></span><span class="tx-aba-n">{{ T.pagas.n }}</span></button>
+    <button type="button" class="tx-aba tx-a-ina" data-p="atrasadas"><span class="tx-aba-ico"><i class="fas fa-clock"></i></span>
+      <span class="tx-aba-txt"><span class="tx-aba-lbl">Em atraso</span><span class="tx-aba-val">{{ P.devendo_valor | float | format_currency }}</span><span class="tx-aba-sub">mensalidades vencidas</span></span><span class="tx-aba-n">{{ P.devendo | length }}</span></button>
+    <button type="button" class="tx-aba tx-a-ctr" data-p="contratos"><span class="tx-aba-ico"><i class="fas fa-file-contract"></i></span>
+      <span class="tx-aba-txt"><span class="tx-aba-lbl">Contratos ativos</span><span class="tx-aba-val">{{ (resumo.total or 0) | float | format_currency }}</span><span class="tx-aba-sub">por mês · {{ resumo.com_decimo or 0 }} com 13º</span></span><span class="tx-aba-n">{{ resumo.n or 0 }}</span></button>
+  </div>
+
+  <div class="hp-bancos">
+    <div class="hp-bancos-tit"><b><i class="fas fa-building-columns"></i> Bancos da cobrança</b><small>O padrão emite tudo. Troque o banco de uma empresa no cartão dela. Clique num banco para ver só as empresas dele.</small></div>
+    {% for b in P.bancos %}{% set pb = P.por_banco.get(b.id) %}
+    <div class="hp-banco{{ ' padrao' if b.padrao }}" data-banco="{{ b.id }}" onclick="hpFiltroBanco(this)" role="button" tabindex="0">
+      {{ bco_img(b, 40) }}
+      <span class="tx"><b>{{ b.nome }}{% if b.padrao %}<span class="hp-tag pd"><i class="fas fa-star"></i> padrão</span>{% endif %}</b>
+        <small>{{ b.apelido }}</small></span>
+      <span class="vl"><b>{{ (pb.valor if pb else 0) | float | format_currency }}</b><small>{{ pb.n if pb else 0 }} empresa{{ 's' if not pb or pb.n != 1 }} a emitir</small></span>
+      {% if not b.padrao and pode_rota('financeiro.honorarios_banco_padrao') %}<a class="mk" href="#" onclick="event.stopPropagation(); hpPadrao({{ b.id }}, '{{ b.nome }}'); return false">tornar padrão</a>{% endif %}
+    </div>{% endfor %}
+  </div>
+
+  <div class="hp-mais">
+    <a href="{{ url_for('financeiro.honorarios', aba='com') }}"><i class="fas fa-list"></i> Lista de contratos <b>{{ resumo.n or 0 }}</b></a>
+    <a href="{{ url_for('financeiro.honorarios', aba='sem') }}"><i class="fas fa-building-circle-xmark"></i> Sem honorários <b>{{ resumo.sem_contrato or 0 }}</b></a>
+    <a href="{{ url_for('financeiro.honorarios', aba='pendentes') }}"{% if resumo.pendentes %} class="al"{% endif %}><i class="fas fa-stamp"></i> Aguardando aprovação <b>{{ resumo.pendentes or 0 }}</b></a>
+    <span class="hp-filtros">
+      <button type="button" class="tx-f on" data-fn="">Todas</button>
+      <button type="button" class="tx-f" data-fn="1"><i class="fas fa-file-invoice"></i> Com nota <b>{{ P.n_nota }}</b></button>
+      <button type="button" class="tx-f" data-fn="0"><i class="fas fa-barcode"></i> Só boleto <b>{{ P.n_so_boleto }}</b></button>
+    </span>
+  </div>
+
+  <form id="hpForm" method="POST" action="{{ url_for('financeiro.lote_emitir') }}" onsubmit="return hpConfirmar()"><input type="hidden" name="competencia" value="{{ competencia.strftime('%Y-%m') }}"></form>
+  {% set grupos = {'emitir': P.linhas | selectattr('fase', 'in', ['emitir', 'erro']) | list, 'cobradas': P.linhas | selectattr('fase', 'equalto', 'cobradas') | list,
+                   'pagas': P.linhas | selectattr('fase', 'equalto', 'pagas') | list, 'atrasadas': P.devendo, 'contratos': P.linhas} %}
+  {% for fase, titulo in [('emitir', 'A emitir'), ('cobradas', 'Emitidas, aguardando pagamento'), ('pagas', 'Pagas'), ('atrasadas', 'Mensalidades em atraso'), ('contratos', 'Todos os contratos ativos')] %}
+  <div class="tx-painel{{ ' on' if fase == 'emitir' }}" data-p="{{ fase }}">
+    <div class="tx-faixa">
+      {% if fase == 'emitir' and pode_emitir and grupos.emitir %}<label class="hp-marcar" onclick="event.preventDefault(); hpTodas()"><input type="checkbox" id="hpTodas"> marcar todas</label>{% endif %}
+      <div class="hp-sec">{{ titulo }} <small>{{ grupos[fase] | length }} empresa{{ 's' if grupos[fase]|length != 1 }}</small></div>
+      <div class="tx-busca"><i class="fas fa-magnifying-glass"></i><input type="search" placeholder="Empresa, número ou nome fantasia" oninput="hpBusca(this)"></div>
+    </div>
+    {% if loop.first %}<div class="hp-legenda"><span><i style="background:#22c55e"></i>pago</span><span><i style="background:#3b82f6"></i>a vencer</span><span><i style="background:#ef4444"></i>atrasado</span>
+      <span><i style="background:repeating-linear-gradient(90deg,#fdba74 0 5px,#fed7aa 5px 10px)"></i>a emitir</span><span><i style="background:#e2e8f0"></i>sem cobrança</span>
+      <span class="dir">barrinhas = mensalidades dos últimos 6 meses, pelo vencimento · <b>regra</b> = vale sempre (no contrato) · <b>só {{ competencia.strftime('%m/%Y') }}</b> = só nesta cobrança</span></div>{% endif %}
+    {% if grupos[fase] %}<div class="hp-grade">{% for l in grupos[fase] %}{{ cartao(l) }}{% endfor %}</div>
+    {% else %}<div class="tx-vazio"><i class="fas fa-mug-hot"></i>{{ {'emitir': 'Tudo emitido nesta competência.', 'cobradas': 'Nenhuma cobrança aguardando pagamento.', 'pagas': 'Nenhuma paga ainda.', 'atrasadas': 'Ninguém em atraso.', 'contratos': 'Nenhum contrato ativo.'}[fase] }}</div>{% endif %}
+    {% if fase == 'emitir' and grupos.emitir and pode_emitir %}
+    <div class="hp-barra"><span><b id="hpSoma">R$ 0,00</b> · <span id="hpQtd">nenhuma empresa marcada</span><span id="hpPorBanco"></span></span>
+      <button type="submit" form="hpForm" id="hpEmitir" disabled><i class="fas fa-paper-plane"></i> Emitir as marcadas</button></div>
+    {% endif %}
+  </div>
+  {% endfor %}
+</div>
+</div>
+
+{% if pode_esc %}
+<div class="hp-fundo" id="hpCx" onclick="if (event.target === this) hpFechar()">
+  <div class="hp-cx">
+    <div class="hp-cx-cab"><div><b id="hpCxTit">Emitir por qual banco?</b><span id="hpCxNome"></span></div><button type="button" onclick="hpFechar()"><i class="fas fa-xmark"></i></button></div>
+    <div class="hp-cx-corpo">
+      <div id="hpOpBanco">
+      {% for b in P.bancos %}<label class="hp-op"><input type="radio" name="hpval" value="{{ b.id }}">{{ bco_img(b, 34) }}
+        <span class="tx"><b>{{ b.nome }}{% if b.padrao %} <span class="hp-tag pd"><i class="fas fa-star"></i> padrão</span>{% endif %}</b><small>{{ b.apelido }}</small></span></label>{% endfor %}
+      </div>
+      <div id="hpOpNota">
+        <label class="hp-op"><input type="radio" name="hpval" value="1"><span class="hp-ic"><i class="fas fa-file-invoice"></i></span>
+          <span class="tx"><b>Nota + boleto</b><small>emite a nota fiscal e o boleto, e manda os dois por e-mail</small></span></label>
+        <label class="hp-op"><input type="radio" name="hpval" value="0"><span class="hp-ic"><i class="fas fa-barcode"></i></span>
+          <span class="tx"><b>Só boleto</b><small>sem nota fiscal; só o boleto vai por e-mail</small></span></label>
+      </div>
+      <div class="hp-seg">
+        <label class="on"><input type="radio" name="hpvale" value="mes" checked><b>Só esta cobrança</b>competência {{ competencia.strftime('%m/%Y') }}; no mês que vem volta à regra</label>
+        <label><input type="radio" name="hpvale" value="sempre"><b>Sempre (regra)</b>fica gravado no contrato da empresa até você trocar de novo</label>
+      </div>
+      <div class="hp-msg" id="hpMsg"></div>
+    </div>
+    <div class="hp-cx-pe"><button type="button" onclick="hpFechar()">Cancelar</button><button type="button" class="prim" id="hpSalvar" onclick="hpSalvar()"><i class="fas fa-check"></i> Salvar</button></div>
+  </div>
+</div>
+{% endif %}
+
+<div class="tx-gav" id="txGav" hidden>
+  <div class="tx-gav-fundo" onclick="txGavFechar()"></div>
+  <div class="tx-gav-pane">
+    <button type="button" class="tx-gav-x" onclick="txGavFechar()" title="Fechar">&times;</button>
+    <div class="tx-gav-corpo" id="txGavCorpo"></div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+var BANCOS = {{ bancos_js | tojson }};
+var URL_ESC = "{{ url_for('financeiro.honorarios_escolha') if pode_rota('financeiro.honorarios_escolha') else '' }}";  {# o {% set %} do content não chega aqui #}
+var URL_PADRAO = "{{ url_for('financeiro.honorarios_banco_padrao') if pode_rota('financeiro.honorarios_banco_padrao') else '' }}";
+var URL_COB = "{{ url_for('financeiro.titulo_cobranca', titulo_id=999999999) }}";
+var COMP = "{{ competencia.strftime('%Y-%m') }}";
+document.querySelectorAll('.tx-aba').forEach(function (a) {
+  a.addEventListener('click', function () {
+    document.querySelectorAll('.tx-aba').forEach(function (x) { x.classList.toggle('on', x === a); });
+    document.querySelectorAll('.tx-painel').forEach(function (p) { p.classList.toggle('on', p.dataset.p === a.dataset.p); });
+  });
+});
+function brl(v) { return v.toLocaleString('pt-BR', {style: 'currency', currency: 'BRL'}); }
+/* filtros: banco + nota + busca, juntos */
+var F = {banco: '', nota: ''};
+function hpFiltrar() {
+  document.querySelectorAll('.tx-painel').forEach(function (p) {
+    var q = ((p.querySelector('.tx-busca input') || {}).value || '').trim().toLowerCase();
+    p.querySelectorAll('.hp-c').forEach(function (c) {
+      var ok = (!F.banco || c.dataset.banco === F.banco) && (F.nota === '' || c.dataset.nota === F.nota) && (!q || c.dataset.busca.toLowerCase().indexOf(q) >= 0);
+      c.style.display = ok ? '' : 'none';
+    });
+  });
+}
+function hpBusca() { hpFiltrar(); }
+function hpFiltroBanco(bt) {
+  var on = !bt.classList.contains('on');
+  document.querySelectorAll('.hp-banco').forEach(function (x) { x.classList.toggle('on', on && x === bt); });
+  F.banco = on ? bt.dataset.banco : ''; hpFiltrar();
+}
+document.querySelectorAll('.hp-filtros .tx-f').forEach(function (b) {
+  b.addEventListener('click', function () {
+    document.querySelectorAll('.hp-filtros .tx-f').forEach(function (x) { x.classList.toggle('on', x === b); });
+    F.nota = b.dataset.fn; hpFiltrar();
+  });
+});
+/* marcar e emitir */
+function hpSoma() {
+  var soma = 0, n = 0, pb = {}, nf = 0;
+  document.querySelectorAll('.tx-painel[data-p="emitir"] .hp-c.marcado').forEach(function (c) {
+    soma += parseFloat(c.dataset.v) || 0; n++; pb[c.dataset.banco] = (pb[c.dataset.banco] || 0) + 1; if (c.dataset.nota === '1') nf++;
+  });
+  var s = document.getElementById('hpSoma'); if (!s) return;
+  s.textContent = brl(soma);
+  document.getElementById('hpQtd').textContent = n ? n + (n === 1 ? ' empresa marcada' : ' empresas marcadas') + ' · ' + nf + ' com nota' : 'nenhuma empresa marcada';
+  var h = '';
+  Object.keys(pb).forEach(function (k) { var b = BANCOS[k] || {}; h += '<span class="pb">' + (b.img ? '<img src="' + b.img + '" width="18" height="18" alt="">' : '') + (b.nome || '?') + ' · ' + pb[k] + '</span>'; });
+  document.getElementById('hpPorBanco').innerHTML = h;
+  document.getElementById('hpEmitir').disabled = !n;
+}
+function hpMarcar(ev, c) { c.classList.toggle('marcado'); c.querySelector('input').checked = c.classList.contains('marcado'); hpSoma(); }
+function hpTodas() {
+  var cb = document.getElementById('hpTodas'); cb.checked = !cb.checked;
+  document.querySelectorAll('.tx-painel[data-p="emitir"] .hp-c.marcavel').forEach(function (c) {
+    if (c.style.display !== 'none') { c.classList.toggle('marcado', cb.checked); c.querySelector('input').checked = cb.checked; }
+  });
+  hpSoma();
+}
+function hpConfirmar() {
+  var t = document.getElementById('hpQtd').textContent + ' · ' + document.getElementById('hpSoma').textContent;
+  var bancos = [].map.call(document.querySelectorAll('#hpPorBanco .pb'), function (x) { return x.textContent; }).join(', ');
+  return confirm('Emitir a cobrança de ' + COMP.split('-').reverse().join('/') + '?\n\n' + t + '\nBancos: ' + bancos + '\n\nCada empresa recebe a nota (quando tiver) e o boleto por e-mail.');
+}
+/* escolher banco / nota */
+var hpCx = document.getElementById('hpCx'), hpAtual = null;
+function hpEscolher(campo, bt) {
+  if (!hpCx) return;
+  hpAtual = {campo: campo, cli: bt.dataset.cli};
+  document.getElementById('hpCxTit').textContent = campo === 'banco' ? 'Emitir por qual banco?' : 'Emite nota fiscal?';
+  document.getElementById('hpCxNome').textContent = bt.dataset.nome;
+  document.getElementById('hpOpBanco').hidden = campo !== 'banco';
+  document.getElementById('hpOpNota').hidden = campo !== 'nota';
+  var grupo = document.getElementById(campo === 'banco' ? 'hpOpBanco' : 'hpOpNota');
+  hpCx.querySelectorAll('input[name="hpval"]').forEach(function (r) { r.checked = false; });
+  grupo.querySelectorAll('input[name="hpval"]').forEach(function (r) { r.checked = r.value === bt.dataset.atual; });
+  hpCx.querySelectorAll('input[name="hpvale"]').forEach(function (r) { r.checked = r.value === 'mes'; });
+  hpMarcas(); document.getElementById('hpMsg').textContent = ''; hpCx.classList.add('on');
+}
+function hpFechar() { hpCx.classList.remove('on'); }
+function hpMarcas() { hpCx.querySelectorAll('.hp-op input, .hp-seg input').forEach(function (x) { x.closest('label').classList.toggle('on', x.checked); }); }
+if (hpCx) hpCx.addEventListener('change', hpMarcas);
+function hpSalvar() {
+  var v = hpCx.querySelector((hpAtual.campo === 'banco' ? '#hpOpBanco' : '#hpOpNota') + ' input[name="hpval"]:checked');
+  var vale = hpCx.querySelector('input[name="hpvale"]:checked');
+  if (!v) { document.getElementById('hpMsg').textContent = 'Escolha uma opção.'; return; }
+  var fd = new FormData(); fd.append('cliente_id', hpAtual.cli); fd.append('campo', hpAtual.campo); fd.append('valor', v.value);
+  fd.append('vale', vale.value); fd.append('competencia', COMP);
+  var bt = document.getElementById('hpSalvar'); bt.disabled = true;
+  fetch(URL_ESC, {method: 'POST', body: fd, credentials: 'same-origin'}).then(function (r) { return r.json(); })
+    .then(function (j) { if (j.ok) { location.reload(); } else { document.getElementById('hpMsg').textContent = j.erro || 'Não consegui salvar.'; bt.disabled = false; } })
+    .catch(function () { document.getElementById('hpMsg').textContent = 'Não consegui salvar agora. Tente de novo.'; bt.disabled = false; });
+}
+function hpPadrao(id, nome) {
+  if (!URL_PADRAO || !confirm(nome + ' passa a ser o banco padrão: toda cobrança sem banco escolhido sai por ele (honorários, lançamentos e cobranças avulsas). Confirma?')) return;
+  var f = document.createElement('form'); f.method = 'POST'; f.action = URL_PADRAO;
+  f.innerHTML = '<input type="hidden" name="conta_id" value="' + id + '"><input type="hidden" name="competencia" value="' + COMP + '">';
+  document.body.appendChild(f); f.submit();
+}
+/* janela da cobrança */
+(function () {
+  var gav = document.getElementById('txGav'), corpo = document.getElementById('txGavCorpo');
+  window.txGavFechar = function () { gav.hidden = true; document.body.style.overflow = ''; corpo.innerHTML = ''; };
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && !gav.hidden) txGavFechar(); if (e.key === 'Escape' && hpCx) hpFechar(); });
+  window.hpCob = function (tid) {
+    gav.hidden = false; document.body.style.overflow = 'hidden';
+    corpo.innerHTML = '<div class="tx-gav-carregando"><i class="fas fa-circle-notch fa-spin"></i>Abrindo a cobrança…</div>';
+    fetch(URL_COB.replace('999999999', tid), {credentials: 'same-origin'})
+      .then(function (r) { if (!r.ok) throw new Error(r.status); return r.text(); })
+      .then(function (h) { corpo.innerHTML = h; gav.querySelector('.tx-gav-pane').scrollTop = 0; })
+      .catch(function () { corpo.innerHTML = '<div class="tx-gav-carregando"><i class="fas fa-triangle-exclamation"></i>Não consegui abrir a cobrança agora. Tente de novo.</div>'; });
+  };
+})();
+/* emissão em andamento */
+(function () {
+  var r = document.getElementById('hpRodando'); if (!r) return;
+  setInterval(function () {
+    fetch(r.dataset.url, {credentials: 'same-origin'}).then(function (x) { return x.json(); }).then(function (s) {
+      document.getElementById('hpRodTxt').textContent = (s.ok || 0) + ' prontas' + (s.erro ? ', ' + s.erro + ' com erro' : '');
+      if (!s.rodando) location.reload();
+    }).catch(function () {});
+  }, 4000);
+})();
+</script>
+{% endblock %}

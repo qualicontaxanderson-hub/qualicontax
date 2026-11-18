@@ -1820,7 +1820,10 @@ def _apply_migrations():
     # Comissões (17/11/2026, etapa 3): a chave Pix de quem recebe comissão (o pedido de pagamento mostra o Pix
     # copia e cola) e a comissão padrão de cada serviço do catálogo (PCT / FIXO / SEM + valor).
     for _tab, _cols in (('usuarios', [('pix_tipo', 'VARCHAR(10) NULL'), ('pix_chave', 'VARCHAR(120) NULL')]),
-                        ('nfse_servicos', [('comissao_tipo', 'VARCHAR(8) NULL'), ('comissao_valor', 'DECIMAL(12,2) NULL')])):
+                        ('nfse_servicos', [('comissao_tipo', 'VARCHAR(8) NULL'), ('comissao_valor', 'DECIMAL(12,2) NULL')]),
+                        # 18/11/2026: o BANCO PADRÃO da cobrança (Honorários: "teremos o Banco Padrão e poderemos decidir
+                        # emitir por outro caso necessário")
+                        ('fin_cobranca_contas', [('padrao', 'TINYINT(1) NOT NULL DEFAULT 0')])):
         _t = execute_query("SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = DATABASE() "
                            "AND TABLE_NAME = %s", (_tab,), fetch=True, fetch_one=True) or {}
         if not _t.get('cnt', 0):
@@ -1831,6 +1834,22 @@ def _apply_migrations():
                 "AND TABLE_NAME = %s AND COLUMN_NAME = %s", (_tab, _col_name), fetch=True, fetch_one=True) or {}
             if _c.get('cnt', 0) == 0:
                 _migrate(f"ALTER TABLE {_tab} ADD COLUMN {_col_name} {_col_def}")
+
+    # 18/11/2026: escolhas SÓ DESTA competência na tela Honorários (banco e nota de uma empresa num mês);
+    # a regra fica no contrato (fin_contratos.banco_boleto e gerar_nfse). NULL = segue a regra.
+    _migrate("""
+        CREATE TABLE IF NOT EXISTS fin_honorarios_escolhas (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            empresa_id INT NOT NULL,
+            competencia DATE NOT NULL,
+            cliente_id INT NOT NULL,
+            conta_cobranca_id INT NULL,
+            gerar_nfse TINYINT(1) NULL,
+            usuario_id INT NULL,
+            atualizado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            UNIQUE KEY uk_hon_esc (empresa_id, competencia, cliente_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    """)
 
     print("✓ Migrations concluídas")
 

@@ -331,7 +331,11 @@ class FinCobrancaConta:
 
     @staticmethod
     def padrao_da_empresa(empresa_id):
-        """A conta ativa da empresa (produção antes de homologação)."""
+        """A conta ativa da empresa: a marcada como PADRÃO (18/11/2026, Honorários), senão produção antes de homologação."""
+        if execute_query("SHOW COLUMNS FROM fin_cobranca_contas LIKE 'padrao'", fetch=True):
+            return execute_query(
+                "SELECT * FROM fin_cobranca_contas WHERE empresa_id = %s AND ativo = 1 AND so_consulta = 0 "
+                " ORDER BY padrao DESC, (ambiente = 'producao') DESC, id LIMIT 1", (empresa_id,), fetch=True, fetch_one=True)
         return execute_query(
             "SELECT * FROM fin_cobranca_contas WHERE empresa_id = %s AND ativo = 1 AND so_consulta = 0 "
             " ORDER BY (ambiente = 'producao') DESC, id LIMIT 1", (empresa_id,), fetch=True, fetch_one=True)

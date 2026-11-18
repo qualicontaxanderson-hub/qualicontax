@@ -36,6 +36,9 @@ def _competencia():
 @financeiro.route('/financeiro/lote')
 @permission_required(PERM)
 def lote():
+    # 18/11/2026: o Lote mensal mora dentro de HONORÁRIOS (etapa 4)
+    if not request.args.get('antigo'):
+        return redirect(url_for('financeiro.honorarios', competencia=_competencia().strftime('%Y-%m')))
     comp = _competencia()
     lote_row, linhas = lote_mensal.previa(EMP, comp)
     tot = {'empresas': len(linhas), 'valor': sum(l['total'] for l in linhas),
@@ -62,11 +65,11 @@ def lote_emitir():
         lote_id = lote_mensal.rodar(current_app._get_current_object(), EMP, comp, current_user.id, so_clientes=so)
     except ValueError as e:
         flash(str(e), 'danger')
-        return redirect(url_for('financeiro.lote', competencia=comp.strftime('%Y-%m')))
+        return redirect(url_for('financeiro.honorarios', competencia=comp.strftime('%Y-%m')))
     registrar('escrita.emitiu_lote_mensal', 'financeiro', tabela='fin_lotes_mensais', registro_id=lote_id,
               depois={'competencia': comp.strftime('%Y-%m'), 'so_clientes': so})
-    flash('Lote de %s em emissão. Acompanhe abaixo; a página atualiza sozinha.' % comp.strftime('%m/%Y'), 'success')
-    return redirect(url_for('financeiro.lote', competencia=comp.strftime('%Y-%m')))
+    flash('Cobrança de %s em emissão. Acompanhe no alto da tela; ela atualiza sozinha.' % comp.strftime('%m/%Y'), 'success')
+    return redirect(url_for('financeiro.honorarios', competencia=comp.strftime('%Y-%m')))
 
 
 @financeiro.route('/financeiro/lote/<int:lote_id>/status')
@@ -83,4 +86,4 @@ def lote_reabrir(lote_id):
     execute_query("UPDATE fin_lotes_mensais SET status = 'ABERTO' WHERE id = %s", (lote_id,), fetch=False)
     registrar('escrita.reabriu_lote_mensal', 'financeiro', tabela='fin_lotes_mensais', registro_id=lote_id, depois={'status': 'ABERTO'})
     flash('Lote reaberto: lançamentos novos voltam a cair nesta competência.', 'info')
-    return redirect(url_for('financeiro.lote'))
+    return redirect(url_for('financeiro.honorarios'))
