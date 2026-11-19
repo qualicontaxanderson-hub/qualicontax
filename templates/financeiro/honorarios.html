@@ -367,6 +367,7 @@
       <input type="hidden" name="contrato_id" id="ho-id">
       <input type="hidden" name="cliente_id" id="ho-cliente-id">
       <input type="hidden" name="aba" value="{{ aba }}">
+      <input type="hidden" name="volta" class="ho-volta"><input type="hidden" name="competencia" class="ho-volta-comp">
       <div class="ns-g">
         <div class="ns-f">
 
@@ -549,7 +550,7 @@
   </div>
 </div>
 
-<form id="ho-form-encerrar" method="POST" style="display:none;"><input type="hidden" name="fim" id="ho-enc-fim"></form>
+<form id="ho-form-encerrar" method="POST" style="display:none;"><input type="hidden" name="fim" id="ho-enc-fim"><input type="hidden" name="volta" class="ho-volta"><input type="hidden" name="competencia" class="ho-volta-comp"></form>
 <form id="ho-form-reprovar" method="POST" style="display:none;"><input type="hidden" name="motivo" id="ho-rep-motivo"></form>
 {% if modo == 'admin' %}
 <div id="hoConviteModal" class="modal" style="display:none;">
@@ -1027,7 +1028,16 @@ function hoEditar(cid) {
         if (window.HO_ENC_AO_ABRIR) { window.HO_ENC_AO_ABRIR = false; if (document.getElementById('ho-enc-bt')) hoEncAbrir(); }
     });
 }
-function hoFechar() { document.getElementById('hoModal').style.display = 'none'; }
+// 19/11/2026: aberto pelo botão Contrato dos cartões (?volta=painel) — fechar, salvar e encerrar voltam para os cartões, no mesmo mês
+var HO_VOLTA = (function () { var q = new URLSearchParams(location.search); return q.get('volta') === 'painel' ? { comp: q.get('competencia') || '' } : null; })();
+if (HO_VOLTA) {
+    document.querySelectorAll('.ho-volta').forEach(function (i) { i.value = 'painel'; });
+    document.querySelectorAll('.ho-volta-comp').forEach(function (i) { i.value = HO_VOLTA.comp; });
+}
+function hoFechar() {
+    document.getElementById('hoModal').style.display = 'none';
+    if (HO_VOLTA) location.href = '{{ url_for('financeiro.honorarios') }}' + (HO_VOLTA.comp ? '?competencia=' + encodeURIComponent(HO_VOLTA.comp) : '');
+}
 function hoEncerrar(cid, nome) {   // 18/11/2026: abre o contrato com a caixa de encerrar à mostra (sem prompt do navegador)
     window.HO_ENC_AO_ABRIR = true; hoEditar(cid);
 }

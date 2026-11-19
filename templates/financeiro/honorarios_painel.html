@@ -272,7 +272,7 @@ span.hp-bco, span.hp-nf { cursor:default; }
   <div class="hp-ac">
     {% set tid = l.atual.id if (l.atual and f != 'atrasadas') else (l.atrasos[-1].id if (f == 'atrasadas' and l.atrasos) else None) %}
     {% if tid and pode_rota('financeiro.titulo_cobranca') %}<button type="button" class="cob" onclick="event.stopPropagation(); hpCob({{ tid }})"><i class="fas fa-barcode"></i> Cobrança</button>{% endif %}
-    <a href="{{ url_for('financeiro.honorarios', aba='com', editar=l.contrato.id) }}" onclick="event.stopPropagation()"><i class="fas fa-file-contract"></i> Contrato</a>
+    <a href="{{ url_for('financeiro.honorarios', aba='com', editar=l.contrato.id, volta='painel', competencia=competencia.strftime('%Y-%m')) }}" onclick="event.stopPropagation()"><i class="fas fa-file-contract"></i> Contrato</a>
   </div>
 </div>
 {% endmacro %}
@@ -289,7 +289,7 @@ span.hp-bco, span.hp-nf { cursor:default; }
         <span><small>Competência</small><b>{{ competencia.strftime('%m/%Y') }}</b></span>
         <a href="{{ url_for('financeiro.honorarios', competencia=comp_prox.strftime('%Y-%m')) }}" title="Próximo mês"><i class="fas fa-chevron-right"></i></a></div>
       {% if pode_rota('financeiro.honorarios_reajuste') %}<a class="hp-btn hp-btn2" href="{{ url_for('financeiro.honorarios_reajuste') }}"><i class="fas fa-arrow-trend-up"></i> Reajuste de janeiro</a>{% endif %}
-      {% if pode_rota('financeiro.honorarios_salvar') %}<a class="hp-btn" href="{{ url_for('financeiro.honorarios', aba='com', novo=1) }}"><i class="fas fa-plus"></i> Novo contrato</a>{% endif %}
+      {% if pode_rota('financeiro.honorarios_salvar') %}<a class="hp-btn" href="{{ url_for('financeiro.honorarios', aba='com', novo=1, volta='painel', competencia=competencia.strftime('%Y-%m')) }}"><i class="fas fa-plus"></i> Novo contrato</a>{% endif %}
     </div>
   </div>
 </div>

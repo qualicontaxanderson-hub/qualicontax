@@ -298,12 +298,24 @@ def honorarios_sugestoes(cliente_id):
     return jsonify(FinContrato.sugestoes(cliente_id))
 
 
+def _volta_painel(f):
+    """19/11/2026: contrato aberto pelos cartões (Cobrança do mês) volta para os cartões, no mesmo mês."""
+    if f.get('volta') != 'painel':
+        return None
+    comp = (f.get('competencia') or '').strip()
+    try:
+        datetime.strptime(comp, '%Y-%m')
+    except ValueError:
+        comp = None
+    return redirect(url_for('financeiro.honorarios', competencia=comp))
+
+
 @financeiro.route('/financeiro/honorarios/salvar', methods=['POST'])
 @permission_required(PERM)
 def honorarios_salvar():
     f = request.form
     cid = f.get('contrato_id', type=int)
-    volta = redirect(url_for('financeiro.honorarios', aba=f.get('aba') or 'com'))
+    volta = _volta_painel(f) or redirect(url_for('financeiro.honorarios', aba=f.get('aba') or 'com'))
     try:
         itens = []
         for d, v, s in zip(f.getlist('item_desc'), f.getlist('item_valor'), f.getlist('item_servico')):
@@ -446,7 +458,7 @@ def honorarios_encerrar(cid):
     registrar('escrita.encerrou_contrato_honorarios', 'financeiro', tabela='fin_contratos', registro_id=cid,
               antes=_foto(c), depois={'situacao': 'ENCERRADO', 'fim': str(fim), 'empresa': c['nome_razao_social']})
     flash('Contrato de %s encerrado em %s. O 13º sai proporcional aos meses de casa.' % (c['nome_razao_social'], fim.strftime('%d/%m/%Y')), 'success')
-    return redirect(url_for('financeiro.honorarios', aba='com'))
+    return _volta_painel(request.form) or redirect(url_for('financeiro.honorarios', aba='com'))
 
 
 # ---------------------------------------------------------------------------
