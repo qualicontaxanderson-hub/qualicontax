@@ -149,7 +149,21 @@
 .hp-em .hp-op { align-items:flex-start; } .hp-em .hp-op .hp-ic { width:36px; height:36px; border-radius:11px; background:#fff7ed; color:#ea580c; display:inline-flex; align-items:center; justify-content:center; font-size:15px; flex:0 0 auto; }
 .hp-em .hp-op.on { border-color:#ea580c; background:#fff7ed; box-shadow:0 0 0 3px #ffedd5; } .hp-em .hp-op.on .hp-ic { background:#ea580c; color:#fff; }
 .hp-em .hp-op small { display:block; line-height:1.35; } .hp-em .hp-op small b { display:inline; font-size:inherit; color:#9a3412; }
-#hpEmData { display:block; margin-top:8px; height:40px; border:1px solid #e2e8f0; border-radius:10px; padding:0 10px; font:inherit; font-size:14px; font-weight:700; color:#0f172a; background:#fff; width:min(100%, 220px); }
+.hp-dt-ops { display:flex; flex-wrap:wrap; gap:6px; margin-top:10px; }
+.hp-dt { border:1.5px solid #e2e8f0; background:#fff; border-radius:12px; padding:7px 10px; cursor:pointer; font:inherit; text-align:left; display:flex; flex-direction:column; min-width:88px; line-height:1.15; color:#0f172a; }
+.hp-dt small { font-size:10.5px; font-weight:800; letter-spacing:.05em; text-transform:uppercase; color:#94a3b8; } .hp-dt b { font-size:14px; } .hp-dt i { font-style:normal; font-size:11.5px; color:#64748b; }
+.hp-dt:hover { border-color:#fdba74; } .hp-dt.on { border-color:#ea580c; background:#ea580c; color:#fff; box-shadow:0 6px 16px rgba(234,88,12,.3); } .hp-dt.on small, .hp-dt.on i { color:rgba(255,255,255,.85); }
+.hp-dt.cal { justify-content:center; align-items:center; flex-direction:row; gap:7px; min-width:0; font-weight:800; font-size:12.5px; color:#9a3412; border-style:dashed; } .hp-dt.cal.on { border-style:solid; color:#fff; }
+.hp-cal { margin-top:10px; background:#fff; border:1px solid #e2e8f0; border-radius:14px; padding:10px 10px 8px; width:min(100%, 320px); }
+.hp-cal-cab { display:flex; align-items:center; justify-content:space-between; margin-bottom:6px; } .hp-cal-cab b { font-size:13.5px; }
+#hpEmCx { padding-top:4vh; } #hpEmCx .hp-cx { max-height:92vh; overflow:auto; }
+.hp-cal-cab button { width:30px; height:30px; border-radius:9px; border:1px solid #e2e8f0; background:#fff; cursor:pointer; color:#334155; } .hp-cal-cab button:disabled { opacity:.35; cursor:default; }
+.hp-cal-g { display:grid; grid-template-columns:repeat(7, 1fr); gap:3px; }
+.hp-cal-g span { text-align:center; font-size:10px; font-weight:800; color:#94a3b8; letter-spacing:.04em; padding:2px 0 4px; }
+.hp-cal-g button { height:34px; border-radius:9px; border:0; background:transparent; font:inherit; font-size:13px; font-weight:700; color:#0f172a; cursor:pointer; }
+.hp-cal-g button:hover { background:#fff7ed; } .hp-cal-g button.fds { color:#94a3b8; font-weight:600; } .hp-cal-g button.hoje { box-shadow:inset 0 0 0 1.5px #fdba74; }
+.hp-cal-g button:disabled { color:#cbd5e1; cursor:default; background:transparent; } .hp-cal-g button.on { background:#ea580c; color:#fff; box-shadow:0 4px 12px rgba(234,88,12,.35); }
+.hp-cal-pe { font-size:11px; color:#94a3b8; margin-top:6px; text-align:center; }
 .hp-em-nota { font-size:12.5px; color:#475569; display:flex; gap:8px; align-items:flex-start; line-height:1.4; } .hp-em-nota i { color:#16a34a; margin-top:2px; }
 .hp-cx-pe .prim.em { background:linear-gradient(135deg,#f97316,#c2410c); border-color:transparent; }
 .hp-msg.erro { color:#b91c1c; font-weight:700; font-size:13px; }
@@ -346,7 +360,9 @@ span.hp-bco, span.hp-nf { cursor:default; }
         <span class="tx"><b>Data do contrato</b><small id="hpEmContratoTxt">o dia de vencimento de cada contrato, no mês seguinte à competência</small></span></label>
       <label class="hp-op" id="hpEmOpOutra" onclick="hpEmVenc('outra')"><input type="radio" name="hpvenc" value="outra"><span class="hp-ic"><i class="fas fa-calendar-plus"></i></span>
         <span class="tx"><b>Outra data</b><small>a mesma data para todas as empresas marcadas</small>
-          <input type="date" id="hpEmData" min="{{ hoje.isoformat() }}" onclick="event.stopPropagation()" onchange="hpEmVenc('outra')"></span></label>
+          <input type="hidden" id="hpEmData" value="">
+          <div class="hp-dt-ops" id="hpEmChips"></div>
+          <div class="hp-cal" id="hpEmCal" hidden></div></span></label>
       <div class="hp-em-nota"><i class="fas fa-envelope"></i> Cada empresa recebe a nota (quando tiver) e o boleto por e-mail, nos contatos do Financeiro.</div>
       <div class="hp-msg" id="hpEmMsg"></div>
     </div>
@@ -564,8 +580,57 @@ function hpEmVenc(qual) {
   document.getElementById('hpEmOpOutra').classList.toggle('on', qual === 'outra');
   document.querySelector('#hpEmCx input[name="hpvenc"][value="' + qual + '"]').checked = true;
   document.getElementById('hpEmMsg').textContent = '';
-  if (qual === 'outra') { var d = document.getElementById('hpEmData'); if (!d.value) setTimeout(function () { d.focus(); try { d.showPicker && d.showPicker(); } catch (e) {} }, 30); }
   hpEmRotulo();
+}
+/* datas prontas + calendário próprio (19/11/2026, Anderson: "arrume a data, está feio") */
+var DIAS_S = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'], MESES_L = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
+function hpIso(d) { return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2); }
+function hpDe(iso) { var p = iso.split('-'); return new Date(+p[0], +p[1] - 1, +p[2]); }
+var hpCalMes = null;
+function hpEmSugestoes() {
+  var hoje = hpDe(HOJE), out = [], vistos = {};
+  function add(rot, d) { var iso = hpIso(d); if (iso <= HOJE || vistos[iso]) return; vistos[iso] = 1; out.push({rot: rot, iso: iso, d: d}); }
+  add('daqui a 7 dias', new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate() + 7));
+  add('dia 25', hoje.getDate() < 25 ? new Date(hoje.getFullYear(), hoje.getMonth(), 25) : new Date(hoje.getFullYear(), hoje.getMonth() + 1, 25));
+  add('fim do mês', new Date(hoje.getFullYear(), hoje.getMonth() + 1, 0));
+  add('dia 5 do mês que vem', new Date(hoje.getFullYear(), hoje.getMonth() + 1, 5));
+  add('dia 10 do mês que vem', new Date(hoje.getFullYear(), hoje.getMonth() + 1, 10));
+  out.sort(function (a, b) { return a.iso < b.iso ? -1 : 1; });
+  return out.slice(0, 5);
+}
+function hpEmChipsPinta() {
+  var v = document.getElementById('hpEmData').value, box = document.getElementById('hpEmChips'), h = '';
+  var sug = hpEmSugestoes(), fixo = sug.some(function (x) { return x.iso === v; });
+  sug.forEach(function (x) {
+    h += '<button type="button" class="hp-dt' + (x.iso === v ? ' on' : '') + '" onclick="hpEmEscolhe(\'' + x.iso + '\')"><small>' + x.rot + '</small><b>' + hpBr(x.iso).slice(0, 5) + '</b><i>' + DIAS_S[x.d.getDay()] + '</i></button>';
+  });
+  var cal = document.getElementById('hpEmCal'), aberto = !cal.hidden;
+  h += '<button type="button" class="hp-dt cal' + (aberto || (v && !fixo) ? ' on' : '') + '" onclick="hpEmCalToggle()"><i class="fas fa-calendar-days"></i>' + (v && !fixo ? hpBr(v) : 'Escolher no calendário') + '</button>';
+  box.innerHTML = h;
+}
+function hpEmEscolhe(iso) {
+  document.getElementById('hpEmData').value = iso; document.getElementById('hpEmMsg').textContent = '';
+  hpEmVenc('outra'); hpEmChipsPinta(); if (!document.getElementById('hpEmCal').hidden) hpEmCalMonta();
+}
+function hpEmCalToggle() {
+  var cal = document.getElementById('hpEmCal'); cal.hidden = !cal.hidden;
+  if (!cal.hidden) { var v = document.getElementById('hpEmData').value; hpCalMes = hpDe(v || HOJE); hpCalMes.setDate(1); hpEmCalMonta(); }
+  hpEmChipsPinta();
+}
+function hpEmCalMover(n) { hpCalMes = new Date(hpCalMes.getFullYear(), hpCalMes.getMonth() + n, 1); hpEmCalMonta(); }
+function hpEmCalMonta() {
+  var cal = document.getElementById('hpEmCal'), v = document.getElementById('hpEmData').value, hoje = hpDe(HOJE);
+  var ano = hpCalMes.getFullYear(), mes = hpCalMes.getMonth(), prim = new Date(ano, mes, 1).getDay(), dias = new Date(ano, mes + 1, 0).getDate();
+  var podeVoltar = ano > hoje.getFullYear() || (ano === hoje.getFullYear() && mes > hoje.getMonth());
+  var h = '<div class="hp-cal-cab"><button type="button" onclick="hpEmCalMover(-1)"' + (podeVoltar ? '' : ' disabled') + ' aria-label="Mês anterior"><i class="fas fa-chevron-left"></i></button><b>' + MESES_L[mes].charAt(0).toUpperCase() + MESES_L[mes].slice(1) + ' de ' + ano + '</b><button type="button" onclick="hpEmCalMover(1)" aria-label="Mês seguinte"><i class="fas fa-chevron-right"></i></button></div><div class="hp-cal-g">';
+  ['D', 'S', 'T', 'Q', 'Q', 'S', 'S'].forEach(function (x) { h += '<span>' + x + '</span>'; });
+  for (var i = 0; i < prim; i++) h += '<button type="button" disabled></button>';
+  for (var d = 1; d <= dias; d++) {
+    var dt = new Date(ano, mes, d), iso = hpIso(dt), fds = dt.getDay() === 0 || dt.getDay() === 6;
+    h += '<button type="button" class="' + (iso === v ? 'on ' : '') + (fds ? 'fds ' : '') + (iso === HOJE ? 'hoje' : '') + '"' + (iso < HOJE ? ' disabled' : ' onclick="hpEmEscolhe(\'' + iso + '\')"') + '>' + d + '</button>';
+  }
+  h += '</div><div class="hp-cal-pe">fim de semana em cinza: o banco só compensa no dia útil seguinte</div>';
+  cal.innerHTML = h;
 }
 function hpEmRotulo() {
   var outra = document.getElementById('hpEmOpOutra').classList.contains('on'), d = document.getElementById('hpEmData').value;
@@ -589,6 +654,7 @@ function hpEmAbrir() {
   else txt = 'o dia de vencimento de cada contrato, no mês seguinte à competência';
   document.getElementById('hpEmContratoTxt').innerHTML = txt;
   document.getElementById('hpEmData').value = ''; document.getElementById('hpEmMsg').textContent = '';
+  document.getElementById('hpEmCal').hidden = true; hpEmChipsPinta();
   hpEmVenc('contrato');
   document.getElementById('hpEmCx').classList.add('on'); document.body.style.overflow = 'hidden';
 }
@@ -596,7 +662,7 @@ function hpEmFechar() { document.getElementById('hpEmCx').classList.remove('on')
 function hpEmConfirmar() {
   var outra = document.getElementById('hpEmOpOutra').classList.contains('on'), d = document.getElementById('hpEmData').value, msg = document.getElementById('hpEmMsg');
   msg.className = 'hp-msg erro';
-  if (outra && !d) { msg.textContent = 'Escolha a data de vencimento.'; document.getElementById('hpEmData').focus(); return; }
+  if (outra && !d) { msg.textContent = 'Escolha a data de vencimento: toque numa das datas ou abra o calendário.'; return; }
   if (outra && d < HOJE) { msg.textContent = 'Essa data já passou. Escolha hoje ou uma data à frente.'; return; }
   document.getElementById('hpVencInput').value = outra ? d : '';
   var ok = document.getElementById('hpEmOk'); ok.disabled = true; ok.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> Emitindo…';
