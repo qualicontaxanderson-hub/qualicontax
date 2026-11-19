@@ -139,7 +139,59 @@
         {% endif %}
         {% if boleto.link and not copias.pagina %}<a class="tj-ib" href="{{ boleto.link }}" target="_blank" rel="noopener"><i class="fas fa-arrow-up-right-from-square"></i>Página</a>{% endif %}
         {% if (vivo or boleto.situacao == 'identified') and pode_rota('financeiro.boleto_sincronizar') %}<form method="POST" action="{{ url_for('financeiro.boleto_sincronizar', boleto_id=boleto.id) }}"><input type="hidden" name="volta" value="{{ volta }}"><button class="tj-ib"><i class="fas fa-rotate"></i>Conferir</button></form>{% endif %}
-        {% if vivo and pode_rota('financeiro.boleto_cancelar') %}<form method="POST" action="{{ url_for('financeiro.boleto_cancelar', boleto_id=boleto.id) }}" onsubmit="return confirm('Cancelar este boleto no banco? O cliente não vai mais conseguir pagá-lo.');"><input type="hidden" name="volta" value="{{ volta }}"><button class="tj-ib tj-ib-verm"><i class="fas fa-ban"></i>Cancelar</button></form>{% endif %}
+        {% if vivo and pode_rota('financeiro.boleto_cancelar') %}<button type="button" class="tj-ib tj-ib-verm" onclick="var m=document.getElementById('tjCanc{{ boleto.id }}');document.body.appendChild(m);m.classList.add('on');document.body.style.overflow='hidden'"><i class="fas fa-ban"></i>Cancelar</button>
+        <div class="tj-canc" id="tjCanc{{ boleto.id }}" role="dialog" aria-modal="true" aria-labelledby="tjCancTit{{ boleto.id }}" onclick="if(event.target===this){this.classList.remove('on');document.body.style.overflow=''}">
+          <form method="POST" action="{{ url_for('financeiro.boleto_cancelar', boleto_id=boleto.id) }}" class="tj-canc-cx" onsubmit="var b=this.querySelector('.tj-canc-ok');b.disabled=true;b.innerHTML='<i class=&quot;fas fa-circle-notch fa-spin&quot;></i> Cancelando no banco…'">
+            <input type="hidden" name="volta" value="{{ volta }}">
+            <header class="tj-canc-cab">
+              <i class="fas fa-ban"></i>
+              <div><small>Boleto nº {{ numero_boleto(boleto) }} · {{ boleto.banco_nome }}</small><h3 id="tjCancTit{{ boleto.id }}">Cancelar este boleto no banco?</h3></div>
+              <button type="button" class="tj-canc-x" aria-label="Fechar" onclick="var m=this.closest('.tj-canc');m.classList.remove('on');document.body.style.overflow=''"><i class="fas fa-xmark"></i></button>
+            </header>
+            <div class="tj-canc-dados">
+              <div><dt>Empresa</dt><dd>{{ nome }}</dd></div>
+              <div><dt>Valor</dt><dd>{{ boleto.valor | float | format_currency }}</dd></div>
+              <div><dt>Vencimento</dt><dd>{{ boleto.vencimento.strftime('%d/%m/%Y') }}</dd></div>
+              <div><dt>Honorário</dt><dd>{{ desc }}{% if comp and comp not in desc %} <span>· {{ comp }}</span>{% endif %}</dd></div>
+            </div>
+            <ul class="tj-canc-lista">
+              <li><i class="fas fa-building-columns"></i><span><b>O banco cancela o boleto.</b> O cliente não consegue mais pagar por ele: nem pela linha digitável, nem pelo Pix do boleto, nem pela página.</span></li>
+              {% if boleto.nfse_id %}<li><i class="fas fa-file-invoice"></i><span><b>A nota fiscal continua valendo</b> e o honorário fica em aberto, sem boleto. Para cobrar de novo, gere outro boleto por aqui ou cancele a nota também.</span></li>
+              {% else %}<li><i class="fas fa-rotate-left"></i><span><b>O honorário é cancelado junto</b> e sai do A receber. Em Honorários a empresa volta para <b>A emitir</b> nessa competência, já com o que estiver no contrato hoje.</span></li>{% endif %}
+              <li><i class="fas fa-calendar-check"></i><span>Se a ideia é só dar mais prazo, feche esta janela e use <b>Prorrogar vencimento</b>: é o mesmo boleto com data nova.</span></li>
+            </ul>
+            <p class="tj-canc-aviso"><i class="fas fa-triangle-exclamation"></i> Não dá para desfazer. Fica registrado na Auditoria quem cancelou e quando.</p>
+            <footer class="tj-canc-pe">
+              <button type="button" class="tj-canc-volta" onclick="var m=this.closest('.tj-canc');m.classList.remove('on');document.body.style.overflow=''"><i class="fas fa-arrow-left"></i> Voltar</button>
+              <button type="submit" class="tj-canc-ok"><i class="fas fa-ban"></i> Cancelar o boleto</button>
+            </footer>
+          </form>
+        </div>
+        <style>
+        .tj-canc { position:fixed; inset:0; z-index:1200; display:none; align-items:center; justify-content:center; padding:16px; background:rgba(15,23,42,.55); backdrop-filter:blur(2px); }
+        .tj-canc.on { display:flex; }
+        .tj-canc-cx { width:min(560px, 100%); max-height:94vh; overflow:auto; background:#fff; border-radius:18px; box-shadow:0 30px 80px rgba(0,0,0,.35); font-size:14px; color:#0f172a; animation:tjCancSobe .22s cubic-bezier(.2,.8,.2,1); }
+        @keyframes tjCancSobe { from { transform:translateY(14px); opacity:0; } to { transform:none; opacity:1; } }
+        .tj-canc-cab { display:flex; align-items:center; gap:14px; padding:18px 20px; background:linear-gradient(135deg, #dc2626, #b91c1c); color:#fff; border-radius:18px 18px 0 0; }
+        .tj-canc-cab > i { width:46px; height:46px; border-radius:13px; background:rgba(255,255,255,.18); display:inline-flex; align-items:center; justify-content:center; font-size:20px; flex:0 0 auto; }
+        .tj-canc-cab div { flex:1; min-width:0; } .tj-canc-cab small { display:block; font-size:11.5px; font-weight:800; letter-spacing:.06em; text-transform:uppercase; opacity:.85; }
+        .tj-canc-cab h3 { margin:2px 0 0; font-size:18px; font-weight:900; line-height:1.2; }
+        .tj-canc-x { border:0; background:rgba(255,255,255,.16); color:#fff; width:34px; height:34px; border-radius:10px; cursor:pointer; font-size:16px; flex:0 0 auto; }
+        .tj-canc-dados { display:grid; grid-template-columns:1fr 1fr; gap:10px 16px; padding:16px 20px 6px; }
+        .tj-canc-dados div:first-child, .tj-canc-dados div:last-child { grid-column:1 / -1; }
+        .tj-canc-dados dt { font-size:10.5px; font-weight:800; letter-spacing:.07em; text-transform:uppercase; color:#94a3b8; }
+        .tj-canc-dados dd { margin:2px 0 0; font-weight:800; font-size:15px; } .tj-canc-dados dd span { color:#64748b; font-weight:600; }
+        .tj-canc-lista { list-style:none; margin:10px 20px 0; padding:0; display:flex; flex-direction:column; gap:8px; }
+        .tj-canc-lista li { display:flex; gap:12px; align-items:flex-start; padding:11px 13px; border:1px solid #e6eeea; border-radius:12px; background:#f8fafc; line-height:1.4; }
+        .tj-canc-lista li > i { width:30px; height:30px; border-radius:9px; background:#fee2e2; color:#dc2626; display:inline-flex; align-items:center; justify-content:center; font-size:13px; flex:0 0 auto; }
+        .tj-canc-lista li:last-child > i { background:#ecfdf5; color:#15803d; }
+        .tj-canc-aviso { margin:12px 20px 0; padding:10px 13px; border-radius:12px; background:#fffbeb; border:1px solid #fde68a; color:#92400e; font-weight:700; font-size:13px; display:flex; gap:10px; align-items:center; }
+        .tj-canc-pe { display:flex; gap:10px; justify-content:flex-end; padding:16px 20px 18px; }
+        .tj-canc-volta, .tj-canc-ok { border-radius:12px; padding:12px 18px; font:inherit; font-size:14px; font-weight:800; cursor:pointer; display:inline-flex; align-items:center; gap:8px; }
+        .tj-canc-volta { border:1px solid #e6eeea; background:#fff; color:#334155; } .tj-canc-volta:hover { border-color:#9fc9b3; }
+        .tj-canc-ok { border:0; background:#dc2626; color:#fff; box-shadow:0 8px 20px rgba(220,38,38,.3); } .tj-canc-ok:hover { background:#b91c1c; } .tj-canc-ok:disabled { opacity:.7; cursor:default; }
+        @media (max-width:640px) { .tj-canc { padding:0; align-items:flex-end; } .tj-canc-cx { border-radius:18px 18px 0 0; max-height:92vh; } .tj-canc-dados { grid-template-columns:1fr 1fr; } .tj-canc-pe { flex-direction:column-reverse; } .tj-canc-volta, .tj-canc-ok { justify-content:center; width:100%; padding:14px; font-size:15px; } }
+        </style>{% endif %}
       </div>{% endif %}
       {% if boleto.situacao in ('waiting', 'unpaid') and not restrito and pode_rota('financeiro.boleto_vencimento') %}
       <form method="POST" action="{{ url_for('financeiro.boleto_vencimento', boleto_id=boleto.id) }}" class="tj-form">
