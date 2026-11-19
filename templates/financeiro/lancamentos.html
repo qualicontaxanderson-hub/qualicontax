@@ -3,6 +3,17 @@
 {% block title %}Lançamentos - Financeiro - Qualicontax{% endblock %}
 
 {% block extra_css %}
+<style>{% include 'clientes/_pk_css.html' %}
+/* 19/11/2026: serviço escolhido na caixa nossa (botão-campo) e Desconto na Nova cobrança */
+#nsServ + .ts-wrapper { display:none; }
+.ns-serv-bt { display:flex; align-items:center; gap:10px; width:100%; min-height:46px; height:auto; padding:5px 10px 5px 6px; text-align:left; cursor:pointer; }
+.ns-serv-bt .sg { width:34px; height:34px; border-radius:9px; background:#e2e8f0; color:#475569; font-weight:900; font-size:12px; display:inline-flex; align-items:center; justify-content:center; flex:0 0 auto; }
+.ns-serv-bt .tx { flex:1; min-width:0; display:flex; flex-direction:column; line-height:1.2; } .ns-serv-bt .tx b { font-size:13.5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.ns-serv-bt .tx small { color:#64748b; font-size:11.5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; } .ns-serv-bt > i { color:#94a3b8; }
+.ns-serv-bt.vazio { border-style:dashed; border-color:#fdba74; } .ns-serv-bt.vazio b { color:#9a3412; } .ns-serv-bt:hover { border-color:#22c55e; }
+.ns-desc-un { color:#15803d; margin-left:4px; } #nsDescBox .ns-seg button:disabled { opacity:.35; cursor:not-allowed; }
+.lm-t-desc { background:#dcfce7; color:#166534; } .tx-c.desc .tx-c-val { color:#15803d; } .lm-junto { font-size:11.5px; color:#166534; background:#f0fdf4; border:1px solid #bbf7d0; border-radius:9px; padding:6px 9px; margin-top:8px; }
+</style>
 {# 17/11/2026 — LANÇAMENTOS refeito no molde aprovado pelo Anderson ("Aprova"): quadros coloridos e cartões como a tela
    COBRANÇAS. A equipe SOLICITA a cobrança (boleto + nota, só boleto ou na mensalidade) com a comissão; Anderson ou
    Alessandra aprovam e aí a cobrança sai. Cada um vê só o que é seu. #}
@@ -206,7 +217,7 @@
                 align-items:center; justify-content:center; line-height:1; flex:0 0 40px; box-shadow:0 6px 14px rgba(15,61,46,.18); }
 .lm-mes-h .ic b { font-size:13px; font-weight:800; text-transform:uppercase; letter-spacing:.04em; }
 .lm-mes-h .ic small { font-size:10px; opacity:.8; margin-top:2px; }
-.lm-mes-h h3 { margin:0; font-size:16px; font-weight:800; color:#0f172a; text-transform:capitalize; white-space:nowrap; }
+.lm-mes-h h3 { margin:0; font-size:16px; font-weight:800; color:#0f172a; white-space:nowrap; }
 .lm-mes-h .lm-mes-n { font-size:12.5px; font-weight:700; color:#475569; background:#f1f5f9; border-radius:99px; padding:3px 10px; white-space:nowrap; }
 .lm-mes-h .lm-mes-v { font-size:13px; font-weight:800; color:#15803d; background:#ecfdf3; border-radius:99px; padding:3px 11px; font-variant-numeric:tabular-nums; white-space:nowrap; }
 .lm-mes-h .lm-mes-tag { font-size:11px; font-weight:800; letter-spacing:.05em; text-transform:uppercase; color:#fff; background:#16a34a; border-radius:99px; padding:3px 9px; }
@@ -214,7 +225,7 @@
 .lm-mes.atual .lm-mes-h .ic { background:linear-gradient(135deg,#15803d,#22c55e); }
 .lm-mes.passado .lm-mes-h .ic { background:linear-gradient(135deg,#991b1b,#dc2626); }
 /* vencimento em destaque: cor pela distância até a data */
-.lm-venc { display:inline-flex; align-items:center; gap:7px; margin-top:7px; padding:4px 10px 4px 5px; border-radius:99px; font-size:12.5px; font-weight:700;
+.lm-venc { display:inline-flex; align-items:center; gap:7px; margin-top:9px; max-width:100%; box-sizing:border-box; padding:4px 10px 4px 5px; border-radius:99px; font-size:12.5px; font-weight:700;
            background:#eff6ff; color:#1d4ed8; border:1px solid #bfdbfe; white-space:nowrap; }
 .lm-venc .dd { display:inline-flex; flex-direction:column; align-items:center; justify-content:center; width:30px; height:24px; border-radius:99px; background:#1d4ed8; color:#fff;
                font-size:12px; font-weight:800; line-height:1; }
@@ -241,13 +252,13 @@
 
 {# filtros do quadro: só aparecem as opções que existem nele, com a contagem #}
 {% macro filtros(lista) %}
-  {% set ns = namespace(n=0, b=0, m=0, p=0) %}{% set quem = {} %}
+  {% set ns = namespace(n=0, b=0, m=0, p=0, d=0) %}{% set quem = {} %}
   {% for l in lista %}
-    {% if l.destino == 'MENSAL' %}{% set ns.m = ns.m + 1 %}{% elif 'nota' in (l.como or '') %}{% set ns.n = ns.n + 1 %}{% else %}{% set ns.b = ns.b + 1 %}{% endif %}
+    {% if l.origem == 'DESCONTO' %}{% set ns.d = ns.d + 1 %}{% elif l.destino == 'MENSAL' %}{% set ns.m = ns.m + 1 %}{% elif 'nota' in (l.como or '') %}{% set ns.n = ns.n + 1 %}{% else %}{% set ns.b = ns.b + 1 %}{% endif %}
     {% if (l.parcelas and l.parcelas > 1) or l.parcela %}{% set ns.p = ns.p + 1 %}{% endif %}
     {% set _ = quem.update({(l.lancado_por_nome or ''): quem.get(l.lancado_por_nome or '', 0) + 1}) %}
   {% endfor %}
-  {% set tipos = (ns.n > 0) | int + (ns.b > 0) | int + (ns.m > 0) | int %}
+  {% set tipos = (ns.n > 0) | int + (ns.b > 0) | int + (ns.m > 0) | int + (ns.d > 0) | int %}
   {% if lista %}
   <div class="lm-filtros">
     <div class="lm-fg lm-fdt" data-g="dt"><em>Vencimento</em><button type="button" class="tx-f on" data-v="">Todos</button>
@@ -259,7 +270,8 @@
       {% if ns.n %}<button type="button" class="tx-f" data-v="N"><i class="fas fa-file-invoice-dollar"></i> Boleto + nota <b>{{ ns.n }}</b></button>{% endif %}
       {% if ns.b %}<button type="button" class="tx-f" data-v="B"><i class="fas fa-barcode"></i> Só boleto <b>{{ ns.b }}</b></button>{% endif %}
       {% if ns.m %}<button type="button" class="tx-f" data-v="M"><i class="fas fa-calendar"></i> Mensalidade <b>{{ ns.m }}</b></button>{% endif %}
-      {% if ns.p %}<button type="button" class="tx-f" data-v="P"><i class="fas fa-layer-group"></i> Parcelados <b>{{ ns.p }}</b></button>{% endif %}</div>{% endif %}
+      {% if ns.p %}<button type="button" class="tx-f" data-v="P"><i class="fas fa-layer-group"></i> Parcelados <b>{{ ns.p }}</b></button>{% endif %}
+      {% if ns.d %}<button type="button" class="tx-f" data-v="D"><i class="fas fa-tag"></i> Descontos <b>{{ ns.d }}</b></button>{% endif %}</div>{% endif %}
     {% if aprov and quem|length > 1 %}<div class="lm-fg" data-g="quem"><em>Quem pediu</em><button type="button" class="tx-f on" data-v="">Todos</button>
       {% for nome, qt in quem|dictsort %}<button type="button" class="tx-f" data-v="{{ nome }}">{{ nome.split()[0] if nome else '—' }} <b>{{ qt }}</b></button>{% endfor %}</div>{% endif %}
   </div>
@@ -270,22 +282,22 @@
 {% set falhou = l.status == 'APROVADO' and l.destino == 'AVULSO' and not l.titulo_id and not l.carteira %}
 {% set cls = {'apr': 'tx-venc', 'cob': ('tx-fut' if l.destino == 'MENSAL' and l.status == 'APROVADO' else ('tx-venc' if falhou else 'tx-hoje')), 'pag': 'tx-ok', 'atr': 'tx-ina'}[fase] %}
 {% set adiantado = l.comissao_adiantada and not l.desconto_de and l.titulo_status != 'liquidado' %}{% set adiantavel = pedir and l.adiantavel %}
-{% set cc_ = 'M' if l.destino == 'MENSAL' else ('N' if 'nota' in (l.como or '') else 'B') %}
-<div class="tx-c {{ cls }}{% if adiantavel %} marcavel adi{% endif %}" data-cc="{{ cc_ }}" data-parc="{{ '1' if (l.parcelas and l.parcelas > 1) or l.parcela else '' }}" data-quem="{{ l.lancado_por_nome or '' }}" data-dt="{{ (l.titulo_vencimento or l.vencimento or l.competencia).isoformat() if (l.titulo_vencimento or l.vencimento or l.competencia) else '' }}" data-busca="{{ l.numero_cliente or '' }} {{ l.nome_razao_social }} {{ l.servico_nome }} {{ l.lancado_por_nome }}"{% if adiantavel %} data-v="{{ l.comissao_valor | float }}" onclick="lmMarcar(this)"{% endif %}>
+{% set cc_ = 'D' if l.origem == 'DESCONTO' else ('M' if l.destino == 'MENSAL' else ('N' if 'nota' in (l.como or '') else 'B')) %}
+<div class="tx-c {{ cls }}{% if adiantavel %} marcavel adi{% endif %}{% if l.origem == 'DESCONTO' %} desc{% endif %}" data-cc="{{ cc_ }}" data-parc="{{ '1' if (l.parcelas and l.parcelas > 1) or l.parcela else '' }}" data-quem="{{ l.lancado_por_nome or '' }}" data-dt="{{ (l.titulo_vencimento or l.vencimento or l.competencia).isoformat() if (l.titulo_vencimento or l.vencimento or l.competencia) else '' }}" data-busca="{{ l.numero_cliente or '' }} {{ l.nome_razao_social }} {{ l.servico_nome }} {{ l.lancado_por_nome }}"{% if adiantavel %} data-v="{{ l.comissao_valor | float }}" onclick="lmMarcar(this)"{% endif %}>
   {% if adiantavel %}<input type="checkbox" name="lanc" value="{{ l.id if l.carteira else 'a' ~ l.id }}" hidden><span class="lm-ck"><i class="fas fa-check"></i></span>{% endif %}
   <div class="tx-c-top"><span class="tx-c-num">{{ l.numero_cliente or '—' }}</span><span class="tx-c-nome" title="{{ l.nome_razao_social }}">{{ l.nome_razao_social }}</span></div>
-  <div class="tx-c-meio"><div><div class="tx-c-val">{{ l.valor_total | float | format_currency }}</div>
-    <div class="tx-c-desc">{{ l.descricao or l.servico_nome }}</div>
-    {% if l.destino == 'MENSAL' %}<span class="lm-venc mensal"><span class="dd"><i class="fas fa-calendar"></i></span>mensalidade de {{ l.competencia.strftime('%m/%Y') }}</span>
-    {% elif l.titulo_vencimento or l.vencimento %}{% set vd = l.titulo_vencimento or l.vencimento %}<span class="lm-venc" data-venc="{{ vd.isoformat() }}" data-pago="{{ '1' if fase == 'pag' else '' }}"><span class="dd">{{ vd.strftime('%d') }}</span>vence {{ vd.strftime('%d/%m/%Y') }}<em></em></span>{% endif %}</div>
+  <div class="tx-c-meio"><div><div class="tx-c-val">{% if l.origem == 'DESCONTO' %}− {% endif %}{{ l.valor_total | float | format_currency }}</div>
+    <div class="tx-c-desc">{{ l.descricao or l.servico_nome }}</div></div>
     <span class="tx-c-st">{% if fase == 'apr' %}<i class="fas fa-hourglass-half"></i> {{ 'pedido ' ~ l.lancado_em.strftime('%d/%m') if l.lancado_em else 'aguardando' }}
       {% elif fase == 'pag' %}<i class="fas fa-circle-check"></i> pago
       {% elif fase == 'atr' %}<i class="fas fa-clock"></i> atrasado
       {% elif l.status == 'APROVADO' and l.destino == 'MENSAL' %}<i class="fas fa-calendar"></i> no lote de {{ l.competencia.strftime('%m/%Y') }}
       {% elif falhou %}<i class="fas fa-triangle-exclamation"></i> a cobrança não saiu
       {% else %}<i class="fas fa-paper-plane"></i> cobrado{% endif %}</span></div>
+  {% if l.destino == 'MENSAL' %}<span class="lm-venc mensal"><span class="dd"><i class="fas fa-calendar"></i></span>mensalidade de {{ l.competencia.strftime('%m/%Y') }}</span>
+  {% elif l.titulo_vencimento or l.vencimento %}{% set vd = l.titulo_vencimento or l.vencimento %}<span class="lm-venc" data-venc="{{ vd.isoformat() }}" data-pago="{{ '1' if fase == 'pag' else '' }}" title="Vencimento"><span class="dd">{{ vd.strftime('%d') }}</span>vence {{ vd.strftime('%d/%m') }}<em></em></span>{% endif %}
   {% if falhou %}{% set mf = motivo_nfse(l.motivo_falha) %}<div class="lm-falha"><i class="fas fa-circle-exclamation"></i> {% if mf.texto %}<b>{{ mf.texto }}</b>{% if mf.cod %} <small>({{ mf.cod }})</small>{% endif %}<br>{{ mf.fazer or 'Corrija o que o governo apontou e emita de novo.' }}{% if mf.bruto and mf.texto != mf.bruto %}<br><small title="{{ mf.bruto }}">Texto do governo: {{ mf.bruto[:160] }}{{ '…' if mf.bruto|length > 160 }}</small>{% endif %}{% else %}A nota ou o boleto não saíram na aprovação.{% endif %}{% if aprov %} {{ 'Depois toque em Cobrar de novo.' if mf.texto else 'Corrija o cadastro e cobre de novo.' }}{% else %} Quem aprova vai cobrar de novo.{% endif %}</div>{% endif %}
-  <div style="margin-top:8px"><span class="lm-tipo {{ 'lm-t-me' if l.destino == 'MENSAL' else 'lm-t-av' }}"><i class="fas {{ 'fa-calendar' if l.destino == 'MENSAL' else 'fa-barcode' }}"></i> {{ l.como }}</span>
+  <div style="margin-top:8px">{% if l.origem == 'DESCONTO' %}<span class="lm-tipo lm-t-desc"><i class="fas fa-tag"></i> desconto {{ 'na mensalidade' if l.desc_sobre == 'MENSAL' else 'sobre o serviço' }}</span> {% endif %}<span class="lm-tipo {{ 'lm-t-me' if l.destino == 'MENSAL' else 'lm-t-av' }}"><i class="fas {{ 'fa-calendar' if l.destino == 'MENSAL' else 'fa-barcode' }}"></i> {{ l.como }}</span>
     {% if l.parcelas and l.parcelas > 1 and not l.parcela %}<span class="lm-tipo lm-t-parc"><i class="fas fa-layer-group"></i> em {{ l.parcelas }}x de {{ ((l.valor_total | float) / l.parcelas) | format_currency }}</span>
     {% elif l.parcela %}<span class="lm-tipo lm-t-parc"><i class="fas fa-layer-group"></i> parcela {{ l.parcela }}/{{ l.parcelas }}</span>{% endif %}</div>
   {% if adiantavel %}<div class="lm-adi"><i class="fas fa-forward"></i> {{ 'Cliente em atraso.' if fase == 'atr' else 'O cliente ainda não pagou.' }} Marque para pedir a comissão adiantada; se não recebermos, ela é descontada dos próximos pedidos.</div>
@@ -300,7 +312,9 @@
     <div class="lm-com"><span>Comissão <b>{{ l.comissao_valor | float | format_currency }}</b></span>
       <span class="lm-cs {{ {'AGUARDANDO': 'lm-cs-ag', 'LIBERADA': 'lm-cs-lib', 'FECHADA': 'lm-cs-pg', 'PAGA': 'lm-cs-pg'}.get(l.comissao_status, 'lm-cs-ag') }}">{{ l.situacao_com }}</span></div>
   {% endif %}
-  {% if fase == 'apr' and aprov %}
+  {% if l.origem == 'DESCONTO' and l.desc_lancamento_id and fase == 'apr' %}
+    <div class="lm-junto"><i class="fas fa-link"></i> Pedido junto com o lançamento nº {{ l.desc_lancamento_id }}: é aprovado, reprovado ou cancelado com ele.</div>
+  {% elif fase == 'apr' and aprov %}
     <div class="lm-ac"><button type="button" class="no" onclick="lmReprovar({{ l.id }})"><i class="fas fa-xmark"></i> Reprovar</button>
       <button type="button" class="ok" onclick="lmAprovar({{ l.id }})"><i class="fas fa-check"></i> Aprovar</button></div>
   {% elif fase == 'apr' and l.lancado_por == eu.id and not l.carteira and pode_rota('financeiro.lancamento_cancelar') %}
@@ -326,7 +340,7 @@
   {% for k in (ordem | sort(reverse=(fase == 'pag'))) %}{% set itens = meses[k] %}{% set mm = k[5:7] | int %}
     <div class="lm-mes" data-mes="{{ k }}" data-fase="{{ fase }}">
       <div class="lm-mes-h"><span class="ic"><b>{{ NOMES[mm - 1][:3] if mm else '—' }}</b><small>{{ k[:4] if mm else '' }}</small></span>
-        <h3>{{ (NOMES[mm - 1] ~ ' de ' ~ k[:4]) if mm else 'sem data' }}</h3>
+        <h3>{{ (NOMES[mm - 1] | capitalize ~ ' de ' ~ k[:4]) if mm else 'Sem data' }}</h3>
         <span class="lm-mes-n"><b>{{ itens | length }}</b> lançamento{{ 's' if itens | length != 1 }}</span>
         <span class="lm-mes-v">{{ itens | sum(attribute='valor_total') | float | format_currency }}</span></div>
       <div class="tx-grade">{% for l in itens %}{{ cartao(l, fase) }}{% endfor %}</div>
@@ -529,7 +543,8 @@
       <button type="button" class="ns-op" data-v="MENSAL"><i class="fas fa-calendar-plus"></i><b>Na mensalidade</b><small>entra no boleto do mês escolhido</small></button></div></section>
     {% endif %}
     <section class="ns-b"><div class="ns-h"><i class="fas fa-briefcase"></i> Serviço e valor</div><div class="ns-campos">
-      <div class="ns-campo"><label>Serviço</label><select id="nsServ" name="servico_id" placeholder="Escolha o serviço"></select></div>
+      <div class="ns-campo"><label>Serviço</label><select id="nsServ" name="servico_id" placeholder="Escolha o serviço"></select>
+        <button type="button" class="ns-in ns-serv-bt vazio" id="nsServBt" onclick="nsServAbrir()"><span class="sg">?</span><span class="tx"><b>Escolher o serviço</b><small>toque para abrir a lista</small></span><i class="fas fa-chevron-right"></i></button></div>
       <div class="ns-campo"><label>Valor (R$)</label><input class="ns-in" id="nsValor" name="valor" inputmode="numeric" placeholder="0,00" autocomplete="off"></div>
       <div class="ns-campo" id="nsVencBox"><label>Vencimento do boleto</label><input class="ns-in" type="date" id="nsVenc" name="vencimento"></div>
       <div class="ns-campo"><label>Parcelas</label><div class="ns-parc"><select class="ns-in" id="nsParc" name="parcelas">{% for k in range(1, 13) %}<option value="{{ k }}">{{ k }}x</option>{% endfor %}</select><small id="nsParcTxt">à vista</small></div></div>
@@ -542,6 +557,14 @@
       <div class="ns-campo" id="nsCompBox" hidden><label>Mensalidade de</label><select class="ns-in" id="nsComp" name="competencia"></select></div>
       <div class="ns-campo" style="grid-column:1/-1"><label>Texto da nota / do boleto</label><input class="ns-in" id="nsDesc" name="descricao" maxlength="200" placeholder="o nome do serviço"></div>
     </div></section>
+    <section class="ns-b" id="nsDescBox"><div class="ns-h"><i class="fas fa-tag"></i> Desconto <em>opcional · sai no boleto como linha própria e fica no controle</em></div>
+      <div class="ns-seg" id="nsDescSeg"><button type="button" data-v="" class="on">Sem desconto</button><button type="button" data-v="FIXO">Valor fixo</button><button type="button" data-v="PCT">Porcentagem</button></div>
+      <input type="hidden" name="desc_tipo" id="nsDescTipo" value=""><input type="hidden" name="desc_sobre" id="nsDescSobreIn" value="SERVICO">
+      <div class="ns-campos" id="nsDescCampos" hidden style="margin-top:10px">
+        <div class="ns-campo"><label>Desconto <b class="ns-desc-un" id="nsDescUn">R$</b></label><input class="ns-in" id="nsDescValor" name="desc_valor" inputmode="numeric" placeholder="0,00" autocomplete="off"><input class="ns-in" id="nsDescPct" name="desc_valor" inputmode="decimal" placeholder="10" maxlength="6" disabled hidden></div>
+        <div class="ns-campo"><label>Sobre o quê</label><div class="ns-seg" id="nsDescSobre"><button type="button" data-v="SERVICO" class="on">Este serviço</button><button type="button" data-v="MENSAL">A mensalidade</button></div></div>
+        <div class="ns-campo" style="grid-column:1/-1"><label>Motivo <small>obrigatório · ex.: guias de INSS apuradas pelo DP, erro na guia</small></label><input class="ns-in" id="nsDescMotivo" name="desc_motivo" maxlength="200" placeholder="por que o cliente ganha este desconto"></div>
+      </div></section>
     <section class="ns-b" id="nsComBox"{{ ' hidden' if aprov }}><div class="ns-h"><i class="fas fa-hand-holding-dollar"></i> Sua comissão <em id="nsComPad"></em></div>
       <div class="ns-com"><div class="ns-seg" id="nsSeg"><button type="button" data-v="PADRAO" class="on">Padrão</button><button type="button" data-v="PCT">Outro %</button><button type="button" data-v="FIXO">Valor fixo</button><button type="button" data-v="SEM">Sem comissão</button></div>
         <input class="ns-in" id="nsCv" name="comissao_valor" inputmode="decimal" placeholder="%" hidden><b id="nsCr" style="color:#6d28d9"></b></div>
@@ -660,6 +683,7 @@
 })();
 </script>
 <script src="https://cdn.jsdelivr.net/npm/tom-select@2.4.3/dist/js/tom-select.complete.min.js"></script>
+<script src="{{ url_for('static', filename='js/caixa_servico.js') }}"></script>
 <script>
 (function () {
   var D = JSON.parse(document.getElementById('lmDados').textContent);
@@ -742,10 +766,10 @@
       var p = el.dataset.venc.split('-'), d = new Date(+p[0], +p[1] - 1, +p[2]), dias = Math.round((d - h) / 864e5), em = el.querySelector('em');
       var txt = SEM[d.getDay()], cls = 'longe';
       if (el.dataset.pago) { cls = 'longe'; }
-      else if (dias < 0) { cls = 'passou'; txt = 'venceu há ' + (-dias) + (dias === -1 ? ' dia' : ' dias'); }
+      else if (dias < 0) { cls = 'passou'; txt = 'há ' + (-dias) + (dias === -1 ? ' dia' : ' dias'); }
       else if (dias === 0) { cls = 'hoje'; txt = 'vence hoje'; }
       else if (dias <= 7) { cls = 'perto'; txt = (dias === 1 ? 'amanhã' : 'em ' + dias + ' dias') + ' · ' + SEM[d.getDay()]; }
-      else if (dias <= 31) { cls = ''; txt = 'em ' + dias + ' dias'; }
+      else if (dias <= 31) { cls = ''; txt = 'em ' + dias + ' dias · ' + SEM[d.getDay()]; }
       if (cls) el.classList.add(cls);
       if (em) em.textContent = '· ' + txt;
     });
@@ -931,28 +955,33 @@
     return a.tipo === 'FIXO' ? a.valor : valor * a.valor / 100;
   }
   function resumo() {
-    var c = cliente(), s = servico(), valor = num($('nsValor').value), com = comissao(valor), a = acordo(s ? s.id : null);
+    var c = cliente(), s = servico(), valor = num($('nsValor').value), ds = desconto(valor, c), liq = Math.max(0, Math.round((valor - ds.valor) * 100) / 100), com = comissao(liq), a = acordo(s ? s.id : null);
+    // "A mensalidade" só quando a cobrança vai na mensalidade de quem tem contrato
+    var bms = $('nsDescSobre').querySelector('[data-v=MENSAL]'); bms.disabled = !(como === 'MENSAL' && c && c.mensal);
+    if (bms.disabled && dsobre === 'MENSAL') { dsobre = 'SERVICO'; $('nsDescSobreIn').value = 'SERVICO'; $('nsDescSobre').querySelectorAll('button').forEach(function (b) { b.classList.toggle('on', b.dataset.v === 'SERVICO'); }); ds = desconto(valor, c); liq = Math.max(0, Math.round((valor - ds.valor) * 100) / 100); com = comissao(liq); }
+    nsServPinta();
     var rot = !a ? '' : a.sem ? 'sem comissão' : (a.tipo === 'FIXO' ? brl(a.valor) + ' fixo' : a.valor + '%');
     $('nsComPad').textContent = a ? 'padrão deste serviço: ' + rot : 'você não tem acordo de comissão';
     $('nsSeg').querySelector('[data-v=PADRAO]').textContent = a ? 'Padrão (' + (a.sem ? 'sem' : a.tipo === 'FIXO' ? brl(a.valor) : a.valor + '%') + ')' : 'Padrão (sem acordo)';
     $('nsCr').textContent = '= ' + brl(com);
-    $('nsPv').textContent = brl(como === 'MENSAL' && c && c.mensal ? c.mensal + valor : valor);
+    $('nsPv').textContent = brl(como === 'MENSAL' && c && c.mensal ? c.mensal + liq : liq);
     $('nsPc').textContent = D.aprovador ? (como === 'MENSAL' ? 'no boleto da mensalidade' : 'emissão agora') : (com ? 'sua comissão: ' + brl(com) : (s ? 'sem comissão' : 'escolha o serviço'));
     var comp = $('nsComp').selectedOptions[0];
     var linhas = [['Cliente', c ? (c.num ? c.num + ' · ' : '') + c.nome : '—'], ['Cobrança', { BOLETO_NOTA: 'Boleto + nota fiscal', BOLETO: 'Só boleto', MENSAL: 'Na mensalidade' + (comp ? ' de ' + comp.textContent : '') }[como]],
-                  ['Serviço', s ? s.nome : '—']];
+                  ['Serviço', s ? s.nome : (ds.valor && ds.sobre === 'MENSAL' ? 'só o desconto' : '—')]];
+    if (ds.valor) linhas.push(['Desconto', (ds.sobre === 'MENSAL' ? 'na mensalidade' : 's/ ' + (s ? s.nome : 'o serviço')) + ' − ' + brl(ds.valor) + (ds.pct ? ' (' + ds.pct.toLocaleString('pt-BR') + '%)' : '')]);
     var np = +$('nsParc').value || 1;
     if (como !== 'MENSAL' && np <= 1) linhas.push(['Vencimento', dbr($('nsVenc').value) || '—']);
-    if (np > 1) linhas.push(['Parcelas', np + 'x de ' + brl(valor / np)]);
-    $('nsParcTxt').textContent = np > 1 ? np + 'x de ' + brl(valor / np) : 'à vista';
-    parcLinhas($('nsParcL'), np, valor, como === 'MENSAL', como === 'MENSAL' ? (comp ? comp.value : '') : $('nsVenc').value, null, como === 'MENSAL' ? $('nsComp') : $('nsVenc'));
+    if (np > 1) linhas.push(['Parcelas', np + 'x de ' + brl(liq / np)]);
+    $('nsParcTxt').textContent = np > 1 ? np + 'x de ' + brl(liq / np) : 'à vista';
+    parcLinhas($('nsParcL'), np, liq, como === 'MENSAL', como === 'MENSAL' ? (comp ? comp.value : '') : $('nsVenc').value, null, como === 'MENSAL' ? $('nsComp') : $('nsVenc'));
     $('nsParcBox').hidden = np <= 1;
     if (np > 1) { $('nsVencBox').hidden = true; $('nsCompBox').hidden = true; } else { $('nsVencBox').hidden = como === 'MENSAL'; $('nsCompBox').hidden = como !== 'MENSAL'; }
     if (!D.aprovador) linhas.push(['Comissão', com ? brl(com) + (ct === 'PCT' ? ' (' + num($('nsCv').value) + '%)' : '') : 'sem']);
     var h = '<div class="ns-h"><i class="fas fa-eye"></i> Resumo</div>' + linhas.map(function (x) { return '<div><span>' + x[0] + '</span><b>' + esc(x[1]) + '</b></div>'; }).join('');
-    if (como === 'MENSAL' && c) h += '<div><span>Mensalidade</span><b>' + (c.mensal ? brl(c.mensal) : 'sem contrato') + '</b></div><div class="big"><span>Boleto do mês</span><b>' + brl((c.mensal || 0) + valor) + '</b></div>';
-    else h += np > 1 ? '<div><span>Total</span><b>' + brl(valor) + '</b></div><div class="big"><span>Cada boleto</span><b>' + brl(valor / np) + '</b></div>'
-                     : '<div class="big"><span>Total do boleto</span><b>' + brl(valor) + '</b></div>';
+    if (como === 'MENSAL' && c) h += '<div><span>Mensalidade</span><b>' + (c.mensal ? brl(c.mensal) : 'sem contrato') + '</b></div><div class="big"><span>Boleto do mês</span><b>' + brl((c.mensal || 0) + liq) + '</b></div>';
+    else h += np > 1 ? '<div><span>Total</span><b>' + brl(liq) + '</b></div><div class="big"><span>Cada boleto</span><b>' + brl(liq / np) + '</b></div>'
+                     : (ds.valor ? '<div><span>Serviço</span><b>' + brl(valor) + '</b></div><div><span>Desconto</span><b>− ' + brl(ds.valor) + '</b></div>' : '') + '<div class="big"><span>Total do boleto</span><b>' + brl(liq) + '</b></div>';
     $('nsRes').innerHTML = h;
     // 19/11/2026 — "na mensalidade" só com contrato de honorários ativo: sem contrato não há boleto do mês para entrar
     var bm = $('nsOps').querySelector('.ns-op[data-v="MENSAL"]');
@@ -985,6 +1014,35 @@
     $('nsCv').hidden = !(v === 'PCT' || v === 'FIXO'); $('nsCv').placeholder = v === 'PCT' ? '%' : 'R$'; if (!$('nsCv').hidden) $('nsCv').focus();
     resumo();
   }
+  // ── 19/11/2026: serviço na caixa nossa + Desconto ──
+  function nsSigla(nome) { var p = String(nome || '').replace(/—.*$/, '').trim().split(/\s+/).filter(function (x) { return x.length > 2 || /^[A-Z0-9-]+$/.test(x); }); if (p.length === 1 && /^[A-Z0-9-]{2,5}$/.test(p[0])) return p[0].slice(0, 4); return (((p[0] || '')[0] || '') + ((p[1] || '')[0] || '')).toUpperCase(); }
+  function nsCor(s) { var C = ['#0f766e', '#4f46e5', '#b45309', '#be123c', '#7c3aed', '#0369a1', '#15803d', '#c2410c'], h = 0; String(s).split('').forEach(function (c) { h = (h * 31 + c.charCodeAt(0)) >>> 0; }); return C[h % 8]; }
+  function nsServPinta() {
+    var bt = $('nsServBt'); if (!bt) return; var s = servico(), sg = bt.querySelector('.sg'), b = bt.querySelector('b'), sm = bt.querySelector('small');
+    if (s) { sg.textContent = nsSigla(s.nome); sg.style.background = nsCor(s.nome.split(' — ')[0]); sg.style.color = '#fff'; b.textContent = s.nome; sm.textContent = (s.valor ? brl(s.valor) + ' · ' : '') + (s.nota ? 'com nota fiscal' : 'sem nota fiscal') + ' · toque para trocar'; bt.classList.remove('vazio'); }
+    else { sg.textContent = '?'; sg.style.background = ''; sg.style.color = ''; b.textContent = dtipo && dsobre === 'MENSAL' ? 'Sem serviço (só o desconto)' : 'Escolher o serviço'; sm.textContent = 'toque para abrir a lista'; bt.classList.toggle('vazio', !(dtipo && dsobre === 'MENSAL')); }
+  }
+  window.nsServAbrir = function () {
+    if (!window.CaixaServico || !tsServ) return;
+    CaixaServico.abrir({ servicos: D.servicos.map(function (s) { return { id: s.id, nome: s.nome, n: s.n || 0, valor_padrao: s.valor || null }; }), atual: { servico_id: tsServ.getValue() }, titulo: 'Serviço da cobrança',
+      empresa: (cliente() || {}).nome || 'escolha o serviço', z: 1300, onUsar: function (e) { tsServ.setValue(e.servico_id || ''); if (e.complemento) $('nsDesc').value = e.descricao; } });
+  };
+  var dtipo = '', dsobre = 'SERVICO';
+  function descCampo() { return $(dtipo === 'PCT' ? 'nsDescPct' : 'nsDescValor'); }
+  function setDesc(v) {
+    dtipo = v; $('nsDescTipo').value = v;
+    $('nsDescSeg').querySelectorAll('button').forEach(function (b) { b.classList.toggle('on', b.dataset.v === v); });
+    $('nsDescCampos').hidden = !v; $('nsDescUn').textContent = v === 'PCT' ? '%' : 'R$';
+    $('nsDescValor').hidden = v === 'PCT'; $('nsDescValor').disabled = v === 'PCT' || !v; $('nsDescPct').hidden = v !== 'PCT'; $('nsDescPct').disabled = v !== 'PCT';
+    resumo(); if (v) setTimeout(function () { descCampo().focus(); }, 30);
+  }
+  function setDescSobre(v) { dsobre = v; $('nsDescSobreIn').value = v; $('nsDescSobre').querySelectorAll('button').forEach(function (b) { b.classList.toggle('on', b.dataset.v === v); }); resumo(); }
+  function desconto(valor, c) {
+    if (!dtipo) return { valor: 0, base: 0, pct: 0, motivo: '', sobre: dsobre };
+    var v = num(descCampo().value), base = dsobre === 'MENSAL' ? ((c && c.mensal) || 0) : valor;
+    var d = dtipo === 'PCT' ? Math.round(base * v) / 100 : v; if (d > base) d = base;
+    return { valor: Math.round(d * 100) / 100, base: base, pct: dtipo === 'PCT' ? v : 0, motivo: $('nsDescMotivo').value.trim(), sobre: dsobre };
+  }
   function criar() {
     tsCli = new TomSelect('#nsCli', {
       options: D.clientes.map(function (c) { return { value: String(c.id), text: (c.num ? c.num + ' · ' : '') + c.nome, busca: c.num + ' ' + c.nome + ' ' + c.doc, c: c }; }),
@@ -998,7 +1056,7 @@
       dropdownParent: 'body', dropdownClass: 'ts-dropdown ns-dd',
       render: { option: function (o) { return '<div class="ns-o"><span>' + esc(o.text) + '</span><small>' + (o.s.valor ? brl(o.s.valor) : '') + (o.s.nota ? '' : ' · sem nota') + '</small></div>'; } },
       onChange: function () {
-        var s = servico();
+        var s = servico(); nsServPinta();
         if (s) { if (s.valor && !num($('nsValor').value)) $('nsValor').value = brl(s.valor).replace('R$ ', ''); if (!$('nsDesc').value) $('nsDesc').placeholder = s.nome;
                  if (como !== 'MENSAL') setComo(s.nota ? 'BOLETO_NOTA' : 'BOLETO'); }
         // serviço travado (nunca paga comissão): só "Sem comissão"
@@ -1013,6 +1071,14 @@
     var amanha = new Date(); amanha.setDate(amanha.getDate() + 1);       // amanhã no relógio daqui (não em UTC)
     $('nsVenc').value = amanha.getFullYear() + '-' + String(amanha.getMonth() + 1).padStart(2, '0') + '-' + String(amanha.getDate()).padStart(2, '0'); $('nsVenc').min = D.hoje;
     $('nsOps').addEventListener('click', function (e) { var b = e.target.closest('.ns-op'); if (b) setComo(b.dataset.v); });
+    $('nsDescSeg').addEventListener('click', function (e) { var b = e.target.closest('button'); if (b) setDesc(b.dataset.v); });
+    $('nsDescSobre').addEventListener('click', function (e) { var b = e.target.closest('button'); if (b && !b.disabled) setDescSobre(b.dataset.v); });
+    ['nsDescPct', 'nsDescMotivo'].forEach(function (id) { $(id).addEventListener('input', resumo); });
+    $('nsDescValor').addEventListener('input', function () {
+      var d = this.value.replace(/\D/g, '').replace(/^0+/, '').slice(0, 11);
+      this.value = d ? (parseInt(d, 10) / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : ''; resumo();
+    });
+    nsServPinta();
     $('nsSeg').addEventListener('click', function (e) { var b = e.target.closest('button'); if (b) setCt(b.dataset.v); });
     ['nsVenc', 'nsComp', 'nsCv', 'nsParc'].forEach(function (id) { $(id).addEventListener('input', resumo); $(id).addEventListener('change', resumo); });
     $('nsValor').addEventListener('input', function () {     // como na maquininha: 100000 vira 1.000,00
@@ -1020,7 +1086,9 @@
       this.value = d ? (parseInt(d, 10) / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : ''; resumo();
     });
     $('nsForm').addEventListener('submit', function (e) {
-      var m = !tsCli.getValue() ? 'Escolha o cliente.' : !tsServ.getValue() ? 'Escolha o serviço.' : !num($('nsValor').value) ? 'Informe o valor.'
+      var soDesc = !!dtipo && dsobre === 'MENSAL' && !tsServ.getValue(), dd = desconto(num($('nsValor').value), cliente());
+      var m = !tsCli.getValue() ? 'Escolha o cliente.' : (!tsServ.getValue() && !soDesc) ? 'Escolha o serviço (ou marque o desconto "sobre a mensalidade").' : (tsServ.getValue() && !num($('nsValor').value)) ? 'Informe o valor.'
+            : (dtipo && !(dd.valor > 0)) ? 'Informe o valor do desconto.' : (dtipo && !dd.motivo) ? 'Diga o motivo do desconto.'
             : (como !== 'MENSAL' && !$('nsVenc').value) ? 'Informe o vencimento.' : ((ct === 'PCT' || ct === 'FIXO') && !num($('nsCv').value)) ? 'Informe a comissão.' : '';
       if (m) { e.preventDefault(); $('nsMsg').textContent = m; return; }
       if (D.aprovador && como !== 'MENSAL' && !confirm('Emitir agora ' + ({ BOLETO_NOTA: 'a nota e o boleto', BOLETO: 'o boleto' }[como]) + ' de ' + brl(num($('nsValor').value)) + ' para ' + (cliente() || {}).nome + '?')) { e.preventDefault(); return; }
