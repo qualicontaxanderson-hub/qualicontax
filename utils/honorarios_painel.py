@@ -148,11 +148,22 @@ def painel(competencia, empresa_id=EMPRESA_QUALICONTAX):
         else:
             fase = 'emitir'
         l['fase'] = fase
-        tot[fase]['n'] += 1
+        e13 = l.get('tipo') == 'DECIMO'                     # a parcela do 13º soma no valor, não na conta de empresas
+        tot[fase]['n'] += 0 if e13 else 1
         tot[fase]['valor'] += (atual['valor'] if atual else l['total'])
         if fase in ('emitir', 'erro') and l['banco']:
-            por_banco[l['banco']['id']]['n'] += 1
+            por_banco[l['banco']['id']]['n'] += 0 if e13 else 1
             por_banco[l['banco']['id']]['valor'] += l['total']
+    # 19/11/2026 — Anderson: "não queria dois painéis, queria só um e quando emitir emite os dois": a parcela do 13º em
+    # boleto próprio fica DENTRO do cartão da empresa (l['dec13']); marcar a empresa emite a mensalidade e a parcela.
+    dec = {l['cliente_id']: l for l in linhas if l.get('tipo') == 'DECIMO'}
+    linhas = [l for l in linhas if l.get('tipo') != 'DECIMO']
+    for l in linhas:
+        d = dec.get(l['cliente_id'])
+        if d:
+            d['pendente'] = d['fase'] in ('emitir', 'erro')
+        l['dec13'] = d
+        l['pendente'] = l['fase'] in ('emitir', 'erro') or bool(d and d['pendente'])
     # atrasados de meses anteriores (quem deve mensalidade velha), separado da cobrança do mês
     devendo = [l for l in linhas if l['atrasos']]
     n_nota = sum(1 for l in linhas if l['nota'])

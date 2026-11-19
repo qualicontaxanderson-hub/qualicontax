@@ -62,8 +62,9 @@ def lote_emitir():
     comp = _competencia()
     marcados = request.form.getlist('cliente')
     so = [int(x) for x in marcados if str(x).isdigit()] if marcados else None
-    # 19/11/2026: "149d" = a parcela do 13º em boleto próprio da empresa 149 (cartão separado no painel)
-    sod = [int(x[:-1]) for x in marcados if str(x).endswith('d') and str(x)[:-1].isdigit()] if marcados else None
+    # 19/11/2026: marcar a empresa emite a mensalidade E a parcela do 13º em boleto próprio (Anderson: "um painel só e
+    # quando emitir emite os dois"); cada uma só sai se ainda não saiu neste lote
+    sod = so
     # 19/11/2026 — vencimento escolhido na janela ("outra data"); vazio = dia do contrato
     venc, raw = None, (request.form.get('vencimento') or '').strip()
     if raw:
