@@ -40,7 +40,12 @@ def _data(raw):
 
 
 def _servicos():
-    return execute_query("SELECT id, nome FROM nfse_servicos WHERE ativo = 1 ORDER BY ordem, nome", fetch=True) or []
+    """Serviços para a caixa da linha do contrato: com o valor padrão e em quantos contratos ativos aparece (19/11/2026)."""
+    rows = execute_query("""SELECT s.id, s.nome, s.valor_padrao,
+                                   (SELECT COUNT(*) FROM fin_contrato_itens i JOIN fin_contratos c ON c.id = i.contrato_id AND c.situacao = 'ATIVO'
+                                     WHERE i.servico_id = s.id) AS n
+                              FROM nfse_servicos s WHERE s.ativo = 1 ORDER BY s.ordem, s.nome""", fetch=True) or []
+    return [{'id': r['id'], 'nome': r['nome'], 'n': int(r['n'] or 0), 'valor_padrao': float(r['valor_padrao']) if r['valor_padrao'] is not None else None} for r in rows]
 
 
 def _grupos():
