@@ -205,12 +205,18 @@
         <!-- Flash Messages -->
         {% with messages = get_flashed_messages(with_categories=true) %}
             {% if messages %}
-                <div class="flash-messages">
+                {# 19/11/2026 — avisos no meio da tela: verde/azul somem sozinhos; vermelho/amarelo ficam até "Fechar" #}
+                {% set ns = namespace(fica=false) %}
+                {% for category, message in messages %}{% if category in ('danger', 'error', 'warning') %}{% set ns.fica = true %}{% endif %}{% endfor %}
+                <div class="flash-messages{{ ' com-fundo' if ns.fica }}" id="qcAvisos" role="status" aria-live="polite">
                     {% for category, message in messages %}
-                        <div class="alert alert-{{ category }}">
-                            <i class="fas fa-{{ 'check-circle' if category == 'success' else 'exclamation-triangle' if category == 'warning' else 'info-circle' if category == 'info' else 'times-circle' }}"></i>
-                            <span>{{ message }}</span>
-                            <button class="alert-close">&times;</button>
+                        {% set cat = 'danger' if category == 'error' else category %}
+                        {% set fica = cat in ('danger', 'warning') %}
+                        <div class="alert alert-{{ cat }} {{ 'fica' if fica else 'some' }}">
+                            <i class="fas fa-{{ 'circle-check' if cat == 'success' else 'triangle-exclamation' if cat == 'warning' else 'circle-info' if cat == 'info' else 'circle-xmark' }} alert-ico"></i>
+                            <span class="alert-txt">{{ message }}</span>
+                            {% if fica %}<button type="button" class="alert-fechar">Fechar</button>{% else %}<i class="alert-barra"></i>{% endif %}
+                            <button type="button" class="alert-close" aria-label="Fechar">&times;</button>
                         </div>
                     {% endfor %}
                 </div>

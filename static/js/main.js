@@ -84,20 +84,30 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    // ── Auto-hide alerts after 5 seconds ──
-    document.querySelectorAll('.alert').forEach(function(alert) {
-        const closeBtn = alert.querySelector('.alert-close');
-        if (closeBtn) {
-            closeBtn.addEventListener('click', function() {
-                alert.style.opacity = '0';
-                setTimeout(() => alert.remove(), 300);
-            });
+    // ── Avisos do sistema (19/11/2026): verde/azul somem em 4,5 s (param com o mouse em cima);
+    //    vermelho/amarelo ficam até "Fechar", o × ou Esc. Quando o último sai, o fundo escurecido sai junto. ──
+    const caixaAvisos = document.getElementById('qcAvisos');
+    if (caixaAvisos) {
+        function tirar(alert) {
+            if (!alert || alert.classList.contains('saindo')) return;
+            alert.classList.add('saindo');
+            setTimeout(function () {
+                alert.remove();
+                if (!caixaAvisos.querySelector('.alert.fica')) caixaAvisos.classList.remove('com-fundo');
+                if (!caixaAvisos.querySelector('.alert')) caixaAvisos.remove();
+            }, 260);
         }
-        setTimeout(function() {
-            alert.style.opacity = '0';
-            setTimeout(() => alert.remove(), 300);
-        }, 5000);
-    });
+        caixaAvisos.querySelectorAll('.alert').forEach(function (alert) {
+            alert.querySelectorAll('.alert-close, .alert-fechar').forEach(function (b) { b.addEventListener('click', function () { tirar(alert); }); });
+            if (alert.classList.contains('some')) {
+                let resta = 4500, inicio = Date.now(), t = setTimeout(function () { tirar(alert); }, resta);
+                alert.addEventListener('mouseenter', function () { clearTimeout(t); resta -= Date.now() - inicio; });
+                alert.addEventListener('mouseleave', function () { inicio = Date.now(); t = setTimeout(function () { tirar(alert); }, Math.max(resta, 800)); });
+            }
+        });
+        caixaAvisos.addEventListener('click', function (e) { if (e.target === caixaAvisos) { /* clicou fora dos cartões: nada */ } });
+        document.addEventListener('keydown', function (e) { if (e.key === 'Escape') caixaAvisos.querySelectorAll('.alert.fica').forEach(tirar); });
+    }
 
 });
 
