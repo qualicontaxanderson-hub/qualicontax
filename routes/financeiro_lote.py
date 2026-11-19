@@ -60,7 +60,10 @@ def lote():
 @permission_required(PERM)
 def lote_emitir():
     comp = _competencia()
-    so = [int(x) for x in request.form.getlist('cliente') if str(x).isdigit()] or None
+    marcados = request.form.getlist('cliente')
+    so = [int(x) for x in marcados if str(x).isdigit()] if marcados else None
+    # 19/11/2026: "149d" = a parcela do 13º em boleto próprio da empresa 149 (cartão separado no painel)
+    sod = [int(x[:-1]) for x in marcados if str(x).endswith('d') and str(x)[:-1].isdigit()] if marcados else None
     # 19/11/2026 — vencimento escolhido na janela ("outra data"); vazio = dia do contrato
     venc, raw = None, (request.form.get('vencimento') or '').strip()
     if raw:
@@ -73,12 +76,12 @@ def lote_emitir():
             flash('O vencimento escolhido (%s) já passou. Escolha hoje ou uma data à frente.' % venc.strftime('%d/%m/%Y'), 'danger')
             return redirect(url_for('financeiro.honorarios', competencia=comp.strftime('%Y-%m')))
     try:
-        lote_id = lote_mensal.rodar(current_app._get_current_object(), EMP, comp, current_user.id, so_clientes=so, vencimento=venc)
+        lote_id = lote_mensal.rodar(current_app._get_current_object(), EMP, comp, current_user.id, so_clientes=so, vencimento=venc, so_decimo=sod)
     except ValueError as e:
         flash(str(e), 'danger')
         return redirect(url_for('financeiro.honorarios', competencia=comp.strftime('%Y-%m')))
     registrar('escrita.emitiu_lote_mensal', 'financeiro', tabela='fin_lotes_mensais', registro_id=lote_id,
-              depois={'competencia': comp.strftime('%Y-%m'), 'so_clientes': so, 'vencimento': venc.isoformat() if venc else 'dia do contrato'})
+              depois={'competencia': comp.strftime('%Y-%m'), 'so_clientes': so, 'so_decimo': sod, 'vencimento': venc.isoformat() if venc else 'dia do contrato'})
     flash('Cobrança de %s em emissão%s. Acompanhe no alto da tela; ela atualiza sozinha.'
           % (comp.strftime('%m/%Y'), (' com vencimento em ' + venc.strftime('%d/%m/%Y')) if venc else ''), 'success')
     return redirect(url_for('financeiro.honorarios', competencia=comp.strftime('%Y-%m')))

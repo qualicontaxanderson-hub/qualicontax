@@ -90,7 +90,8 @@
 .ho-dp-p { display:flex; align-items:center; gap:8px; flex-wrap:wrap; font-size:12.5px; color:#334155; background:#fff; border:1px solid #e2e8f0; border-radius:10px; padding:7px 10px; }
 .ho-dp-p b { margin-left:auto; color:#0f3d2e; } .ho-dp-p a { font-size:12px; font-weight:700; color:#15803d; }
 .ho-dp-p .pill { font-size:11px; font-weight:800; border-radius:999px; padding:2px 8px; white-space:nowrap; }
-.ho-dp-p .pill.pedido { background:#fef3c7; color:#92400e; } .ho-dp-p .pill.emitido { background:#dbeafe; color:#1e40af; } .ho-dp-p .pill.pago { background:#dcfce7; color:#166534; } .ho-dp-p .pill.falhou { background:#fee2e2; color:#991b1b; }
+.ho-dp-p .pill.a_emitir { background:#f1f5f9; color:#475569; } .ho-dp-p .pill.emitido { background:#dbeafe; color:#1e40af; } .ho-dp-p .pill.pago { background:#dcfce7; color:#166534; } .ho-dp-p .pill.falhou, .ho-dp-p .pill.atrasado { background:#fee2e2; color:#991b1b; }
+.ho-dp-tit { font-size:12.5px; font-weight:800; color:#0f3d2e; margin:4px 0 2px; } .ho-dp-tit small { font-weight:600; color:#64748b; }
 .ho-dp-acao { margin-top:10px; display:flex; align-items:center; gap:8px; flex-wrap:wrap; } .ho-dp-acao .ns-bt.prim { font-size:14px; padding:10px 16px; }
 .ho-dp-conf { display:flex; align-items:center; gap:8px; flex-wrap:wrap; background:#fff7ed; border:1px solid #fdba74; border-radius:10px; padding:8px 10px; font-size:12.5px; font-weight:600; color:#9a3412; }
 .ho-dp-conf .ns-bt.mini { padding:7px 12px; border-radius:9px; } .ho-dp-conf .ns-bt.mini.prim { font-size:12.5px; box-shadow:none; }
@@ -421,7 +422,7 @@
               <input type="date" name="decimo_desde" id="ho-dec-desde" class="ns-in" style="width:190px;">
             </div>
             <div class="ho-dec" id="ho-dec-box" style="margin-top:10px;">
-              <div class="ho-dp-cab"><span class="ho-lbl">Parcelas do 13º <small>cada uma é um boleto, separado da mensalidade</small></span>
+              <div class="ho-dp-cab"><span class="ho-lbl">Parcelas do 13º <small>cada uma sai no painel do mês, em boleto separado da mensalidade</small></span>
                 <span class="ns-seg" id="ho-dp-n">{% for k in range(1, 7) %}<button type="button" data-v="{{ k }}" onclick="hoDpN({{ k }})">{{ k }}</button>{% endfor %}</span></div>
               <div id="ho-dec-rows" class="ho-dp-rows"></div>
               <div id="ho-dp-st" class="ho-dp-st"></div>
@@ -731,42 +732,18 @@ function hoDpPinta() {
     var $ = function (i) { return document.getElementById(i); }, st = $('ho-dp-st'), ac = $('ho-dp-acao'); if (!st) return;
     var datas = hoDpDatas(), n = datas.length, ano = hoDpAno(), b = hoDpBase(hoDpTotal(), ano), vals = hoDpReparte(b.valor, n || 1), dp = HO_DP;
     document.querySelectorAll('#ho-dec-rows .ho-dp-v').forEach(function (e, k) { e.textContent = b.meses && b.valor ? brl(vals[k]) : '—'; });
+    // situação de cada parcela do ciclo atual, pelo que o contrato SALVO diz (o painel do mês é quem emite)
     var html = '';
     if (dp && dp.parcelas && dp.parcelas.length) {
+        html = '<div class="ho-dp-tit">13º de ' + dp.ano + ' · ' + brl(Number(dp.base)) + ' em ' + dp.parcelas.length + (dp.parcelas.length === 1 ? ' boleto' : ' boletos') + ' <small>pelo contrato salvo</small></div>';
         dp.parcelas.forEach(function (p) {
-            var quando = p.st === 'pedido' && p.datas ? (p.de > 1 ? p.de + ' parcelas: ' : '') + p.datas.split(',').map(hoDataBr).join(', ') : (p.de > 1 ? p.n + '/' + p.de + ' · ' : '') + 'vence ' + hoDataBr(p.vencimento);
-            html += '<div class="ho-dp-p"><span class="pill ' + p.st + '">' + p.rot + '</span><span>' + quando + '</span><b>' + brl(Number(p.valor)) + '</b>'
+            html += '<div class="ho-dp-p"><span class="pill ' + p.st + '">' + p.rot + '</span><span>' + p.n + '/' + p.de + ' · vence ' + hoDataBr(p.vencimento) + '</span><b>' + brl(Number(p.valor)) + '</b>'
                 + (p.titulo_id ? '<a href="/financeiro/titulos?busca=' + encodeURIComponent($('ho-cli-nome').textContent) + '" target="_blank">ver em Cobranças</a>' : '') + '</div>';
         });
-    } else if ($('ho-id').value) html = '<div class="ho-dp-dica">Nenhum boleto do 13º de ' + ano + ' foi emitido ainda.</div>';
+    }
     st.innerHTML = html;
-    var acao = '', rot = n + (n === 1 ? ' boleto' : ' boletos') + ' do 13º de ' + ano;
-    if (!$('ho-id').value) acao = '<span class="ho-dp-dica"><i class="fas fa-circle-info"></i> Salve o contrato; depois abra de novo e emita os boletos do 13º aqui.</span>';
-    else if (dp && dp.emitido) acao = '<span class="ho-dp-dica">Para mudar data ou valor, cancele o boleto em Cobranças e emita de novo aqui.</span>';
-    else if (!b.meses || !b.valor) acao = '<span class="ho-dp-dica">Pelo "Começa a cobrar" e o valor deste contrato, não há 13º de ' + ano + ' a cobrar.</span>';
-    else {
-        var pedido = dp && dp.parcelas && dp.parcelas.length;
-        acao = '<button type="button" class="ns-bt prim ho-dp-bt" onclick="hoDpEmitir()"><i class="fas fa-paper-plane"></i> '
-            + (dp && dp.pode_emitir ? (pedido ? 'Aprovar e emitir ' : 'Emitir ') + rot + ' · ' + brl(b.valor) : 'Pedir aprovação: ' + rot) + '</button>';
-    }
-    ac.innerHTML = acao;
-}
-function hoDpEmitir(confirmado) {
-    var ac = document.getElementById('ho-dp-acao'), datas = hoDpDatas(), n = datas.length;
-    if (datas.some(function (d) { return !d; })) { ac.innerHTML = '<span class="ho-dp-conf"><i class="fas fa-circle-exclamation"></i> Preencha a data de todas as parcelas. <button type="button" class="ns-bt mini" onclick="hoDpPinta()">Voltar</button></span>'; return; }
-    if (!confirmado) {
-        ac.innerHTML = '<span class="ho-dp-conf"><i class="fas fa-triangle-exclamation"></i> ' + (HO_DP && HO_DP.pode_emitir ? 'Vai emitir ' + n + (n === 1 ? ' boleto' : ' boletos') + ' no banco agora, nas datas acima, e avisar o cliente por e-mail.' : 'Vai pedir a aprovação de ' + n + (n === 1 ? ' boleto' : ' boletos') + ' do 13º.')
-            + ' <button type="button" class="ns-bt mini prim" onclick="hoDpEmitir(1)"><i class="fas fa-check"></i> Confirmar</button><button type="button" class="ns-bt mini" onclick="hoDpPinta()">Voltar</button></span>';
-        return;
-    }
-    ac.innerHTML = '<span class="ho-dp-dica"><i class="fas fa-spinner fa-spin"></i> Emitindo no banco…</span>';
-    var fd = new FormData(); datas.forEach(function (d) { fd.append('dec_data', d); });
-    fetch('/financeiro/honorarios/' + document.getElementById('ho-id').value + '/decimo-proprio', { method: 'POST', body: fd, headers: { 'X-Requested-With': 'fetch' } })
-        .then(function (r) { return r.json(); }).then(function (r) {
-            if (r.decimo_proprio) HO_DP = r.decimo_proprio;
-            hoDpPinta();
-            document.getElementById('ho-dp-st').insertAdjacentHTML('afterbegin', '<div class="ns-aviso ' + (r.ok ? 'ok' : 'red') + '"><i class="fas fa-circle-' + (r.ok ? 'check' : 'exclamation') + '"></i> ' + (r.msgs && r.msgs.length ? r.msgs : [r.erro || 'Não deu certo.']).join('<br>') + '</div>');
-        }).catch(function () { hoDpPinta(); document.getElementById('ho-dp-st').insertAdjacentHTML('afterbegin', '<div class="ns-aviso red"><i class="fas fa-circle-exclamation"></i> Sem resposta do servidor. Veja em Lançamentos se o pedido saiu antes de tentar de novo.</div>'); });
+    ac.innerHTML = '<span class="ho-dp-dica"><i class="fas fa-circle-info"></i> ' + (!$('ho-id').value ? 'Salve o contrato: cada parcela entra no painel do mês anterior ao vencimento, junto com a mensalidade, em boleto separado. ' : 'Cada parcela sai pelo painel do mês anterior ao vencimento, junto com a mensalidade, em boleto separado. ')
+        + 'Os dias repetem todo ano' + (b.meses && b.valor ? '' : '; pelo "Começa a cobrar" e o valor, não há 13º de ' + ano + ' a cobrar') + '.' + (dp && dp.parcelas && dp.parcelas.length && (datas.join() !== dp.ciclo.join()) ? ' <b>Datas alteradas: salve para valer.</b>' : '') + '</span>';
 }
 function hoDecimo() {
     var tipo = document.getElementById('ho-decimo').value, ini = document.getElementById('ho-dec-inicio').value;
@@ -916,7 +893,7 @@ function hoEditar(cid) {
         document.getElementById('ho-dec-desde').value = c.decimo_desde || '';
         var parc = c.decimo_parcelas; if (typeof parc === 'string') { try { parc = JSON.parse(parc); } catch (e) { parc = []; } }
         HO_DP = c.decimo_proprio || null;
-        var dts = (parc || []).map(function (p) { return p && p.data; }).filter(Boolean).sort();
+        var dts = (HO_DP && HO_DP.ciclo && HO_DP.ciclo.length) ? HO_DP.ciclo.slice() : (parc || []).map(function (p) { return p && p.data; }).filter(Boolean).sort();
         if (dts.length) hoDpN(dts.length, dts);
         document.getElementById('ho-reajuste').value = c.reajuste_tipo || 'SALARIO_MINIMO';
         document.getElementById('ho-prox').value = c.proximo_reajuste || ''; document.getElementById('ho-reaj-obs').value = c.reajuste_obs || '';

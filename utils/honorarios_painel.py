@@ -86,6 +86,19 @@ def _historico(clientes, de, ate):
     return out
 
 
+def _titulo_da_parcela(feito):
+    """19/11/2026: a parcela do 13º em boleto próprio tem o título dela (não entra no histórico das mensalidades)."""
+    if not feito or feito.get('status') != 'ok' or not feito.get('titulo_id'):
+        return None
+    t = execute_query('SELECT id, valor, valor_baixado, status, vencimento FROM fin_titulos WHERE id = %s', (feito['titulo_id'],),
+                      fetch=True, fetch_one=True)
+    if not t or t['status'] == 'cancelado':
+        return None
+    st = ('pago' if t['status'] == 'liquidado' else 'parcial' if _d(t['valor_baixado']) > 0 else
+          'atrasado' if t['vencimento'] < date.today() else 'aberto')
+    return {'status': st, 'valor': _d(t['valor']), 'pago': _d(t['valor_baixado']), 'venc': t['vencimento'], 'id': t['id']}
+
+
 def painel(competencia, empresa_id=EMPRESA_QUALICONTAX):
     lote, linhas = lote_mensal.previa(empresa_id, competencia)
     bancos = contas(empresa_id)
@@ -116,11 +129,17 @@ def painel(competencia, empresa_id=EMPRESA_QUALICONTAX):
         l['banco'] = conta or padrao
         l['banco_trocado'] = bool(conta and padrao and conta['id'] != padrao['id'])
         l['banco_mes'] = bool(l.get('conta_mes') and conta)          # só nesta competência
-        h = hist.get(l['cliente_id'], {})
-        l['meses'] = [{'mes': MESES[x.month - 1], 'ano': x.year, **(h.get(x.strftime('%Y-%m')) or {'status': 'sem'})} for x in meses]
-        atual = h.get(venc_mes.strftime('%Y-%m'))
+        if l.get('tipo') == 'DECIMO':
+            # parcela do 13º em boleto próprio: situação pelo título dela; sem as bolinhas das mensalidades
+            atual = _titulo_da_parcela(l.get('feito'))
+            l['meses'] = []
+            l['atrasos'] = [dict(atual, mes=MESES[atual['venc'].month - 1], ano=atual['venc'].year)] if atual and atual['status'] in ('atrasado', 'parcial') else []
+        else:
+            h = hist.get(l['cliente_id'], {})
+            l['meses'] = [{'mes': MESES[x.month - 1], 'ano': x.year, **(h.get(x.strftime('%Y-%m')) or {'status': 'sem'})} for x in meses]
+            atual = h.get(venc_mes.strftime('%Y-%m'))
+            l['atrasos'] = [x for x in l['meses'][:-1] if x['status'] in ('atrasado', 'parcial')]
         l['atual'] = atual
-        l['atrasos'] = [x for x in l['meses'][:-1] if x['status'] in ('atrasado', 'parcial')]
         feito = l.get('feito') or {}
         if feito.get('status') == 'erro':
             fase = 'erro'

@@ -194,6 +194,11 @@ span.hp-bco, span.hp-nf { cursor:default; }
 .hp-msg { color:#b91c1c; font-size:12.5px; font-weight:700; min-height:14px; }
 #hpOpBanco, #hpOpNota { display:flex; flex-direction:column; gap:10px; } #hpOpBanco[hidden], #hpOpNota[hidden] { display:none; }
 .hp-banco { user-select:none; }
+/* 19/11/2026: parcela do 13º em boleto próprio — 2º cartão da empresa */
+.hp-c-13 { box-shadow:inset 4px 0 0 #7c3aed; }
+.hp-13 { font-size:10.5px; font-weight:800; color:#fff; background:#7c3aed; border-radius:6px; padding:2px 7px; flex-shrink:0; white-space:nowrap; }
+.hp-13 i { font-size:9.5px; margin-right:2px; }
+.hp-13-info { font-size:11.5px; color:#5b21b6; background:#f5f3ff; border-radius:8px; padding:6px 9px; margin:8px 0 2px; }
 @media (max-width:900px) { .hp-filtros { margin-left:0; width:100%; } .hp-legenda .dir { margin-left:0; } }
 </style>
 {% endblock %}
@@ -209,14 +214,15 @@ span.hp-bco, span.hp-nf { cursor:default; }
 {% set f = l.fase %}
 {% set cls = {'emitir': 'tx-venc', 'erro': 'tx-venc', 'cobradas': 'tx-hoje', 'pagas': 'tx-ok', 'atrasadas': 'tx-ina'}.get(f, 'tx-fut') %}
 {% set marca = f in ('emitir', 'erro') and pode_emitir %}
-{% set muda = f in ('emitir', 'erro') and pode_esc %}
-<div class="tx-c hp-c {{ cls }}{{ ' marcavel' if marca }}" data-banco="{{ l.banco.id if l.banco else '' }}" data-nota="{{ 1 if l.nota else 0 }}" data-v="{{ l.total | float }}" data-cli="{{ l.cliente_id }}" data-venc="{{ l.vencimento.isoformat() if l.vencimento else '' }}" data-grupo="{{ l.grupo or '' }}" data-dec="{{ 1 if l.decimo else 0 }}"
+{% set dec13 = l.tipo == 'DECIMO' %}
+{% set muda = f in ('emitir', 'erro') and pode_esc and not dec13 %}
+<div class="tx-c hp-c {{ cls }}{{ ' marcavel' if marca }}{{ ' hp-c-13' if dec13 }}" data-tipo="{{ 'DECIMO' if dec13 else 'MENSAL' }}" data-banco="{{ l.banco.id if l.banco else '' }}" data-nota="{{ 1 if l.nota else 0 }}" data-v="{{ l.total | float }}" data-cli="{{ l.cliente_id }}" data-venc="{{ l.vencimento.isoformat() if l.vencimento else '' }}" data-grupo="{{ l.grupo or '' }}" data-dec="{{ 1 if l.decimo else 0 }}"
      data-busca="{{ l.numero or '' }} {{ l.empresa }} {{ l.contrato.nome_fantasia or '' }} {{ l.contrato.cpf_cnpj or '' }} {{ l.grupo or '' }}"{% if marca %} onclick="hpMarcar(event, this)"{% endif %}>
-  {% if marca %}<input type="checkbox" name="cliente" value="{{ l.cliente_id }}" hidden form="hpForm"><span class="hp-ck"><i class="fas fa-check"></i></span>{% endif %}
-  <div class="tx-c-top"><span class="tx-c-num">{{ l.numero or '—' }}</span><span class="tx-c-nome" title="{{ l.empresa }}">{{ l.empresa }}</span></div>
+  {% if marca %}<input type="checkbox" name="cliente" value="{{ l.cliente_id }}{{ 'd' if dec13 }}" hidden form="hpForm"><span class="hp-ck"><i class="fas fa-check"></i></span>{% endif %}
+  <div class="tx-c-top"><span class="tx-c-num">{{ l.numero or '—' }}</span>{% if dec13 %}<span class="hp-13"><i class="fas fa-gift"></i> 13º {{ l.parcela.n }}/{{ l.parcela.de }}</span>{% endif %}<span class="tx-c-nome" title="{{ l.empresa }}">{{ l.empresa }}</span></div>
   <div class="tx-c-meio">
     <div><div class="tx-c-val">{{ (l.atual.valor if l.atual else l.total) | float | format_currency }}</div>
-      <div class="tx-c-desc">{% if f == 'emitir' %}a emitir · competência {{ competencia.strftime('%m/%Y') }}{% elif f == 'erro' %}a cobrança não saiu{% elif f == 'pagas' %}pago{% elif f == 'atrasadas' %}em atraso{% else %}emitida · aguardando{% endif %}</div></div>
+      <div class="tx-c-desc">{% if dec13 %}13º de {{ l.parcela.ano }}, parcela {{ l.parcela.n }}/{{ l.parcela.de }} · boleto próprio · {% endif %}{% if f == 'emitir' %}a emitir{% if not dec13 %} · competência {{ competencia.strftime('%m/%Y') }}{% endif %}{% elif f == 'erro' %}a cobrança não saiu{% elif f == 'pagas' %}pago{% elif f == 'atrasadas' %}em atraso{% else %}emitida · aguardando{% endif %}</div></div>
     <div class="hp-venc">{{ 'venceu' if f == 'pagas' else 'vence' }}<b>{{ (l.atual.venc if l.atual else l.vencimento).strftime('%d/%m/%Y') }}</b></div>
   </div>
   <div class="hp-itens">
@@ -241,6 +247,7 @@ span.hp-bco, span.hp-nf { cursor:default; }
     {%- if muda %}</button>{% else %}</span>{% endif %}
     <span class="hp-chip{{ ' semct' if not l.contatos }}" title="Contatos do Financeiro que recebem a cobrança por e-mail"><i class="fas fa-envelope"></i> {{ (l.contatos ~ ' contato' ~ ('s' if l.contatos != 1 else '')) if l.contatos else 'sem contato' }}</span>
   </div>
+  {% if dec13 %}<div class="hp-13-info"><i class="fas fa-circle-info"></i> Separado da mensalidade{% if l.parcela.n < l.parcela.de %} · a parcela {{ l.parcela.n + 1 }}/{{ l.parcela.de }} vem no painel do mês que vem{% else %} · última parcela do 13º de {{ l.parcela.ano }}{% endif %}</div>{% endif %}
   <div class="hp-meses">{% for m in l.meses %}<span class="hp-m {{ m.status }}{{ ' atual' if loop.last }}" title="vencimento {{ m.mes }}/{{ m.ano }}: {{ {'pago': 'pago', 'aberto': 'a vencer', 'atrasado': 'atrasado', 'parcial': 'pago em parte', 'sem': 'a emitir' if loop.last else 'sem cobrança'}[m.status] }}{% if m.valor %} · {{ m.valor | float | format_currency }}{% endif %}">{{ m.mes }}<i></i></span>{% endfor %}</div>
   {% if l.atrasos and f != 'atrasadas' %}<div class="hp-deve"><i class="fas fa-clock"></i> Deve {{ l.atrasos | map(attribute='mes') | join(', ') }}: {{ (l.atrasos | sum(attribute='valor') - l.atrasos | sum(attribute='pago')) | float | format_currency }}</div>{% endif %}
   {% if f == 'atrasadas' %}<div class="hp-deve"><i class="fas fa-clock"></i> {% for x in l.atrasos %}{{ x.mes }}/{{ x.ano }} {{ (x.valor - x.pago) | float | format_currency }}{{ ' · ' if not loop.last }}{% endfor %}</div>{% endif %}
@@ -652,6 +659,8 @@ function hpEmAbrir() {
   if (ds.length === 1) txt = 'vence em <b>' + hpBr(ds[0]) + '</b>' + (ds[0] === HOJE ? ' — o dia do contrato já passou nesta competência, por isso sai vencendo hoje' : '');
   else if (ds.length > 1) txt = 'cada empresa na sua data: de <b>' + hpBr(ds[0]) + '</b> a <b>' + hpBr(ds[ds.length - 1]) + '</b>' + (ds[0] === HOJE ? ' (as que já passaram do dia saem vencendo hoje)' : '');
   else txt = 'o dia de vencimento de cada contrato, no mês seguinte à competência';
+  var n13 = cards.filter(function (c) { return c.dataset.tipo === 'DECIMO'; }).length;
+  if (n13) txt += ' · <b>13º em boleto próprio</b>: ' + (n13 === 1 ? 'a parcela marcada sai na data combinada' : n13 + ' parcelas marcadas saem nas datas combinadas') + ', mesmo escolhendo "Outra data"';
   document.getElementById('hpEmContratoTxt').innerHTML = txt;
   document.getElementById('hpEmData').value = ''; document.getElementById('hpEmMsg').textContent = '';
   document.getElementById('hpEmCal').hidden = true; hpEmChipsPinta();

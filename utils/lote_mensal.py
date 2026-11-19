@@ -18,7 +18,7 @@ from decimal import Decimal
 
 from werkzeug.datastructures import MultiDict
 
-from models.fin_contrato import EMPRESA_QUALICONTAX, SERVICO_HONORARIOS, FinContrato
+from models.fin_contrato import EMPRESA_QUALICONTAX, SERVICO_DECIMO_PROPRIO, SERVICO_HONORARIOS, FinContrato
 from models.fin_lancamento import FinLancamento, FinLoteMensal, mes_seguinte
 from utils.db_helper import execute_query
 
@@ -82,16 +82,19 @@ def regra_banco(contrato):
     return int(v) if v.isdigit() else None
 
 
-def previa(empresa_id, competencia, so_clientes=None):
-    """Linhas da tela: uma por empresa, com itens, total, vencimento e o que já saiu neste lote."""
+def previa(empresa_id, competencia, so_clientes=None, so_decimo=None):
+    """Linhas da tela: uma por empresa (tipo MENSAL), com itens, total, vencimento e o que já saiu neste lote; e, para
+    quem tem o 13º em boletos próprios, a 2ª linha da empresa (tipo DECIMO) com a parcela que vence no mês seguinte.
+    ``so_clientes``/``so_decimo`` = None: sem filtro; lista: só essas empresas (mensalidade / parcela do 13º)."""
     lote = FinLoteMensal.get(empresa_id, competencia)
     feitos = {}
     if lote:
         for r in execute_query('SELECT * FROM fin_lote_itens WHERE lote_id = %s', (lote['id'],), fetch=True) or []:
-            feitos[r['cliente_id']] = r
+            feitos[(r['cliente_id'], r.get('tipo') or 'MENSAL')] = r
     contratos = contratos_da_competencia(empresa_id, competencia)
-    if so_clientes:
-        contratos = [c for c in contratos if c['cliente_id'] in so_clientes]
+    if so_clientes is not None or so_decimo is not None:
+        quer = set(so_clientes or []) | set(so_decimo or [])
+        contratos = [c for c in contratos if c['cliente_id'] in quer]
     por_contrato, por_cliente = {}, {}
     if contratos:
         ids = [c['id'] for c in contratos]
@@ -106,9 +109,9 @@ def previa(empresa_id, competencia, so_clientes=None):
         itens = itens_da_empresa(c, competencia, por_contrato.get(c['id'], []), por_cliente.get(c['cliente_id'], []))
         total = sum(_d(i['valor']) for i in itens)
         linhas.append({'contrato': c, 'cliente_id': c['cliente_id'], 'numero': c['numero_cliente'], 'empresa': c['nome_razao_social'],
-                       'itens': itens, 'total': total, 'vencimento': vencimento_para(c['dia_vencimento'], competencia),
+                       'tipo': 'MENSAL', 'itens': itens, 'total': total, 'vencimento': vencimento_para(c['dia_vencimento'], competencia),
                        'nota': bool(c.get('gerar_nfse')), 'boleto': bool(c.get('gerar_boleto')),
-                       'contatos': c.get('n_contatos_fin') or 0, 'feito': feitos.get(c['cliente_id'])})
+                       'contatos': c.get('n_contatos_fin') or 0, 'feito': feitos.get((c['cliente_id'], 'MENSAL'))})
         # 18/11/2026 — Anderson: "teremos o Banco Padrão e poderemos decidir emitir por outro caso necessário" e
         # "temos que ter o controle dos que fazem NF e ter as opções de selecionar para ser regra e/ou desmarcar".
         # Ordem: escolha deste mês > regra do contrato > padrão.
@@ -121,6 +124,17 @@ def previa(empresa_id, competencia, so_clientes=None):
         l['conta_regra'] = regra_banco(c)
         l['conta_mes'] = e.get('conta_cobranca_id')
         l['conta_id'] = l['conta_mes'] or l['conta_regra']      # None = o banco padrão
+        # 19/11/2026 — 13º em boletos próprios: a parcela que vence no mês seguinte é a 2ª cobrança da empresa, boleto
+        # separado da mensalidade (Anderson: a FAST paga o 13º em 3 parcelas "mas não nos honorários"). Mesmo banco e
+        # mesma regra de nota da mensalidade; vencimento é o dia combinado (ou hoje, se já passou).
+        p = FinContrato.parcela_decimo_proprio(c, competencia)
+        if p and (so_decimo is None or c['cliente_id'] in so_decimo):
+            linhas.append(dict(l, tipo='DECIMO', parcela=p, boleto=True, total=p['valor'], vencimento=max(p['vencimento'], date.today()),
+                               itens=[{'origem': 'decimo', 'servico_id': SERVICO_DECIMO_PROPRIO,
+                                       'nome': '13º honorário %d · parcela %d/%d' % (p['ano'], p['n'], p['de']), 'valor': str(p['valor'])}],
+                               feito=feitos.get((c['cliente_id'], 'DECIMO'))))
+        if so_clientes is not None and c['cliente_id'] not in so_clientes:
+            linhas.remove(l)                                   # só a parcela do 13º foi marcada; a mensalidade não
     return lote, linhas
 
 
@@ -132,16 +146,17 @@ def _cobrar(linha, lote_id, usuario_id, conta, cfg, empresa_id):
     from utils import nfse_emissor
     itens, total, venc = linha['itens'], linha['total'], linha['vencimento']
     competencia = linha['competencia']
-    rid = execute_query(
-        """INSERT INTO fin_lote_itens (lote_id, cliente_id, contrato_id, itens, total, vencimento, status)
-           VALUES (%s, %s, %s, %s, %s, %s, 'pendente')
+    tipo = linha.get('tipo') or 'MENSAL'           # MENSAL = a mensalidade; DECIMO = parcela do 13º em boleto próprio
+    execute_query(
+        """INSERT INTO fin_lote_itens (lote_id, cliente_id, tipo, contrato_id, itens, total, vencimento, status)
+           VALUES (%s, %s, %s, %s, %s, %s, %s, 'pendente')
            ON DUPLICATE KEY UPDATE itens = VALUES(itens), total = VALUES(total), vencimento = VALUES(vencimento), id = LAST_INSERT_ID(id)""",
-        (lote_id, linha['cliente_id'], linha['contrato']['id'], json.dumps(itens, ensure_ascii=False), total, venc), fetch=False)
+        (lote_id, linha['cliente_id'], tipo, linha['contrato']['id'], json.dumps(itens, ensure_ascii=False), total, venc), fetch=False)
 
     def fechar(status, erro=None, titulo_id=None, nfse_id=None, boleto_id=None, email=None):
         execute_query("""UPDATE fin_lote_itens SET status = %s, erro = %s, titulo_id = %s, nfse_id = %s, boleto_id = %s, email = %s
-                         WHERE lote_id = %s AND cliente_id = %s""",
-                      (status, (erro or None), titulo_id, nfse_id, boleto_id, (email or '')[:255] or None, lote_id, linha['cliente_id']), fetch=False)
+                         WHERE lote_id = %s AND cliente_id = %s AND tipo = %s""",
+                      (status, (erro or None), titulo_id, nfse_id, boleto_id, (email or '')[:255] or None, lote_id, linha['cliente_id'], tipo), fetch=False)
         return status
 
     if total <= 0:
@@ -192,14 +207,15 @@ def _cobrar(linha, lote_id, usuario_id, conta, cfg, empresa_id):
             FinLancamento.marcar_faturado(i['lancamento_id'], titulo_id=titulo_id, nfse_id=nfse_id, boleto_id=boleto_id, lote_id=lote_id)
     # comissão de honorários (cliente "dele") e de indicação: nasce aqui, liberada quando o título for pago
     honor = sum(_d(i['valor']) for i in itens if i['origem'] == 'honorarios')
-    try:
-        FinLancamento.comissoes_do_lote(empresa_id, linha['cliente_id'], competencia, titulo_id, lote_id, honor, nfse_id, boleto_id)
-    except Exception:
-        logger.exception('[lote] comissões da empresa %s', linha['cliente_id'])
+    if tipo == 'MENSAL':                           # o 13º não tem comissão
+        try:
+            FinLancamento.comissoes_do_lote(empresa_id, linha['cliente_id'], competencia, titulo_id, lote_id, honor, nfse_id, boleto_id)
+        except Exception:
+            logger.exception('[lote] comissões da empresa %s', linha['cliente_id'])
     return fechar('ok', titulo_id=titulo_id, nfse_id=nfse_id, boleto_id=boleto_id, email='; '.join(a for a in avisos if a))
 
 
-def rodar(app, empresa_id, competencia, usuario_id, so_clientes=None, vencimento=None):
+def rodar(app, empresa_id, competencia, usuario_id, so_clientes=None, vencimento=None, so_decimo=None):
     """Emite o lote inteiro (ou só ``so_clientes``) numa thread. Devolve o id do lote.
     ``vencimento`` (date): a pessoa escolheu outra data na janela de emissão — vale para todas as empresas desta
     rodada no lugar do dia do contrato (19/11/2026, Anderson: "escolher data do contrato ou outra data")."""
@@ -228,12 +244,12 @@ def rodar(app, empresa_id, competencia, usuario_id, so_clientes=None, vencimento
         _rodando[lote_id] = True
         try:
             with app.app_context(), app.test_request_context('https://app.qualicontax.com.br/'):
-                _lote, linhas = previa(empresa_id, competencia, so_clientes=so_clientes)
+                _lote, linhas = previa(empresa_id, competencia, so_clientes=so_clientes, so_decimo=so_decimo)
                 for linha in linhas:
                     if linha['feito'] and linha['feito']['status'] == 'ok':
                         continue
                     linha['competencia'] = competencia
-                    if vencimento:
+                    if vencimento and (linha.get('tipo') or 'MENSAL') == 'MENSAL':      # a parcela do 13º fica na data combinada
                         linha['vencimento'] = vencimento
                     _cobrar(linha, lote_id, usuario_id, conta_da(linha), cfg, empresa_id)
                 r = execute_query("SELECT COUNT(*) n, COALESCE(SUM(total), 0) t FROM fin_lote_itens WHERE lote_id = %s AND status = 'ok'",

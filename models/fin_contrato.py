@@ -14,6 +14,7 @@ Regras fixas (dele):
   janeiro depois de 12 meses (nov/26 → jan/28). Exceções guardadas em ``reajuste_tipo``;
 * quem não é o Anderson cadastra como ``PENDENTE``; a aprovação dele deixa ``ATIVO``.
 """
+import calendar
 import json
 from datetime import date
 from decimal import Decimal
@@ -296,6 +297,60 @@ class FinContrato:
         """De que ano é o 13º pago nessas datas: 1ª parcela de julho em diante = o ano dela; antes disso, o anterior
         (3 parcelas 25/12, 25/01, 25/02 são o 13º do ano do 25/12; quem começa em janeiro paga o do ano passado)."""
         return primeira_data.year if primeira_data.month >= 7 else primeira_data.year - 1
+
+    @staticmethod
+    def ciclo_decimo_proprio(contrato, hoje=None):
+        """As datas do ciclo atual do 13º em boletos próprios: o dia/mês guardado repete todo ano. O ciclo só vira
+        60 dias depois da última parcela (em março/2027 o da FAST ainda é 25/12/2026, 25/01 e 25/02/2027)."""
+        datas = FinContrato.datas_decimo_proprio(contrato)
+        if not datas:
+            return []
+        hoje = hoje or date.today()
+        m1 = datas[0].month
+
+        def monta(y):
+            out = []
+            for d in datas:
+                yy = y if d.month >= m1 else y + 1
+                out.append(date(yy, d.month, min(d.day, calendar.monthrange(yy, d.month)[1])))
+            return out
+        for y in (hoje.year - 1, hoje.year, hoje.year + 1):
+            ciclo = monta(y)
+            if (hoje - ciclo[-1]).days <= 60:
+                return ciclo
+        return ciclo
+
+    @staticmethod
+    def dividir_decimo(base, n):
+        """base em n parcelas de centavos inteiros; a sobra dos centavos fica na 1ª."""
+        cent = int((_d(base) * 100).quantize(Decimal('1')))
+        b = cent // max(n, 1)
+        return [Decimal(cent - b * (n - 1)) / 100] + [Decimal(b) / 100] * (n - 1)
+
+    @staticmethod
+    def parcela_decimo_proprio(contrato, competencia):
+        """A parcela do 13º em boletos próprios que vence no mês seguinte a esta competência (como a mensalidade),
+        ou None: {'n', 'de', 'ano', 'vencimento', 'valor'}. O valor é o 13º do ano (proporcional aos meses de casa)
+        dividido por igual entre as parcelas. Só o dia/mês guardado conta — repete todo ano."""
+        if (contrato.get('decimo_tipo') or 'NENHUM') != 'PROPRIO':
+            return None
+        datas = FinContrato.datas_decimo_proprio(contrato)
+        if not datas:
+            return None
+        vm = date(competencia.year + (competencia.month == 12), competencia.month % 12 + 1, 1)   # mês do vencimento
+        m1 = datas[0].month
+        for k, d in enumerate(datas):
+            if d.month != vm.month:
+                continue
+            y1 = vm.year if d.month >= m1 else vm.year - 1          # ano da 1ª parcela deste ciclo
+            ano = FinContrato.ano_decimo(date(y1, m1, 1))
+            base = FinContrato.base_decimo(contrato, ano)
+            if base <= 0:
+                return None
+            vals = FinContrato.dividir_decimo(base, len(datas))
+            return {'n': k + 1, 'de': len(datas), 'ano': ano, 'valor': vals[k].quantize(Decimal('0.01')),
+                    'vencimento': date(vm.year, d.month, min(d.day, calendar.monthrange(vm.year, d.month)[1]))}
+        return None
 
     # ---------------- reajuste (06/11/2026) ----------------
     @staticmethod
