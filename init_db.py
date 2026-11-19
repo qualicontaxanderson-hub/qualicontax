@@ -1813,7 +1813,9 @@ def _apply_migrations():
                                     ('lancado_pelo_admin', 'INT NULL'),      # 18/11/2026: "lançado pelo administrador"
                                     # 18/11/2026: serviço parcelado ("1500,00... dividir em 2 ou 3 parcelas")
                                     ('parcelas', 'TINYINT NULL'), ('parcela', 'TINYINT NULL'), ('parcela_grupo', 'INT NULL'),
-                                    ('parcelas_datas', 'VARCHAR(400) NULL')]:     # as datas/meses escolhidos no pedido
+                                    ('parcelas_datas', 'VARCHAR(400) NULL'),      # as datas/meses escolhidos no pedido
+                                    # 19/11/2026: 13º em boletos próprios, pedido de dentro do contrato de honorários
+                                    ('contrato_id', 'INT NULL'), ('decimo_ano', 'SMALLINT NULL')]:
             _c = execute_query(
                 "SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() "
                 "AND TABLE_NAME = 'fin_lancamentos' AND COLUMN_NAME = %s", (_col_name,), fetch=True, fetch_one=True) or {}

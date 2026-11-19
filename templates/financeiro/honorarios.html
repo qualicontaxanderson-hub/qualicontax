@@ -83,7 +83,19 @@
 .ho-bancos { grid-template-columns:repeat(4, minmax(0,1fr)); } .ho-bancos .ns-op i { font-size:16px; color:#f59e0b; }
 .ho-bco-logo { display:block; height:24px; margin-bottom:6px; } .ho-bco-logo img { height:22px; width:auto; border-radius:6px; }
 .ho-venc { display:flex; align-items:center; gap:10px; flex-wrap:wrap; } .ho-venc-outro { display:inline-flex; align-items:center; gap:6px; font-size:12.5px; color:#64748b; } .ho-venc-outro .ns-in { width:76px; text-align:center; }
-.ho-dec-rows > div { display:flex; gap:6px; margin-bottom:6px; } .ho-dec-rows .form-control { height:38px; border:1px solid #d7e3dc; border-radius:10px; padding:0 10px; font:inherit; }
+.ho-dp-cab { display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:8px; }
+.ho-dp-row { display:flex; align-items:center; gap:10px; margin-bottom:6px; } .ho-dp-row .ho-dp-k { width:26px; font-size:12px; font-weight:800; color:#64748b; }
+.ho-dp-row .qcd { flex:0 0 240px; } .ho-dp-row .ho-dp-v { font-size:13.5px; font-weight:800; color:#0f3d2e; }
+.ho-dp-st { margin-top:8px; display:flex; flex-direction:column; gap:5px; }
+.ho-dp-p { display:flex; align-items:center; gap:8px; flex-wrap:wrap; font-size:12.5px; color:#334155; background:#fff; border:1px solid #e2e8f0; border-radius:10px; padding:7px 10px; }
+.ho-dp-p b { margin-left:auto; color:#0f3d2e; } .ho-dp-p a { font-size:12px; font-weight:700; color:#15803d; }
+.ho-dp-p .pill { font-size:11px; font-weight:800; border-radius:999px; padding:2px 8px; white-space:nowrap; }
+.ho-dp-p .pill.pedido { background:#fef3c7; color:#92400e; } .ho-dp-p .pill.emitido { background:#dbeafe; color:#1e40af; } .ho-dp-p .pill.pago { background:#dcfce7; color:#166534; } .ho-dp-p .pill.falhou { background:#fee2e2; color:#991b1b; }
+.ho-dp-acao { margin-top:10px; display:flex; align-items:center; gap:8px; flex-wrap:wrap; } .ho-dp-acao .ns-bt.prim { font-size:14px; padding:10px 16px; }
+.ho-dp-conf { display:flex; align-items:center; gap:8px; flex-wrap:wrap; background:#fff7ed; border:1px solid #fdba74; border-radius:10px; padding:8px 10px; font-size:12.5px; font-weight:600; color:#9a3412; }
+.ho-dp-conf .ns-bt.mini { padding:7px 12px; border-radius:9px; } .ho-dp-conf .ns-bt.mini.prim { font-size:12.5px; box-shadow:none; }
+.ho-dp-dica { font-size:12px; color:#64748b; } .ho-dp-st .ns-aviso { margin:0 0 4px; }
+@media (max-width:560px) { .ho-dp-row { flex-wrap:wrap; } .ho-dp-row .qcd { flex:1 1 100%; order:3; } .ho-dp-row .ho-dp-v { margin-left:auto; } .ho-dp-acao .ns-bt.prim { width:100%; justify-content:center; } }
 #ho-dec-rows .btn { height:38px; width:38px; border:1px solid #e2e8f0; background:#fff; border-radius:10px; color:#94a3b8; cursor:pointer; }
 .ho-res { margin:0; display:flex; flex-direction:column; gap:7px; } .ho-res > div { display:flex; gap:10px; align-items:baseline; font-size:13px; }
 .ho-res dt { flex:0 0 72px; font-size:11px; font-weight:800; letter-spacing:.05em; text-transform:uppercase; color:#94a3b8; } .ho-res dd { margin:0; color:#0f172a; min-width:0; } .ho-res dd b { color:#0f3d2e; }
@@ -253,7 +265,7 @@
                     <td class="fin-valor">{{ c.valor | float | format_currency }}</td>
                     <td>dia {{ c.dia_vencimento }}</td>
                     <td>{{ c.inicio.strftime('%m/%Y') if c.inicio else '—' }}</td>
-                    <td>{% if c.decimo_tipo == 'DUAS' %}2 parcelas{% elif c.decimo_tipo == 'UNICA' %}única{% elif c.decimo_tipo == 'PERSONALIZADO' %}personalizado{% else %}<span class="ho-num">sem</span>{% endif %}</td>
+                    <td>{% if c.decimo_tipo == 'DUAS' %}2 parcelas{% elif c.decimo_tipo == 'UNICA' %}única{% elif c.decimo_tipo == 'PROPRIO' %}boletos próprios{% else %}<span class="ho-num">sem</span>{% endif %}</td>
                     <td>{{ c.criado_por_nome or '—' }}<span class="ho-plano">{{ c.criado_em.strftime('%d/%m/%Y %H:%M') if c.criado_em else '' }}</span></td>
                     <td>{{ c.observacao or '' }}</td>
                     <td class="la-acoes" style="white-space:nowrap;">
@@ -292,7 +304,7 @@
                     <td class="fin-valor fin-td-valor">{{ c.valor | float | format_currency }}</td>
                     <td class="fin-td-oculta"><strong>dia {{ c.dia_vencimento }}</strong> <span class="ho-num">do mês seguinte</span></td>
                     <td class="fin-td-oculta">{{ c.inicio.strftime('%m/%Y') if c.inicio else '—' }}{% if c.fim %} <span class="ho-num">até {{ c.fim.strftime('%m/%Y') }}</span>{% endif %}</td>
-                    <td class="fin-td-oculta">{% if c.decimo_tipo == 'DUAS' %}2 parcelas{% elif c.decimo_tipo == 'UNICA' %}parcela única{% elif c.decimo_tipo == 'PERSONALIZADO' %}personalizado{% else %}<span class="ho-num">sem 13º</span>{% endif %}</td>
+                    <td class="fin-td-oculta">{% if c.decimo_tipo == 'DUAS' %}2 parcelas{% elif c.decimo_tipo == 'UNICA' %}parcela única{% elif c.decimo_tipo == 'PROPRIO' %}boletos próprios{% else %}<span class="ho-num">sem 13º</span>{% endif %}</td>
                     <td class="fin-td-oculta">{% if c.reajuste_tipo == 'SALARIO_MINIMO' %}{{ c.proximo_reajuste.strftime('%m/%Y') if c.proximo_reajuste else '—' }} <span class="ho-num">sal. mínimo</span>{% else %}{{ REAJUSTE_TIPOS.get(c.reajuste_tipo, c.reajuste_tipo) }}{% if c.proximo_reajuste %} <span class="ho-num">{{ c.proximo_reajuste.strftime('%m/%Y') }}</span>{% endif %}{% endif %}</td>
                     <td class="fin-td-oculta">{% if c.n_contatos_fin %}<span class="ho-ok"><i class="fas fa-envelope"></i> {{ c.n_contatos_fin }} contato{{ 's' if c.n_contatos_fin > 1 }}</span>{% else %}<span class="ho-falta" title="Nenhum contato com e-mail marcado no departamento Financeiro"><i class="fas fa-triangle-exclamation"></i> sem contato Financeiro</span>{% endif %}</td>
                     <td class="fin-td-extra"><span class="fin-pilula {{ 'liquidado' if c.situacao == 'ATIVO' else ('alerta' if c.situacao == 'PENDENTE' else 'cancelado') }}">{{ c.situacao | capitalize }}</span>{% if c.cliente_situacao != 'ATIVO' %} <span class="fin-pilula cancelado" title="Cadastro do cliente">{{ c.cliente_situacao | capitalize }}</span>{% endif %}</td>
@@ -396,7 +408,7 @@
               <button type="button" class="ns-op" data-v="NENHUM" onclick="hoDecTipo('NENHUM')"><i class="fas fa-ban"></i><b>Sem 13º</b><small>não cobra ou foi cancelado</small></button>
               <button type="button" class="ns-op" data-v="UNICA" onclick="hoDecTipo('UNICA')"><i class="fas fa-1"></i><b>Parcela única</b><small>vence em dezembro</small></button>
               <button type="button" class="ns-op" data-v="DUAS" onclick="hoDecTipo('DUAS')"><i class="fas fa-2"></i><b>Duas parcelas</b><small>vencem em novembro e dezembro</small></button>
-              <button type="button" class="ns-op" data-v="PERSONALIZADO" onclick="hoDecTipo('PERSONALIZADO')"><i class="fas fa-sliders"></i><b>Personalizado</b><small>frações por competência</small></button>
+              <button type="button" class="ns-op" data-v="PROPRIO" onclick="hoDecTipo('PROPRIO')"><i class="fas fa-receipt"></i><b>Boletos próprios</b><small>fora da mensalidade, nas datas combinadas</small></button>
             </div>
             <span style="display:none"><select name="decimo_tipo" id="ho-decimo" onchange="hoDecimo()">{% for k, v in DECIMO_TIPOS.items() %}<option value="{{ k }}">{{ v }}</option>{% endfor %}</select>
               <select name="decimo_inicio" id="ho-dec-inicio" onchange="hoDecimo()">{% for k, v in DECIMO_INICIOS.items() %}<option value="{{ k }}">{{ v }}</option>{% endfor %}</select></span>
@@ -409,9 +421,11 @@
               <input type="date" name="decimo_desde" id="ho-dec-desde" class="ns-in" style="width:190px;">
             </div>
             <div class="ho-dec" id="ho-dec-box" style="margin-top:10px;">
-              <span class="ho-lbl">Frações <small>competência · % do 13º</small></span>
-              <div id="ho-dec-rows"></div>
-              <button type="button" class="ns-bt mini" onclick="hoAddDec()"><i class="fas fa-plus"></i> fração</button>
+              <div class="ho-dp-cab"><span class="ho-lbl">Parcelas do 13º <small>cada uma é um boleto, separado da mensalidade</small></span>
+                <span class="ns-seg" id="ho-dp-n">{% for k in range(1, 7) %}<button type="button" data-v="{{ k }}" onclick="hoDpN({{ k }})">{{ k }}</button>{% endfor %}</span></div>
+              <div id="ho-dec-rows" class="ho-dp-rows"></div>
+              <div id="ho-dp-st" class="ho-dp-st"></div>
+              <div id="ho-dp-acao" class="ho-dp-acao"></div>
             </div>
           </section>
 
@@ -568,7 +582,7 @@ function hoProxima(t, tipo, modo, ini, desde) {
     var meses = base.y > HO_ANO ? 0 : (base.y < HO_ANO ? 12 : 13 - base.m), dec = 0;
     if (tipo === 'UNICA' && comp.m === 11) dec = t * meses / 12;
     else if (tipo === 'DUAS' && (comp.m === 10 || comp.m === 11)) dec = t * meses / 12 / 2;
-    else if (tipo === 'PERSONALIZADO') { document.querySelectorAll('#ho-dec-rows > div').forEach(function (r) { var m = parseInt(r.querySelector('[name=dec_mes]').value, 10), p = parseFloat(r.querySelector('[name=dec_pct]').value) || 0; if (m === comp.m) dec += t * meses / 12 * p / 100; }); }
+    // PROPRIO: nada na mensalidade — o 13º sai em boletos próprios, nas datas combinadas
     return { comp: comp, venc: (dia < 10 ? '0' + dia : dia) + '/' + (vencM < 10 ? '0' + vencM : vencM) + '/' + vencY, dec: dec, total: t + dec };
 }
 function hoResumoLado(t) {
@@ -596,12 +610,12 @@ function hoResumoLado(t) {
     var base = ini || { y: HO_ANO, m: 1 }; if (modo === 'INTEIRO') base = { y: base.y, m: 1 }; else if (modo === 'PROXIMO') base = { y: base.y + 1, m: 1 }; else if (modo === 'DATA' && desde) base = desde;
     var mesesDec = base.y > HO_ANO ? 0 : (base.y < HO_ANO ? 12 : 13 - base.m), dec13 = t * mesesDec / 12;
     if (tipo === 'NENHUM') { $('ho-k-dec').textContent = 'não cobra'; $('ho-k-dec-s').textContent = 'sem 13º'; }
-    else { $('ho-k-dec').textContent = mesesDec ? brl(dec13) : 'a partir de ' + base.y; $('ho-k-dec-s').textContent = mesesDec ? (mesesDec + '/12 · ' + (tipo === 'DUAS' ? '2 parcelas' : tipo === 'UNICA' ? 'parcela única' : 'personalizado')) : 'só no ano que vem'; }
+    else { $('ho-k-dec').textContent = mesesDec ? brl(dec13) : 'a partir de ' + base.y; $('ho-k-dec-s').textContent = mesesDec ? (mesesDec + '/12 · ' + (tipo === 'DUAS' ? '2 parcelas' : tipo === 'UNICA' ? 'parcela única' : hoDpDatas().length + (hoDpDatas().length === 1 ? ' boleto próprio' : ' boletos próprios'))) : 'só no ano que vem'; }
     if (prox) { var pp = hoData(prox); $('ho-k-reaj').textContent = HO_MESES[pp.m - 1] + '/' + pp.y; } else if (rt === 'SALARIO_MINIMO' && ini) { $('ho-k-reaj').textContent = 'jan/' + (ini.m === 1 ? ini.y + 1 : ini.y + 2); } else $('ho-k-reaj').textContent = rt === 'SEM' ? 'adiado' : '—';
     $('ho-k-reaj-s').textContent = (HO_REAJ_ROT[rt] || '').toLowerCase();
     // prévia de valor nos cartões do 13º
-    var pv = { UNICA: mesesDec ? brl(dec13) + ' em dez' : 'só no ano que vem', DUAS: mesesDec ? '2 × ' + brl(dec13 / 2) : 'só no ano que vem', PERSONALIZADO: 'frações por competência', NENHUM: 'não cobra ou foi cancelado' };
-    document.querySelectorAll('#ho-dec-ops .ns-op').forEach(function (b) { var s = b.querySelector('small'); s.textContent = pv[b.dataset.v] || s.textContent; s.classList.toggle('prev', t > 0 && b.dataset.v !== 'NENHUM' && b.dataset.v !== 'PERSONALIZADO'); });
+    var pv = { UNICA: mesesDec ? brl(dec13) + ' em dez' : 'só no ano que vem', DUAS: mesesDec ? '2 × ' + brl(dec13 / 2) : 'só no ano que vem', PROPRIO: 'fora da mensalidade, nas datas combinadas', NENHUM: 'não cobra ou foi cancelado' };
+    document.querySelectorAll('#ho-dec-ops .ns-op').forEach(function (b) { var s = b.querySelector('small'); s.textContent = pv[b.dataset.v] || s.textContent; s.classList.toggle('prev', t > 0 && b.dataset.v !== 'NENHUM' && b.dataset.v !== 'PROPRIO'); });
     var vt = $('ho-vig-txt'); if (vt) vt.innerHTML = ini ? '<i class="fas fa-calendar-check"></i> <b>' + hoMesesEntre(ini) + '</b>' + (fim ? ' · encerra em ' + hoDataBr(fim) : '') : '';
 }
 // ---- contexto do contrato (18/11/2026): cabeçalho, indicadores, como paga, quem recebe, reajustes, histórico ----
@@ -685,23 +699,86 @@ function hoAddItem(desc, valor, servico) {
     iv.addEventListener('input', hoSoma); iv.addEventListener('change', hoSoma);
     hoSoma();
 }
-function hoAddDec(mes, pct) {
-    var d = document.createElement('div'); d.style.cssText = 'display:flex; gap:6px; margin-bottom:6px;';
-    var meses = ['', 'jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
-    var o = ''; for (var m = 1; m <= 12; m++) o += '<option value="' + m + '"' + (m === (mes || 11) ? ' selected' : '') + '>' + meses[m] + '</option>';
-    d.innerHTML = '<select name="dec_mes" class="form-control" style="width:90px;">' + o + '</select><input type="number" name="dec_pct" class="form-control" style="width:90px;" step="0.01" min="0" max="100" placeholder="%" value="' + (pct || '') + '"><button type="button" class="btn btn-outline btn-sm" onclick="this.parentNode.remove()"><i class="fas fa-times"></i></button>';
-    document.getElementById('ho-dec-rows').appendChild(d);
+// ---- 19/11/2026: 13º em BOLETOS PRÓPRIOS (Anderson: a FAST paga o 13º em 3 parcelas, fora dos honorários) ----
+var HO_DP = null;   // o que o servidor sabe do 13º deste contrato: ano, parcelas pedidas/emitidas, se quem está logado pode emitir
+function hoDpDatas() { return [].map.call(document.querySelectorAll('#ho-dec-rows input[name=dec_data]'), function (i) { return i.value; }); }
+function hoIsoDe(d) { return d.getFullYear() + '-' + (d.getMonth() < 9 ? '0' : '') + (d.getMonth() + 1) + '-' + (d.getDate() < 10 ? '0' : '') + d.getDate(); }
+function hoIsoSoma(iso, k) { var p = iso.split('-'); var y = +p[0], m = +p[1] - 1 + k, d = +p[2]; y += Math.floor(m / 12); m = ((m % 12) + 12) % 12; d = Math.min(d, new Date(y, m + 1, 0).getDate()); return y + '-' + (m < 9 ? '0' : '') + (m + 1) + '-' + (d < 10 ? '0' : '') + d; }
+function hoDpPadrao() { var hoje = hoIsoDe(new Date()), dez = HO_ANO + '-12-20'; if (dez >= hoje) return dez; var d = new Date(); d.setDate(d.getDate() + 10); return hoIsoDe(d); }
+function hoDpAno() { var d = hoDpDatas()[0]; if (!d) return HO_ANO; var p = d.split('-'); return +p[0] - (+p[1] >= 7 ? 0 : 1); }
+function hoDpTotal() { var t = 0; document.querySelectorAll('#ho-itens input[name=item_valor]').forEach(function (i) { t += hoNum(i.value); }); return t; }
+function hoDpBase(t, ano) {   // 13º do ano, proporcional aos meses de casa — a mesma conta do resumo
+    var modo = document.getElementById('ho-dec-inicio').value, ini = hoData(document.getElementById('ho-inicio').value), desde = hoData(document.getElementById('ho-dec-desde').value);
+    var base = ini || { y: ano, m: 1 };
+    if (modo === 'INTEIRO') base = { y: base.y, m: 1 }; else if (modo === 'PROXIMO') base = { y: base.y + 1, m: 1 }; else if (modo === 'DATA' && desde) base = desde;
+    var meses = base.y > ano ? 0 : (base.y < ano ? 12 : 13 - base.m);
+    return { meses: meses, valor: Math.round(t * meses / 12 * 100) / 100 };
+}
+function hoDpReparte(total, n) { var c = Math.round(total * 100), b = Math.floor(c / n), out = []; for (var k = 0; k < n; k++) out.push(b / 100); out[0] = (c - b * (n - 1)) / 100; return out; }
+function hoDpN(n, datas) {
+    var atuais = datas || hoDpDatas(); n = Math.max(1, Math.min(6, n || 1));
+    var novas = []; for (var k = 0; k < n; k++) novas.push(atuais[k] || (k ? hoIsoSoma(novas[k - 1], 1) : hoDpPadrao()));
+    var box = document.getElementById('ho-dec-rows'); box.innerHTML = '';
+    novas.forEach(function (d, k) {
+        var r = document.createElement('div'); r.className = 'ho-dp-row';
+        r.innerHTML = '<span class="ho-dp-k">' + (k + 1) + 'ª</span><input type="date" name="dec_data" class="ns-in"><b class="ho-dp-v"></b>';
+        r.querySelector('input').value = d; box.appendChild(r);
+        if (window.QCData) QCData.ligar(r.querySelector('input'));
+    });
+    hoMarca('#ho-dp-n button', n); hoDpPinta(); hoResumo();
+}
+function hoDpPinta() {
+    var $ = function (i) { return document.getElementById(i); }, st = $('ho-dp-st'), ac = $('ho-dp-acao'); if (!st) return;
+    var datas = hoDpDatas(), n = datas.length, ano = hoDpAno(), b = hoDpBase(hoDpTotal(), ano), vals = hoDpReparte(b.valor, n || 1), dp = HO_DP;
+    document.querySelectorAll('#ho-dec-rows .ho-dp-v').forEach(function (e, k) { e.textContent = b.meses && b.valor ? brl(vals[k]) : '—'; });
+    var html = '';
+    if (dp && dp.parcelas && dp.parcelas.length) {
+        dp.parcelas.forEach(function (p) {
+            var quando = p.st === 'pedido' && p.datas ? (p.de > 1 ? p.de + ' parcelas: ' : '') + p.datas.split(',').map(hoDataBr).join(', ') : (p.de > 1 ? p.n + '/' + p.de + ' · ' : '') + 'vence ' + hoDataBr(p.vencimento);
+            html += '<div class="ho-dp-p"><span class="pill ' + p.st + '">' + p.rot + '</span><span>' + quando + '</span><b>' + brl(Number(p.valor)) + '</b>'
+                + (p.titulo_id ? '<a href="/financeiro/titulos?busca=' + encodeURIComponent($('ho-cli-nome').textContent) + '" target="_blank">ver em Cobranças</a>' : '') + '</div>';
+        });
+    } else if ($('ho-id').value) html = '<div class="ho-dp-dica">Nenhum boleto do 13º de ' + ano + ' foi emitido ainda.</div>';
+    st.innerHTML = html;
+    var acao = '', rot = n + (n === 1 ? ' boleto' : ' boletos') + ' do 13º de ' + ano;
+    if (!$('ho-id').value) acao = '<span class="ho-dp-dica"><i class="fas fa-circle-info"></i> Salve o contrato; depois abra de novo e emita os boletos do 13º aqui.</span>';
+    else if (dp && dp.emitido) acao = '<span class="ho-dp-dica">Para mudar data ou valor, cancele o boleto em Cobranças e emita de novo aqui.</span>';
+    else if (!b.meses || !b.valor) acao = '<span class="ho-dp-dica">Pelo "Começa a cobrar" e o valor deste contrato, não há 13º de ' + ano + ' a cobrar.</span>';
+    else {
+        var pedido = dp && dp.parcelas && dp.parcelas.length;
+        acao = '<button type="button" class="ns-bt prim ho-dp-bt" onclick="hoDpEmitir()"><i class="fas fa-paper-plane"></i> '
+            + (dp && dp.pode_emitir ? (pedido ? 'Aprovar e emitir ' : 'Emitir ') + rot + ' · ' + brl(b.valor) : 'Pedir aprovação: ' + rot) + '</button>';
+    }
+    ac.innerHTML = acao;
+}
+function hoDpEmitir(confirmado) {
+    var ac = document.getElementById('ho-dp-acao'), datas = hoDpDatas(), n = datas.length;
+    if (datas.some(function (d) { return !d; })) { ac.innerHTML = '<span class="ho-dp-conf"><i class="fas fa-circle-exclamation"></i> Preencha a data de todas as parcelas. <button type="button" class="ns-bt mini" onclick="hoDpPinta()">Voltar</button></span>'; return; }
+    if (!confirmado) {
+        ac.innerHTML = '<span class="ho-dp-conf"><i class="fas fa-triangle-exclamation"></i> ' + (HO_DP && HO_DP.pode_emitir ? 'Vai emitir ' + n + (n === 1 ? ' boleto' : ' boletos') + ' no banco agora, nas datas acima, e avisar o cliente por e-mail.' : 'Vai pedir a aprovação de ' + n + (n === 1 ? ' boleto' : ' boletos') + ' do 13º.')
+            + ' <button type="button" class="ns-bt mini prim" onclick="hoDpEmitir(1)"><i class="fas fa-check"></i> Confirmar</button><button type="button" class="ns-bt mini" onclick="hoDpPinta()">Voltar</button></span>';
+        return;
+    }
+    ac.innerHTML = '<span class="ho-dp-dica"><i class="fas fa-spinner fa-spin"></i> Emitindo no banco…</span>';
+    var fd = new FormData(); datas.forEach(function (d) { fd.append('dec_data', d); });
+    fetch('/financeiro/honorarios/' + document.getElementById('ho-id').value + '/decimo-proprio', { method: 'POST', body: fd, headers: { 'X-Requested-With': 'fetch' } })
+        .then(function (r) { return r.json(); }).then(function (r) {
+            if (r.decimo_proprio) HO_DP = r.decimo_proprio;
+            hoDpPinta();
+            document.getElementById('ho-dp-st').insertAdjacentHTML('afterbegin', '<div class="ns-aviso ' + (r.ok ? 'ok' : 'red') + '"><i class="fas fa-circle-' + (r.ok ? 'check' : 'exclamation') + '"></i> ' + (r.msgs && r.msgs.length ? r.msgs : [r.erro || 'Não deu certo.']).join('<br>') + '</div>');
+        }).catch(function () { hoDpPinta(); document.getElementById('ho-dp-st').insertAdjacentHTML('afterbegin', '<div class="ns-aviso red"><i class="fas fa-circle-exclamation"></i> Sem resposta do servidor. Veja em Lançamentos se o pedido saiu antes de tentar de novo.</div>'); });
 }
 function hoDecimo() {
     var tipo = document.getElementById('ho-decimo').value, ini = document.getElementById('ho-dec-inicio').value;
-    document.getElementById('ho-dec-box').style.display = tipo === 'PERSONALIZADO' ? 'block' : 'none';
+    document.getElementById('ho-dec-box').style.display = tipo === 'PROPRIO' ? 'block' : 'none';
+    if (tipo === 'PROPRIO') { if (!document.querySelector('#ho-dec-rows input[name=dec_data]')) hoDpN(1); else hoDpPinta(); }
     document.querySelectorAll('.ho-dec-on').forEach(function (e) { e.style.display = tipo === 'NENHUM' ? 'none' : 'block'; });
     document.getElementById('ho-dec-desde-box').style.display = (tipo !== 'NENHUM' && ini === 'DATA') ? 'block' : 'none';
     hoSync();
 }
 function hoLimpar() {
     ['ho-id', 'ho-cliente-id', 'ho-cli-q', 'ho-fim', 'ho-prox', 'ho-reaj-obs', 'ho-dec-desde', 'ho-grupo', 'ho-banco'].forEach(function (i) { var e = document.getElementById(i); if (e) e.value = ''; });
-    document.querySelector('#ho-itens tbody').innerHTML = ''; document.getElementById('ho-dec-rows').innerHTML = '';
+    document.querySelector('#ho-itens tbody').innerHTML = ''; document.getElementById('ho-dec-rows').innerHTML = ''; HO_DP = null;
     document.getElementById('ho-chips').innerHTML = ''; document.getElementById('ho-rede').style.display = 'none'; document.getElementById('ho-grupo-aviso').style.display = 'none'; hoGrupoPinta(); if (window.QCData) QCData.pintarTodos();
     document.getElementById('ho-dia').value = 10; document.getElementById('ho-inicio').value = '{{ hoje.strftime("%Y-%m") }}-01';
     document.getElementById('ho-decimo').value = 'NENHUM'; document.getElementById('ho-dec-inicio').value = 'PROPORCIONAL'; document.getElementById('ho-reajuste').value = 'SALARIO_MINIMO';
@@ -807,8 +884,8 @@ function hoResumo() {
         var base = ini || { y: HO_ANO, m: 1 };
         if (modo === 'INTEIRO') base = { y: base.y, m: 1 }; else if (modo === 'PROXIMO') base = { y: base.y + 1, m: 1 }; else if (modo === 'DATA' && desde) base = desde;
         var meses = base.y > HO_ANO ? 0 : (base.y < HO_ANO ? 12 : 13 - base.m);
-        var pct = 100; if (tipo === 'PERSONALIZADO') { pct = 0; document.querySelectorAll('#ho-dec-rows [name=dec_pct]').forEach(function (p) { pct += parseFloat(p.value) || 0; }); }
-        partes.push('13º de ' + HO_ANO + ' ' + (meses ? brl(t * meses / 12 * pct / 100) + ' (' + meses + '/12)' : 'só a partir de ' + base.y));
+        if (tipo === 'PROPRIO') { var nd = hoDpDatas().filter(Boolean).length, ad = hoDpAno(), bd = hoDpBase(t, ad); partes.push('13º de ' + ad + ' em ' + nd + (nd === 1 ? ' boleto próprio' : ' boletos próprios') + (bd.meses ? ' · ' + brl(bd.valor) + ' (' + bd.meses + '/12)' : ' · só a partir de ' + base.y)); }
+        else partes.push('13º de ' + HO_ANO + ' ' + (meses ? brl(t * meses / 12) + ' (' + meses + '/12)' : 'só a partir de ' + base.y));
     } else partes.push('sem 13º');
     var rt = document.getElementById('ho-reajuste').value, prox = hoData(document.getElementById('ho-prox').value);
     if (prox) partes.push('reajuste ' + ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'][prox.m - 1] + '/' + prox.y);
@@ -816,6 +893,7 @@ function hoResumo() {
     nota.className = 'ns-aviso ok'; nota.innerHTML = '<i class="fas fa-circle-check"></i> ' + partes.join(' · ');
 }
 document.getElementById('ho-form').addEventListener('input', hoResumo);
+document.getElementById('ho-form').addEventListener('input', function (e) { if (document.getElementById('ho-decimo').value === 'PROPRIO' && !(e.target && e.target.closest && e.target.closest('#ho-dp-acao'))) hoDpPinta(); });
 document.getElementById('ho-form').addEventListener('change', hoResumo);
 function hoTrocarCliente() { hoSetCliente(null); document.getElementById('ho-cli-q').focus(); }
 function hoNovo(id, nome, numero) {
@@ -837,7 +915,9 @@ function hoEditar(cid) {
         document.getElementById('ho-dec-inicio').value = c.decimo_inicio || 'PROPORCIONAL';
         document.getElementById('ho-dec-desde').value = c.decimo_desde || '';
         var parc = c.decimo_parcelas; if (typeof parc === 'string') { try { parc = JSON.parse(parc); } catch (e) { parc = []; } }
-        (parc || []).forEach(function (p) { hoAddDec(p.mes, p.pct); });
+        HO_DP = c.decimo_proprio || null;
+        var dts = (parc || []).map(function (p) { return p && p.data; }).filter(Boolean).sort();
+        if (dts.length) hoDpN(dts.length, dts);
         document.getElementById('ho-reajuste').value = c.reajuste_tipo || 'SALARIO_MINIMO';
         document.getElementById('ho-prox').value = c.proximo_reajuste || ''; document.getElementById('ho-reaj-obs').value = c.reajuste_obs || '';
         document.getElementById('ho-nfse').checked = !!Number(c.gerar_nfse); document.getElementById('ho-boleto').checked = !!Number(c.gerar_boleto);
@@ -865,6 +945,7 @@ document.getElementById('ho-form').addEventListener('submit', function (e) {
     if (!document.getElementById('ho-cliente-id').value) falta = 'ho-row-cli';
     else { var ok = false; document.querySelectorAll('#ho-itens input[name=item_valor]').forEach(function (i) { if (hoNum(i.value) > 0) ok = true; }); if (!ok) falta = 'ho-row-itens'; }
     if (!document.getElementById('ho-dia').value || !document.getElementById('ho-inicio').value) falta = falta || 'ho-row-cli';
+    if (!falta && document.getElementById('ho-decimo').value === 'PROPRIO' && (!hoDpDatas().length || hoDpDatas().some(function (d) { return !d; }))) falta = 'ho-dec-box';
     if (falta) {
         e.preventDefault(); hoResumo();
         var r = document.getElementById(falta); r.classList.add('ho-row-falta'); r.scrollIntoView({ block: 'center' });

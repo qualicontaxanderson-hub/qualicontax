@@ -281,7 +281,7 @@
                     <div><small>Honorários</small><b class="qb-verde">{{ contrato.valor | float | format_currency }}<span>/mês</span></b></div>
                     <div><small>Vencimento</small><b>dia {{ contrato.dia_vencimento }}</b></div>
                     <div><small>Desde</small><b>{{ contrato.inicio.strftime('%m/%Y') if contrato.inicio else '—' }}{% if contrato.fim %} até {{ contrato.fim.strftime('%m/%Y') }}{% endif %}</b></div>
-                    <div data-nocopiar><small>13º</small><b>{% if contrato.decimo_tipo == 'DUAS' %}duas parcelas{% elif contrato.decimo_tipo == 'UNICA' %}parcela única{% elif contrato.decimo_tipo == 'PERSONALIZADO' %}personalizado{% else %}sem 13º{% endif %}</b></div>
+                    <div data-nocopiar><small>13º</small><b>{% if contrato.decimo_tipo == 'DUAS' %}duas parcelas{% elif contrato.decimo_tipo == 'UNICA' %}parcela única{% elif contrato.decimo_tipo == 'PROPRIO' %}boletos próprios{% else %}sem 13º{% endif %}</b></div>
                     <div data-nocopiar><small>Reajuste</small><b>{% if contrato.reajuste_tipo == 'SALARIO_MINIMO' %}salário mínimo{% else %}{{ contrato.reajuste_tipo | lower | replace('_', ' ') }}{% endif %}</b></div>
                     {% if contrato.situacao != 'ATIVO' %}<div data-nocopiar><small>Situação</small><b class="qb-verm">{{ contrato.situacao | capitalize }}</b></div>{% endif %}
                     {% if pode_rota('financeiro.honorarios') %}<a class="qb-btn-escuro" href="{{ url_for('financeiro.honorarios', aba='com', busca=cliente.numero_cliente or cliente.nome_razao_social) }}">Editar honorários</a>{% endif %}

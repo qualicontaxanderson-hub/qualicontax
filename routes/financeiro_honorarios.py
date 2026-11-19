@@ -78,6 +78,120 @@ def _foto(c):
 ABAS_CONTRATOS = ('com', 'sem', 'pendentes', 'enc')
 
 
+# ---------------------------------------------------------------------------
+# 19/11/2026 — 13º em BOLETOS PRÓPRIOS (Anderson: "a fast quer pagar o 13 em três parcelas mas não nos honorários").
+# O contrato guarda as datas combinadas; o botão da janela cria o pedido em Lançamentos (serviço do 13º, sem comissão,
+# N parcelas nas datas) e, quando quem clica aprova, já emite os boletos — a mesma engrenagem de "Nova solicitação".
+# ---------------------------------------------------------------------------
+def _parcelas_proprio(f):
+    """[{'data': 'AAAA-MM-DD'}, ...] das datas digitadas na janela (até 6, em ordem, sem repetir)."""
+    datas = sorted({d for d in (_data(x) for x in f.getlist('dec_data')) if d})
+    if not datas:
+        raise ValueError('Informe a data de cada parcela do 13º.')
+    if len(datas) > 6:
+        raise ValueError('O 13º em boletos próprios vai até 6 parcelas.')
+    return [{'data': d.isoformat()} for d in datas]
+
+
+def _decimo_proprio(c):
+    """O que a janela mostra do 13º em boletos próprios: ano, valor, datas guardadas, parcelas pedidas/emitidas."""
+    from models.fin_lancamento import FinLancamento
+    from routes.financeiro_lancamentos import _aprovador
+    hoje = date.today()
+    datas = FinContrato.datas_decimo_proprio(c)
+    ano = FinContrato.ano_decimo(datas[0]) if datas else hoje.year
+    if ano < hoje.year - 1:                      # datas de anos atrás: já é outro 13º
+        ano = hoje.year
+    parcelas = []
+    for l in (FinLancamento.decimo_do_contrato(c['id'], ano) if c.get('id') else []):
+        if l['status'] == 'LANCADO':
+            st, rot = 'pedido', 'aguardando aprovação'
+        elif (l.get('titulo_status') or '') == 'liquidado':
+            st, rot = 'pago', 'pago'
+        elif l['status'] == 'FATURADO':
+            st, rot = 'emitido', 'boleto emitido'
+        else:
+            st, rot = 'falhou', 'aprovado, a cobrança não saiu'
+        parcelas.append({'id': l['id'], 'n': l.get('parcela') or 1, 'de': l.get('parcelas') or 1, 'st': st, 'rot': rot,
+                         'vencimento': l['vencimento'].isoformat() if l.get('vencimento') else '', 'valor': str(l['valor_total']),
+                         'datas': l.get('parcelas_datas') or '', 'titulo_id': l.get('titulo_id')})
+    return {'ano': ano, 'base': str(FinContrato.base_decimo(c, ano)), 'datas': [d.isoformat() for d in datas], 'parcelas': parcelas,
+            'pode_emitir': bool(_aprovador()), 'emitido': any(p['st'] != 'pedido' for p in parcelas)}
+
+
+@financeiro.route('/financeiro/honorarios/<int:cid>/decimo-proprio', methods=['POST'])
+@permission_required(PERM)
+def honorarios_decimo_proprio(cid):
+    """Botão "Emitir os N boletos do 13º" da janela do contrato. Grava as datas no contrato, cria (ou acerta) o pedido
+    em Lançamentos e, se quem clicou aprova, emite agora. Devolve JSON para a janela se atualizar sem recarregar."""
+    from models.fin_contrato import EMPRESA_QUALICONTAX, SERVICO_DECIMO_PROPRIO
+    from models.fin_lancamento import FinLancamento
+    from routes.financeiro_lancamentos import _aprovador, _aprovar_e_cobrar, _eu, _marcar_pelo_admin
+    c = FinContrato.get(cid)
+    if not c:
+        return jsonify({'ok': False, 'erro': 'Contrato não encontrado.'}), 404
+    try:
+        if c['situacao'] != 'ATIVO':
+            raise ValueError('Só contrato ativo emite o 13º: este está %s.' % (c['situacao'] or '').lower())
+        datas = [date.fromisoformat(p['data']) for p in _parcelas_proprio(request.form)]
+        hoje = date.today()
+        for i, d in enumerate(datas):
+            if d < hoje:
+                raise ValueError('A data da %dª parcela (%s) já passou.' % (i + 1, d.strftime('%d/%m/%Y')))
+        ano = FinContrato.ano_decimo(datas[0])
+        base = FinContrato.base_decimo(c, ano)
+        if base <= 0:
+            raise ValueError('Pelo "Começa a cobrar" deste contrato, o 13º de %d não é cobrado.' % ano)
+        antes = _foto(c)
+        FinContrato.atualizar(cid, {'decimo_tipo': 'PROPRIO', 'decimo_parcelas': [{'data': d.isoformat()} for d in datas]})
+        c = FinContrato.get(cid)
+        if antes != _foto(c):
+            registrar('escrita.alterou_contrato_honorarios', 'financeiro', tabela='fin_contratos', registro_id=cid,
+                      antes=antes, depois=_foto(c))
+        existentes = FinLancamento.decimo_do_contrato(cid, ano)
+        if existentes and any(l['status'] != 'LANCADO' for l in existentes):
+            return jsonify({'ok': True, 'msgs': ['Os boletos do 13º de %d já foram emitidos. Para mudar data ou valor, cancele em Cobranças e emita de novo aqui.' % ano],
+                            'decimo_proprio': _decimo_proprio(c)})
+        n = len(datas)
+        descricao = '13º honorário %d' % ano + (' em %d parcelas' % n if n > 1 else '')
+        pdatas = ','.join(d.isoformat() for d in datas) if n > 1 else None
+        com_nota = 1 if c.get('gerar_nfse') else 0
+        if existentes:                                   # pedido ainda aguardando aprovação: acerta datas e valor
+            lid = existentes[0]['id']
+            execute_query("""UPDATE fin_lancamentos SET valor_unitario = %s, valor_total = %s, vencimento = %s, parcelas = %s,
+                                 parcelas_datas = %s, com_nota = %s, descricao = %s WHERE id = %s AND status = 'LANCADO'""",
+                          (base, base, datas[0], n, pdatas, com_nota, descricao, lid), fetch=False)
+        else:
+            lid = FinLancamento.criar(EMPRESA_QUALICONTAX, c['cliente_id'], SERVICO_DECIMO_PROPRIO, descricao, Decimal('1'), base,
+                                      'AVULSO', _eu().id, vencimento=datas[0], competencia=hoje.replace(day=1), com_nota=bool(com_nota),
+                                      comissao_tipo='SEM', observacao='13º em boletos próprios, pedido pela janela do contrato de honorários '
+                                      '(datas combinadas com o cliente: %s).' % ', '.join(d.strftime('%d/%m/%Y') for d in datas))
+            execute_query('UPDATE fin_lancamentos SET contrato_id = %s, decimo_ano = %s, parcelas = %s, parcelas_datas = %s WHERE id = %s',
+                          (cid, ano, n, pdatas, lid), fetch=False)
+            _marcar_pelo_admin(lid)
+            registrar('escrita.lancou_servico', 'financeiro', tabela='fin_lancamentos', registro_id=lid,
+                      depois={'empresa': c['nome_razao_social'], 'servico': descricao, 'valor': str(base), 'como': 'boleto + nota' if com_nota else 'só boleto',
+                              'parcelas': n, 'datas': ', '.join(d.strftime('%d/%m/%Y') for d in datas), 'origem': 'contrato de honorários'})
+        msgs, ok = [], True
+        if _aprovador():
+            conta = int(c['banco_boleto']) if str(c.get('banco_boleto') or '').isdigit() else None
+            parcelas, com, ok, m = _aprovar_e_cobrar(lid, _eu().id, None, None, n, conta, datas if n > 1 else None)
+            execute_query('UPDATE fin_lancamentos SET contrato_id = %s, decimo_ano = %s WHERE id = %s OR parcela_grupo = %s',
+                          (cid, ano, lid, lid), fetch=False)
+            registrar('escrita.aprovou_lancamento', 'financeiro', tabela='fin_lancamentos', registro_id=lid,
+                      depois={'empresa': c['nome_razao_social'], 'servico': descricao, 'valor': str(base), 'destino': 'AVULSO',
+                              'comissao': str(com), 'parcelas': len(parcelas), 'direto': True, 'origem': 'contrato de honorários'})
+            msgs += m
+            if not ok:
+                msgs.append('Alguma parcela não saiu: veja em Lançamentos › Cobranças e use "Cobrar de novo".')
+        else:
+            msgs.append('Pedido enviado: Anderson ou Alessandra aprovam em Lançamentos e os %d boletos saem.' % n if n > 1
+                        else 'Pedido enviado: Anderson ou Alessandra aprovam em Lançamentos e o boleto sai.')
+        return jsonify({'ok': ok, 'msgs': msgs, 'decimo_proprio': _decimo_proprio(FinContrato.get(cid))})
+    except (ValueError, InvalidOperation) as e:
+        return jsonify({'ok': False, 'erro': str(e) if isinstance(e, ValueError) else 'Valor inválido.', 'decimo_proprio': _decimo_proprio(c)})
+
+
 def _competencia_painel():
     from models.fin_lancamento import FinLoteMensal
     from models.fin_contrato import EMPRESA_QUALICONTAX
@@ -154,6 +268,7 @@ def honorarios_json(cid):
     g = Cliente.get_grupos(c['cliente_id'])
     out['grupo_id'] = g[0]['id'] if g else None
     out['extra'] = _extra_contrato(c, g[0]['nome'] if g else None)      # 18/11/2026: o que a janela mostra além dos campos
+    out['decimo_proprio'] = _decimo_proprio(c)                             # 19/11/2026: 13º em boletos próprios
     return jsonify(out)
 
 
@@ -246,10 +361,7 @@ def honorarios_salvar():
         if not inicio:
             raise ValueError('Informe o início do contrato.')
         decimo_tipo = f.get('decimo_tipo') or 'NENHUM'
-        parcelas = None
-        if decimo_tipo == 'PERSONALIZADO':
-            parcelas = [{'mes': int(m), 'pct': float(_dec(p))} for m, p in zip(f.getlist('dec_mes'), f.getlist('dec_pct'))
-                        if (m or '').isdigit() and (p or '').strip()]
+        parcelas = _parcelas_proprio(f) if decimo_tipo == 'PROPRIO' else None
         reajuste_tipo = f.get('reajuste_tipo') or 'SALARIO_MINIMO'
         prox = _data(f.get('proximo_reajuste'))
         if reajuste_tipo == 'SALARIO_MINIMO' and not prox:
@@ -475,10 +587,7 @@ def _ler_form(f):
     if not inicio:
         raise ValueError('Informe o início do contrato.')
     decimo_tipo = f.get('decimo_tipo') or 'NENHUM'
-    parcelas = None
-    if decimo_tipo == 'PERSONALIZADO':
-        parcelas = [{'mes': int(m), 'pct': float(_dec(p))} for m, p in zip(f.getlist('dec_mes'), f.getlist('dec_pct'))
-                    if (m or '').isdigit() and (p or '').strip()]
+    parcelas = _parcelas_proprio(f) if decimo_tipo == 'PROPRIO' else None
     reajuste_tipo = f.get('reajuste_tipo') or 'SALARIO_MINIMO'
     prox = _data(f.get('proximo_reajuste'))
     if reajuste_tipo == 'SALARIO_MINIMO' and not prox:

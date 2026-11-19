@@ -26,7 +26,12 @@ CATEGORIA_DECIMO = 25              # fin_categorias 'Décimo terceiro'
 SERVICO_HONORARIOS = 1             # nfse_servicos 'Honorários contábeis'
 
 DECIMO_TIPOS = {'NENHUM': 'Sem 13º (não cobra ou foi cancelado)', 'UNICA': 'Parcela única (vence em dezembro)',
-                'DUAS': 'Duas parcelas (vencem em novembro e dezembro)', 'PERSONALIZADO': 'Personalizado'}
+                'DUAS': 'Duas parcelas (vencem em novembro e dezembro)',
+                # 19/11/2026 — Anderson (FAST: "quer pagar o 13 em três parcelas mas não nos honorários"): o 13º sai em
+                # boletos separados da mensalidade, nas datas combinadas, pela engrenagem dos Lançamentos. Tomou o lugar
+                # do "Personalizado" (frações dentro da mensalidade), que nenhum contrato usava.
+                'PROPRIO': 'Boletos próprios (fora da mensalidade, nas datas combinadas)'}
+SERVICO_DECIMO_PROPRIO = 4         # nfse_servicos 'Honorários contábeis — 13º' (o mesmo da parcela única; comissão travada)
 # Quando o 13º começa a ser cobrado (Anderson, 06/11/2026: "temos que ter a OPÇÃO, já inicia a cobrança no ano
 # ou próximo ano em diante"). Vira a coluna decimo_desde: a base do proporcional.
 DECIMO_INICIOS = {'PROPORCIONAL': 'Já este ano, proporcional aos meses de casa',
@@ -237,7 +242,7 @@ class FinContrato:
         """[(competencia(date, dia 1), valor)] do 13º do ano, já proporcional aos meses de casa.
         DUAS: 50% na competência out + 50% na nov; UNICA: 100% na nov; PERSONALIZADO: o que foi digitado."""
         tipo = contrato.get('decimo_tipo') or 'NENHUM'
-        if tipo == 'NENHUM':
+        if tipo in ('NENHUM', 'PROPRIO'):          # PROPRIO: nada na mensalidade — sai em boletos próprios
             return []
         meses = meses_de_casa(contrato.get('decimo_desde') or contrato.get('inicio'), contrato.get('fim'), ano)
         if not meses:
@@ -260,6 +265,37 @@ class FinContrato:
             acumulado += v
             out.append((date(ano, mes, 1), v))
         return out
+
+    @staticmethod
+    def base_decimo(contrato, ano):
+        """Valor do 13º do ano: honorário mensal × meses de casa / 12 (0 quando ainda não cobra)."""
+        meses = meses_de_casa(contrato.get('decimo_desde') or contrato.get('inicio'), contrato.get('fim'), ano)
+        if not meses:
+            return Decimal('0')
+        return (_d(contrato['valor']) * meses / 12).quantize(Decimal('0.01'))
+
+    @staticmethod
+    def datas_decimo_proprio(contrato):
+        """As datas combinadas dos boletos próprios do 13º (decimo_parcelas = [{"data": "AAAA-MM-DD"}, ...]), em ordem."""
+        parc = contrato.get('decimo_parcelas')
+        if isinstance(parc, str):
+            try:
+                parc = json.loads(parc or '[]')
+            except ValueError:
+                parc = []
+        out = []
+        for p in parc or []:
+            try:
+                out.append(date.fromisoformat(str((p or {}).get('data') or '')))
+            except ValueError:
+                pass
+        return sorted(out)
+
+    @staticmethod
+    def ano_decimo(primeira_data):
+        """De que ano é o 13º pago nessas datas: 1ª parcela de julho em diante = o ano dela; antes disso, o anterior
+        (3 parcelas 25/12, 25/01, 25/02 são o 13º do ano do 25/12; quem começa em janeiro paga o do ano passado)."""
+        return primeira_data.year if primeira_data.month >= 7 else primeira_data.year - 1
 
     # ---------------- reajuste (06/11/2026) ----------------
     @staticmethod

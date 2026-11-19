@@ -282,6 +282,14 @@ class FinLancamento:
                       ((motivo or '')[:255] or None, lid), fetch=False)
 
     @staticmethod
+    def decimo_do_contrato(contrato_id, ano):
+        """19/11/2026: os lançamentos do 13º em boletos próprios deste contrato e ano — o pedido ainda inteiro
+        (LANCADO, com parcelas_datas) ou as parcelas já divididas e cobradas."""
+        return execute_query(f"""{FinLancamento.SELECT} WHERE l.contrato_id = %s AND l.decimo_ano = %s
+                                  AND l.status NOT IN ('CANCELADO', 'REPROVADO') ORDER BY COALESCE(l.parcela, 1), l.id""",
+                             (contrato_id, ano), fetch=True) or []
+
+    @staticmethod
     def marcar_faturado(lid, titulo_id=None, nfse_id=None, boleto_id=None, lote_id=None):
         execute_query("""UPDATE fin_lancamentos SET status = 'FATURADO', titulo_id = COALESCE(%s, titulo_id),
                          nfse_id = COALESCE(%s, nfse_id), boleto_id = COALESCE(%s, boleto_id), lote_id = COALESCE(%s, lote_id)
