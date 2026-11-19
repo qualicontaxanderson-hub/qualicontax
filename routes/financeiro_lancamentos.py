@@ -624,7 +624,7 @@ def lancamento_novo():
             did = FinLancamento.criar(EMP, cliente_id, FinLancamento.servico_desconto_id(EMP), rot[:200], Decimal('1'), dv, destino, _eu().id,
                                       vencimento=venc, observacao=desc['motivo'], competencia=comp,
                                       com_nota=None if destino == 'MENSAL' else False, comissao_tipo='SEM', pagador_cliente_id=pagador)
-            execute_query('UPDATE fin_lancamentos SET desc_lancamento_id = %s, desc_sobre = %s WHERE id = %s', (lid, desc['sobre'], did), fetch=False)
+            execute_query("UPDATE fin_lancamentos SET origem = 'DESCONTO', desc_lancamento_id = %s, desc_sobre = %s WHERE id = %s", (lid, desc['sobre'], did), fetch=False)
             _marcar_pelo_admin(did)
             dl = FinLancamento.get(did)
             registrar('escrita.lancou_desconto', 'financeiro', tabela='fin_lancamentos', registro_id=did,
@@ -863,7 +863,7 @@ def _dividir(l, n, datas=None):
             nd = FinLancamento.criar(d['empresa_id'], d['cliente_id'], d['servico_id'], '%s (parcela %d/%d)' % (bd, k + 1, n), Decimal('1'), partes[k],
                                      d['destino'], d['lancado_por'], vencimento=vencs[k], observacao=d.get('observacao'), competencia=comps[k],
                                      com_nota=d.get('com_nota'), comissao_tipo='SEM', pagador_cliente_id=d.get('pagador_cliente_id'))
-            execute_query("""UPDATE fin_lancamentos SET parcela = %s, parcelas = %s, parcela_grupo = %s, desc_lancamento_id = %s, desc_sobre = %s,
+            execute_query("""UPDATE fin_lancamentos SET origem = 'DESCONTO', parcela = %s, parcelas = %s, parcela_grupo = %s, desc_lancamento_id = %s, desc_sobre = %s,
                                  status = %s, lancado_pelo_admin = %s WHERE id = %s""",
                           (k + 1, n, d['id'], ids[k], d.get('desc_sobre'), d['status'], d.get('lancado_pelo_admin'), nd), fetch=False)
     return ids
