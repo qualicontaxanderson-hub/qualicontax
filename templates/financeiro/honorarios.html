@@ -4,6 +4,7 @@
 
 {% block extra_css %}
 <style>
+{% include 'clientes/_pk_css.html' %}
 /* Honorários (06/11/2026): tabela .fin-tab da identidade; só o que é desta tela fica aqui */
 .ho-abas { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin:14px 0 10px; }
 .ho-busca { margin-left:auto; display:flex; gap:6px; }
@@ -56,7 +57,14 @@
 .ho-cli { display:flex; align-items:center; gap:12px; }
 .ho-cli-av { width:44px; height:44px; border-radius:13px; background:#eef6f1; color:#15803d; display:inline-flex; align-items:center; justify-content:center; font-weight:800; font-size:15px; flex-shrink:0; }
 .ho-cli-tx { flex:1; min-width:0; } .ho-cli-tx b { display:block; font-size:15px; } .ho-cli-tx small { color:#64748b; font-size:12px; }
-.ho-grupo-l { display:flex; gap:12px; margin-top:12px; } .ho-grupo-l select.ns-in { appearance:auto; }
+.ho-grupo-l { display:flex; gap:12px; margin-top:12px; }
+.ho-grupo-bt { display:flex; align-items:center; gap:10px; width:100%; min-height:52px; height:auto; padding:7px 12px 7px 8px; text-align:left; cursor:pointer; }
+.ho-grupo-bt .ho-grupo-sig { width:36px; height:36px; border-radius:10px; background:#e2e8f0; color:#475569; font-weight:900; font-size:12.5px; display:inline-flex; align-items:center; justify-content:center; flex:0 0 auto; letter-spacing:.02em; }
+.ho-grupo-bt.tem .ho-grupo-sig { color:#fff; }
+.ho-grupo-bt .ho-grupo-tx { flex:1; min-width:0; display:flex; flex-direction:column; line-height:1.2; } .ho-grupo-bt .ho-grupo-tx b { font-size:14px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.ho-grupo-bt .ho-grupo-tx small { color:#64748b; font-size:11.5px; } .ho-grupo-bt > i { color:#94a3b8; }
+.ho-grupo-bt:hover { border-color:#22c55e; }
+.ho-grupo-usar { margin-left:8px; border:1px solid #16a34a; background:#16a34a; color:#fff; border-radius:9px; padding:4px 10px; font:inherit; font-size:12.5px; font-weight:800; cursor:pointer; }
 .ho-sug { position:absolute; left:0; right:0; top:44px; background:#fff; border:1px solid #d7e3dc; border-radius:12px; box-shadow:0 14px 34px rgba(15,23,42,.16); z-index:5; max-height:260px; overflow:auto; }
 .ho-sug div { padding:9px 12px; cursor:pointer; font-size:13px; border-bottom:1px solid #f1f5f4; } .ho-sug div:hover { background:#f0fdf4; } .ho-sug div:last-child { border-bottom:0; }
 .ho-itens { width:100%; border-collapse:separate; border-spacing:0 6px; }
@@ -341,7 +349,8 @@
             </div>
             <div class="ho-grupo-l">
               <label class="ns-campo" style="flex:1; min-width:200px;"><span class="ho-lbl">Grupo <small>é o do cadastro: trocar aqui troca lá</small></span>
-                <select name="grupo_id" id="ho-grupo" class="ns-in"><option value="">— sem grupo —</option>{% for g in grupos %}<option value="{{ g.id }}">{{ g.nome }}</option>{% endfor %}</select></label>
+                <input type="hidden" name="grupo_id" id="ho-grupo" value="">
+                <button type="button" class="ns-in ho-grupo-bt" id="ho-grupo-bt" onclick="hoGrupoAbrir()"><span class="ho-grupo-sig" id="ho-grupo-sig">—</span><span class="ho-grupo-tx"><b id="ho-grupo-nome">— sem grupo —</b><small id="ho-grupo-sub">toque para escolher ou criar um grupo</small></span><i class="fas fa-chevron-right"></i></button></label>
             </div>
             <div class="ns-aviso" id="ho-grupo-aviso" style="display:none; margin-top:8px;"></div>
           </section>
@@ -517,6 +526,7 @@
 
 {% block extra_js %}
 <script src="{{ url_for('static', filename='js/dinheiro.js') }}"></script>
+<script src="{{ url_for('static', filename='js/caixa_grupo.js') }}"></script>
 <script>
 var HO_SERVICOS = {{ servicos | tojson }};
 var HO_SERV_HON = {{ SERVICO_HONORARIOS }};
@@ -691,7 +701,7 @@ function hoDecimo() {
 function hoLimpar() {
     ['ho-id', 'ho-cliente-id', 'ho-cli-q', 'ho-fim', 'ho-prox', 'ho-reaj-obs', 'ho-dec-desde', 'ho-grupo', 'ho-banco'].forEach(function (i) { var e = document.getElementById(i); if (e) e.value = ''; });
     document.querySelector('#ho-itens tbody').innerHTML = ''; document.getElementById('ho-dec-rows').innerHTML = '';
-    document.getElementById('ho-chips').innerHTML = ''; document.getElementById('ho-rede').style.display = 'none'; document.getElementById('ho-grupo-aviso').style.display = 'none';
+    document.getElementById('ho-chips').innerHTML = ''; document.getElementById('ho-rede').style.display = 'none'; document.getElementById('ho-grupo-aviso').style.display = 'none'; hoGrupoPinta();
     document.getElementById('ho-dia').value = 10; document.getElementById('ho-inicio').value = '{{ hoje.strftime("%Y-%m") }}-01';
     document.getElementById('ho-decimo').value = 'NENHUM'; document.getElementById('ho-dec-inicio').value = 'PROPORCIONAL'; document.getElementById('ho-reajuste').value = 'SALARIO_MINIMO';
     document.getElementById('ho-nfse').checked = true; document.getElementById('ho-boleto').checked = true;
@@ -710,6 +720,40 @@ function hoSetCliente(id, nome, numero) {
     if (id) hoSugestoes(id); else { document.getElementById('ho-chips').innerHTML = ''; document.getElementById('ho-rede').style.display = 'none'; }
     hoResumo();
 }
+// ---- Grupo: a caixa da ficha do cliente (19/11/2026) no lugar do <select> ----
+var HO_GRUPOS = {{ grupos | map(attribute='nome') | list | tojson }}, HO_GRUPOS_ID = {{ grupos | map(attribute='id') | list | tojson }};
+var HO_PK_CORES = ['#0f766e', '#4f46e5', '#b45309', '#be123c', '#7c3aed', '#0369a1', '#15803d', '#c2410c'];
+function hoGrupoNome(id) { var i = HO_GRUPOS_ID.indexOf(parseInt(id, 10)); return i >= 0 ? HO_GRUPOS[i] : ''; }
+function hoGrupoPinta() {
+    var id = document.getElementById('ho-grupo').value, bt = document.getElementById('ho-grupo-bt'); if (!bt) return;
+    var nome = id ? (bt.dataset.nome && bt.dataset.id === id ? bt.dataset.nome : hoGrupoNome(id)) : '';
+    var sig = document.getElementById('ho-grupo-sig');
+    if (id && nome) {
+        var h = 0; nome.split('').forEach(function (c) { h = (h * 31 + c.charCodeAt(0)) >>> 0; });
+        sig.textContent = nome.slice(0, 2).toUpperCase(); sig.style.background = HO_PK_CORES[h % 8]; bt.classList.add('tem');
+        document.getElementById('ho-grupo-nome').textContent = nome; document.getElementById('ho-grupo-sub').textContent = 'toque para trocar · é o grupo do cadastro';
+    } else {
+        sig.textContent = '—'; sig.style.background = ''; bt.classList.remove('tem');
+        document.getElementById('ho-grupo-nome').textContent = '— sem grupo —'; document.getElementById('ho-grupo-sub').textContent = 'toque para escolher ou criar um grupo';
+    }
+}
+function hoGrupoUsar(id, nome) {
+    var g = document.getElementById('ho-grupo'), bt = document.getElementById('ho-grupo-bt');
+    g.value = id || ''; bt.dataset.id = String(id || ''); bt.dataset.nome = nome || '';
+    if (id && HO_GRUPOS_ID.indexOf(parseInt(id, 10)) < 0) { HO_GRUPOS_ID.push(parseInt(id, 10)); HO_GRUPOS.push(nome); }
+    document.getElementById('ho-grupo-aviso').style.display = 'none';
+    hoGrupoPinta(); if (typeof hoSync === 'function') hoSync();
+}
+function hoGrupoAbrir() {
+    if (!window.CaixaGrupo) return;
+    CaixaGrupo.abrir({
+        atual: document.getElementById('ho-grupo').value, empresa: document.getElementById('ho-cli-nome').textContent || 'empresa ainda não escolhida',
+        pode_criar: {{ pode_rota('clientes.grupo_rapido') | tojson }}, z: 1300,
+        url_opcoes: {{ url_for('clientes.caixa_opcoes') | tojson }} + '?qual=grupo', url_novo: {{ url_for('clientes.grupo_rapido') | tojson }},
+        reserva: HO_GRUPOS_ID.map(function (id, i) { return { id: id, nome: HO_GRUPOS[i] }; }),
+        onUsar: function (id, nome) { hoGrupoUsar(id, nome || hoGrupoNome(id)); }
+    });
+}
 // ---- sugestões da rede (06/11/2026): o que as outras empresas do grupo pagam; um clique preenche, ou ignora e digita ----
 var HO_SUG = [];
 function hoSugestoes(cid) {
@@ -720,9 +764,10 @@ function hoSugestoes(cid) {
         if (d.grupo) { g.value = d.grupo.id; av.style.display = 'none'; }
         else {
             g.value = '';
-            av.innerHTML = 'Sem grupo no cadastro' + (d.grupo_sugerido ? ': parece ser <b>' + d.grupo_sugerido.nome + '</b>' : '') + '. Escolha aqui ou arrume no cadastro; com o grupo, os valores da rede aparecem como sugestão.';
+            av.innerHTML = 'Sem grupo no cadastro' + (d.grupo_sugerido ? ': parece ser <b>' + d.grupo_sugerido.nome + '</b> <button type="button" class="ho-grupo-usar" data-id="' + d.grupo_sugerido.id + '" data-nome="' + String(d.grupo_sugerido.nome).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;') + '" onclick="hoGrupoUsar(this.dataset.id, this.dataset.nome)"><i class="fas fa-check"></i> Usar ' + String(d.grupo_sugerido.nome).replace(/</g, '&lt;') + '</button>' : '') + '. Com o grupo, os valores da rede aparecem como sugestão; trocar aqui troca também no cadastro.';
             av.style.display = 'block';
         }
+        hoGrupoPinta();
         var rede = document.getElementById('ho-rede'), chips = document.getElementById('ho-chips'); chips.innerHTML = '';
         if (!HO_SUG.length) { rede.style.display = 'none'; hoResumo(); return; }
         rede.innerHTML = 'O que as outras empresas do grupo <b>' + d.rede + '</b> pagam:';
@@ -786,7 +831,7 @@ function hoEditar(cid) {
         document.getElementById('ho-cli-trocar').style.display = 'none';
         (c.itens || []).forEach(function (i) { hoAddItem(i.descricao, i.valor, i.servico_id); });
         document.getElementById('ho-dia').value = c.dia_vencimento; document.getElementById('ho-inicio').value = c.inicio || '';
-        document.getElementById('ho-fim').value = c.fim || ''; document.getElementById('ho-grupo').value = c.grupo_id || '';
+        document.getElementById('ho-fim').value = c.fim || ''; document.getElementById('ho-grupo').value = c.grupo_id || ''; hoGrupoPinta();
         document.getElementById('ho-decimo').value = c.decimo_tipo || 'NENHUM';
         document.getElementById('ho-dec-inicio').value = c.decimo_inicio || 'PROPORCIONAL';
         document.getElementById('ho-dec-desde').value = c.decimo_desde || '';
