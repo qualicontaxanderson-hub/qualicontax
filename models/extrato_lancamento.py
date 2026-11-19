@@ -1418,6 +1418,13 @@ class RegraExtrato:
         """Compatibilidade: roda logo depois do import do OFX."""
         if not ids:
             return 0
+        # 19/11/2026: antes das regras, a saída que pagou um pedido de comissão quita o pedido e vai para a
+        # categoria de comissão da pessoa (Configurações → Usuários → No DRE)
+        try:
+            from utils import usuario_dre
+            usuario_dre.comissoes_pelo_extrato()
+        except Exception:
+            pass
         marks = ','.join(['%s'] * len(ids))
         # A trava vale aqui tambem, e aqui e o caminho mais perigoso: este
         # metodo roda logo depois do import, sem ninguem olhando. Sem a

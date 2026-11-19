@@ -2103,6 +2103,21 @@ def usuario_editar(uid):
                                      titular_nome, titular_cpf, pix_tipo, pix_chave, atualizado_por)
                                  VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""", (uid,) + tuple(bf[k] for k in bf) + (current_user.id,), fetch=False)
 
+        # 19/11/2026 — Anderson: "no cadastro de funcionário usuário no Config ter essas configurações em qual parte do
+        # DRE ficaria cada coisa de cada funcionário" (salário, ajuda de custo, comissão)
+        dre_mudou = {}
+        if request.form.get('dre_form') == '1':
+            from utils import usuario_dre as _ud
+            _antes = _ud.de(uid)
+            for _p, _r in _ud.PAPEIS:
+                try:
+                    if _ud.salvar(uid, _p, request.form.get('dre_' + _p), current_user.id):
+                        dre_mudou[_p] = {'antes': _antes.get(_p), 'depois': _ud.categoria(uid, _p)}
+                except ValueError as _e:
+                    flash('%s: %s' % (_r, _e), 'warning')
+            if dre_mudou.get('COMISSAO'):
+                _ud.classificar_comissoes_pendentes(uid)
+
         # Quem mexeu em acesso tem de ficar registrado. Perfis e empresas
         # entram como lista ordenada de ids: o diff do registrar mostra
         # exatamente quais entraram e quais sairam. A SENHA nunca vai para o
@@ -2121,7 +2136,8 @@ def usuario_editar(uid):
                           'departamento_id': departamento_id,
                           'perfis': sorted(int(p) for p in perfis_sel),
                           'empresas': sorted(int(c) for c in empresas_sel),
-                          'senha_trocada': bool(nova_senha), 'dados_bancarios_alterados': banco_mudou})
+                          'senha_trocada': bool(nova_senha), 'dados_bancarios_alterados': banco_mudou,
+                          'dre': dre_mudou or None})
         flash(f'Usuário "{nome}" atualizado com sucesso.', 'success')
         return redirect(url_for('configuracoes.usuarios'))
 
@@ -2138,7 +2154,9 @@ def usuario_editar(uid):
     from utils import contas_recebimento as _cr
     contas = _cr.contas_de(uid)                       # 18/11/2026: todas as contas da pessoa; a escolhida recebe
     banco = _cr.escolhida(uid)
-    return _render_usuario_form( departamentos=_departamentos_ativos(),
+    from utils import usuario_dre as _ud
+    return _render_usuario_form( departamentos=_departamentos_ativos(), dre=_ud.de(uid), dre_papeis=_ud.PAPEIS,
+                           dre_cats=_ud.categorias_despesa(),
                            perfis=perfis, clientes=clientes, usuario=usuario,
                            perfis_usuario=perfis_usuario,
                            empresas_usuario=empresas_usuario,

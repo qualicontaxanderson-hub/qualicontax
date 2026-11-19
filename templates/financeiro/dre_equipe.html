@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+
+{% block title %}Pagamentos da equipe - Qualicontax{% endblock %}
+
+{% block content %}
+{% include 'financeiro/_nav_financeiro.html' %}
+{# 19/11/2026 — Anderson: "quando eu quisesse consultar quanto pago de ajuda de custo ter o relatório e comissão a mesma coisa" #}
+<style>
+.pe-kpis { display:grid; grid-template-columns:repeat(4, minmax(0,1fr)); gap:12px; margin-bottom:16px; }
+.pe-kpi { display:block; background:#fff; border:1.5px solid #e2e8f0; border-radius:14px; padding:14px 16px; text-decoration:none; color:#0f172a; }
+.pe-kpi:hover { border-color:#86efac; }
+.pe-kpi.ativo { border-color:var(--primary-green, #00A85A); background:#f0fdf4; box-shadow:0 0 0 3px #dcfce7; }
+.pe-kpi small { display:block; font-size:12px; font-weight:800; letter-spacing:.05em; text-transform:uppercase; color:#64748b; }
+.pe-kpi b { display:block; font-size:21px; margin-top:4px; font-variant-numeric:tabular-nums; }
+.pe-kpi i { color:#94a3b8; margin-right:4px; }
+.pe-filtros { display:flex; flex-wrap:wrap; gap:10px; align-items:center; margin-bottom:14px; }
+.pe-filtros select { height:38px; border:1px solid #d1d5db; border-radius:10px; padding:0 10px; font-size:14px; background:#fff; }
+.pe-filtros label { font-size:12px; font-weight:800; letter-spacing:.05em; text-transform:uppercase; color:#94a3b8; display:flex; align-items:center; gap:8px; }
+.pe-wrap { overflow-x:auto; background:#fff; border:1px solid #e2e8f0; border-radius:14px; margin-bottom:18px; }
+.pe-wrap table { width:100%; min-width:1100px; border-collapse:collapse; font-size:13.5px; }
+.pe-wrap th, .pe-wrap td { padding:9px 10px; text-align:right; white-space:nowrap; border-bottom:1px solid #f1f5f9; font-variant-numeric:tabular-nums; }
+.pe-wrap th { font-size:12px; color:#64748b; background:#f8fafc; }
+.pe-wrap td:first-child, .pe-wrap th:first-child { text-align:left; position:sticky; left:0; background:inherit; }
+.pe-wrap tbody tr { background:#fff; }
+.pe-wrap td:first-child { font-weight:700; color:#0f172a; }
+.pe-wrap td:first-child small { display:block; font-weight:500; color:#94a3b8; font-size:12px; }
+.pe-wrap tfoot td { font-weight:800; background:#f0fdf4; border-top:2px solid #bbf7d0; }
+.pe-wrap .z { color:#cbd5e1; }
+.pe-sec { font-size:12.5px; font-weight:800; letter-spacing:.06em; text-transform:uppercase; color:#475569; margin:6px 0 10px; }
+.pe-det { display:grid; grid-template-columns:repeat(auto-fill, minmax(300px, 1fr)); gap:10px; }
+.pe-it { background:#fff; border:1px solid #e2e8f0; border-radius:12px; padding:10px 12px; display:grid; grid-template-columns:minmax(0,1fr) auto; gap:2px 10px; font-size:13.5px; }
+.pe-it b { color:#0f172a; } .pe-it .v { font-weight:800; font-variant-numeric:tabular-nums; text-align:right; }
+.pe-it small { color:#64748b; font-size:12px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.pe-tag { font-size:11.5px; font-weight:800; border-radius:99px; padding:2px 8px; background:#f1f5f9; color:#475569; justify-self:end; }
+.pe-tag.SALARIO { background:#dbeafe; color:#1d4ed8; } .pe-tag.AJUDA { background:#fef3c7; color:#92400e; } .pe-tag.COMISSAO { background:#dcfce7; color:#15803d; }
+.pe-aviso { background:#fffbeb; border:1px dashed #f59e0b; border-radius:12px; padding:10px 14px; font-size:13px; color:#92400e; margin-top:18px; }
+.pe-aviso a { color:#b45309; font-weight:700; }
+.pe-vazio { text-align:center; color:#64748b; padding:36px 12px; background:#fff; border:1px dashed #d7e3dc; border-radius:14px; }
+@media (max-width:700px) { .pe-kpis { grid-template-columns:repeat(2, minmax(0,1fr)); } .pe-kpi b { font-size:18px; } .pe-det { grid-template-columns:minmax(0,1fr); } }
+</style>
+
+<div class="page-header">
+    <div>
+        <h1 class="page-title"><i class="fas fa-people-group" style="color: var(--primary-green);"></i> Pagamentos da equipe</h1>
+        <p class="page-subtitle">Salário, ajuda de custo e comissão de cada pessoa, mês a mês (pela competência, como no DRE)</p>
+    </div>
+    <div class="page-actions">
+        <a href="{{ url_for('financeiro.dre', ano=ano) }}" class="btn btn-outline"><i class="fas fa-chart-pie"></i> DRE</a>
+    </div>
+</div>
+
+{% set base = {'ano': ano} %}{% if pessoa %}{% set _ = base.update({'pessoa': pessoa}) %}{% endif %}
+<div class="pe-kpis">
+    <a class="pe-kpi {{ 'ativo' if not tipo }}" href="{{ url_for('financeiro.dre_equipe', **base) }}"><small><i class="fas fa-layer-group"></i>Tudo</small><b>{{ total | float | format_currency }}</b></a>
+    {% for p, rot in papeis.items() %}
+    <a class="pe-kpi {{ 'ativo' if tipo == p }}" href="{{ url_for('financeiro.dre_equipe', tipo=p, **base) }}"><small><i class="fas fa-{{ {'SALARIO': 'wallet', 'AJUDA': 'hand-holding-heart', 'COMISSAO': 'percent'}[p] }}"></i>{{ rot }}</small><b>{{ tot_papel[p] | float | format_currency }}</b></a>
+    {% endfor %}
+</div>
+
+<form class="pe-filtros" method="GET">
+    {% if tipo %}<input type="hidden" name="tipo" value="{{ tipo }}">{% endif %}
+    <label>Ano <select name="ano" onchange="this.form.submit()">{% for a in anos %}<option value="{{ a }}"{{ ' selected' if a == ano }}>{{ a }}</option>{% endfor %}</select></label>
+    <label>Pessoa <select name="pessoa" onchange="this.form.submit()"><option value="">Todas</option>{% for uid, nome in pessoas %}<option value="{{ uid }}"{{ ' selected' if uid == pessoa }}>{{ nome }}</option>{% endfor %}</select></label>
+</form>
+
+{% if linhas %}
+<div class="pe-sec">{{ papeis[tipo] if tipo else 'Tudo' }} · {{ ano }}</div>
+<div class="pe-wrap">
+<table>
+    <thead><tr><th>Pessoa</th>{% for m in meses %}<th>{{ m }}</th>{% endfor %}<th>Total</th></tr></thead>
+    <tbody>
+    {% for l in linhas %}
+    <tr><td>{{ l.nome }}{% if not tipo %}<small>{% for p, rot in papeis.items() if l.papeis[p] %}{{ rot }} {{ l.papeis[p] | float | format_currency }}{{ ' · ' if not loop.last }}{% endfor %}</small>{% endif %}</td>
+        {% for v in l.meses %}<td class="{{ 'z' if not v }}">{{ v | float | format_currency if v else '—' }}</td>{% endfor %}
+        <td><b>{{ l.total | float | format_currency }}</b></td></tr>
+    {% endfor %}
+    </tbody>
+    <tfoot><tr><td>Total</td>{% for v in tot_meses %}<td>{{ v | float | format_currency if v else '—' }}</td>{% endfor %}<td>{{ total | float | format_currency }}</td></tr></tfoot>
+</table>
+</div>
+
+<div class="pe-sec">Pagamentos <small style="color:#94a3b8">{{ detalhe|length }}</small></div>
+<div class="pe-det">
+    {% for d in detalhe %}
+    <div class="pe-it"><b>{{ d.pessoa }}</b><span class="v">{{ d.valor | float | format_currency }}</span>
+        <small title="{{ d.descricao }}">{{ d.competencia.strftime('%m/%Y') }} · {{ d.descricao }}</small><span class="pe-tag {{ {'Salário': 'SALARIO', 'Ajuda de custo': 'AJUDA', 'Comissão': 'COMISSAO'}[d.papel] }}">{{ d.papel }}</span></div>
+    {% endfor %}
+</div>
+{% else %}
+<div class="pe-vazio"><i class="fas fa-people-group" style="font-size:2em; display:block; margin-bottom:10px;"></i>
+    Nenhum pagamento {{ ('de ' ~ papeis[tipo]|lower) if tipo }} em {{ ano }}{{ ' para essa pessoa' if pessoa }}.</div>
+{% endif %}
+
+{% if sem_vinculo %}
+<div class="pe-aviso"><i class="fas fa-circle-info"></i> Só entra aqui quem tem as contas vinculadas em <b>Configurações → Usuários → No DRE</b>.
+    Ainda sem vínculo ({{ sem_vinculo|length }}):
+    {% for u in sem_vinculo[:12] %}<a href="{{ url_for('configuracoes.usuario_editar', uid=u.id) }}#dre">{{ u.nome.split()[0] }}</a>{{ ', ' if not loop.last }}{% endfor %}{{ '…' if sem_vinculo|length > 12 }}</div>
+{% endif %}
+{% endblock %}

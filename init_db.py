@@ -1822,6 +1822,16 @@ def _apply_migrations():
             if _c.get('cnt', 0) == 0:
                 _migrate(f"ALTER TABLE fin_lancamentos ADD COLUMN {_col_name} {_col_def}")
 
+    # 19/11/2026 — em que conta do DRE cai o salário, a ajuda de custo e a comissão de cada pessoa (utils/usuario_dre.py)
+    _migrate("""CREATE TABLE IF NOT EXISTS fin_usuario_dre (
+        usuario_id INT NOT NULL,
+        papel VARCHAR(12) NOT NULL,
+        categoria_id INT NULL,
+        atualizado_por INT NULL,
+        atualizado_em DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        PRIMARY KEY (usuario_id, papel)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci""")
+
     # Comissões (17/11/2026, etapa 3): a chave Pix de quem recebe comissão (o pedido de pagamento mostra o Pix
     # copia e cola) e a comissão padrão de cada serviço do catálogo (PCT / FIXO / SEM + valor).
     for _tab, _cols in (('usuarios', [('pix_tipo', 'VARCHAR(10) NULL'), ('pix_chave', 'VARCHAR(120) NULL')]),

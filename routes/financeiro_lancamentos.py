@@ -155,12 +155,9 @@ def lancamentos():
     aprov = _aprovador()
     hoje = date.today()
     FinLancamento.liberar_comissoes_pagas()
-    try:            # pedido de comissão pago: o extrato que puxou a saída quita sozinho
-        for fid, eid in FinComissaoFechamento.quitar_pelo_extrato():
-            registrar('escrita.quitou_comissao_pelo_extrato', 'financeiro', tabela='fin_comissao_fechamentos', registro_id=fid,
-                      depois={'extrato_id': eid})
-    except Exception:
-        logger.exception('[lancamentos] quitação de comissão pelo extrato')
+    # pedido de comissão pago: o extrato que puxou a saída quita sozinho e (19/11/2026) a saída vai para o DRE
+    from utils import usuario_dre
+    usuario_dre.comissoes_pelo_extrato()
     quem = None if aprov else _eu().id
     todos = FinLancamento.listar(EMP, lancado_por=quem, origem=None if not aprov else 'SERVICO', limite=1500)
     grupos = {k: [] for k in FASES}
@@ -216,6 +213,9 @@ def lancamentos():
     tem_adiantavel = any(l.get('adiantavel') for l in aguard)
     pedidos = FinComissaoFechamento.listar(usuario_id=None if aprov else _eu().id)
     a_pagar = [f for f in pedidos if f['status'] not in ('PAGO', 'CANCELADO')]
+    # 19/11/2026: quem ainda não tem a comissão vinculada no DRE — o cartão pede o vínculo antes do "Registrar pago"
+    sem_dre = usuario_dre.sem_comissao(f['usuario_id'] for f in pedidos if f['status'] != 'CANCELADO') if aprov else set()
+    cats_dre = usuario_dre.categorias_despesa() if sem_dre else []
     acordos = [a for a in FinComissaoAcordo.listar(usuario_id=_eu().id) if a['base'] == 'SERVICO']
     clientes = execute_query(
         """SELECT id, numero_cliente AS num, nome_razao_social AS nome, cpf_cnpj AS doc, COALESCE(avulso, 0) AS av
@@ -240,7 +240,7 @@ def lancamentos():
         'financeiro/lancamentos.html', aprov=aprov, admin=_admin(), hoje=hoje, grupos=grupos, fora=fora[:30],
         tot={k: soma(v) for k, v in grupos.items()}, liberadas=liberadas, meus_com=meus_com, aguard=aguard, tem_adiantavel=tem_adiantavel,
         tot_liberadas=sum(float(l['comissao_valor'] or 0) for l in liberadas),
-        pedidos=pedidos, a_pagar=a_pagar, tot_a_pagar=sum(float(f['total'] or 0) - float(f['valor_pago'] or 0) for f in a_pagar),
+        pedidos=pedidos, a_pagar=a_pagar, sem_dre=sem_dre, cats_dre=cats_dre, tot_a_pagar=sum(float(f['total'] or 0) - float(f['valor_pago'] or 0) for f in a_pagar),
         aba=request.args.get('aba') if request.args.get('aba') in FASES + ('com',) else ('apr' if (aprov or grupos['apr']) else 'cob'),
         caixa_json=json.dumps(caixa, ensure_ascii=False), STATUS=STATUS, COMISSAO=COMISSAO,
         acordos_todos=FinComissaoAcordo.listar(so_ativos=True) if _admin() else [],
@@ -354,10 +354,8 @@ def comissao_pedido(fid):
     copiar e pagar"). Quem pediu e quem aprova abrem; o Pix já vem com o valor que falta."""
     from utils.pix_brcode import copia_e_cola, codigo_pedido, qr_data_uri
     FinLancamento.liberar_comissoes_pagas()
-    try:
-        FinComissaoFechamento.quitar_pelo_extrato()
-    except Exception:
-        logger.exception('[lancamentos] quitação de comissão pelo extrato')
+    from utils import usuario_dre
+    usuario_dre.comissoes_pelo_extrato()
     f = FinComissaoFechamento.get(fid)
     if not f or (not _aprovador() and f['usuario_id'] != _eu().id):
         abort(404)
@@ -990,6 +988,38 @@ def fechamento_pagar(fid):
         flash(str(e) if isinstance(e, ValueError) else 'Valor inválido.', 'danger')
     if request.form.get('volta') == 'pedido':      # pagou de dentro da página do pedido
         return redirect(url_for('financeiro.comissao_pedido', fid=fid))
+    return redirect(url_for('financeiro.lancamentos', aba='com'))
+
+
+@financeiro.route('/financeiro/lancamentos/dre-comissao/<int:uid>', methods=['POST'])
+@permission_required(PERM)
+def comissao_vincular_dre(uid):
+    """Vincula a COMISSÃO da pessoa a uma categoria do DRE (19/11/2026 — Anderson: "quando fazer a primeira vez obrigar
+    a gente a vincular no usuário e após isso não precisa mais"). Grava no usuário (o mesmo de Configurações → Usuários
+    → No DRE) e já manda para o DRE as saídas de comissão dela que estavam sem categoria."""
+    if _vendo_como():
+        flash('Você está vendo como outra pessoa: volte a ser você para alterar.', 'warning')
+        return redirect(url_for('financeiro.lancamentos', aba='com'))
+    if not _aprovador():
+        abort(403)
+    from utils import usuario_dre
+    try:
+        antes = usuario_dre.categoria(uid, 'COMISSAO')
+        if not request.form.get('categoria_id'):
+            raise ValueError('Escolha a conta do DRE.')
+        usuario_dre.salvar(uid, 'COMISSAO', request.form.get('categoria_id'), current_user.id)
+        registrar('escrita.vinculou_dre_usuario', 'financeiro', tabela='fin_usuario_dre', registro_id=uid,
+                  antes={'COMISSAO': antes}, depois={'COMISSAO': int(request.form.get('categoria_id'))})
+        feitos = usuario_dre.classificar_comissoes_pendentes(uid)
+        for eid, cid, res in feitos:
+            registrar('escrita.classificou_comissao_no_dre', 'financeiro', tabela='extrato_lancamentos', registro_id=eid,
+                      depois={'categoria_id': cid, 'conciliacao': res})
+        msg = 'Pronto: as comissões dessa pessoa vão sozinhas para essa conta do DRE.'
+        if feitos:
+            msg += ' %d pagamento%s já lançado%s.' % (len(feitos), 's' if len(feitos) > 1 else '', 's' if len(feitos) > 1 else '')
+        flash(msg, 'success')
+    except ValueError as e:
+        flash(str(e), 'danger')
     return redirect(url_for('financeiro.lancamentos', aba='com'))
 
 

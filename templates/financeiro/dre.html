@@ -20,6 +20,11 @@
 .dre-grupo { cursor: pointer; }
 .dre-grupo td:first-child { font-weight: 600; }
 .dre-cat td:first-child { padding-left: 30px; color: #6b7280; }
+/* 19/11/2026: a pessoa (pai) com o total e as contas dela embaixo */
+.dre-cat-pai td:first-child, .dre-m-cat.dre-cat-pai > span:first-child { color: #334155; font-weight: 700; }
+.dre-cat-sub td:first-child { padding-left: 54px; color: #94a3b8; }
+.dre-cat-sub td { color: #64748b; font-size: .95em; }
+.dre-m-cat.dre-cat-sub { padding-left: 54px; color: #94a3b8; }
 .dre-sub { background: #f0fdf4; font-weight: 700; border-top: 2px solid #bbf7d0; }
 .dre-neg { color: #b91c1c; }
 .dre-vazio { text-align: center; color: #6b7280; padding: 36px 12px; }
@@ -67,6 +72,9 @@
         </a>
         <a href="{{ url_for('financeiro.categorias') }}" class="btn btn-outline">
             <i class="fas fa-tags"></i> Categorias
+        </a>
+        <a href="{{ url_for('financeiro.dre_equipe', ano=ano) }}" class="btn btn-outline">
+            <i class="fas fa-people-group"></i> Pagamentos da equipe
         </a>
     </div>
 </div>
@@ -228,13 +236,22 @@
                     <td><strong>{{ l.g.total | float | round(2) | format_currency }}</strong></td>
                 </tr>
                 {% for c in l.g.cats %}
-                <tr class="dre-cat" data-pai="{{ bloco }}" style="display:none;">
+                <tr class="dre-cat{{ ' dre-cat-pai' if c.subs }}" data-pai="{{ bloco }}" style="display:none;">
                     <td>{{ c.nome }}</td>
                     {% for v in c.meses %}
                     <td>{{ v | float | round(2) | format_currency if v else '—' }}</td>
                     {% endfor %}
                     <td>{{ c.total | float | round(2) | format_currency }}</td>
                 </tr>
+                {% for s in c.subs %}
+                <tr class="dre-cat dre-cat-sub" data-pai="{{ bloco }}" style="display:none;">
+                    <td>{{ s.nome }}</td>
+                    {% for v in s.meses %}
+                    <td>{{ v | float | round(2) | format_currency if v else '—' }}</td>
+                    {% endfor %}
+                    <td>{{ s.total | float | round(2) | format_currency }}</td>
+                </tr>
+                {% endfor %}
                 {% endfor %}
                 {% else %}
                 <tr class="dre-sub">
@@ -273,10 +290,19 @@
             {% for c in l.g.cats %}
             {% set cv = c.total if idx == 'ano' else c.meses[idx] %}
             {% if cv %}
-            <div class="dre-m-lin dre-m-cat" style="display:none;">
+            <div class="dre-m-lin dre-m-cat{{ ' dre-cat-pai' if c.subs }}" style="display:none;">
                 <span>{{ c.nome }}</span>
                 <span class="dre-m-val">{{ cv | float | round(2) | format_currency }}</span>
             </div>
+            {% for s in c.subs %}
+            {% set sv = s.total if idx == 'ano' else s.meses[idx] %}
+            {% if sv %}
+            <div class="dre-m-lin dre-m-cat dre-cat-sub" style="display:none;">
+                <span>{{ s.nome }}</span>
+                <span class="dre-m-val">{{ sv | float | round(2) | format_currency }}</span>
+            </div>
+            {% endif %}
+            {% endfor %}
             {% endif %}
             {% endfor %}
             {% endif %}

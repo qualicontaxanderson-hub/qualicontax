@@ -264,6 +264,22 @@
             <p class="us-txt" style="margin-top:8px"><i class="fas fa-shield-halved"></i> Só o administrador vê esta parte. Os números não vão para a Auditoria, só o aviso de que mudaram.</p>
         </div>
     </div>
+    {# 19/11/2026 — Anderson: "em qual parte do DRE ficaria cada coisa de cada funcionário" #}
+    <div class="cli-filtros us-bloco" id="dre">
+        <div class="cli-f-row">
+            <span class="cli-seg-rot"><i class="fas fa-chart-pie"></i> No DRE <small style="text-transform:none; letter-spacing:0; font-weight:600; color:#94a3b8">— em que conta cai cada pagamento desta pessoa</small></span>
+            <input type="hidden" name="dre_form" value="1">
+            <div class="us-campos">
+                {% for papel, rot in dre_papeis %}
+                <label class="us-campo"><span>{{ rot }}</span>
+                    <select name="dre_{{ papel }}"><option value="">— não vinculado —</option>
+                    {% for g, cs in dre_cats | groupby('grupo') %}<optgroup label="{{ g }}">{% for c in cs %}<option value="{{ c.id }}"{{ ' selected' if dre.get(papel) == c.id }}>{{ c.nome }}</option>{% endfor %}</optgroup>{% endfor %}
+                    </select></label>
+                {% endfor %}
+            </div>
+            <p class="us-txt" style="margin-top:8px"><i class="fas fa-bolt"></i> A <b>comissão</b> vai sozinha: quando o extrato traz o pagamento de um pedido de comissão, a saída já entra nessa conta do DRE. Sem vínculo, o pedido de comissão pede a conta antes de registrar o pagamento.</p>
+        </div>
+    </div>
     {% endif %}
 
     {# A antiga "Empresas Permitidas" saiu em 02/10/2026; a regra que vale é a

@@ -192,6 +192,10 @@
 .lm-per { display:inline-flex; align-items:center; gap:6px; font-size:13px; color:#64748b; } .lm-per[hidden] { display:none; }
 .lm-per input { height:34px; border:1px solid #d7e3dc; border-radius:9px; padding:0 8px; font:inherit; font-size:13px; }
 .lm-fdt .tx-f.zero { display:none; }
+.lm-dre { margin-top:8px; padding:9px 10px; border:1.5px dashed #f59e0b; background:#fffbeb; border-radius:10px; display:grid; grid-template-columns:minmax(0,1fr) auto; gap:6px; }
+.lm-dre > span { grid-column:1/-1; font-size:13px; font-weight:700; color:#92400e; } .lm-dre > span small { display:block; font-weight:500; color:#a16207; font-size:12px; }
+.lm-dre select { min-width:0; height:36px; border:1px solid #fcd34d; border-radius:9px; font-size:13px; padding:0 6px; background:#fff; }
+.lm-dre button { height:36px; border:0; border-radius:9px; background:#d97706; color:#fff; font-weight:800; font-size:13px; padding:0 12px; }
 .lm-nada { display:none; padding:18px; text-align:center; color:#64748b; font-size:13.5px; background:#fff; border:1px dashed #d7e3dc; border-radius:14px; margin-bottom:20px; }
 .lm-pagar.lm-pagar-c input { font-size:13.5px; } .lm-pagar.lm-pagar-c button { font-size:13.5px; height:36px; }
 @media (max-width:700px) { .lm-filtros { gap:8px; } .lm-fg > em { white-space:nowrap; } .lm-fg { flex-wrap:nowrap; overflow-x:auto; max-width:100%; padding-bottom:2px; } .lm-filtros .tx-f { white-space:nowrap; } }
@@ -370,7 +374,16 @@
             {% else %}<i class="fas fa-hourglass-half"></i> a pagar{% endif %}</span></div>
         <div class="lm-ac"><a class="cob lm-ac-a" href="{{ url_for('financeiro.comissao_pedido', fid=f.id) }}"><i class="fas fa-qrcode"></i> {{ 'Abrir e pagar' if f.status not in ('PAGO', 'CANCELADO') else 'Abrir' }}</a>
           {% if f.status not in ('PAGO', 'CANCELADO') and (f.valor_pago | float) == 0 %}<button type="button" class="no" onclick="cnAbrir({{ f.id }}, {{ f.usuario_nome | tojson }}, {{ (f.total | float) | tojson }})"><i class="fas fa-ban"></i> Cancelar</button>{% endif %}</div>
-        {% if f.status not in ('PAGO', 'CANCELADO') and pode_rota('financeiro.fechamento_pagar') %}
+        {% if f.usuario_id in sem_dre and f.status != 'CANCELADO' %}
+        {# 19/11/2026 — Anderson: "quando fazer a primeira vez obrigar a gente a vincular no usuário e após isso não precisa mais" #}
+        <form class="lm-dre" method="POST" action="{{ url_for('financeiro.comissao_vincular_dre', uid=f.usuario_id) }}">
+          <span><i class="fas fa-chart-pie"></i> Em que conta do DRE vai a comissão de {{ f.usuario_nome.split()[0] }}? <small>Fica gravado no usuário; da próxima vez vai sozinho.</small></span>
+          <select name="categoria_id" required><option value="">Escolha a conta…</option>
+            {% for g, cs in cats_dre | groupby('grupo') %}<optgroup label="{{ g }}">{% for c in cs %}<option value="{{ c.id }}"{{ ' selected' if g == 'Comissões' and c.nome.split()[0]|lower == f.usuario_nome.split()[0]|lower }}>{{ c.nome }}</option>{% endfor %}</optgroup>{% endfor %}
+          </select>
+          <button><i class="fas fa-link"></i> Vincular</button>
+        </form>
+        {% elif f.status not in ('PAGO', 'CANCELADO') and pode_rota('financeiro.fechamento_pagar') %}
         <form class="lm-pagar lm-pagar-c" method="POST" action="{{ url_for('financeiro.fechamento_pagar', fid=f.id) }}" onsubmit="return confirm('Registrar o pagamento a {{ f.usuario_nome }}?')">
           <input type="date" name="data" value="{{ hoje.isoformat() }}" title="data do pagamento"><input name="valor" value="{{ '%.2f'|format(falta) | replace('.', ',') }}" inputmode="decimal" title="valor pago">
           <button><i class="fas fa-check"></i> Registrar pago</button></form>

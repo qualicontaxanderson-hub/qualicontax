@@ -854,6 +854,30 @@ def _aplicar_centro(rows, centro_sel, centros):
     return out, nota
 
 
+def _arvore_cats(cats):
+    """Categoria com subcategorias vira UMA linha com o total e as subs embaixo (19/11/2026 — Anderson: "no DRE
+    Gabriel total / Salário / Ajuda de custo / Comissões"). A consulta devolve a sub como "Pai · Sub"; o que foi
+    lançado direto no pai, quando ele tem subs, aparece como "sem detalhar" para a soma bater."""
+    arv = {}
+    for c in cats:
+        pai, _, sub = c['nome'].partition(' · ')
+        n = arv.setdefault(pai, {'nome': pai, 'meses': [Decimal('0')] * 12, 'total': Decimal('0'),
+                                 'subs': [], 'ordem': c.get('ordem') or 0})
+        for i in range(12):
+            n['meses'][i] += c['meses'][i]
+        n['total'] += c['total']
+        n['ordem'] = min(n['ordem'], c.get('ordem') or 0)
+        if sub:
+            n['subs'].append(dict(c, nome=sub))
+        else:
+            n['proprio'] = c
+    for n in arv.values():
+        n['subs'].sort(key=lambda s: (s.get('ordem') or 0, s['nome']))
+        if n['subs'] and n.get('proprio'):
+            n['subs'].insert(0, dict(n['proprio'], nome='sem detalhar'))
+    return sorted(arv.values(), key=lambda n: n['nome'])
+
+
 def _montar_dre(rows, grupos_vis=None):
     """Linhas de exibição do DRE na ordem da seção 7 do documento.
 
@@ -885,7 +909,7 @@ def _montar_dre(rows, grupos_vis=None):
         g['ordem'] = min(g['ordem'], r['ordem'])
         c = g['cats'].setdefault(r['nome'], {'nome': r['nome'],
                                              'meses': [Decimal('0')] * 12,
-                                             'total': Decimal('0')})
+                                             'total': Decimal('0'), 'ordem': r['ordem']})
         v = Decimal(str(r['total'] or 0))
         i = int(r['mes']) - 1
         g['meses'][i] += v
@@ -893,7 +917,7 @@ def _montar_dre(rows, grupos_vis=None):
         c['meses'][i] += v
         c['total'] += v
     for g in grupos.values():
-        g['cats'] = sorted(g['cats'].values(), key=lambda c: c['nome'])
+        g['cats'] = _arvore_cats(g['cats'].values())
 
     def soma(lista):
         out = [Decimal('0')] * 12
@@ -1014,6 +1038,63 @@ def dre():
                            centros=centros, centro_sel=centro_sel,
                            nota_centro=nota_centro, entre=entre,
                            ano=ano, anos=anos, meses=_DRE_MESES)
+
+
+@financeiro.route('/financeiro/dre/equipe')
+@permission_required('financeiro.dre')
+def dre_equipe():
+    """PAGAMENTOS DA EQUIPE (19/11/2026 — Anderson: "quando eu quisesse consultar quanto pago de ajuda de custo ter o
+    relatório e comissão a mesma coisa"). Soma o que caiu nas contas que cada pessoa tem vinculadas em Configurações →
+    Usuários → No DRE (salário, ajuda de custo, comissão), mês a mês, pela competência — o mesmo número do DRE."""
+    from utils import usuario_dre
+    ano_atual = date.today().year
+    try:
+        ano = int(request.args.get('ano') or ano_atual)
+    except ValueError:
+        ano = ano_atual
+    papeis = dict(usuario_dre.PAPEIS)
+    tipo = request.args.get('tipo') if request.args.get('tipo') in papeis else ''
+    pessoa = int(request.args['pessoa']) if (request.args.get('pessoa') or '').isdigit() else None
+    vinc = execute_query(
+        """SELECT d.usuario_id, d.papel, d.categoria_id, u.nome
+             FROM fin_usuario_dre d JOIN usuarios u ON u.id = d.usuario_id
+            WHERE d.categoria_id IS NOT NULL ORDER BY u.nome""", fetch=True) or []
+    pessoas = sorted({(v['usuario_id'], v['nome']) for v in vinc}, key=lambda x: x[1])
+    usados = [v for v in vinc if (not tipo or v['papel'] == tipo) and (not pessoa or v['usuario_id'] == pessoa)]
+    por_cat = {v['categoria_id']: v for v in usados}
+    linhas, detalhe = {}, []
+    tot_meses, tot_papel = [Decimal('0')] * 12, {p: Decimal('0') for p in papeis}
+    if por_cat:
+        marks = ','.join(['%s'] * len(por_cat))
+        rows = execute_query(
+            f"""SELECT t.id, t.categoria_id, t.competencia, t.valor, t.status,
+                       COALESCE(t.descricao, t.contraparte_nome, '') AS descricao
+                  FROM fin_titulos t
+                 WHERE t.categoria_id IN ({marks}) AND YEAR(t.competencia) = %s AND t.status <> 'cancelado'
+                 ORDER BY t.competencia DESC, t.id DESC""", tuple(por_cat) + (ano,), fetch=True) or []
+        for r in rows:
+            v = por_cat[r['categoria_id']]
+            val, i = Decimal(str(r['valor'] or 0)), r['competencia'].month - 1
+            ln = linhas.setdefault(v['usuario_id'], {'nome': v['nome'], 'meses': [Decimal('0')] * 12, 'total': Decimal('0'),
+                                                    'papeis': {p: Decimal('0') for p in papeis}})
+            ln['meses'][i] += val
+            ln['total'] += val
+            ln['papeis'][v['papel']] += val
+            tot_meses[i] += val
+            tot_papel[v['papel']] += val
+            detalhe.append(dict(r, pessoa=v['nome'], papel=papeis[v['papel']]))
+    sem_vinculo = execute_query(
+        """SELECT u.id, u.nome FROM usuarios u
+            WHERE u.situacao = 'ATIVO' AND NOT EXISTS (SELECT 1 FROM fin_usuario_dre d WHERE d.usuario_id = u.id)
+            ORDER BY u.nome""", fetch=True) or []
+    from models.fin_titulo import FinDre
+    anos = FinDre.anos_com_dado()
+    if ano_atual not in anos:
+        anos.insert(0, ano_atual)
+    return render_template('financeiro/dre_equipe.html', ano=ano, anos=anos, tipo=tipo, pessoa=pessoa, papeis=papeis,
+                           pessoas=pessoas, linhas=sorted(linhas.values(), key=lambda l: -l['total']),
+                           tot_meses=tot_meses, tot_papel=tot_papel, total=sum(tot_meses), detalhe=detalhe,
+                           sem_vinculo=sem_vinculo, meses=_DRE_MESES)
 
 
 # =======================================================================
