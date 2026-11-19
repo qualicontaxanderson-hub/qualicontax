@@ -156,7 +156,9 @@ class FinLancamento:
     def listar(empresa_id, lancado_por=None, status=None, destino=None, competencia=None, cliente_id=None,
                busca=None, comissao_status=None, limite=500, origem=None):
         cond, params = ['l.empresa_id = %s'], [empresa_id]
-        if origem:
+        if isinstance(origem, (list, tuple, set)):
+            cond.append('l.origem IN (%s)' % ','.join(['%s'] * len(origem))); params += list(origem)
+        elif origem:
             cond.append('l.origem = %s'); params.append(origem)
         if lancado_por:
             cond.append('l.lancado_por = %s'); params.append(lancado_por)
@@ -216,10 +218,15 @@ class FinLancamento:
              None if com_nota is None else (1 if com_nota else 0), comissao_tipo, cv), fetch=False)
 
     @staticmethod
-    def comissao_calculada(l, tipo=None, valor=None):
+    def comissao_calculada(l, tipo=None, valor=None, base=None):
         """(acordo, valor da comissão) — o que vale ao aprovar. Quem aprova pode mandar tipo/valor (ajuste); senão
         vale o que a pessoa pediu; "padrão" é o acordo dela para o serviço. Sem acordo (não comissionado, ex.: Jabes)
-        só ganha se quem aprova der."""
+        só ganha se quem aprova der. ``base`` (19/11/2026): o valor líquido quando há desconto junto (comissão pelo líquido)."""
+        if l.get('origem') == 'DESCONTO':
+            return None, Decimal('0')
+        if base is None:
+            base = _d(l['valor_total']) - FinLancamento.desconto_total(l['id']) if l.get('id') else _d(l['valor_total'])
+        l = dict(l, valor_total=max(_d(base), Decimal('0')))
         acordo = FinComissaoAcordo.vigente(l['lancado_por'], l['servico_id'], l['lancado_em'].date() if l.get('lancado_em') else None)
         if FinLancamento.servico_travado(l['servico_id']):
             # 17/11/2026 — Anderson: "é bom ter uma trava das que nunca pagamos comissão". Serviço marcado "Nunca"
@@ -244,6 +251,28 @@ class FinLancamento:
             return acordo, _d(valor)
         return acordo, FinComissaoAcordo.calcular(acordo, l['valor_total'])
 
+    # ---------------- desconto lançado pela equipe (19/11/2026) ----------------
+    @staticmethod
+    def servico_desconto_id(empresa_id=2):
+        """O serviço "Desconto" do catálogo (sem nota, sem comissão): é o que os lançamentos de desconto apontam.
+        Cria se não existir."""
+        r = execute_query("SELECT id FROM nfse_servicos WHERE empresa_id = %s AND nome = 'Desconto' LIMIT 1", (empresa_id,), fetch=True, fetch_one=True)
+        if r:
+            return r['id']
+        return execute_query("""INSERT INTO nfse_servicos (empresa_id, nome, descricao, emite_nota, ordem, ativo, comissao_tipo)
+                                VALUES (%s, 'Desconto', 'Desconto lançado pela equipe (sobre um serviço ou sobre a mensalidade)', 0, 999, 1, 'SEM')""",
+                             (empresa_id,), fetch=False)
+
+    @staticmethod
+    def descontos_de(lid, status=('LANCADO', 'APROVADO')):
+        """Os descontos ligados a este lançamento (ainda vivos)."""
+        return execute_query(f"""{FinLancamento.SELECT} WHERE l.desc_lancamento_id = %s AND l.origem = 'DESCONTO'
+                                  AND l.status IN ({','.join(['%s'] * len(status))}) ORDER BY l.id""", (lid,) + tuple(status), fetch=True) or []
+
+    @staticmethod
+    def desconto_total(lid):
+        return sum((_d(d['valor_total']) for d in FinLancamento.descontos_de(lid)), Decimal('0'))
+
     @staticmethod
     def servico_travado(servico_id):
         """Serviço que NUNCA paga comissão (comissao_tipo = 'SEM' no catálogo)."""
@@ -263,10 +292,20 @@ class FinLancamento:
                    comissao_acordo_id = %s, comissao_valor = %s, comissao_status = %s WHERE id = %s""",
             (aprovado_por, acordo['id'] if acordo else None, com if com > 0 else None,
              'AGUARDANDO' if com > 0 else 'SEM', lid), fetch=False)
+        # 19/11/2026: o desconto pedido junto com o serviço é aprovado junto (uma aprovação só)
+        execute_query("""UPDATE fin_lancamentos SET status = 'APROVADO', aprovado_por = %s, aprovado_em = NOW(), comissao_status = 'SEM'
+                          WHERE desc_lancamento_id = %s AND origem = 'DESCONTO' AND status = 'LANCADO'""", (aprovado_por, lid), fetch=False)
         return com
 
     @staticmethod
+    def _cascata(lid, status, motivo=None):
+        """Reprovar/cancelar o serviço reprova/cancela o desconto pedido junto."""
+        execute_query("UPDATE fin_lancamentos SET status = %s, motivo = COALESCE(%s, motivo) WHERE desc_lancamento_id = %s AND origem = 'DESCONTO' AND status IN ('LANCADO', 'APROVADO')",
+                      (status, motivo, lid), fetch=False)
+
+    @staticmethod
     def reprovar(lid, por, motivo):
+        FinLancamento._cascata(lid, 'REPROVADO', (motivo or '')[:255] or None)
         l = FinLancamento.get(lid)
         if not l or l['status'] != 'LANCADO':
             raise ValueError('Só lançamento aguardando aprovação pode ser reprovado.')
@@ -278,6 +317,7 @@ class FinLancamento:
         l = FinLancamento.get(lid)
         if not l or l['status'] not in ('LANCADO', 'APROVADO'):
             raise ValueError('Lançamento já cobrado não se cancela aqui: cancele a cobrança.')
+        FinLancamento._cascata(lid, 'CANCELADO', (motivo or '')[:255] or None)
         execute_query("UPDATE fin_lancamentos SET status = 'CANCELADO', motivo = %s WHERE id = %s",
                       ((motivo or '')[:255] or None, lid), fetch=False)
 
@@ -324,7 +364,7 @@ class FinLancamento:
     @staticmethod
     def para_o_mensal(empresa_id, competencia, cliente_id=None):
         """Aprovados, destino MENSAL, da competência, ainda não cobrados — o que o lote junta."""
-        cond, params = ["l.empresa_id = %s", "l.status = 'APROVADO'", "l.destino = 'MENSAL'", "l.origem = 'SERVICO'", "l.competencia = %s"], [empresa_id, competencia]
+        cond, params = ["l.empresa_id = %s", "l.status = 'APROVADO'", "l.destino = 'MENSAL'", "l.origem IN ('SERVICO', 'DESCONTO')", "l.competencia = %s"], [empresa_id, competencia]
         if cliente_id:
             cond.append('l.cliente_id = %s'); params.append(cliente_id)
         return execute_query(f"{FinLancamento.SELECT} WHERE {' AND '.join(cond)} ORDER BY l.cliente_id, l.id",

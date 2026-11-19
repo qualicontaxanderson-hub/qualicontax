@@ -84,6 +84,41 @@ def _contrato_ativo(cliente_id):
                               (cliente_id, EMP), fetch=True))
 
 
+def _desconto_do_form(f):
+    """19/11/2026 — o Desconto da Nova cobrança: {'tipo': FIXO|PCT, 'valor', 'sobre': SERVICO|MENSAL, 'motivo'} ou None."""
+    tipo = (f.get('desc_tipo') or '').strip().upper()
+    if not tipo:
+        return None
+    if tipo not in ('FIXO', 'PCT'):
+        raise ValueError('Tipo de desconto inválido.')
+    v = _dec(f.get('desc_valor'))
+    if v is None or v <= 0:
+        raise ValueError('Informe o valor do desconto.')
+    if tipo == 'PCT' and v >= 100:
+        raise ValueError('O desconto em porcentagem precisa ser menor que 100%.')
+    motivo = (f.get('desc_motivo') or '').strip()
+    if not motivo:
+        raise ValueError('Diga o motivo do desconto (fica no controle dos descontos).')
+    sobre = (f.get('desc_sobre') or 'SERVICO').strip().upper()
+    return {'tipo': tipo, 'valor': v, 'sobre': 'MENSAL' if sobre == 'MENSAL' else 'SERVICO', 'motivo': motivo[:200]}
+
+
+def _mensal_de(cliente_id):
+    r = execute_query("SELECT COALESCE(SUM(valor), 0) v FROM fin_contratos WHERE cliente_id = %s AND empresa_id = %s AND situacao = 'ATIVO'",
+                      (cliente_id, EMP), fetch=True, fetch_one=True) or {}
+    return Decimal(str(r.get('v') or 0))
+
+
+def _valor_desconto(desc, base, do_que):
+    base = Decimal(str(base or 0))
+    dv = (base * desc['valor'] / 100).quantize(Decimal('0.01')) if desc['tipo'] == 'PCT' else desc['valor']
+    if base <= 0:
+        raise ValueError('Não há %s para descontar.' % do_que)
+    if dv > base:
+        raise ValueError('O desconto (R$ %s) não pode ser maior que %s (R$ %s).' % (dv, do_que, base))
+    return dv
+
+
 SEM_MENSAL = ('Esta empresa não tem contrato de honorários ativo: não existe mensalidade para incluir a cobrança. '
               'Emita avulso (boleto agora ou na aprovação) ou cadastre os honorários em Honorários › Sem honorários.')
 
@@ -101,8 +136,9 @@ def _meu_ou_admin(l):
 
 
 def _servicos():
-    return execute_query("SELECT id, nome, valor_padrao, emite_nota, comissao_tipo, comissao_valor FROM nfse_servicos "
-                         "WHERE empresa_id = %s AND ativo = 1 ORDER BY ordem, nome", (EMP,), fetch=True) or []
+    return execute_query("""SELECT s.id, s.nome, s.valor_padrao, s.emite_nota, s.comissao_tipo, s.comissao_valor,
+                                   (SELECT COUNT(*) FROM fin_lancamentos x WHERE x.servico_id = s.id AND x.status <> 'CANCELADO') AS n
+                              FROM nfse_servicos s WHERE s.empresa_id = %s AND s.ativo = 1 ORDER BY s.ordem, s.nome""", (EMP,), fetch=True) or []
 
 
 PIX_TIPOS = {'cpf': 'CPF', 'cnpj': 'CNPJ', 'celular': 'Celular', 'email': 'E-mail', 'aleatoria': 'Chave aleatória'}
@@ -170,7 +206,7 @@ def lancamentos():
     from utils import usuario_dre
     usuario_dre.comissoes_pelo_extrato()
     quem = None if aprov else _eu().id
-    todos = FinLancamento.listar(EMP, lancado_por=quem, origem=None if not aprov else 'SERVICO', limite=1500)
+    todos = FinLancamento.listar(EMP, lancado_por=quem, origem=None if not aprov else ('SERVICO', 'DESCONTO'), limite=1500)
     grupos = {k: [] for k in FASES}
     fora = []
     for l in todos:
@@ -242,7 +278,8 @@ def lancamentos():
         'clientes': [{'id': c['id'], 'num': str(c['num'] or ''), 'nome': c['nome'], 'doc': c['doc'] or '', 'av': bool(c['av']),
                       'mensal': mensal.get(c['id'], 0)} for c in clientes],
         'servicos': [{'id': s['id'], 'nome': s['nome'], 'valor': float(s['valor_padrao'] or 0), 'nota': bool(s['emite_nota']),
-                      'ct': s.get('comissao_tipo') or '', 'cv': float(s.get('comissao_valor') or 0)} for s in _servicos()],
+                      'ct': s.get('comissao_tipo') or '', 'cv': float(s.get('comissao_valor') or 0), 'n': int(s.get('n') or 0)}
+                     for s in _servicos() if s['nome'] != 'Desconto'],
         'acordos': [{'servico_id': a['servico_id'], 'tipo': a['tipo'], 'valor': float(a['valor'])} for a in acordos],
         'comps': [{'v': c.isoformat(), 'rot': c.strftime('%m/%Y')} for c in comps],
         'hoje': hoje.isoformat(), 'eu': getattr(_eu(), 'nome', ''), 'aprovador': aprov,
@@ -533,41 +570,72 @@ def lancamento_novo():
     try:
         cliente_id = f.get('cliente_id', type=int)
         servico_id = f.get('servico_id', type=int)
-        if not cliente_id or not servico_id:
-            raise ValueError('Escolha o cliente e o serviço.')
-        s = execute_query('SELECT nome FROM nfse_servicos WHERE id = %s AND empresa_id = %s', (servico_id, EMP), fetch=True, fetch_one=True)
-        if not s:
-            raise ValueError('Serviço inválido.')
         como = f.get('como') or 'BOLETO_NOTA'
         if como not in ('BOLETO_NOTA', 'BOLETO', 'MENSAL'):
             raise ValueError('Escolha como cobrar.')
         destino = 'MENSAL' if como == 'MENSAL' else 'AVULSO'
+        desc = _desconto_do_form(f)          # 19/11/2026: Desconto junto (sobre o serviço) ou só o desconto (na mensalidade)
+        if not cliente_id:
+            raise ValueError('Escolha o cliente.')
+        so_desconto = bool(desc and desc['sobre'] == 'MENSAL' and not servico_id)
+        if not servico_id and not so_desconto:
+            raise ValueError('Escolha o serviço.')
+        if desc and destino == 'AVULSO':
+            desc['sobre'] = 'SERVICO'             # avulso: o desconto é sempre sobre o serviço desta cobrança
+        if so_desconto and destino != 'MENSAL':
+            raise ValueError('Desconto na mensalidade só com "Incluir na mensalidade".')
+        s = execute_query('SELECT nome FROM nfse_servicos WHERE id = %s AND empresa_id = %s', (servico_id, EMP), fetch=True, fetch_one=True) if servico_id else None
+        if servico_id and not s:
+            raise ValueError('Serviço inválido.')
         if destino == 'MENSAL' and not _contrato_ativo(cliente_id):
             raise ValueError(SEM_MENSAL)
         comp = _data(f.get('competencia')) if destino == 'MENSAL' else None
-        lid = FinLancamento.criar(EMP, cliente_id, servico_id, (f.get('descricao') or s['nome']).strip() or s['nome'],
-                                  Decimal('1'), _dec(f.get('valor')), destino, _eu().id,
-                                  vencimento=_data(f.get('vencimento')) if destino == 'AVULSO' else None,
-                                  observacao=(f.get('observacao') or '').strip() or None, competencia=comp,
-                                  com_nota=None if destino == 'MENSAL' else (como == 'BOLETO_NOTA'),
-                                  comissao_tipo='SEM' if FinLancamento.servico_travado(servico_id) else (f.get('comissao_tipo') or 'PADRAO'),
-                                  comissao_valor=None if FinLancamento.servico_travado(servico_id) else (f.get('comissao_valor') or None))
-        _marcar_pelo_admin(lid)
-        n = _parcelas_do_form(f)
-        datas = _datas_parcelas(f, n, destino == 'MENSAL')
-        if n > 1:
-            execute_query('UPDATE fin_lancamentos SET parcelas = %s, parcelas_datas = %s WHERE id = %s',
-                          (n, ','.join(d.isoformat() for d in datas) if datas else None, lid), fetch=False)
-        l = FinLancamento.get(lid)
-        registrar('escrita.lancou_servico', 'financeiro', tabela='fin_lancamentos', registro_id=lid,
+        venc = _data(f.get('vencimento')) if destino == 'AVULSO' else None
+        valor = _dec(f.get('valor')) if servico_id else Decimal('0')
+        dv = None
+        if desc:
+            dv = _valor_desconto(desc, valor if desc['sobre'] == 'SERVICO' else _mensal_de(cliente_id),
+                                 'o serviço' if desc['sobre'] == 'SERVICO' else 'a mensalidade')
+        lid = did = None
+        n, datas = 1, None
+        if servico_id:
+            lid = FinLancamento.criar(EMP, cliente_id, servico_id, (f.get('descricao') or s['nome']).strip() or s['nome'],
+                                      Decimal('1'), valor, destino, _eu().id, vencimento=venc,
+                                      observacao=(f.get('observacao') or '').strip() or None, competencia=comp,
+                                      com_nota=None if destino == 'MENSAL' else (como == 'BOLETO_NOTA'),
+                                      comissao_tipo='SEM' if FinLancamento.servico_travado(servico_id) else (f.get('comissao_tipo') or 'PADRAO'),
+                                      comissao_valor=None if FinLancamento.servico_travado(servico_id) else (f.get('comissao_valor') or None))
+            _marcar_pelo_admin(lid)
+            n = _parcelas_do_form(f)
+            datas = _datas_parcelas(f, n, destino == 'MENSAL')
+            if n > 1:
+                execute_query('UPDATE fin_lancamentos SET parcelas = %s, parcelas_datas = %s WHERE id = %s',
+                              (n, ','.join(d.isoformat() for d in datas) if datas else None, lid), fetch=False)
+        if desc:
+            rot = ('Desconto s/ ' + (s['nome'] if desc['sobre'] == 'SERVICO' and s else 'a mensalidade')) + ' — ' + desc['motivo']
+            did = FinLancamento.criar(EMP, cliente_id, FinLancamento.servico_desconto_id(EMP), rot[:200], Decimal('1'), dv, destino, _eu().id,
+                                      vencimento=venc, observacao=desc['motivo'], competencia=comp,
+                                      com_nota=None if destino == 'MENSAL' else False, comissao_tipo='SEM')
+            execute_query('UPDATE fin_lancamentos SET desc_lancamento_id = %s, desc_sobre = %s WHERE id = %s', (lid, desc['sobre'], did), fetch=False)
+            _marcar_pelo_admin(did)
+            dl = FinLancamento.get(did)
+            registrar('escrita.lancou_desconto', 'financeiro', tabela='fin_lancamentos', registro_id=did,
+                      depois={'empresa': dl['nome_razao_social'], 'desconto': str(dv), 'tipo': desc['tipo'], 'pedido': str(desc['valor']),
+                              'sobre': desc['sobre'], 'servico': s['nome'] if s else None, 'motivo': desc['motivo'], 'como': _como(dl),
+                              'ligado_ao_lancamento': lid})
+        l = FinLancamento.get(lid or did)
+        registrar('escrita.lancou_servico', 'financeiro', tabela='fin_lancamentos', registro_id=l['id'],
                   depois={'empresa': l['nome_razao_social'], 'servico': l['servico_nome'], 'valor': str(l['valor_total']),
                           'como': _como(l), 'vencimento': str(l['vencimento'] or ''),
                           'comissao_pedida': (l.get('comissao_pedida_tipo') or '') + (' ' + str(l['comissao_pedida_valor']) if l.get('comissao_pedida_valor') else ''),
-                          'parcelas': n})
+                          'parcelas': n, 'desconto': str(dv) if dv else None})
         if _aprovador() and f.get('emitir') == '1':
             # 17/11/2026 — Anderson: "numa tela só para emissão imediata ou para incluir no mensal". Quem aprova não
             # precisa aprovar a própria: já sai aprovado — avulso emite agora, mensal entra no lote do mês.
-            parcelas, com, ok, msgs = _aprovar_e_cobrar(lid, _eu().id, None, None, n, _conta_escolhida(f), datas)
+            if lid:
+                parcelas, com, ok, msgs = _aprovar_e_cobrar(lid, _eu().id, None, None, n, _conta_escolhida(f), datas)
+            else:                                  # só o desconto, na mensalidade
+                FinLancamento.aprovar(did, _eu().id); parcelas, com, ok, msgs = [FinLancamento.get(did)], Decimal('0'), True, []
             registrar('escrita.aprovou_lancamento', 'financeiro', tabela='fin_lancamentos', registro_id=lid,
                       depois={'empresa': l['nome_razao_social'], 'servico': l['servico_nome'], 'valor': str(l['valor_total']),
                               'destino': l['destino'], 'comissao': str(com), 'lancado_por': l['lancado_por_nome'], 'direto': True,
@@ -578,9 +646,11 @@ def lancamento_novo():
                 if not ok:
                     flash('Ficou aprovado, mas alguma cobrança não saiu. Corrija e use "Cobrar de novo" no cartão.', 'danger')
                 return redirect(url_for('financeiro.lancamentos', aba='cob'))
-            flash('Incluído na mensalidade de %s de %s: sai no boleto do lote do mês.' % (', '.join(p['competencia'].strftime('%m/%Y') for p in parcelas), l['nome_razao_social']), 'success')
+            flash(('Desconto de R$ %s incluído na mensalidade de %s de %s.' % (dv, ', '.join(p['competencia'].strftime('%m/%Y') for p in parcelas), l['nome_razao_social'])) if so_desconto
+                  else ('Incluído na mensalidade de %s de %s%s: sai no boleto do lote do mês.' % (', '.join(p['competencia'].strftime('%m/%Y') for p in parcelas), l['nome_razao_social'],
+                                                                                              (' com desconto de R$ %s' % dv) if dv else '')), 'success')
             return redirect(url_for('financeiro.lancamentos', aba='cob'))
-        flash('Solicitação enviada: %s · %s. Anderson ou Alessandra aprovam e a cobrança sai.' % (l['nome_razao_social'], _como(l)), 'success')
+        flash('Solicitação enviada: %s · %s%s. Anderson ou Alessandra aprovam e a cobrança sai.' % (l['nome_razao_social'], _como(l), (' · desconto de R$ %s' % dv) if dv else ''), 'success')
     except (ValueError, InvalidOperation) as e:
         flash(str(e) if isinstance(e, ValueError) else 'Valor inválido.', 'danger')
     return redirect(url_for('financeiro.lancamentos', aba='apr'))
@@ -642,14 +712,26 @@ def _cobrar_avulso(l, usuario_id, conta_id=None):
     competencia = l['competencia']
     _venc, mensagem = sugestao_boleto(conta, competencia)
     itens = [{'servico_id': l['servico_id'], 'nome': l['descricao'] or l['servico_nome'], 'valor': Decimal(str(l['valor_total'])),
-              'emite_nota': bool(l['com_nota'] if l.get('com_nota') is not None else l.get('emite_nota'))}]
+              'emite_nota': bool(l['com_nota'] if l.get('com_nota') is not None else l.get('emite_nota')), 'origem': 'honorarios'}]
+    total = Decimal(str(l['valor_total']))
+    # 19/11/2026: desconto pedido junto (aprovado): a linha do serviço sai pelo líquido dizendo de onde veio; a página do
+    # cliente e o e-mail mostram as duas linhas
+    descs = FinLancamento.descontos_de(l['id'], status=('APROVADO',))
+    desc_total = sum((Decimal(str(d['valor_total'])) for d in descs), Decimal('0'))
+    desc_nome = (descs[0]['descricao'] or 'Desconto').split(' — ')[0] if descs else None
+    if desc_total > 0:
+        from utils.lote_mensal import _abate_desconto
+        itens = _abate_desconto(itens, desc_total, 'desconto')
+        total = total - desc_total
+        if total <= 0 or not itens:
+            return False, ['O desconto cobre o serviço inteiro: não há o que cobrar.']
     cfg = NfseConfig.get(l['empresa_id']) if itens[0]['emite_nota'] else None
     nfse_id = boleto_id = titulo_id = None
     if cfg:
         serie = cfg.get('serie_nacional') if (cfg.get('emissor') or 'nacional') == 'nacional' else cfg.get('serie_sp')
         form = MultiDict([('serie', str(serie or '')), ('competencia', competencia.isoformat()),
-                          ('tomador_cliente_id', str(l['cliente_id'])), ('descricao', l['descricao'] or l['servico_nome']),
-                          ('item_servico_id', str(l['servico_id'])), ('item_valor', str(l['valor_total']))])
+                          ('tomador_cliente_id', str(l['cliente_id'])), ('descricao', (l['descricao'] or l['servico_nome']) + ((' Desconto de R$ %s já abatido.' % desc_total) if desc_total > 0 else '')),
+                          ('item_servico_id', str(l['servico_id'])), ('item_valor', str(itens[0]['valor']))])
         try:
             pedido = nfse_emissor.pedido_do_form(form, l['empresa_id'], cfg)
             pedido.origem = 'lancamento'
@@ -675,8 +757,9 @@ def _cobrar_avulso(l, usuario_id, conta_id=None):
         boleto_id = (b or {}).get('id')
         titulo_id = (b or {}).get('titulo_id')
     else:
-        boleto_id, ok, msg, aviso = emitir_boleto_avulso(l['empresa_id'], conta, _pagador_do_tomador(t), itens, itens[0]['valor'],
-                                                         competencia, vencimento, mensagem, None, usuario_id)
+        boleto_id, ok, msg, aviso = emitir_boleto_avulso(l['empresa_id'], conta, _pagador_do_tomador(t), itens, total,
+                                                         competencia, vencimento, mensagem, None, usuario_id,
+                                                         desconto=desc_total if desc_total > 0 else None, desconto_nome=desc_nome)
         msgs.append(msg)
         if aviso:
             msgs.append(aviso)
@@ -684,6 +767,8 @@ def _cobrar_avulso(l, usuario_id, conta_id=None):
             titulo_id = (FinBoleto.get(boleto_id) or {}).get('titulo_id')
     if ok:
         FinLancamento.marcar_faturado(l['id'], titulo_id=titulo_id, nfse_id=nfse_id, boleto_id=boleto_id)
+        for d in descs:
+            FinLancamento.marcar_faturado(d['id'], titulo_id=titulo_id, nfse_id=nfse_id, boleto_id=boleto_id)
     return ok, msgs
 
 
@@ -757,6 +842,20 @@ def _dividir(l, n, datas=None):
         execute_query("""UPDATE fin_lancamentos SET parcela = %s, parcelas = %s, parcela_grupo = %s, lancado_pelo_admin = %s
                           WHERE id = %s""", (k + 1, n, l['id'], l.get('lancado_pelo_admin'), nid), fetch=False)
         ids.append(nid)
+    # 19/11/2026: o desconto pedido junto acompanha as parcelas, na mesma proporção
+    for d in FinLancamento.descontos_de(l['id']):
+        partes = _repartir(d['valor_total'], n)
+        bd = re.sub(r'\s*\(parcela \d+/\d+\)$', '', (d['descricao'] or '').strip())
+        execute_query("""UPDATE fin_lancamentos SET valor_unitario = %s, valor_total = %s, descricao = %s, parcela = 1, parcelas = %s,
+                             parcela_grupo = id, vencimento = %s, competencia = %s WHERE id = %s""",
+                      (partes[0], partes[0], ('%s (parcela 1/%d)' % (bd, n))[:200], n, vencs[0], comps[0], d['id']), fetch=False)
+        for k in range(1, n):
+            nd = FinLancamento.criar(d['empresa_id'], d['cliente_id'], d['servico_id'], '%s (parcela %d/%d)' % (bd, k + 1, n), Decimal('1'), partes[k],
+                                     d['destino'], d['lancado_por'], vencimento=vencs[k], observacao=d.get('observacao'), competencia=comps[k],
+                                     com_nota=d.get('com_nota'), comissao_tipo='SEM')
+            execute_query("""UPDATE fin_lancamentos SET parcela = %s, parcelas = %s, parcela_grupo = %s, desc_lancamento_id = %s, desc_sobre = %s,
+                                 status = %s, lancado_pelo_admin = %s WHERE id = %s""",
+                          (k + 1, n, d['id'], ids[k], d.get('desc_sobre'), d['status'], d.get('lancado_pelo_admin'), nd), fetch=False)
     return ids
 
 
@@ -824,6 +923,9 @@ def lancamento_aprovar(lid):
         if mudou:
             execute_query("UPDATE fin_lancamentos SET destino = %s, com_nota = %s, vencimento = %s, competencia = %s "
                           "WHERE id = %s AND status = 'LANCADO'", (destino, com_nota, venc, comp, lid), fetch=False)
+            execute_query("UPDATE fin_lancamentos SET destino = %s, com_nota = %s, vencimento = %s, competencia = %s "
+                          "WHERE desc_lancamento_id = %s AND origem = 'DESCONTO' AND status = 'LANCADO'",
+                          (destino, None if destino == 'MENSAL' else 0, venc, comp, lid), fetch=False)
             l = FinLancamento.get(lid)
             registrar('escrita.alterou_cobranca_lancamento', 'financeiro', tabela='fin_lancamentos', registro_id=lid, antes=antes,
                       depois={'empresa': l['nome_razao_social'], 'servico': l['servico_nome'], 'como': _como(l),

@@ -509,7 +509,8 @@ def itens_avulsos_do_form(f, empresa_id, competencia):
     return itens, sum((i['valor'] for i in itens), Decimal('0'))
 
 
-def emitir_boleto_avulso(empresa_id, conta, pagador, itens, total, competencia, vencimento, mensagem, titulo_id, usuario_id, desconto=None):
+def emitir_boleto_avulso(empresa_id, conta, pagador, itens, total, competencia, vencimento, mensagem, titulo_id, usuario_id, desconto=None,
+                         desconto_nome='Desconto mensal'):
     """Boleto SEM nota fiscal (Anderson, 04/11/2026: "só o boleto para a Brilho"). O título é o centro:
     reusa o título escolhido ou cria um a receber. Devolve (boleto_id, ok, msg, aviso_email).
     ``desconto`` (19/11/2026): desconto mensal já abatido nos ``itens``/``total``; aqui só entra como linha informativa
@@ -517,7 +518,7 @@ def emitir_boleto_avulso(empresa_id, conta, pagador, itens, total, competencia, 
     mensagem = _mensagem_do_boleto(mensagem, competencia, conta)
     itens_json = [{'nome': i['nome'], 'valor': str(i['valor']), 'emite_nota': False} for i in itens]
     if desconto and Decimal(str(desconto)) > 0:
-        itens_json.append({'nome': 'Desconto mensal', 'valor': str(-Decimal(str(desconto))), 'emite_nota': False, 'desconto': True})
+        itens_json.append({'nome': desconto_nome or 'Desconto', 'valor': str(-Decimal(str(desconto))), 'emite_nota': False, 'desconto': True})
     boleto_id = FinBoleto.rascunho(empresa_id, conta, titulo_id, None, total, vencimento, pagador,
                                    itens_json, mensagem or None, usuario_id)
     if not boleto_id:

@@ -62,6 +62,10 @@ def itens_da_empresa(contrato, competencia, itens_contrato=None, lancamentos=Non
     if lancamentos is None:
         lancamentos = FinLancamento.para_o_mensal(contrato['empresa_id'], competencia, contrato['cliente_id'])
     for l in lancamentos:
+        if l.get('origem') == 'DESCONTO':          # 19/11/2026: desconto lançado pela equipe, aprovado — linha negativa
+            itens.append({'origem': 'desconto', 'servico_id': None, 'nome': l['descricao'] or 'Desconto',
+                          'valor': str(-_d(l['valor_total'])), 'lancamento_id': l['id'], 'abate_de': l.get('desc_lancamento_id')})
+            continue
         itens.append({'origem': 'lancamento', 'servico_id': l['servico_id'], 'nome': l['descricao'] or l['servico_nome'],
                       'valor': str(_d(l['valor_total'])), 'lancamento_id': l['id']})
     return itens
@@ -145,13 +149,13 @@ def previa(empresa_id, competencia, so_clientes=None, so_decimo=None):
     return lote, linhas
 
 
-def _abate_desconto(itens, desconto):
+def _abate_desconto(itens, desconto, rotulo='desconto mensal', primeiro=None):
     """Itens que vão para a nota e para o boleto quando há desconto mensal: a linha dos honorários sai pelo LÍQUIDO e
     diz de onde veio ("Honorários contábeis (R$ 1.000,00 − desconto mensal R$ 33,55)"); se não couber nela, abate das
     outras. Banco e governo não aceitam linha negativa; a página do cliente e o e-mail mostram as duas linhas."""
     resta = _d(desconto)
     out = []
-    ordem = sorted(range(len(itens)), key=lambda k: 0 if itens[k].get('origem') == 'honorarios' else 1)
+    ordem = sorted(range(len(itens)), key=lambda k: (0 if k == primeiro else 1, 0 if itens[k].get('origem') == 'honorarios' else 1))
     novos = {}
     for k in ordem:
         v = _d(itens[k]['valor'])
@@ -163,7 +167,7 @@ def _abate_desconto(itens, desconto):
     for k, i in enumerate(itens):
         if k in novos:
             v, corte = novos[k]
-            nome = '%s (R$ %s − desconto mensal R$ %s)' % (i['nome'], _brl(v), _brl(corte))
+            nome = '%s (R$ %s − %s R$ %s)' % (i['nome'], _brl(v), rotulo, _brl(corte))
             out.append(dict(i, nome=nome[:255], valor=str((v - corte).quantize(Decimal('0.01')))))
         else:
             out.append(dict(i))
@@ -172,6 +176,22 @@ def _abate_desconto(itens, desconto):
 
 def _brl(v):
     return ('%.2f' % _d(v)).replace('.', ',')
+
+
+def _aplicar_descontos(itens):
+    """(itens cobráveis já abatidos, total de desconto). O desconto lançado "sobre X" abate a linha de X; o desconto mensal
+    e o "sobre a mensalidade" abatem os honorários (depois as outras linhas)."""
+    descs = [i for i in itens if i.get('origem') == 'desconto']
+    cobr = [dict(i) for i in itens if i.get('origem') != 'desconto']
+    total = Decimal('0')
+    for d in descs:
+        v = -_d(d['valor'])
+        if v <= 0:
+            continue
+        total += v
+        alvo = [k for k, i in enumerate(cobr) if d.get('abate_de') and i.get('lancamento_id') == d.get('abate_de')]
+        cobr = _abate_desconto(cobr, v, 'desconto' if d.get('lancamento_id') else 'desconto mensal', primeiro=alvo[0] if alvo else None)
+    return cobr, total
 
 
 def _cobrar(linha, lote_id, usuario_id, conta, cfg, empresa_id):
@@ -202,10 +222,8 @@ def _cobrar(linha, lote_id, usuario_id, conta, cfg, empresa_id):
         return fechar('erro', 'cadastro sem CPF/CNPJ')
     _v, mensagem = sugestao_boleto(conta, competencia)
     # 19/11/2026 — desconto mensal: a linha negativa vira abatimento na linha dos honorários (banco e nota só aceitam positivo)
-    desconto = sum((-_d(i['valor']) for i in itens if i.get('origem') == 'desconto'), Decimal('0'))
-    itens_lin = itens                                              # o que fica gravado no lote (com a linha do desconto)
-    if desconto > 0:
-        itens = _abate_desconto([i for i in itens if i.get('origem') != 'desconto'], desconto)
+    itens_lin = itens                                              # o que fica gravado no lote (com as linhas de desconto)
+    itens, desconto = _aplicar_descontos(itens)
     emite_nota = bool(cfg) and linha['nota'] and any(i['servico_id'] for i in itens)
     nfse_id = boleto_id = titulo_id = None
     avisos = []

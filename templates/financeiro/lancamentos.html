@@ -955,7 +955,7 @@
     return a.tipo === 'FIXO' ? a.valor : valor * a.valor / 100;
   }
   function resumo() {
-    var c = cliente(), s = servico(), valor = num($('nsValor').value), ds = desconto(valor, c), liq = Math.max(0, Math.round((valor - ds.valor) * 100) / 100), com = comissao(liq), a = acordo(s ? s.id : null);
+    var c = cliente(), s = servico(), valor = (!s && dtipo && dsobre === 'MENSAL') ? 0 : num($('nsValor').value), ds = desconto(valor, c), liq = Math.max(0, Math.round((valor - ds.valor) * 100) / 100), com = comissao(liq), a = acordo(s ? s.id : null);
     // "A mensalidade" só quando a cobrança vai na mensalidade de quem tem contrato
     var bms = $('nsDescSobre').querySelector('[data-v=MENSAL]'); bms.disabled = !(como === 'MENSAL' && c && c.mensal);
     if (bms.disabled && dsobre === 'MENSAL') { dsobre = 'SERVICO'; $('nsDescSobreIn').value = 'SERVICO'; $('nsDescSobre').querySelectorAll('button').forEach(function (b) { b.classList.toggle('on', b.dataset.v === 'SERVICO'); }); ds = desconto(valor, c); liq = Math.max(0, Math.round((valor - ds.valor) * 100) / 100); com = comissao(liq); }
@@ -1086,7 +1086,7 @@
       this.value = d ? (parseInt(d, 10) / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : ''; resumo();
     });
     $('nsForm').addEventListener('submit', function (e) {
-      var soDesc = !!dtipo && dsobre === 'MENSAL' && !tsServ.getValue(), dd = desconto(num($('nsValor').value), cliente());
+      var soDesc = !!dtipo && dsobre === 'MENSAL' && !tsServ.getValue(), dd = desconto(soDesc ? 0 : num($('nsValor').value), cliente());
       var m = !tsCli.getValue() ? 'Escolha o cliente.' : (!tsServ.getValue() && !soDesc) ? 'Escolha o serviço (ou marque o desconto "sobre a mensalidade").' : (tsServ.getValue() && !num($('nsValor').value)) ? 'Informe o valor.'
             : (dtipo && !(dd.valor > 0)) ? 'Informe o valor do desconto.' : (dtipo && !dd.motivo) ? 'Diga o motivo do desconto.'
             : (como !== 'MENSAL' && !$('nsVenc').value) ? 'Informe o vencimento.' : ((ct === 'PCT' || ct === 'FIXO') && !num($('nsCv').value)) ? 'Informe a comissão.' : '';
