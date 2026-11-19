@@ -75,7 +75,7 @@ def _foto(c):
             'itens': ['%s = %s' % (i['descricao'], i['valor']) for i in FinContrato.itens(c['id'])] if c.get('id') else None}
 
 
-ABAS_CONTRATOS = ('com', 'sem', 'pendentes')
+ABAS_CONTRATOS = ('com', 'sem', 'pendentes', 'enc')
 
 
 def _competencia_painel():
@@ -118,13 +118,14 @@ def honorarios():
         sem = [c for c in sem if b in (c['nome_razao_social'] or '').lower() or b == str(c['numero_cliente'])]
     from models.cliente_responsavel import ClienteResponsavel
     pendentes = [c for c in contratos if c['situacao'] == 'PENDENTE']
-    contratos = [c for c in contratos if c['situacao'] not in ('REPROVADO', 'PENDENTE')]
+    encerrados = sorted([c for c in contratos if c['situacao'] == 'ENCERRADO'], key=lambda c: c.get('fim') or date.min, reverse=True)
+    contratos = [c for c in contratos if c['situacao'] == 'ATIVO']
     convites = execute_query(
         """SELECT v.*, cl.nome_razao_social, u.nome AS usuario_nome FROM fin_honorarios_convites v
              JOIN clientes cl ON cl.id = v.cliente_id LEFT JOIN usuarios u ON u.id = v.usuario_id
             WHERE v.usado_em IS NULL AND v.expira_em > NOW() ORDER BY v.id DESC""", fetch=True) or []
     return render_template('financeiro/honorarios.html', modo='admin', aba=aba, busca=busca, contratos=contratos, sem_contrato=sem,
-                           pendentes=pendentes, convites=convites, pessoas=ClienteResponsavel.usuarios_disponiveis(),
+                           pendentes=pendentes, encerrados=encerrados, convites=convites, pessoas=ClienteResponsavel.usuarios_disponiveis(),
                            resumo=FinContrato.resumo(), servicos=_servicos(), grupos=_grupos(), DECIMO_TIPOS=DECIMO_TIPOS, DECIMO_INICIOS=DECIMO_INICIOS,
                            REAJUSTE_TIPOS=REAJUSTE_TIPOS, hoje=date.today(), SERVICO_HONORARIOS=SERVICO_HONORARIOS,
                            bancos=_bancos_cobranca())

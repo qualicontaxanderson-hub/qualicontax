@@ -110,7 +110,7 @@
 .hp-ref-busca i { color:#94a3b8; font-size:12.5px; } .hp-ref-busca input { border:0; outline:0; font:inherit; font-size:13px; width:100%; background:none; color:#0f172a; }
 .hp-links { display:inline-flex; gap:6px; flex-wrap:wrap; }
 .hp-links a { display:inline-flex; align-items:center; gap:6px; height:46px; font-size:12.5px; font-weight:700; color:#475569; background:#fff; border:1px solid #e6eeea; border-radius:13px; padding:0 10px; text-decoration:none; white-space:nowrap; }
-.hp-links a b { color:#0f3d2e; } .hp-links a i { color:#16a34a; } .hp-links a:hover { border-color:#9fc9b3; } .hp-links a.al { border-color:#fde68a; background:#fffbeb; color:#92400e; } .hp-links a.al i { color:#d97706; }
+.hp-links a b { color:#0f3d2e; } .hp-links a i { color:#16a34a; } .hp-links a.enc i { color:#94a3b8; } .hp-links a.enc { color:#64748b; } .hp-links a:hover { border-color:#9fc9b3; } .hp-links a.al { border-color:#fde68a; background:#fffbeb; color:#92400e; } .hp-links a.al i { color:#d97706; }
 .hp-refino .tx-ref-pop { min-width:320px; max-width:400px; }
 .hp-refino .pop-busca { display:flex; align-items:center; gap:8px; margin:0 8px 8px; height:36px; border:1px solid #e6eeea; border-radius:10px; padding:0 10px; background:#f8fafc; }
 .hp-refino .pop-busca i { color:#94a3b8; font-size:12px; } .hp-refino .pop-busca input { border:0; outline:0; background:none; font:inherit; font-size:13px; width:100%; }
@@ -289,6 +289,7 @@ span.hp-bco, span.hp-nf { cursor:default; }
       <a href="{{ url_for('financeiro.honorarios', aba='com') }}" title="Lista de contratos"><i class="fas fa-list"></i> Contratos <b>{{ resumo.n or 0 }}</b></a>
       <a href="{{ url_for('financeiro.honorarios', aba='sem') }}" title="Empresas sem honorários"><i class="fas fa-building-circle-xmark"></i> Sem honorários <b>{{ resumo.sem_contrato or 0 }}</b></a>
       <a href="{{ url_for('financeiro.honorarios', aba='pendentes') }}"{% if resumo.pendentes %} class="al"{% endif %} title="Aguardando aprovação"><i class="fas fa-stamp"></i> Aprovar <b>{{ resumo.pendentes or 0 }}</b></a>
+      {% if resumo.encerrados %}<a href="{{ url_for('financeiro.honorarios', aba='enc') }}" class="enc" title="Contratos encerrados: saíram da cobrança do mês"><i class="fas fa-box-archive"></i> Encerrados <b>{{ resumo.encerrados }}</b></a>{% endif %}
     </span>
     <div class="tx-ref-resumo" id="hpRefResumo"></div>
     <div class="tx-ref-chips" id="hpRefChips"></div>

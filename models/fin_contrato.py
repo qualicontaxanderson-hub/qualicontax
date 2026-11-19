@@ -222,13 +222,15 @@ class FinContrato:
     def clientes_sem_contrato(empresa_id=EMPRESA_QUALICONTAX):
         """Clientes ativos (numerados, não avulsos) sem contrato vigente — a lista da Alessandra."""
         return execute_query(
-            """SELECT cl.id, cl.numero_cliente, cl.nome_razao_social, cl.cpf_cnpj, cl.tipo_pessoa, cl.criado_por
+            """SELECT cl.id, cl.numero_cliente, cl.nome_razao_social, cl.cpf_cnpj, cl.tipo_pessoa, cl.criado_por,
+                      (SELECT MAX(c2.fim) FROM fin_contratos c2 WHERE c2.cliente_id = cl.id AND c2.empresa_id = %s
+                        AND c2.situacao = 'ENCERRADO') AS encerrado_em
                  FROM clientes cl
                 WHERE cl.situacao = 'ATIVO' AND cl.avulso = 0
                   AND NOT EXISTS (SELECT 1 FROM fin_empresas fe WHERE fe.cliente_id = cl.id)   -- a própria Qualicontax, Brilho, Anderson PF
                   AND NOT EXISTS (SELECT 1 FROM fin_contratos c WHERE c.cliente_id = cl.id
                                    AND c.empresa_id = %s AND c.situacao IN ('PENDENTE','ATIVO'))
-                ORDER BY cl.numero_cliente + 0""", (empresa_id,), fetch=True) or []
+                ORDER BY cl.numero_cliente + 0""", (empresa_id, empresa_id), fetch=True) or []
 
     @staticmethod
     def parcelas_decimo(contrato, ano):
@@ -400,4 +402,6 @@ class FinContrato:
                  FROM fin_contratos WHERE empresa_id = %s AND situacao IN ('PENDENTE','ATIVO')""",
             (empresa_id,), fetch=True, fetch_one=True) or {}
         r['sem_contrato'] = len(FinContrato.clientes_sem_contrato(empresa_id))
+        r['encerrados'] = (execute_query("SELECT COUNT(*) n FROM fin_contratos WHERE empresa_id = %s AND situacao = 'ENCERRADO'",
+                                         (empresa_id,), fetch=True, fetch_one=True) or {}).get('n') or 0
         return r

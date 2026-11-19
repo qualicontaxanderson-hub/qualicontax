@@ -163,6 +163,7 @@
     <a class="fin-chip {{ 'ativo' if aba == 'com' }}" href="{{ url_for('financeiro.honorarios', aba='com', busca=busca) }}">Com honorários <strong>{{ contratos | length }}</strong></a>
     <a class="fin-chip {{ 'ativo' if aba == 'sem' }}" href="{{ url_for('financeiro.honorarios', aba='sem', busca=busca) }}">Sem honorários <strong>{{ sem_contrato | length }}</strong></a>
     <a class="fin-chip {{ 'ativo' if aba == 'pendentes' }}" href="{{ url_for('financeiro.honorarios', aba='pendentes') }}">Aguardando aprovação <strong>{{ pendentes | length }}</strong></a>
+    <a class="fin-chip {{ 'ativo' if aba == 'enc' }}" href="{{ url_for('financeiro.honorarios', aba='enc', busca=busca) }}" title="Contratos encerrados: não entram mais na cobrança do mês"><i class="fas fa-box-archive"></i> Encerrados <strong>{{ encerrados | length }}</strong></a>
     <a class="fin-chip" href="{{ url_for('financeiro.honorarios_reajuste') }}"><i class="fas fa-arrow-trend-up"></i> Reajuste de janeiro</a>
     {% elif modo == 'cadastrar' %}
     <a class="fin-chip {{ 'ativo' if aba == 'sem' }}" href="{{ url_for('financeiro.honorarios_cadastrar', aba='sem') }}">Minhas empresas sem honorários <strong>{{ sem_contrato | length }}</strong></a>
@@ -185,7 +186,7 @@
             {% for c in sem_contrato %}
                 <tr>
                     <td class="fin-num">{{ c.numero_cliente }}</td>
-                    <td class="fin-td-titulo"><a href="{{ url_for('clientes.detalhes', id=c.id) }}">{{ c.nome_razao_social }}</a></td>
+                    <td class="fin-td-titulo"><a href="{{ url_for('clientes.detalhes', id=c.id) }}">{{ c.nome_razao_social }}</a>{% if c.encerrado_em %}<span class="ho-plano" title="Teve honorários e o contrato foi encerrado. Se a empresa fechou, inative o cadastro em Clientes para ela sair desta lista."><i class="fas fa-box-archive"></i> honorários encerrados em {{ c.encerrado_em.strftime('%m/%Y') }}</span>{% endif %}</td>
                     <td class="fin-td-oculta ho-num">{{ c.cpf_cnpj or '—' }}</td>
                     <td class="fin-td-oculta">{{ c.tipo_pessoa or '' }}</td>
                     <td><button class="btn btn-outline btn-sm" onclick="hoNovo({{ c.id }}, {{ c.nome_razao_social | tojson }}, {{ c.numero_cliente | tojson }})"><i class="fas fa-plus"></i> Cadastrar honorários</button>
@@ -208,6 +209,29 @@
     {% for v in convites_meus %}<tr><td>{{ v.numero_cliente }} · {{ v.nome_razao_social }}</td><td>{{ v.expira_em.strftime('%d/%m/%Y') }}</td><td><a class="btn btn-primary btn-sm" href="{{ url_for('financeiro.honorarios_convite', token=v.token) }}">Cadastrar</a></td></tr>{% endfor %}
     </tbody></table>
     {% endif %}
+{% elif aba == 'enc' and modo == 'admin' %}
+    {% if encerrados %}
+    <p class="ho-sec"><i class="fas fa-circle-info"></i> Contrato encerrado não entra mais na cobrança do mês a partir da competência seguinte ao último dia como cliente. As cobranças já emitidas continuam em Cobranças. Para voltar a cobrar, cadastre honorários de novo pela aba Sem honorários.</p>
+    <div class="fin-rolar">
+        <table class="fin-tab" id="ho-tab-enc">
+            <thead><tr><th>Nº</th><th>Empresa</th><th style="text-align:right;">Honorários</th><th>Vigência</th><th>Último dia como cliente</th><th>Última competência cobrada</th><th>Cadastro da empresa</th><th>Ações</th></tr></thead>
+            <tbody>
+            {% for c in encerrados %}
+                <tr>
+                    <td class="fin-num fin-td-meta">{{ c.numero_cliente }}</td>
+                    <td class="fin-td-titulo"><a href="{{ url_for('clientes.detalhes', id=c.cliente_id) }}">{{ c.nome_razao_social }}</a>{% if c.plano %}<span class="ho-plano">{{ c.plano }}</span>{% endif %}</td>
+                    <td class="fin-valor fin-td-valor">{{ c.valor | float | format_currency }}</td>
+                    <td class="fin-td-oculta">{{ c.inicio.strftime('%m/%Y') if c.inicio else '—' }} <span class="ho-num">até</span> {{ c.fim.strftime('%m/%Y') if c.fim else '—' }}</td>
+                    <td class="fin-td-oculta"><strong>{{ c.fim.strftime('%d/%m/%Y') if c.fim else '—' }}</strong></td>
+                    <td class="fin-td-oculta">{% if c.fim %}{{ c.fim.strftime('%m/%Y') }} <span class="ho-num">vence em {{ '%02d/%d' % ((c.fim.month % 12) + 1, c.fim.year + (1 if c.fim.month == 12 else 0)) }}</span>{% else %}—{% endif %}</td>
+                    <td class="fin-td-extra"><span class="fin-pilula cancelado">Encerrado</span> {% if c.cliente_situacao == 'ATIVO' %}<span class="fin-pilula alerta" title="O cadastro em Clientes continua ativo: a empresa aparece em Sem honorários. Se ela fechou, inative o cadastro.">cadastro ainda ativo</span>{% else %}<span class="fin-pilula cancelado" title="Cadastro do cliente">{{ c.cliente_situacao | capitalize }}</span>{% endif %}</td>
+                    <td><button class="btn btn-outline btn-sm" onclick="hoEditar({{ c.id }})" title="Abrir o contrato"><i class="fas fa-folder-open"></i> Abrir</button></td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}<div class="fin-vazio"><i class="fas fa-box-archive"></i> Nenhum contrato encerrado{% if busca %} com essa busca{% endif %}.</div>{% endif %}
 {% elif aba == 'pendentes' and modo == 'admin' %}
     {% if pendentes %}
     <div class="fin-rolar">
