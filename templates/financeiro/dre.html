@@ -4,378 +4,970 @@
 
 {% block content %}
 {% include 'financeiro/_nav_financeiro.html' %}
+{# 19/11/2026 — Anderson: "Melhorar o DRE GERENCIAL e trazendo vida igual as paginas novas". Mesmo molde de Cobranças:
+   hero verde, números em cartões coloridos, gráfico mês a mês e filtros numa barra só. Os números do topo saem das
+   mesmas linhas da tabela, calculadas no servidor. #}
 <style>
-.dre-chips { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 14px; }
-.dre-chip { padding: 7px 16px; border-radius: 999px; border: 1px solid #d1d5db;
-  background: #fff; color: #374151; font-weight: 600; font-size: .9em; text-decoration: none; }
-.dre-chip.ativo { background: var(--primary-green, #00A85A); color: #fff;
-  border-color: var(--primary-green, #00A85A); }
-.dre-regime { padding: 10px 14px; border-radius: 10px; background: #ecfdf5;
-  border: 1px solid #a7f3d0; color: #065f46; margin-bottom: 16px; font-weight: 600; }
-/* A tabela rola DENTRO do contêiner — a página nunca rola de lado */
-.dre-wrap { overflow-x: auto; }
-.dre-wrap table { min-width: 1100px; font-size: .88em; }
-.dre-wrap td, .dre-wrap th { white-space: nowrap; text-align: right; padding: 7px 10px; }
-.dre-wrap td:first-child, .dre-wrap th:first-child { text-align: left; }
-.dre-grupo { cursor: pointer; }
-.dre-grupo td:first-child { font-weight: 600; }
-.dre-cat td:first-child { padding-left: 30px; color: #6b7280; }
-/* 19/11/2026: a pessoa (pai) com o total e as contas dela embaixo */
-.dre-cat-pai td:first-child, .dre-m-cat.dre-cat-pai > span:first-child { color: #334155; font-weight: 700; }
-.dre-cat-sub td:first-child { padding-left: 54px; color: #94a3b8; }
-.dre-cat-sub td { color: #64748b; font-size: .95em; }
-.dre-m-cat.dre-cat-sub { padding-left: 54px; color: #94a3b8; }
-.dre-sub { background: #f0fdf4; font-weight: 700; border-top: 2px solid #bbf7d0; }
-.dre-neg { color: #b91c1c; }
-.dre-vazio { text-align: center; color: #6b7280; padding: 36px 12px; }
+.dr { --verde:#0f3d2e; --linha:#e6eeea; --mudo:#7d968a; --tinta:#0f172a; --rec:#16a34a; --desp:#f97316; }
+.dr-reg { display:inline-flex; background:rgba(255,255,255,.11); border:1px solid rgba(255,255,255,.24); border-radius:11px; padding:3px; gap:2px; }
+.dr-reg a { padding:6px 14px; border-radius:8px; font-size:13px; font-weight:700; color:#eafff3; text-decoration:none; }
+.dr-reg a.on { background:#fff; color:var(--verde); }
+.dr-ano { height:36px; border-radius:10px; border:1px solid rgba(255,255,255,.24); background:rgba(255,255,255,.11); color:#fff;
+          font:inherit; font-size:13px; font-weight:800; padding:0 10px; cursor:pointer; }
+.dr-ano option { color:#0f172a; }
+
+/* ── HERO com o resultado do ano em destaque ── */
+.dr .ef-hero { padding-bottom:78px; }
+.dr-hero-num { display:flex; align-items:flex-end; justify-content:space-between; gap:24px; flex-wrap:wrap; margin-top:22px; }
+.dr-hn small { display:block; font-size:12px; font-weight:800; letter-spacing:1.4px; text-transform:uppercase; color:#a7d9c0; }
+.dr-hn b { display:block; font-size:42px; font-weight:800; color:#fff; letter-spacing:-.03em; line-height:1.1; font-variant-numeric:tabular-nums; margin-top:4px; }
+.dr-hn b.neg { color:#fecaca; }
+.dr-hn-l { display:flex; gap:8px; flex-wrap:wrap; margin-top:10px; }
+.dr-pill { display:inline-flex; align-items:center; gap:6px; font-size:12.5px; font-weight:700; border-radius:99px; padding:5px 12px;
+           background:rgba(255,255,255,.14); color:#eafff3; font-variant-numeric:tabular-nums; }
+.dr-pill.bom { background:#bbf7d0; color:#14532d; } .dr-pill.ruim { background:#fecaca; color:#7f1d1d; }
+.dr-hero-spark { flex:1 1 380px; max-width:560px; min-width:0; }
+.dr-hero-spark svg { display:block; width:100%; height:96px; overflow:visible; }
+.dr-hero-spark .lbl { font-size:11px; fill:#a7d9c0; font-weight:700; }
+
+/* ── 4 números, cada um com o seu mini gráfico ── */
+.dr-kpis { display:grid; grid-template-columns:repeat(4, minmax(0,1fr)); gap:12px; margin-top:-56px; position:relative; z-index:2; margin-bottom:16px; }
+.dr-kpi { --cor:#16a34a; --cor-e:#166534; position:relative; overflow:hidden; border-radius:18px; padding:15px 16px 14px;
+          background:linear-gradient(135deg, var(--cor) 0%, var(--cor-e) 100%); box-shadow:0 10px 24px rgba(15,23,42,.14); color:#fff; min-width:0; }
+.dr-kpi::after { content:''; position:absolute; right:-40px; top:-40px; width:130px; height:130px; border-radius:50%; background:rgba(255,255,255,.08); }
+.dr-kpi-top { display:flex; align-items:center; gap:8px; }
+.dr-kpi-top i { width:30px; height:30px; border-radius:10px; background:rgba(255,255,255,.2); display:inline-flex; align-items:center; justify-content:center; font-size:13px; }
+.dr-kpi small { font-size:12px; font-weight:800; letter-spacing:.6px; text-transform:uppercase; opacity:.95; }
+.dr-kpi b { display:block; font-size:22px; font-weight:800; letter-spacing:-.02em; font-variant-numeric:tabular-nums; line-height:1.2; margin-top:8px; white-space:nowrap; }
+.dr-kpi-pe { display:flex; align-items:flex-end; justify-content:space-between; gap:8px; margin-top:6px; }
+.dr-kpi-pe span { font-size:12px; color:rgba(255,255,255,.88); }
+.dr-kpi-pe em { font-style:normal; font-weight:800; background:rgba(255,255,255,.2); border-radius:99px; padding:1px 7px; margin-right:3px; white-space:nowrap; }
+.dr-kpi svg { width:96px; height:30px; flex:0 0 96px; overflow:visible; }
+.dr-k-rec  { --cor:#16a34a; --cor-e:#166534; }
+.dr-k-desp { --cor:#f97316; --cor-e:#c2410c; }
+.dr-k-res  { --cor:#2563eb; --cor-e:#1e40af; }
+.dr-k-neg  { --cor:#dc2626; --cor-e:#991b1b; }
+.dr-k-mar  { --cor:#7c3aed; --cor-e:#5b21b6; }
+
+/* cartão branco padrão */
+.dr-card { background:#fff; border:1px solid var(--linha); border-radius:18px; box-shadow:0 6px 18px rgba(15,61,46,.06); margin-bottom:16px; min-width:0; }
+.dr-card-h { display:flex; align-items:center; gap:10px; flex-wrap:wrap; padding:15px 18px 0; }
+.dr-card-h h2 { margin:0; font-size:14.5px; font-weight:800; color:var(--tinta); display:flex; align-items:center; gap:8px; }
+.dr-card-h h2 i { color:#16a34a; font-size:13px; }
+.dr-card-h .dr-dica { font-size:12px; color:#94a3b8; }
+.dr-leg { margin-left:auto; display:flex; gap:14px; font-size:12.5px; color:#475569; font-weight:600; flex-wrap:wrap; }
+.dr-leg i { display:inline-block; width:10px; height:10px; border-radius:3px; margin-right:6px; vertical-align:-1px; }
+.dr-leg i.ln { height:3px; width:14px; border-radius:2px; vertical-align:2px; }
+.dr-grid2 { display:grid; grid-template-columns:minmax(0,1.85fr) minmax(0,1fr); gap:16px; }
+.dr-grid2b { display:grid; grid-template-columns:minmax(0,1.2fr) minmax(0,1fr); gap:16px; }
+
+/* gráfico principal (SVG feito no navegador a partir dos números do servidor) */
+.dr-chart { padding:8px 14px 10px; }
+.dr-chart svg { display:block; width:100%; height:350px; }
+.dr-chart .ax { font-size:11px; fill:#94a3b8; }
+.dr-chart .mx { font-size:12px; fill:#64748b; font-weight:700; }
+.dr-chart .mx.on { fill:#0f3d2e; font-weight:800; }
+.dr-chart .hit { fill:transparent; cursor:pointer; }
+.dr-chart .hit:hover { fill:rgba(22,163,74,.05); }
+.dr-dica-graf { font-size:12px; color:#94a3b8; padding:0 18px 14px; }
+.dr-so-mob { display:none; }
+@media (max-width:1100px) { .dr-so-larga { display:none; } .dr-so-mob { display:inline; } }
+
+/* raio-X do mês */
+.dr-rx { padding:14px 18px 16px; }
+.dr-rx-nav { display:flex; align-items:center; gap:8px; }
+.dr-rx-nav button { width:30px; height:30px; border-radius:9px; border:1px solid var(--linha); background:#fff; color:#475569; cursor:pointer; }
+.dr-rx-nav button:hover { border-color:#9fc9b3; color:var(--verde); }
+.dr-rx-nav button:disabled { opacity:.35; cursor:default; }
+.dr-rx-mes { font-size:15px; font-weight:800; color:var(--tinta); flex:1; }
+.dr-rx-res { margin-top:12px; border-radius:14px; padding:12px 14px; background:#f0fdf4; border:1px solid #bbf7d0; }
+.dr-rx-res.neg { background:#fef2f2; border-color:#fecaca; }
+.dr-rx-res small { font-size:11.5px; font-weight:800; letter-spacing:.8px; text-transform:uppercase; color:#15803d; }
+.dr-rx-res.neg small { color:#b91c1c; }
+.dr-rx-res b { display:block; font-size:24px; font-weight:800; color:#14532d; font-variant-numeric:tabular-nums; letter-spacing:-.02em; }
+.dr-rx-res.neg b { color:#991b1b; }
+.dr-rx-res span { font-size:12px; color:#64748b; }
+.dr-rx-lin { display:grid; grid-template-columns:72px minmax(0,1fr) auto; gap:8px; align-items:center; margin-top:10px; font-size:12.5px; color:#475569; }
+.dr-rx-lin b { font-variant-numeric:tabular-nums; color:var(--tinta); }
+.dr-bar { height:8px; border-radius:99px; background:#f1f5f9; overflow:hidden; }
+.dr-bar i { display:block; height:100%; border-radius:99px; }
+.dr-rx-t { font-size:11.5px; font-weight:800; letter-spacing:1px; text-transform:uppercase; color:#94a3b8; margin:16px 0 4px; }
+.dr-top { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:3px 10px; padding:7px 0; border-bottom:1px dashed #eef2f7; font-size:12.5px; }
+.dr-top:last-child { border-bottom:0; }
+.dr-top span { color:#334155; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.dr-top span small { color:#94a3b8; }
+.dr-top b { font-variant-numeric:tabular-nums; color:var(--tinta); }
+.dr-top .dr-bar { grid-column:1 / -1; height:5px; }
+
+/* para onde vai / de onde vem */
+.dr-onde { padding:10px 18px 16px; }
+.dr-og { display:grid; grid-template-columns:minmax(0,190px) minmax(0,1fr) 112px 52px; gap:10px; align-items:center; padding:7px 8px; border-radius:10px;
+         font-size:13px; cursor:pointer; }
+.dr-og:hover { background:#f6faf8; }
+.dr-og > span:first-child { color:#334155; font-weight:700; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.dr-og .dr-bar { height:10px; }
+.dr-og b { text-align:right; font-variant-numeric:tabular-nums; color:var(--tinta); }
+.dr-og em { font-style:normal; text-align:right; font-size:12px; color:#94a3b8; font-variant-numeric:tabular-nums; }
+.dr-sub-t { font-size:11.5px; font-weight:800; letter-spacing:1px; text-transform:uppercase; color:#94a3b8; margin:12px 8px 4px; }
+.dr-sub-t:first-child { margin-top:2px; }
+
+.dr-destaques { display:flex; gap:10px; flex-wrap:wrap; padding:0 18px 16px; }
+.dr-dest { font-size:12.5px; color:#475569; background:#f8fafc; border:1px solid #eef2f7; border-radius:99px; padding:5px 12px; }
+.dr-dest b { color:var(--tinta); font-variant-numeric:tabular-nums; }
+.dr-tipf { position:fixed; z-index:2000; pointer-events:none; background:#0f172a; color:#fff; border-radius:10px; padding:8px 11px; font-size:12px;
+           box-shadow:0 10px 24px rgba(15,23,42,.25); display:none; white-space:nowrap; }
+.dr-tipf div { display:flex; justify-content:space-between; gap:16px; font-variant-numeric:tabular-nums; }
+.dr-tipf b { display:block; margin-bottom:3px; }
+
+/* filtros numa barra só (o mesmo jeito do Refinar de Cobranças) */
+.dr-refino { display:flex; align-items:center; gap:8px; flex-wrap:wrap; background:#fff; border:1px solid var(--linha); border-radius:16px;
+             padding:8px 10px; margin-bottom:16px; box-shadow:0 6px 18px rgba(15,61,46,.06); }
+.dr-refino > i { color:#a3b3ab; margin:0 2px 0 6px; font-size:13px; }
+.dr-ref { position:relative; }
+.dr-ref > summary { list-style:none; display:inline-flex; align-items:center; gap:7px; height:34px; padding:0 12px 0 11px; border-radius:99px;
+                    border:1px solid var(--linha); background:#fff; color:#334155; font-size:12.5px; font-weight:700; cursor:pointer; white-space:nowrap; }
+.dr-ref > summary::-webkit-details-marker { display:none; }
+.dr-ref > summary i { color:#94a3b8; font-size:12px; }
+.dr-ref > summary .fa-chevron-down { font-size:9px; }
+.dr-ref > summary em { font-style:normal; font-weight:600; color:#64748b; }
+.dr-ref.on > summary { background:var(--verde); border-color:var(--verde); color:#fff; }
+.dr-ref.on > summary i, .dr-ref.on > summary em { color:#d1fae5; }
+.dr-ref[open] > summary { box-shadow:0 0 0 3px #ecfdf3; }
+.dr-pop { position:absolute; left:0; top:calc(100% + 8px); z-index:950; min-width:240px; max-width:320px; max-height:360px; overflow:auto; background:#fff;
+          border:1px solid var(--linha); border-radius:14px; box-shadow:0 14px 32px rgba(15,61,46,.16); padding:8px; }
+.dr-pop a { display:flex; align-items:center; gap:9px; padding:8px 10px; border-radius:9px; font-size:13px; color:#334155; text-decoration:none; }
+.dr-pop a:hover { background:#f3f8f5; }
+.dr-pop a i { width:14px; color:#cbd5e1; }
+.dr-pop a.on { font-weight:700; color:var(--verde); } .dr-pop a.on i { color:#16a34a; }
+.dr-pop small { display:block; font-size:11.5px; color:#94a3b8; padding:4px 10px 6px; line-height:1.4; }
+.dr-limpar { font-size:12.5px; font-weight:700; color:#b91c1c; text-decoration:none; padding:0 8px; }
+.dr-regime { margin-left:auto; font-size:12px; color:#64748b; display:flex; align-items:center; gap:6px; padding-right:6px; }
+.dr-regime i { color:#16a34a; }
+
+.dr-nota { display:flex; gap:10px; align-items:flex-start; border-radius:12px; padding:10px 14px; font-size:13px; margin-bottom:14px; }
+.dr-nota.azul { background:#eff6ff; border:1px solid #bfdbfe; color:#1e40af; }
+.dr-nota.ambar { background:#fffbeb; border:1px solid #fde68a; color:#92400e; }
+
+/* a tabela — rola DENTRO do cartão, a página nunca rola de lado */
+.dr-acoes { margin-left:auto; display:flex; gap:6px; }
+.dr-acoes button { border:1px solid var(--linha); background:#fff; color:#475569; border-radius:99px; padding:5px 12px; font:inherit; font-size:12px; font-weight:700; cursor:pointer; }
+.dr-acoes button:hover { border-color:#9fc9b3; color:var(--verde); }
+.dre-wrap { overflow-x:auto; padding:10px 0 6px; }
+.dre-wrap table { width:100%; min-width:1240px; border-collapse:collapse; font-size:13px; }
+.dre-wrap td, .dre-wrap th { white-space:nowrap; text-align:right; padding:8px 10px; font-variant-numeric:tabular-nums; border-bottom:1px solid #f1f5f9; }
+.dre-wrap th { font-size:12px; color:#64748b; font-weight:700; background:#f8fafc; border-bottom:1px solid #e2e8f0; }
+.dre-wrap td:first-child, .dre-wrap th:first-child { text-align:left; position:sticky; left:0; z-index:1; padding-left:18px; min-width:250px; }
+.dre-wrap td { background:#fff; }
+.dre-wrap th:last-child, .dre-wrap td:last-child { padding-right:18px; }
+.dre-wrap .pct { color:#94a3b8; font-size:12px; width:58px; }
+.dre-wrap .tot { font-weight:800; color:var(--tinta); }
+.dre-wrap .z { color:#d5dde5; }
+.dre-grupo { cursor:pointer; }
+.dre-wrap .dre-grupo:hover td { background:#f6faf8; }
+.dre-grupo td { font-weight:600; color:#1e293b; }
+.dre-grupo td:first-child { font-weight:700; }
+.dre-grupo td:first-child .mk { display:inline-block; width:4px; height:16px; border-radius:2px; vertical-align:-3px; margin-right:9px; background:var(--desp); }
+.dre-grupo.rec td:first-child .mk { background:var(--rec); }
+.dre-grupo.inv td:first-child .mk { background:#7c3aed; }
+.dre-grupo .car { color:#94a3b8; width:12px; font-size:11px; margin-right:4px; transition:transform .15s; }
+.dre-grupo.aberto .car { transform:rotate(90deg); }
+.dre-wrap .dre-cat td { color:#475569; background:#fbfdfc; }
+.dre-wrap .dre-cat td:first-child { padding-left:44px; color:#64748b; }
+.dre-wrap .dre-cat-pai td:first-child { color:#334155; font-weight:700; }
+.dre-wrap .dre-cat-sub td { color:#64748b; font-size:12.5px; }
+.dre-wrap .dre-cat-sub td:first-child { padding-left:66px; color:#94a3b8; }
+.dre-wrap .dre-sub td { background:#f0fdf4; font-weight:800; color:#14532d; border-top:1px solid #bbf7d0; border-bottom:1px solid #bbf7d0; }
+.dre-wrap .dre-sub.res td { background:#0f3d2e; color:#fff; font-size:13.5px; border-color:#0f3d2e; }
+.dre-wrap .dre-sub.res td.dre-neg { color:#fecaca; }
+.dre-wrap .dre-sub.res .pct { color:#a7d9c0; }
+.dre-neg { color:#b91c1c; }
+.dre-vazio { text-align:center; color:#64748b; padding:44px 12px; }
+
 /* ===== MOBILE: um mês por vez, em cartão (a tabela de 14 colunas some) ===== */
-.dre-mob { display: none; }
-.dre-mob-meses { display: flex; gap: 6px; overflow-x: auto; padding: 2px 2px 12px;
-  -webkit-overflow-scrolling: touch; }
-.dre-mob-meses::-webkit-scrollbar { display: none; }
-.dre-mes-chip { flex: 0 0 auto; padding: 8px 15px 10px; border-radius: 999px;
-  border: 1px solid #d1d5db; background: #fff; color: #374151; font-weight: 700;
-  font-size: .85em; cursor: pointer; position: relative; font-family: inherit; }
-.dre-mes-chip.ativo { background: var(--primary-green, #00A85A); color: #fff;
-  border-color: var(--primary-green, #00A85A); }
-.dre-mes-chip .pt { position: absolute; left: 50%; transform: translateX(-50%);
-  bottom: 4px; width: 4px; height: 4px; border-radius: 999px;
-  background: var(--primary-green, #00A85A); }
-.dre-mes-chip.ativo .pt { background: #fff; }
-.dre-m-bloco { display: none; }
-.dre-m-bloco.ativo { display: block; }
-.dre-m-lin { display: flex; justify-content: space-between; align-items: baseline;
-  gap: 12px; padding: 11px 10px; border-bottom: 1px solid #f3f4f6; }
-.dre-m-val { font-variant-numeric: tabular-nums; white-space: nowrap; }
-.dre-m-grupo { cursor: pointer; font-weight: 600; }
-.dre-m-grupo i { color: #9ca3af; width: 13px; }
-.dre-m-cat { padding-left: 33px; color: #6b7280; font-size: .92em; background: #fafafa; }
-.dre-m-sub { background: #f0fdf4; font-weight: 800; border-top: 2px solid #bbf7d0; }
-.dre-m-zero { text-align: center; color: #9ca3af; padding: 22px 0 10px; font-size: .9em; }
-@media (max-width: 1023px) {
-  .dre-wrap { display: none; }
-  .dre-mob { display: block; }
+.dre-mob { display:none; padding:12px 12px 6px; }
+.dre-mob-meses { display:flex; gap:6px; overflow-x:auto; padding:2px 2px 12px; -webkit-overflow-scrolling:touch; }
+.dre-mob-meses::-webkit-scrollbar { display:none; }
+.dre-mes-chip { flex:0 0 auto; padding:8px 15px 10px; border-radius:999px; border:1px solid var(--linha); background:#fff; color:#374151;
+                font-weight:700; font-size:13px; cursor:pointer; position:relative; font-family:inherit; }
+.dre-mes-chip.ativo { background:var(--verde); color:#fff; border-color:var(--verde); }
+.dre-mes-chip .pt { position:absolute; left:50%; transform:translateX(-50%); bottom:4px; width:4px; height:4px; border-radius:999px; background:#16a34a; }
+.dre-mes-chip.ativo .pt { background:#fff; }
+.dre-m-bloco { display:none; }
+.dre-m-bloco.ativo { display:block; }
+.dre-m-lin { display:flex; justify-content:space-between; align-items:baseline; gap:12px; padding:11px 10px; border-bottom:1px solid #f1f5f9; font-size:14px; }
+.dre-m-val { font-variant-numeric:tabular-nums; white-space:nowrap; }
+.dre-m-grupo { cursor:pointer; font-weight:600; }
+.dre-m-grupo i { color:#9ca3af; width:13px; }
+.dre-m-grupo .mk { display:inline-block; width:4px; height:14px; border-radius:2px; margin-right:7px; vertical-align:-2px; background:var(--desp); }
+.dre-m-grupo.rec .mk { background:var(--rec); }
+.dre-m-cat { padding-left:33px; color:#6b7280; font-size:13px; background:#fafafa; }
+.dre-m-cat.dre-cat-pai > span:first-child { color:#334155; font-weight:700; }
+.dre-m-cat.dre-cat-sub { padding-left:54px; color:#94a3b8; }
+.dre-m-sub { background:#f0fdf4; font-weight:800; color:#14532d; border-radius:10px; border-bottom:0; margin:4px 0; }
+.dre-m-sub.res { background:#0f3d2e; color:#fff; }
+.dre-m-sub.res .dre-neg { color:#fecaca; }
+.dre-m-zero { text-align:center; color:#9ca3af; padding:22px 0 10px; font-size:13px; }
+
+@media (max-width:1100px) { .dr-kpis { grid-template-columns:repeat(2, minmax(0,1fr)); } .dr-grid2, .dr-grid2b { grid-template-columns:minmax(0,1fr); } }
+@media (max-width:1023px) {
+  .dre-wrap, .dr-acoes { display:none; }
+  .dre-mob { display:block; }
+  .dr-graf { gap:2px; padding:14px 8px 10px; }
+  .dr-gm-v { font-size:10px; }
+  .dr-gb { height:110px; }
+  .dr-card-h .dr-dica { display:none; }
+}
+@media (max-width:700px) {
+  .dr .ef-hero { padding-bottom:70px; }
+  .dr-hn b { font-size:30px; }
+  .dr-hero-spark { flex-basis:100%; }
+  .dr-hero-spark svg { height:64px; }
+  .dr-kpis { gap:8px; margin-top:-48px; }
+  .dr-kpi { padding:12px; border-radius:15px; }
+  .dr-kpi b { font-size:16.5px; margin-top:6px; }
+  .dr-kpi small { font-size:11px; letter-spacing:.3px; }
+  .dr-kpi-top i { display:none; }
+  .dr-kpi svg { display:none; }
+  .dr-chart { overflow-x:auto; padding:6px 6px 8px; }
+  .dr-chart svg { min-width:640px; height:250px; }
+  .dr-og { grid-template-columns:minmax(0,1fr) auto 44px; gap:4px 8px; }
+  .dr-og .dr-bar { grid-column:1 / -1; grid-row:2; height:7px; }
+  .dr-leg { margin-left:0; width:100%; }
+  .dr-regime { margin-left:0; width:100%; }
+  .dr-hero-acoes .ef-btn span { display:none; }
+}
+
+/* ── blocos que recolhem (o estado fica guardado neste aparelho) ── */
+.dr-sec { margin-bottom:16px; }
+.dr-sec-h { width:100%; display:flex; align-items:center; gap:10px; background:transparent; border:0; padding:4px 4px 10px; cursor:pointer; font:inherit; text-align:left; }
+.dr-sec-h > i { width:28px; height:28px; border-radius:9px; background:#dcfce7; color:#15803d; display:inline-flex; align-items:center; justify-content:center; font-size:12px; }
+.dr-sec-h b { font-size:13px; font-weight:800; letter-spacing:.8px; text-transform:uppercase; color:#475569; white-space:nowrap; }
+.dr-sec-res { font-size:12.5px; color:#64748b; display:none; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.dr-sec-res b { font-size:12.5px; letter-spacing:0; text-transform:none; color:var(--tinta); }
+.dr-sec-tg { margin-left:auto; display:inline-flex; align-items:center; gap:6px; font-size:12px; font-weight:700; color:#475569; border:1px solid var(--linha);
+             background:#fff; border-radius:99px; padding:5px 12px; flex:0 0 auto; }
+.dr-sec-tg i { font-size:10px; transition:transform .2s; }
+.dr-sec-h:hover .dr-sec-tg { border-color:#9fc9b3; color:var(--verde); }
+.dr-sec-tg .f { display:none; }
+.dr-sec-c { display:grid; grid-template-rows:1fr; transition:grid-template-rows .28s ease, opacity .2s; }
+.dr-sec-c > div { min-height:0; overflow:hidden; }
+.dr-sec.fechada .dr-sec-c { grid-template-rows:0fr; opacity:0; }
+.dr-sec.fechada .dr-sec-res { display:block; }
+.dr-sec.fechada .dr-sec-tg .a { display:none; } .dr-sec.fechada .dr-sec-tg .f { display:inline; }
+.dr-sec.fechada .dr-sec-tg i { transform:rotate(180deg); }
+.dr-sec.fechada .dr-sec-h { background:#fff; border:1px solid var(--linha); border-radius:14px; padding:10px 12px; box-shadow:0 6px 18px rgba(15,61,46,.05); }
+.dr-sec .dr-card { margin-bottom:0; }
+.dr-sec .dr-grid2b, .dr-sec .dr-grid2 { padding-bottom:2px; }
+
+/* ── células que abrem a gaveta ── */
+.dre-wrap td[data-v] { cursor:pointer; }
+.dre-wrap td[data-v]:not(.z):hover { outline:2px solid #22c55e; outline-offset:-2px; border-radius:6px; color:#14532d; }
+.dre-wrap td.z[data-v] { cursor:default; }
+.dre-m-ir { font-size:10px; color:#cbd5e1; margin-left:4px; }
+.dre-m-cat { cursor:pointer; }
+.dr-top[data-c], .dr-og[data-conta] { cursor:pointer; }
+.dr-top[data-c]:hover span { color:#15803d; }
+
+/* ── a gaveta: o que está lançado ── */
+.gv-fundo { position:fixed; inset:0; background:rgba(15,23,42,.42); backdrop-filter:blur(2px); z-index:1990; opacity:0; pointer-events:none; transition:opacity .2s; }
+.gv-fundo.on { opacity:1; pointer-events:auto; }
+.gv { position:fixed; top:50%; left:50%; width:min(760px, 94vw); max-height:min(860px, 88vh); z-index:1995; background:#f7faf8; border-radius:22px; overflow:hidden;
+      box-shadow:0 30px 80px rgba(15,23,42,.35); transform:translate(-50%, -46%) scale(.97); opacity:0; pointer-events:none;
+      transition:transform .28s cubic-bezier(.2,.8,.2,1), opacity .2s; display:flex; flex-direction:column; }
+.gv.on { transform:translate(-50%, -50%); opacity:1; pointer-events:auto; }
+.gv-h { position:relative; overflow:hidden; padding:22px 26px 20px; color:#fff; background:linear-gradient(150deg,#0b3b2b 0%,#116a43 60%,#178a52 100%); }
+.gv-h.desp { background:linear-gradient(150deg,#7c2d12 0%,#c2410c 60%,#f97316 100%); }
+.gv-h::after { content:''; position:absolute; right:-60px; top:-60px; width:200px; height:200px; border-radius:50%; background:rgba(255,255,255,.08); }
+.gv-x { position:absolute; top:14px; right:14px; z-index:1; width:34px; height:34px; border-radius:10px; border:1px solid rgba(255,255,255,.3); background:rgba(255,255,255,.12);
+        color:#fff; cursor:pointer; font-size:14px; }
+.gv-x:hover { background:rgba(255,255,255,.24); }
+.gv-cam { font-size:12px; font-weight:700; color:rgba(255,255,255,.75); letter-spacing:.3px; padding-right:40px; }
+.gv-tit { font-size:19px; font-weight:800; margin:4px 0 2px; letter-spacing:-.01em; padding-right:40px; line-height:1.25; }
+.gv-per { display:inline-flex; gap:6px; flex-wrap:wrap; margin-top:6px; }
+.gv-per span { font-size:11.5px; font-weight:700; background:rgba(255,255,255,.16); border-radius:99px; padding:3px 10px; }
+.gv-tot { display:flex; align-items:flex-end; justify-content:space-between; gap:12px; margin-top:14px; }
+.gv-tot b { font-size:30px; font-weight:800; letter-spacing:-.02em; font-variant-numeric:tabular-nums; line-height:1; }
+.gv-tot small { font-size:12.5px; color:rgba(255,255,255,.85); text-align:right; }
+.gv-resumo { display:grid; grid-template-columns:repeat(3, minmax(0,1fr)); gap:8px; padding:14px 18px 4px; }
+.gv-r { background:#fff; border:1px solid #e6eeea; border-radius:12px; padding:9px 11px; min-width:0; }
+.gv-r small { display:flex; align-items:center; gap:6px; font-size:11px; font-weight:800; letter-spacing:.5px; text-transform:uppercase; color:#94a3b8; }
+.gv-r small i { width:8px; height:8px; border-radius:50%; display:inline-block; }
+.gv-r b { display:block; font-size:14px; font-variant-numeric:tabular-nums; color:#0f172a; margin-top:3px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.gv-busca { margin:10px 18px 4px; position:relative; }
+.gv-busca i { position:absolute; left:12px; top:50%; transform:translateY(-50%); color:#94a3b8; font-size:13px; }
+.gv-busca input { width:100%; box-sizing:border-box; height:40px; border:1px solid #dfe9e3; border-radius:12px; padding:0 12px 0 34px; font:inherit; font-size:14px; background:#fff; }
+.gv-busca input:focus { outline:none; border-color:#22c55e; box-shadow:0 0 0 3px #dcfce7; }
+.gv-ord { display:flex; gap:6px; padding:6px 18px 8px; flex-wrap:wrap; }
+.gv-ord button { border:1px solid #e6eeea; background:#fff; color:#475569; border-radius:99px; padding:4px 11px; font:inherit; font-size:12px; font-weight:700; cursor:pointer; }
+.gv-ord button.on { background:#0f3d2e; border-color:#0f3d2e; color:#fff; }
+.gv > * { flex-shrink:0; }
+.gv > .gv-lista { flex:1 1 auto; min-height:120px; overflow-y:auto; padding:4px 18px 24px; }
+.gv-dia { font-size:11.5px; font-weight:800; letter-spacing:.8px; text-transform:uppercase; color:#94a3b8; margin:14px 2px 6px; display:flex; justify-content:space-between; }
+.gv-it { background:#fff; border:1px solid #e6eeea; border-radius:14px; padding:11px 13px; margin-bottom:8px; display:grid; grid-template-columns:42px minmax(0,1fr) auto;
+         gap:4px 12px; align-items:start; transition:border-color .15s, box-shadow .15s; animation:gvEntra .25s ease both; }
+.gv-it:hover { border-color:#86efac; box-shadow:0 8px 20px rgba(16,120,70,.08); }
+@keyframes gvEntra { from { opacity:0; transform:translateY(6px); } to { opacity:1; transform:none; } }
+.gv-data { width:42px; height:44px; border-radius:11px; background:#f1f5f9; display:flex; flex-direction:column; align-items:center; justify-content:center; line-height:1; }
+.gv-esq { grid-row:span 3; display:flex; flex-direction:column; align-items:center; gap:7px; }
+.gv-bco { width:28px; height:28px; border-radius:8px; background:#fff; border:1px solid #e2e8f0; padding:2px; box-sizing:border-box; object-fit:contain; }
+.gv-tag img { width:15px; height:15px; border-radius:4px; object-fit:contain; margin:-1px 1px -1px -3px; }
+.gv-tag.ext { background:#f8fafc; color:#334155; border:1px solid #e2e8f0; padding:2px 9px 2px 6px; } a.gv-tag.ext:hover { background:#f1f5f9; border-color:#cbd5e1; }
+.gv-data b { font-size:16px; color:#0f172a; } .gv-data small { font-size:10.5px; font-weight:800; color:#64748b; text-transform:uppercase; margin-top:2px; }
+.gv-nome { font-size:14px; font-weight:700; color:#0f172a; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.gv-val { font-size:14.5px; font-weight:800; color:#0f172a; font-variant-numeric:tabular-nums; text-align:right; white-space:nowrap; }
+.gv-val small { display:block; font-size:11px; font-weight:600; color:#94a3b8; }
+.gv-desc { grid-column:2 / -1; font-size:12.5px; color:#64748b; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.gv-tags { grid-column:2 / -1; display:flex; gap:5px; flex-wrap:wrap; margin-top:4px; }
+.gv-tag { font-size:11px; font-weight:700; border-radius:99px; padding:2px 8px; background:#f1f5f9; color:#475569; display:inline-flex; align-items:center; gap:4px; text-decoration:none; }
+.gv-tag.liquidado { background:#dcfce7; color:#15803d; } .gv-tag.aberto { background:#dbeafe; color:#1d4ed8; } .gv-tag.vencido { background:#fee2e2; color:#b91c1c; }
+.gv-tag.perdido { background:#e2e8f0; color:#475569; }
+.gv-tag.ext { background:#ecfeff; color:#0e7490; } a.gv-tag.ext:hover { background:#cffafe; }
+.gv-tag.conta { background:#fff7ed; color:#9a3412; }
+.gv-vazio { text-align:center; color:#94a3b8; padding:44px 10px; font-size:14px; }
+.gv-vazio i { display:block; font-size:28px; margin-bottom:10px; color:#cbd5e1; }
+.gv-carr { padding:16px 0; }
+.gv-sk { height:66px; border-radius:14px; margin-bottom:8px; background:linear-gradient(90deg,#eef2f0 25%,#f8faf9 50%,#eef2f0 75%); background-size:200% 100%; animation:gvSk 1.1s infinite; }
+@keyframes gvSk { from { background-position:200% 0; } to { background-position:-200% 0; } }
+.gv-aviso { margin:8px 18px 0; font-size:12px; color:#92400e; background:#fffbeb; border:1px solid #fde68a; border-radius:10px; padding:7px 10px; }
+@media (max-width:700px) {
+  .gv { top:auto; bottom:0; left:0; max-height:92vh; width:100vw; border-radius:22px 22px 0 0; transform:translateY(104%); opacity:1; }
+  .gv.on { transform:none; }
+  .gv-h { border-radius:22px 22px 0 0; padding-top:24px; }
+  .gv-h::before { content:''; position:absolute; top:8px; left:50%; transform:translateX(-50%); width:44px; height:5px; border-radius:99px; background:rgba(255,255,255,.4); }
+  .gv-tot b { font-size:24px; }
+  .gv-sec-h b { font-size:12px; }
+  .dr-sec-h b { white-space:normal; font-size:12px; }
 }
 </style>
 
-<div class="page-header">
+{% set _emp = sel_empresas | join(',') %}
+{% set _grp = grupos_sel | join('|') %}
+{% set _ent = entre if entre == 'eliminar' else None %}
+{% macro url() -%}
+{%- set p = {'regime': regime, 'ano': ano, 'emp': _emp or None, 'centro': centro_sel or None, 'grupos': _grp or None, 'entre': _ent} -%}
+{%- set _ = p.update(kwargs) -%}
+{{ url_for('financeiro.dre', **p) }}
+{%- endmacro %}
+{% macro brl(v) %}{{ v | float | round(2) | format_currency }}{% endmacro %}
+{% macro pct(v) %}{% if base_rb and v %}{{ '%.1f' | format((v | float) / (base_rb | float) * 100) | replace('.', ',') }}%{% endif %}{% endmacro %}
+
+<div class="dr">
+<div class="ef-hero">
+  <div class="ef-hero-inner ef-hero-head">
     <div>
-        <h1 class="page-title">
-            <i class="fas fa-chart-pie" style="color: var(--primary-green);"></i>
-            DRE Gerencial
-        </h1>
-        <p class="page-subtitle">Resultado do escritório, mês a mês</p>
+      <h1 class="ef-hero-title">DRE Gerencial</h1>
+      <p class="ef-hero-sub">Resultado do escritório · {{ ano }} · {{ 'competência' if regime == 'competencia' else 'caixa' }} ·
+        {{ (sel_empresas | length ~ ' empresa' ~ ('s' if sel_empresas | length != 1 else '')) if sel_empresas else 'todas as empresas' }}</p>
     </div>
-    <div class="page-actions">
-        <a href="{{ url_for('financeiro.titulos') }}" class="btn btn-outline">
-            <i class="fas fa-file-invoice-dollar"></i> Títulos
-        </a>
-        <a href="{{ url_for('financeiro.categorias') }}" class="btn btn-outline">
-            <i class="fas fa-tags"></i> Categorias
-        </a>
-        <a href="{{ url_for('financeiro.dre_equipe', ano=ano) }}" class="btn btn-outline">
-            <i class="fas fa-people-group"></i> Pagamentos da equipe
-        </a>
-    </div>
-</div>
-
-{% set _outros = {} %}
-{% for k, v in request.args.items() %}{% if k != 'emp' and v %}{% set _ = _outros.update({k: v}) %}{% endif %}{% endfor %}
-<div class="fin-escopo">
-    <span class="fin-escopo-lbl"><i class="fas fa-building"></i> Visualizar por</span>
-    <div class="fin-chips">
-        <a class="fin-chip {{ 'ativo' if not sel_empresas }}"
-           href="{{ url_for('financeiro.dre', **_outros) }}">TODAS</a>
-        {% for e in fin_empresas %}
-        {% if e.cliente_id in sel_empresas %}
-            {% set _nova = sel_empresas | reject('equalto', e.cliente_id) | list %}
-        {% else %}
-            {% set _nova = sel_empresas + [e.cliente_id] %}
-        {% endif %}
-        {% set _csv = _nova | join(',') %}
-        <a class="fin-chip {{ 'ativo' if e.cliente_id in sel_empresas }}"
-           title="{{ e.nome_razao_social }}"
-           href="{{ url_for('financeiro.dre', emp=_csv, **_outros) if _csv else url_for('financeiro.dre', **_outros) }}">{{ e.apelido }}</a>
-        {% endfor %}
-    </div>
-    <span class="fin-selo">
-        <i class="fas fa-{{ 'check-circle' if sel_empresas else 'globe' }}"></i>
-        {{ (sel_empresas | length ~ ' empresa(s)') if sel_empresas else 'Todas as empresas' }}
-    </span>
-</div>
-
-<div class="dre-chips">
-    {% set _emp = sel_empresas | join(',') %}
-    {# O recorte de grupos e o centro viajam junto em toda troca: antes,
-       trocar de regime jogava fora o centro escolhido. #}
-    {% set _grp = grupos_sel | join('|') %}
-    <a class="dre-chip {{ 'ativo' if regime == 'competencia' }}"
-       href="{{ url_for('financeiro.dre', entre=(entre if entre == 'eliminar' else None), regime='competencia', ano=ano, emp=_emp or None, centro=centro_sel or None, grupos=_grp or None) }}">Competência</a>
-    <a class="dre-chip {{ 'ativo' if regime == 'caixa' }}"
-       href="{{ url_for('financeiro.dre', entre=(entre if entre == 'eliminar' else None), regime='caixa', ano=ano, emp=_emp or None, centro=centro_sel or None, grupos=_grp or None) }}">Caixa</a>
-    <form method="GET" action="{{ url_for('financeiro.dre') }}" style="margin-left:auto;">
+    <div class="ef-hero-actions dr-hero-acoes">
+      <div class="dr-reg" title="Competência: pelo mês de referência, pago ou não. Caixa: pelo mês em que o dinheiro entrou ou saiu.">
+        <a class="{{ 'on' if regime == 'competencia' }}" href="{{ url(regime='competencia') }}">Competência</a>
+        <a class="{{ 'on' if regime == 'caixa' }}" href="{{ url(regime='caixa') }}">Caixa</a>
+      </div>
+      <form method="GET" action="{{ url_for('financeiro.dre') }}">
         <input type="hidden" name="regime" value="{{ regime }}">
-        <input type="hidden" name="emp" value="{{ _emp }}">
-        <input type="hidden" name="centro" value="{{ centro_sel or '' }}">
-        <input type="hidden" name="grupos" value="{{ _grp }}">
-        {% if entre == 'eliminar' %}<input type="hidden" name="entre" value="eliminar">{% endif %}
-        <select name="ano" class="form-control" onchange="this.form.submit()">
-            {% for a in anos %}
-            <option value="{{ a }}" {% if a == ano %}selected{% endif %}>{{ a }}</option>
-            {% endfor %}
+        {% if _emp %}<input type="hidden" name="emp" value="{{ _emp }}">{% endif %}
+        {% if centro_sel %}<input type="hidden" name="centro" value="{{ centro_sel }}">{% endif %}
+        {% if _grp %}<input type="hidden" name="grupos" value="{{ _grp }}">{% endif %}
+        {% if _ent %}<input type="hidden" name="entre" value="eliminar">{% endif %}
+        <select name="ano" class="dr-ano" onchange="this.form.submit()" aria-label="Ano">
+          {% for a in anos %}<option value="{{ a }}" {{ 'selected' if a == ano }}>{{ a }}</option>{% endfor %}
         </select>
-    </form>
-</div>
-
-{% if sel_empresas | length != 1 %}
-<div class="dre-chips" style="margin-top:-4px;">
-    {% set _emp = sel_empresas | join(',') %}
-    {% set _grp = grupos_sel | join('|') %}
-    <span class="fe-rotulo" style="font-size:.78em; color:#6b7280; font-weight:700; text-transform:uppercase;"
-          title="Pares aprovados entre empresas do grupo (ex.: pró-labore pago pela Qualicontax e recebido pelo Anderson PF). Considerar mostra os dois lados; Eliminar tira os dois.">Entre empresas do grupo:</span>
-    <a class="dre-chip {{ 'ativo' if entre != 'eliminar' }}"
-       href="{{ url_for('financeiro.dre', regime=regime, ano=ano, emp=_emp or None, centro=centro_sel or None, grupos=_grp or None) }}">Considerar</a>
-    <a class="dre-chip {{ 'ativo' if entre == 'eliminar' }}"
-       href="{{ url_for('financeiro.dre', regime=regime, ano=ano, emp=_emp or None, centro=centro_sel or None, grupos=_grp or None, entre='eliminar') }}">Eliminar</a>
-</div>
-{% endif %}
-
-<div class="dre-chips" style="margin-top:-4px;">
-    {% set _emp = sel_empresas | join(',') %}
-    {% set _grp = grupos_sel | join('|') %}
-    <span class="fe-rotulo" style="font-size:.78em; color:#6b7280; font-weight:700; text-transform:uppercase;">Centro:</span>
-    <a class="dre-chip {{ 'ativo' if not centro_sel }}"
-       href="{{ url_for('financeiro.dre', entre=(entre if entre == 'eliminar' else None), regime=regime, ano=ano, emp=_emp or None, grupos=_grp or None) }}">TODOS</a>
-    {% for cc in centros %}
-    <a class="dre-chip {{ 'ativo' if centro_sel == cc.id }}"
-       href="{{ url_for('financeiro.dre', entre=(entre if entre == 'eliminar' else None), regime=regime, ano=ano, centro=cc.id, emp=_emp or None, grupos=_grp or None) }}">{{ cc.nome }}</a>
-    {% endfor %}
-</div>
-
-{# GRUPOS — o recorte. Abre tudo; clicar num grupo comeca o recorte por ele,
-   clicar de novo tira. Sem nenhum escolhido (ou com todos), nao ha recorte.
-   Quem soma e o SERVIDOR: a tela nunca recalcula subtotal por conta propria. #}
-{% if grupos_todos | length > 1 %}
-<div class="dre-chips" style="margin-top:-4px;">
-    <span class="fe-rotulo" style="font-size:.78em; color:#6b7280; font-weight:700; text-transform:uppercase;">Grupos:</span>
-    <a class="dre-chip {{ 'ativo' if not grupos_sel }}"
-       href="{{ url_for('financeiro.dre', entre=(entre if entre == 'eliminar' else None), regime=regime, ano=ano, centro=centro_sel or None, emp=_emp or None) }}">TODOS</a>
-    {% for g in grupos_todos %}
-        {% if grupos_sel %}
-            {% set _novo = (grupos_sel | reject('equalto', g) | list) if g in grupos_sel else (grupos_sel + [g]) %}
-        {% else %}
-            {% set _novo = [g] %}
-        {% endif %}
-    <a class="dre-chip {{ 'ativo' if g in grupos_sel }}"
-       href="{{ url_for('financeiro.dre', entre=(entre if entre == 'eliminar' else None), regime=regime, ano=ano, centro=centro_sel or None, emp=_emp or None, grupos=(_novo | join('|')) or None) }}">{{ g }}</a>
-    {% endfor %}
-</div>
-{% endif %}
-
-{% if grupos_sel %}
-<div style="padding:8px 14px; border-radius:8px; background:#eff6ff; border:1px solid #bfdbfe;
-            color:#1e40af; margin:10px 0 12px; font-size:.9em;">
-    <i class="fas fa-filter"></i>
-    <b>Recorte de {{ grupos_sel | length }} de {{ grupos_todos | length }} grupos.</b>
-    O total abaixo soma só o que está na tela — não é o resultado do escritório.
-</div>
-{% endif %}
-
-{% if nota_centro %}
-<div style="padding:8px 14px; border-radius:8px; background:#fffbeb; border:1px solid #fde68a;
-            color:#92400e; margin-bottom:12px; font-size:.9em;">
-    <i class="fas fa-circle-info"></i>
-    {% if nota_centro.cru %}
-    Visão do centro que RATEIA, mostrada crua (sem dividir).
-    {% elif nota_centro.rateio %}
-    Inclui a fração do rateio (1/{{ nota_centro.partes }} dos centros que rateiam).
-    {% endif %}
-    {% if nota_centro.sem_centro %}
-    · {{ nota_centro.sem_centro | float | round(2) | format_currency }} em lançamentos
-    SEM centro de custo estão fora desta visão.
-    {% endif %}
-</div>
-{% endif %}
-
-<div class="dre-regime">
-    {% if regime == 'competencia' %}
-    <i class="fas fa-calendar-check"></i> Regime de COMPETÊNCIA — resultado do mês de referência,
-    pago ou não (títulos cancelados ficam de fora).
-    {% else %}
-    <i class="fas fa-money-bill-wave"></i> Regime de CAIXA — o que efetivamente entrou e saiu,
-    pelo mês do pagamento (com juros e multas).
-    {% endif %}
-</div>
-
-<div class="card">
-    <div class="card-body">
-        {% set tem_dado = linhas | selectattr('tipo', 'equalto', 'grupo') | list %}
-        {% if tem_dado %}
-        <div class="dre-wrap">
-        <table class="table">
-            <thead>
-                <tr>
-                    <th>{{ ano }}</th>
-                    {% for m in meses %}<th>{{ m }}</th>{% endfor %}
-                    <th>Total</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for l in linhas %}
-                {% set bloco = loop.index %}
-                {% if l.tipo == 'grupo' %}
-                <tr class="dre-grupo" onclick="dreToggle({{ bloco }})"
-                    title="Clique para abrir as categorias">
-                    <td>
-                        <i class="fas fa-caret-right" id="dre-caret-{{ bloco }}"></i>
-                        ({{ '−' if l.sinal == '-' else '+' }}) {{ l.g.grupo }}
-                    </td>
-                    {% for v in l.g.meses %}
-                    <td>{{ v | float | round(2) | format_currency if v else '—' }}</td>
-                    {% endfor %}
-                    <td><strong>{{ l.g.total | float | round(2) | format_currency }}</strong></td>
-                </tr>
-                {% for c in l.g.cats %}
-                <tr class="dre-cat{{ ' dre-cat-pai' if c.subs }}" data-pai="{{ bloco }}" style="display:none;">
-                    <td>{{ c.nome }}</td>
-                    {% for v in c.meses %}
-                    <td>{{ v | float | round(2) | format_currency if v else '—' }}</td>
-                    {% endfor %}
-                    <td>{{ c.total | float | round(2) | format_currency }}</td>
-                </tr>
-                {% for s in c.subs %}
-                <tr class="dre-cat dre-cat-sub" data-pai="{{ bloco }}" style="display:none;">
-                    <td>{{ s.nome }}</td>
-                    {% for v in s.meses %}
-                    <td>{{ v | float | round(2) | format_currency if v else '—' }}</td>
-                    {% endfor %}
-                    <td>{{ s.total | float | round(2) | format_currency }}</td>
-                </tr>
-                {% endfor %}
-                {% endfor %}
-                {% else %}
-                <tr class="dre-sub">
-                    <td>{{ l.rotulo }}</td>
-                    {% for v in l.meses %}
-                    <td class="{{ 'dre-neg' if v < 0 }}">{{ v | float | round(2) | format_currency }}</td>
-                    {% endfor %}
-                    {% set tot = l.meses | sum %}
-                    <td class="{{ 'dre-neg' if tot < 0 }}">{{ tot | float | round(2) | format_currency }}</td>
-                </tr>
-                {% endif %}
-                {% endfor %}
-            </tbody>
-        </table>
-        </div>
-
-        {# MOBILE: um mês por vez — mesmo dado, na vertical #}
-        {% macro m_bloco(idx, ativo) %}
-        {% set ns = namespace(mov=false) %}
-        {% for l in linhas if l.tipo == 'grupo' %}
-            {% if (l.g.total if idx == 'ano' else l.g.meses[idx]) %}
-                {% set ns.mov = true %}
-            {% endif %}
-        {% endfor %}
-        <div class="dre-m-bloco {{ 'ativo' if ativo }}" data-mes="{{ idx }}">
-            {% if ns.mov %}
-            {% for l in linhas %}
-            {% if l.tipo == 'grupo' %}
-            {% set v = l.g.total if idx == 'ano' else l.g.meses[idx] %}
-            {% if v %}
-            <div class="dre-m-lin dre-m-grupo" onclick="dreMToggle(this)">
-                <span><i class="fas fa-caret-right"></i>
-                    ({{ '−' if l.sinal == '-' else '+' }}) {{ l.g.grupo }}</span>
-                <span class="dre-m-val">{{ v | float | round(2) | format_currency }}</span>
-            </div>
-            {% for c in l.g.cats %}
-            {% set cv = c.total if idx == 'ano' else c.meses[idx] %}
-            {% if cv %}
-            <div class="dre-m-lin dre-m-cat{{ ' dre-cat-pai' if c.subs }}" style="display:none;">
-                <span>{{ c.nome }}</span>
-                <span class="dre-m-val">{{ cv | float | round(2) | format_currency }}</span>
-            </div>
-            {% for s in c.subs %}
-            {% set sv = s.total if idx == 'ano' else s.meses[idx] %}
-            {% if sv %}
-            <div class="dre-m-lin dre-m-cat dre-cat-sub" style="display:none;">
-                <span>{{ s.nome }}</span>
-                <span class="dre-m-val">{{ sv | float | round(2) | format_currency }}</span>
-            </div>
-            {% endif %}
-            {% endfor %}
-            {% endif %}
-            {% endfor %}
-            {% endif %}
-            {% else %}
-            {% set v = (l.meses | sum) if idx == 'ano' else l.meses[idx] %}
-            <div class="dre-m-lin dre-m-sub">
-                <span>{{ l.rotulo }}</span>
-                <span class="dre-m-val {{ 'dre-neg' if v < 0 }}">{{ v | float | round(2) | format_currency }}</span>
-            </div>
-            {% endif %}
-            {% endfor %}
-            {% else %}
-            <div class="dre-m-zero">Sem movimento
-                {{ 'em ' ~ ano if idx == 'ano' else 'neste mês' }}.</div>
-            {% endif %}
-        </div>
-        {% endmacro %}
-
-        <div class="dre-mob">
-            <div class="dre-mob-meses">
-                {% for m in meses %}
-                {% set i = loop.index0 %}
-                {% set nsc = namespace(tem=false) %}
-                {% for l in linhas if l.tipo == 'grupo' %}
-                    {% if l.g.meses[i] %}{% set nsc.tem = true %}{% endif %}
-                {% endfor %}
-                <button type="button" class="dre-mes-chip {{ 'ativo' if loop.index == mes_ini }}"
-                        data-mes="{{ i }}" onclick="dreMes(this)">{{ m }}
-                    {%- if nsc.tem %}<span class="pt"></span>{% endif %}</button>
-                {% endfor %}
-                <button type="button" class="dre-mes-chip" data-mes="ano"
-                        onclick="dreMes(this)">{{ ano }}<span class="pt"></span></button>
-            </div>
-            {% for i in range(12) %}
-            {{ m_bloco(i, loop.index == mes_ini) }}
-            {% endfor %}
-            {{ m_bloco('ano', false) }}
-        </div>
-        {% else %}
-        <div class="dre-vazio">
-            <i class="fas fa-chart-pie" style="font-size:2em; display:block; margin-bottom:10px;"></i>
-            Nenhum lançamento em {{ ano }} no regime de
-            {{ 'competência' if regime == 'competencia' else 'caixa' }}.
-        </div>
-        {% endif %}
+      </form>
+      <a href="{{ url_for('financeiro.dre_equipe', ano=ano) }}" class="ef-btn ef-btn-primary"><i class="fas fa-people-group"></i> <span>Pagamentos da equipe</span></a>
+      <a href="{{ url_for('financeiro.categorias') }}" class="ef-btn" title="Categorias"><i class="fas fa-tags"></i> <span>Categorias</span></a>
+      <a href="{{ url_for('financeiro.titulos') }}" class="ef-btn" title="Títulos"><i class="fas fa-file-invoice-dollar"></i> <span>Títulos</span></a>
     </div>
+  </div>
+  {% if kpi %}
+  <div class="ef-hero-inner dr-hero-num">
+    <div class="dr-hn">
+      <small>Resultado de {{ ano }}</small>
+      <b class="{{ 'neg' if kpi.res < 0 }}">{{ brl(kpi.res) }}</b>
+      <div class="dr-hn-l">
+        {% if kpi.margem is not none %}<span class="dr-pill {{ 'bom' if kpi.margem >= 0 else 'ruim' }}"><i class="fas fa-{{ 'arrow-trend-up' if kpi.margem >= 0 else 'arrow-trend-down' }}"></i> margem de {{ '%.1f' | format(kpi.margem) | replace('.', ',') }}%</span>{% endif %}
+        <span class="dr-pill"><i class="fas fa-calendar-days"></i> {{ kpi.n }} {{ 'mês' if kpi.n == 1 else 'meses' }} com movimento</span>
+        {% if kpi.melhor %}<span class="dr-pill"><i class="fas fa-trophy"></i> melhor mês: {{ kpi.melhor.mes }}</span>{% endif %}
+      </div>
+    </div>
+    <div class="dr-hero-spark" id="drHeroSpark" aria-hidden="true"></div>
+  </div>
+  {% endif %}
 </div>
+
+<div class="ef-body">
+  {% if kpi %}
+  <div class="dr-kpis">
+    <div class="dr-kpi dr-k-rec"><div class="dr-kpi-top"><i class="fas fa-arrow-trend-up"></i><small>Receita bruta</small></div>
+      <b>{{ brl(kpi.rec) }}</b><div class="dr-kpi-pe"><span id="drVarRec"></span><svg data-spark="rec"></svg></div></div>
+    <div class="dr-kpi dr-k-desp"><div class="dr-kpi-top"><i class="fas fa-arrow-trend-down"></i><small>Despesas</small></div>
+      <b>{{ brl(kpi.desp) }}</b><div class="dr-kpi-pe"><span id="drVarDesp"></span><svg data-spark="desp"></svg></div></div>
+    <div class="dr-kpi {{ 'dr-k-res' if kpi.res >= 0 else 'dr-k-neg' }}"><div class="dr-kpi-top"><i class="fas fa-scale-balanced"></i><small>Resultado</small></div>
+      <b>{{ brl(kpi.res) }}</b><div class="dr-kpi-pe"><span><em>{{ brl(kpi.media_res) }}</em>por mês</span><svg data-spark="res"></svg></div></div>
+    <div class="dr-kpi dr-k-mar"><div class="dr-kpi-top"><i class="fas fa-percent"></i><small>Margem</small></div>
+      <b>{% if kpi.margem is not none %}{{ '%.1f' | format(kpi.margem) | replace('.', ',') }}%{% else %}—{% endif %}</b>
+      <div class="dr-kpi-pe"><span>de cada R$ 100 que entram, sobram R$ {{ '%.0f' | format(kpi.margem or 0) }}</span><svg data-spark="mar"></svg></div></div>
+  </div>
+
+  <section class="dr-sec" data-sec="mes">
+  <button type="button" class="dr-sec-h" aria-expanded="true"><i class="fas fa-chart-column"></i><b>Mês a mês e raio-X do mês</b>
+    <span class="dr-sec-res" id="drSecMes"></span><span class="dr-sec-tg"><span class="a">Recolher</span><span class="f">Expandir</span><i class="fas fa-chevron-up"></i></span></button>
+  <div class="dr-sec-c">
+  <div class="dr-grid2">
+    <div class="dr-card">
+      <div class="dr-card-h"><h2><i class="fas fa-chart-column"></i> Mês a mês</h2>
+        <div class="dr-leg"><span><i style="background:var(--rec)"></i>Receita</span><span><i style="background:var(--desp)"></i>Despesas</span><span><i class="ln" style="background:#2563eb"></i>Resultado</span></div></div>
+      <div class="dr-chart" id="drChart"></div>
+      <div class="dr-dica-graf"><i class="fas fa-hand-pointer"></i> Clique num mês para ver o raio-X dele <span class="dr-so-larga">ao lado</span><span class="dr-so-mob">logo abaixo</span>.</div>
+    </div>
+    <div class="dr-card">
+      <div class="dr-rx" id="drRaio">
+        <div class="dr-rx-nav"><span class="dr-rx-mes" id="drRxMes"></span>
+          <button type="button" id="drRxAnt" aria-label="Mês anterior"><i class="fas fa-chevron-left"></i></button>
+          <button type="button" id="drRxProx" aria-label="Próximo mês"><i class="fas fa-chevron-right"></i></button></div>
+        <div class="dr-rx-res" id="drRxRes"><small>Resultado do mês</small><b></b><span></span></div>
+        <div class="dr-rx-lin"><span>Receita</span><div class="dr-bar"><i id="drRxBR" style="background:var(--rec)"></i></div><b id="drRxR"></b></div>
+        <div class="dr-rx-lin"><span>Despesas</span><div class="dr-bar"><i id="drRxBD" style="background:var(--desp)"></i></div><b id="drRxD"></b></div>
+        <div class="dr-rx-t">Onde mais gastou no mês</div>
+        <div id="drRxTop"></div>
+      </div>
+    </div>
+  </div>
+  </div>
+  </section>
+
+  <section class="dr-sec" data-sec="onde">
+  <button type="button" class="dr-sec-h" aria-expanded="true"><i class="fas fa-money-bill-transfer"></i><b>Para onde vai e de onde vem o dinheiro</b>
+    <span class="dr-sec-res" id="drSecOnde"></span><span class="dr-sec-tg"><span class="a">Recolher</span><span class="f">Expandir</span><i class="fas fa-chevron-up"></i></span></button>
+  <div class="dr-sec-c">
+  <div class="dr-grid2b">
+    <div class="dr-card">
+      <div class="dr-card-h"><h2><i class="fas fa-money-bill-transfer"></i> Para onde vai o dinheiro</h2><span class="dr-dica">despesas do ano (investimentos fora) · clique para abrir na tabela</span></div>
+      <div class="dr-onde" id="drOnde"></div>
+    </div>
+    <div class="dr-card">
+      <div class="dr-card-h"><h2><i class="fas fa-ranking-star"></i> De onde vem e as maiores contas</h2></div>
+      <div class="dr-onde" id="drVem"></div>
+    </div>
+  </div>
+  </div>
+  </section>
+  {% endif %}
+
+  {# FILTROS — uma barra só. Cada troca mantém os outros filtros (o servidor monta o endereço). #}
+  <div class="dr-refino">
+    <i class="fas fa-sliders"></i>
+    <details class="dr-ref {{ 'on' if sel_empresas }}">
+      <summary><i class="fas fa-building"></i> Empresas {% if sel_empresas %}<em>{{ sel_empresas | length }}</em>{% endif %}<i class="fas fa-chevron-down"></i></summary>
+      <div class="dr-pop">
+        <a class="{{ 'on' if not sel_empresas }}" href="{{ url(emp=None) }}"><i class="fas fa-check"></i> Todas as empresas</a>
+        {% for e in fin_empresas %}
+          {% if e.cliente_id in sel_empresas %}{% set _nova = sel_empresas | reject('equalto', e.cliente_id) | list %}{% else %}{% set _nova = sel_empresas + [e.cliente_id] %}{% endif %}
+        <a class="{{ 'on' if e.cliente_id in sel_empresas }}" title="{{ e.nome_razao_social }}" href="{{ url(emp=(_nova | join(',')) or None) }}"><i class="fas fa-check"></i> {{ e.apelido }}</a>
+        {% endfor %}
+        <small>Toque em mais de uma para somar.</small>
+      </div>
+    </details>
+    {% if centros %}
+    <details class="dr-ref {{ 'on' if centro_sel }}">
+      <summary><i class="fas fa-location-dot"></i> Centro {% if centro_sel %}{% for cc in centros if cc.id == centro_sel %}<em>{{ cc.nome }}</em>{% endfor %}{% endif %}<i class="fas fa-chevron-down"></i></summary>
+      <div class="dr-pop">
+        <a class="{{ 'on' if not centro_sel }}" href="{{ url(centro=None) }}"><i class="fas fa-check"></i> Todos</a>
+        {% for cc in centros %}<a class="{{ 'on' if centro_sel == cc.id }}" href="{{ url(centro=cc.id) }}"><i class="fas fa-check"></i> {{ cc.nome }}</a>{% endfor %}
+      </div>
+    </details>
+    {% endif %}
+    {% if grupos_todos | length > 1 %}
+    <details class="dr-ref {{ 'on' if grupos_sel }}">
+      <summary><i class="fas fa-layer-group"></i> Grupos {% if grupos_sel %}<em>{{ grupos_sel | length }} de {{ grupos_todos | length }}</em>{% endif %}<i class="fas fa-chevron-down"></i></summary>
+      <div class="dr-pop">
+        <a class="{{ 'on' if not grupos_sel }}" href="{{ url(grupos=None) }}"><i class="fas fa-check"></i> Todos (o DRE inteiro)</a>
+        {% for g in grupos_todos %}
+          {% if grupos_sel %}{% set _novo = (grupos_sel | reject('equalto', g) | list) if g in grupos_sel else (grupos_sel + [g]) %}{% else %}{% set _novo = [g] %}{% endif %}
+        <a class="{{ 'on' if g in grupos_sel }}" href="{{ url(grupos=(_novo | join('|')) or None) }}"><i class="fas fa-check"></i> {{ g }}</a>
+        {% endfor %}
+        <small>Escolha um ou mais grupos para ver só eles, com a soma deles.</small>
+      </div>
+    </details>
+    {% endif %}
+    {% if sel_empresas | length != 1 %}
+    <details class="dr-ref {{ 'on' if entre == 'eliminar' }}">
+      <summary><i class="fas fa-right-left"></i> Entre empresas <em>{{ 'eliminar' if entre == 'eliminar' else 'considerar' }}</em><i class="fas fa-chevron-down"></i></summary>
+      <div class="dr-pop">
+        <a class="{{ 'on' if entre != 'eliminar' }}" href="{{ url(entre=None) }}"><i class="fas fa-check"></i> Considerar</a>
+        <a class="{{ 'on' if entre == 'eliminar' }}" href="{{ url(entre='eliminar') }}"><i class="fas fa-check"></i> Eliminar</a>
+        <small>Pares aprovados entre empresas do grupo (ex.: pró-labore pago pela Qualicontax e recebido pelo Anderson PF). Considerar mostra os dois lados; Eliminar tira os dois.</small>
+      </div>
+    </details>
+    {% endif %}
+    {% if sel_empresas or centro_sel or grupos_sel or entre == 'eliminar' %}
+    <a class="dr-limpar" href="{{ url_for('financeiro.dre', regime=regime, ano=ano) }}"><i class="fas fa-xmark"></i> Limpar</a>
+    {% endif %}
+    <span class="dr-regime"><i class="fas fa-{{ 'calendar-check' if regime == 'competencia' else 'money-bill-wave' }}"></i>
+      {% if regime == 'competencia' %}Competência: pelo mês de referência, pago ou não (cancelados ficam de fora){% else %}Caixa: pelo mês em que o dinheiro entrou ou saiu, com juros e multas{% endif %}</span>
+  </div>
+
+  {% if grupos_sel %}
+  <div class="dr-nota azul"><i class="fas fa-filter"></i>
+    <span><b>Recorte de {{ grupos_sel | length }} de {{ grupos_todos | length }} grupos.</b> O total abaixo soma só o que está na tela — não é o resultado do escritório.</span></div>
+  {% endif %}
+  {% if nota_centro %}
+  <div class="dr-nota ambar"><i class="fas fa-circle-info"></i><span>
+    {% if nota_centro.cru %}Visão do centro que RATEIA, mostrada crua (sem dividir).
+    {% elif nota_centro.rateio %}Inclui a fração do rateio (1/{{ nota_centro.partes }} dos centros que rateiam).{% endif %}
+    {% if nota_centro.sem_centro %} {{ brl(nota_centro.sem_centro) }} em lançamentos SEM centro de custo estão fora desta visão.{% endif %}
+  </span></div>
+  {% endif %}
+
+  <div class="dr-card">
+    {% set tem_dado = linhas | selectattr('tipo', 'equalto', 'grupo') | list %}
+    <div class="dr-card-h"><h2>Demonstrativo</h2><span class="dr-dica">toque num grupo para abrir as contas</span>
+      {% if tem_dado %}<div class="dr-acoes"><button type="button" onclick="dreTodos(true)"><i class="fas fa-plus"></i> Abrir tudo</button>
+        <button type="button" onclick="dreTodos(false)"><i class="fas fa-minus"></i> Fechar tudo</button></div>{% endif %}</div>
+    {% if tem_dado %}
+    <div class="dre-wrap">
+    <table>
+      <thead><tr><th>{{ ano }}</th>{% for m in meses %}<th>{{ m }}</th>{% endfor %}<th>Total</th><th class="pct" title="Quanto representa da receita bruta do ano">% rec.</th></tr></thead>
+      <tbody>
+      {% for l in linhas %}
+      {% set bloco = loop.index %}
+      {% if l.tipo == 'grupo' %}
+      <tr class="dre-grupo {{ 'rec' if l.g.tipo == 'R' else ('inv' if l.g.tipo == 'I') }}" id="dre-g-{{ bloco }}" data-nome="{{ l.g.grupo }}" data-g="{{ l.g.grupo }}" onclick="dreToggle({{ bloco }})">
+        <td title="Clique para abrir as contas"><i class="fas fa-chevron-right car"></i><span class="mk"></span>{{ l.g.grupo }}</td>
+        {% for v in l.g.meses %}<td data-v="{{ v }}" class="{{ 'z' if not v }}">{{ brl(v) if v else '—' }}</td>{% endfor %}
+        <td class="tot" data-v="ano">{{ brl(l.g.total) }}</td><td class="pct">{{ pct(l.g.total) }}</td>
+      </tr>
+      {% for c in l.g.cats %}
+      <tr class="dre-cat{{ ' dre-cat-pai' if c.subs }}" data-pai="{{ bloco }}" data-tipo="{{ l.g.tipo }}" data-g="{{ l.g.grupo }}" data-c="{{ c.nome }}" style="display:none;">
+        <td>{{ c.nome }}</td>
+        {% for v in c.meses %}<td data-v="{{ v }}" class="{{ 'z' if not v }}">{{ brl(v) if v else '—' }}</td>{% endfor %}
+        <td class="tot" data-v="ano">{{ brl(c.total) }}</td><td class="pct">{{ pct(c.total) }}</td>
+      </tr>
+      {% for s in c.subs %}
+      <tr class="dre-cat dre-cat-sub" data-pai="{{ bloco }}" data-tipo="{{ l.g.tipo }}" data-g="{{ l.g.grupo }}" data-c="{{ c.nome }}" data-s="{{ s.nome }}" style="display:none;">
+        <td>{{ s.nome }}</td>
+        {% for v in s.meses %}<td data-v="{{ v }}" class="{{ 'z' if not v }}">{{ brl(v) if v else '—' }}</td>{% endfor %}
+        <td data-v="ano">{{ brl(s.total) }}</td><td class="pct">{{ pct(s.total) }}</td>
+      </tr>
+      {% endfor %}
+      {% endfor %}
+      {% else %}
+      {% set tot = l.meses | sum %}
+      <tr class="dre-sub {{ 'res' if l.rotulo.startswith('RESULTADO') or l.recorte }}">
+        <td>{{ l.rotulo }}</td>
+        {% for v in l.meses %}<td class="{{ 'dre-neg' if v < 0 }}">{{ brl(v) }}</td>{% endfor %}
+        <td class="{{ 'dre-neg' if tot < 0 }}">{{ brl(tot) }}</td><td class="pct">{{ pct(tot) }}</td>
+      </tr>
+      {% endif %}
+      {% endfor %}
+      </tbody>
+    </table>
+    </div>
+
+    {# MOBILE: um mês por vez — mesmo dado, na vertical #}
+    {% macro m_bloco(idx, ativo) %}
+    {% set ns = namespace(mov=false) %}
+    {% for l in linhas if l.tipo == 'grupo' %}{% if (l.g.total if idx == 'ano' else l.g.meses[idx]) %}{% set ns.mov = true %}{% endif %}{% endfor %}
+    <div class="dre-m-bloco {{ 'ativo' if ativo }}" data-mes="{{ idx }}">
+      {% if ns.mov %}
+      {% for l in linhas %}
+      {% if l.tipo == 'grupo' %}
+      {% set v = l.g.total if idx == 'ano' else l.g.meses[idx] %}
+      {% if v %}
+      <div class="dre-m-lin dre-m-grupo {{ 'rec' if l.g.tipo == 'R' }}" onclick="dreMToggle(this)">
+        <span><i class="fas fa-caret-right"></i><span class="mk"></span>{{ l.g.grupo }}</span>
+        <span class="dre-m-val">{{ brl(v) }}</span>
+      </div>
+      {% for c in l.g.cats %}
+      {% set cv = c.total if idx == 'ano' else c.meses[idx] %}
+      {% if cv %}
+      <div class="dre-m-lin dre-m-cat{{ ' dre-cat-pai' if c.subs }}" style="display:none;" data-g="{{ l.g.grupo }}" data-c="{{ c.nome }}" data-m="{{ idx }}"><span>{{ c.nome }}</span><span class="dre-m-val">{{ brl(cv) }} <i class="fas fa-chevron-right dre-m-ir"></i></span></div>
+      {% for s in c.subs %}
+      {% set sv = s.total if idx == 'ano' else s.meses[idx] %}
+      {% if sv %}<div class="dre-m-lin dre-m-cat dre-cat-sub" style="display:none;" data-g="{{ l.g.grupo }}" data-c="{{ c.nome }}" data-s="{{ s.nome }}" data-m="{{ idx }}"><span>{{ s.nome }}</span><span class="dre-m-val">{{ brl(sv) }} <i class="fas fa-chevron-right dre-m-ir"></i></span></div>{% endif %}
+      {% endfor %}
+      {% endif %}
+      {% endfor %}
+      {% endif %}
+      {% else %}
+      {% set v = (l.meses | sum) if idx == 'ano' else l.meses[idx] %}
+      <div class="dre-m-lin dre-m-sub {{ 'res' if l.rotulo.startswith('RESULTADO') or l.recorte }}"><span>{{ l.rotulo }}</span>
+        <span class="dre-m-val {{ 'dre-neg' if v < 0 }}">{{ brl(v) }}</span></div>
+      {% endif %}
+      {% endfor %}
+      {% else %}
+      <div class="dre-m-zero">Sem movimento {{ 'em ' ~ ano if idx == 'ano' else 'neste mês' }}.</div>
+      {% endif %}
+    </div>
+    {% endmacro %}
+
+    <div class="dre-mob">
+      <div class="dre-mob-meses">
+        {% for m in meses %}
+        {% set i = loop.index0 %}
+        {% set nsc = namespace(tem=false) %}
+        {% for l in linhas if l.tipo == 'grupo' %}{% if l.g.meses[i] %}{% set nsc.tem = true %}{% endif %}{% endfor %}
+        <button type="button" class="dre-mes-chip {{ 'ativo' if loop.index == mes_ini }}" data-mes="{{ i }}" onclick="dreMes(this)">{{ m }}
+          {%- if nsc.tem %}<span class="pt"></span>{% endif %}</button>
+        {% endfor %}
+        <button type="button" class="dre-mes-chip" data-mes="ano" onclick="dreMes(this)">{{ ano }}<span class="pt"></span></button>
+      </div>
+      {% for i in range(12) %}{{ m_bloco(i, loop.index == mes_ini) }}{% endfor %}
+      {{ m_bloco('ano', false) }}
+    </div>
+    {% else %}
+    <div class="dre-vazio"><i class="fas fa-chart-pie" style="font-size:2em; display:block; margin-bottom:10px; color:#cbd5e1;"></i>
+      Nenhum lançamento em {{ ano }} no regime de {{ 'competência' if regime == 'competencia' else 'caixa' }}.</div>
+    {% endif %}
+  </div>
+</div>
+</div>
+
+{# GAVETA — o que está lançado na linha/mês clicado. Fica no bloco content: as variáveis de filtro moram aqui. #}
+<div class="gv-fundo" id="gvFundo"></div>
+<aside class="gv" id="gv" aria-hidden="true" role="dialog" aria-label="Lançamentos">
+  <div class="gv-h" id="gvH">
+    <button type="button" class="gv-x" id="gvX" aria-label="Fechar"><i class="fas fa-xmark"></i></button>
+    <div class="gv-cam" id="gvCam"></div>
+    <div class="gv-tit" id="gvTit"></div>
+    <div class="gv-per" id="gvPer"></div>
+    <div class="gv-tot"><b id="gvTot">—</b><small id="gvN"></small></div>
+  </div>
+  <div class="gv-resumo" id="gvResumo"></div>
+  <div id="gvAviso"></div>
+  <div class="gv-busca"><i class="fas fa-magnifying-glass"></i><input type="search" id="gvBusca" placeholder="Procurar por nome, descrição ou valor" autocomplete="off" autocorrect="off" autocapitalize="off" enterkeyhint="search"></div>
+  <div class="gv-ord" id="gvOrd"><button type="button" class="on" data-o="data">Por data</button><button type="button" data-o="valor">Maiores valores</button><button type="button" data-o="nome">Por nome</button></div>
+  <div class="gv-lista" id="gvLista"></div>
+</aside>
+<script>
+(function () {
+    var BASE = {{ {'regime': regime, 'ano': ano, 'emp': _emp, 'centro': centro_sel or '', 'entre': entre if entre == 'eliminar' else ''} | tojson }};
+    var URL_ = {{ url_for('financeiro.dre_lancamentos') | tojson }}, URL_EXT = {{ url_for('financeiro.extrato') | tojson }};
+    var MESES = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
+    var CUR = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+    var $ = function (id) { return document.getElementById(id); };
+    var brl = function (v) { return (v || 0).toLocaleString('pt-BR', {style: 'currency', currency: 'BRL'}); };
+    var esc = function (s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return {'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}[c]; }); };
+    var itens = [], ordem = 'data', pedido = 0, ultimo = null;
+
+    function abre(q) {
+        // q = {grupo, conta?, sub?, mes (0 = ano), tipo?}
+        var n = ++pedido; ultimo = q;
+        var receita = q.tipo === 'R';
+        $('gvH').classList.toggle('desp', !receita);
+        $('gvCam').textContent = q.grupo + (q.sub && q.conta ? ' › ' + q.conta : '');
+        $('gvTit').textContent = q.sub || q.conta || q.grupo;
+        $('gvPer').innerHTML = '<span><i class="fas fa-calendar"></i> ' + (q.mes ? MESES[q.mes - 1] + ' de ' + BASE.ano : 'ano de ' + BASE.ano) + '</span>' +
+            '<span>' + (BASE.regime === 'caixa' ? 'caixa: pela data do pagamento' : 'competência') + '</span>' + (BASE.emp ? '<span>empresas filtradas</span>' : '');
+        $('gvTot').textContent = '…'; $('gvN').textContent = ''; $('gvResumo').innerHTML = ''; $('gvAviso').innerHTML = ''; $('gvBusca').value = '';
+        $('gvLista').innerHTML = '<div class="gv-carr"><div class="gv-sk"></div><div class="gv-sk"></div><div class="gv-sk"></div></div>';
+        $('gv').classList.add('on'); $('gvFundo').classList.add('on'); $('gv').setAttribute('aria-hidden', 'false');
+        document.body.style.overflow = 'hidden';
+        var p = new URLSearchParams();
+        Object.keys(BASE).forEach(function (k) { if (BASE[k]) p.set(k, BASE[k]); });
+        p.set('grupo', q.grupo); p.set('mes', q.mes || 0);
+        if (q.conta) p.set('conta', q.conta);
+        if (q.sub) p.set('sub', q.sub);
+        fetch(URL_ + '?' + p.toString(), {credentials: 'same-origin'}).then(function (r) { return r.json(); }).then(function (j) {
+            if (n !== pedido) return;
+            if (!j.ok) { $('gvLista').innerHTML = '<div class="gv-vazio"><i class="fas fa-triangle-exclamation"></i>' + esc(j.erro || 'Não deu para abrir.') + '</div>'; return; }
+            itens = j.itens;
+            $('gvTot').textContent = brl(j.total);
+            $('gvN').innerHTML = j.n + ' lançamento' + (j.n !== 1 ? 's' : '');
+            var soma = {pago: 0, aberto: 0, vencido: 0};
+            itens.forEach(function (i) { soma[i.status === 'liquidado' ? 'pago' : (i.status === 'vencido' ? 'vencido' : 'aberto')] += i.valor; });
+            $('gvResumo').innerHTML = [['pago', 'Pago', '#16a34a'], ['aberto', 'Em aberto', '#2563eb'], ['vencido', 'Vencido', '#dc2626']].map(function (x) {
+                return '<div class="gv-r"><small><i style="background:' + x[2] + '"></i>' + x[1] + '</small><b>' + brl(soma[x[0]]) + '</b></div>'; }).join('');
+            var avisos = [];
+            if (j.limite) avisos.push('Mostrando os 600 primeiros. Filtre por mês para ver todos.');
+            if (itens.some(function (i) { return i.parte; })) avisos.push('Alguns lançamentos são do centro que rateia: aparece só a parte deste centro.');
+            $('gvAviso').innerHTML = avisos.map(function (a) { return '<div class="gv-aviso"><i class="fas fa-circle-info"></i> ' + a + '</div>'; }).join('');
+            desenha();
+        }).catch(function () { if (n === pedido) $('gvLista').innerHTML = '<div class="gv-vazio"><i class="fas fa-wifi"></i>Sem conexão. Tente de novo.</div>'; });
+    }
+    function fecha() {
+        $('gv').classList.remove('on'); $('gvFundo').classList.remove('on'); $('gv').setAttribute('aria-hidden', 'true');
+        document.body.style.overflow = ''; pedido++;
+    }
+    function desenha() {
+        var t = $('gvBusca').value.trim().toLowerCase();
+        var lista = itens.filter(function (i) {
+            return !t || (i.nome + ' ' + i.descricao + ' ' + i.conta + ' ' + i.empresa + ' ' + (i.extrato ? i.extrato.desc : '') + ' ' + brl(i.valor)).toLowerCase().indexOf(t) >= 0;
+        });
+        lista.sort(ordem === 'valor' ? function (a, b) { return b.valor - a.valor; } :
+                   ordem === 'nome' ? function (a, b) { return (a.nome || a.descricao).localeCompare(b.nome || b.descricao, 'pt-BR'); } :
+                   function (a, b) { return (a.data || '').localeCompare(b.data || '') || b.valor - a.valor; });
+        if (!lista.length) { $('gvLista').innerHTML = '<div class="gv-vazio"><i class="fas fa-' + (t ? 'magnifying-glass' : 'inbox') + '"></i>' + (t ? 'Nada com esse texto.' : 'Nada lançado aqui.') + '</div>'; return; }
+        var html = '', grupoAtual = null, varias = ultimo && !ultimo.sub;
+        lista.forEach(function (i, k) {
+            if (ordem === 'data') {
+                var chave = (i.data || '').slice(0, 7);
+                if (chave !== grupoAtual) {
+                    grupoAtual = chave;
+                    var sub = lista.filter(function (x) { return (x.data || '').slice(0, 7) === chave; });
+                    var m = parseInt(chave.slice(5, 7), 10);
+                    html += '<div class="gv-dia"><span>' + (m ? MESES[m - 1] : '') + '</span><span>' + sub.length + ' · ' + brl(sub.reduce(function (a, b) { return a + b.valor; }, 0)) + '</span></div>';
+                }
+            }
+            var d = (BASE.regime === 'caixa' ? i.data : (i.pago_em || i.vencimento || i.data)) || '';
+            var st = {liquidado: 'pago' + (i.pago_em ? ' em ' + i.pago_em.slice(8, 10) + '/' + i.pago_em.slice(5, 7) : ''), aberto: 'em aberto', vencido: 'vencido', perdido: 'perdido', cancelado: 'cancelado'}[i.status] || i.status;
+            var tags = '<span class="gv-tag ' + esc(i.status) + '"><i class="fas fa-' + (i.status === 'liquidado' ? 'check' : i.status === 'vencido' ? 'clock' : 'hourglass-half') + '"></i>' + esc(st) + '</span>';
+            if (i.extrato) {
+                tags += '<a class="gv-tag ext" target="_blank" title="' + esc(i.extrato.desc) + '" href="' + URL_EXT + '?classif=todos&data_de=' + i.extrato.data + '&data_ate=' + i.extrato.data +
+                        '&vmin=' + i.extrato.valor + '&vmax=' + i.extrato.valor + '">' + (i.extrato.logo ? '<img src="' + i.extrato.logo + '" alt="">' : '<i class="fas fa-building-columns"></i>') + esc(i.extrato.banco) + ' · extrato de ' + i.extrato.data.slice(8, 10) + '/' + i.extrato.data.slice(5, 7) + ' <i class="fas fa-arrow-up-right-from-square" style="font-size:9px"></i></a>';
+            } else {
+                tags += '<span class="gv-tag"><i class="fas fa-' + (i.origem === 'Programação' ? 'repeat' : 'pen') + '"></i>' + esc(i.origem) + '</span>';
+            }
+            if (varias) tags += '<span class="gv-tag conta"><i class="fas fa-tag"></i>' + esc(i.conta) + '</span>';
+            if (i.empresa && !BASE.emp) tags += '<span class="gv-tag"><i class="fas fa-building"></i>' + esc(i.empresa) + '</span>';
+            if (i.parte) tags += '<span class="gv-tag"><i class="fas fa-divide"></i>' + Math.round(i.parte * 100) + '% (rateio)</span>';
+            html += '<div class="gv-it" style="animation-delay:' + Math.min(k, 12) * 18 + 'ms">' +
+                '<div class="gv-esq"><div class="gv-data"><b>' + (d.slice(8, 10) || '—') + '</b><small>' + (d ? CUR[parseInt(d.slice(5, 7), 10) - 1] : '') + '</small></div>' +
+                (i.extrato && i.extrato.logo ? '<img class="gv-bco" src="' + i.extrato.logo + '" alt="" title="' + esc(i.extrato.banco) + '">' : '') + '</div>' +
+                '<div class="gv-nome" title="' + esc(i.nome || i.descricao) + '">' + esc(i.nome || i.descricao || 'Sem nome') + '</div>' +
+                '<div class="gv-val">' + brl(i.valor) + (BASE.regime !== 'caixa' && i.competencia ? '<small>comp. ' + esc(i.competencia) + '</small>' : '') + '</div>' +
+                (i.descricao && i.descricao !== i.nome ? '<div class="gv-desc" title="' + esc(i.descricao) + '">' + esc(i.descricao) + '</div>' : '') +
+                '<div class="gv-tags">' + tags + '</div></div>';
+        });
+        $('gvLista').innerHTML = html;
+    }
+    $('gvX').onclick = fecha; $('gvFundo').onclick = fecha;
+    document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && $('gv').classList.contains('on')) fecha(); });
+    $('gvBusca').addEventListener('input', desenha);
+    $('gvOrd').addEventListener('click', function (e) {
+        var b = e.target.closest('button'); if (!b) return;
+        ordem = b.getAttribute('data-o'); [].forEach.call($('gvOrd').children, function (x) { x.classList.toggle('on', x === b); }); desenha();
+    });
+    // celular: puxar para baixo pelo topo fecha
+    var y0 = null;
+    $('gvH').addEventListener('touchstart', function (e) { y0 = e.touches[0].clientY; }, {passive: true});
+    $('gvH').addEventListener('touchend', function (e) { if (y0 !== null && e.changedTouches[0].clientY - y0 > 70) fecha(); y0 = null; });
+
+    // ── quem abre a gaveta ──
+    var tipoDo = function (el) { var t = el.closest('[data-tipo]'); return t ? t.getAttribute('data-tipo') : (el.closest('tr.rec') ? 'R' : 'P'); };
+    document.querySelectorAll('.dre-wrap tbody tr[data-g]').forEach(function (tr) {
+        [].slice.call(tr.children).forEach(function (td, k) {
+            if (!td.hasAttribute('data-v') || td.classList.contains('z')) return;
+            td.title = 'Ver o que está lançado';
+            td.addEventListener('click', function (e) {
+                e.stopPropagation();
+                abre({grupo: tr.getAttribute('data-g'), conta: tr.getAttribute('data-c'), sub: tr.getAttribute('data-s'),
+                      mes: td.getAttribute('data-v') === 'ano' ? 0 : k, tipo: tr.classList.contains('rec') ? 'R' : (tr.getAttribute('data-tipo') || 'P')});
+            });
+        });
+    });
+    document.querySelectorAll('.dre-m-cat[data-g]').forEach(function (d) {
+        d.addEventListener('click', function () {
+            var m = d.getAttribute('data-m');
+            var g = d.previousElementSibling; while (g && !g.classList.contains('dre-m-grupo')) g = g.previousElementSibling;
+            abre({grupo: d.getAttribute('data-g'), conta: d.getAttribute('data-c'), sub: d.getAttribute('data-s'), mes: m === 'ano' ? 0 : parseInt(m, 10) + 1,
+                  tipo: g && g.classList.contains('rec') ? 'R' : 'P'});
+        });
+    });
+    // painel: contas do raio-X e das maiores contas
+    document.addEventListener('click', function (e) {
+        var el = e.target.closest('[data-abre-conta]'); if (!el) return;
+        var nome = el.getAttribute('data-abre-conta'), partes = nome.split(' · ');
+        abre({grupo: el.getAttribute('data-abre-grupo'), conta: partes[0], sub: partes.length > 1 ? partes.slice(1).join(' · ') : null,
+              mes: parseInt(el.getAttribute('data-abre-mes') || '0', 10), tipo: 'P'});
+    });
+    window.dreGaveta = abre;
+})();
+</script>
 {% endblock %}
 
 {% block extra_js %}
+{% if kpi %}
+<div class="dr-tipf" id="drTip"></div>
 <script>
-function dreToggle(bloco) {
-    var caret = document.getElementById('dre-caret-' + bloco);
-    var abertas = false;
-    document.querySelectorAll('tr[data-pai="' + bloco + '"]').forEach(function (tr) {
-        abertas = tr.style.display === 'none';
-        tr.style.display = abertas ? '' : 'none';
+(function () {
+    var P = {{ kpi.painel | tojson }};
+    var NS = 'http://www.w3.org/2000/svg';
+    var brl = function (v) { return (v || 0).toLocaleString('pt-BR', {style: 'currency', currency: 'BRL'}); };
+    var mil = function (v) { var a = Math.abs(v); return (v < 0 ? '−' : '') + (a >= 1000 ? (a / 1000).toLocaleString('pt-BR', {maximumFractionDigits: 1}) + ' mil' : a.toLocaleString('pt-BR', {maximumFractionDigits: 0})); };
+    var el = function (n, at, pai) { var e = document.createElementNS(NS, n); for (var k in at) e.setAttribute(k, at[k]); if (pai) pai.appendChild(e); return e; };
+    var ativos = []; for (var i = 0; i < 12; i++) if (P.rec[i] || P.desp[i]) ativos.push(i);
+    var esc = function (s) { return String(s).replace(/[&<>"]/g, function (c) { return {'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}[c]; }); };
+    var tip = document.getElementById('drTip');
+    function mostra(ev, html) { tip.innerHTML = html; tip.style.display = 'block';
+        var x = ev.clientX + 14, y = ev.clientY + 14; if (x + tip.offsetWidth > innerWidth - 8) x = ev.clientX - tip.offsetWidth - 14;
+        tip.style.left = x + 'px'; tip.style.top = y + 'px'; }
+    function esconde() { tip.style.display = 'none'; }
+
+    // ── mini gráficos: hero (resultado) e os 4 cartões ──
+    function linha(svg, serie, w, h, cor, area) {
+        var pts = ativos.map(function (i) { return [i, serie[i]]; }); if (pts.length < 2) return;
+        var mn = Math.min.apply(null, pts.map(function (p) { return p[1]; }).concat([0])), mx = Math.max.apply(null, pts.map(function (p) { return p[1]; }));
+        if (mx === mn) mx = mn + 1;
+        var X = function (i) { return (i - pts[0][0]) / (pts[pts.length - 1][0] - pts[0][0]) * w; }, Y = function (v) { return h - (v - mn) / (mx - mn) * h; };
+        var d = pts.map(function (p, k) { return (k ? 'L' : 'M') + X(p[0]).toFixed(1) + ' ' + Y(p[1]).toFixed(1); }).join(' ');
+        svg.setAttribute('viewBox', '0 0 ' + w + ' ' + h); svg.setAttribute('preserveAspectRatio', 'none');
+        if (area) el('path', {d: d + ' L' + X(pts[pts.length - 1][0]) + ' ' + h + ' L0 ' + h + ' Z', fill: area}, svg);
+        el('path', {d: d, fill: 'none', stroke: cor, 'stroke-width': 2, 'vector-effect': 'non-scaling-stroke', 'stroke-linejoin': 'round', 'stroke-linecap': 'round'}, svg);
+        return {X: X, Y: Y, pts: pts};
+    }
+    var mar = P.rec.map(function (r, i) { return r ? P.res[i] / r * 100 : 0; });
+    document.querySelectorAll('svg[data-spark]').forEach(function (s) {
+        var k = s.getAttribute('data-spark');
+        linha(s, k === 'mar' ? mar : P[k], 96, 30, 'rgba(255,255,255,.95)', 'rgba(255,255,255,.14)');
     });
-    if (caret) caret.className = abertas ? 'fas fa-caret-down' : 'fas fa-caret-right';
+    var hs = document.getElementById('drHeroSpark');
+    if (hs && ativos.length > 1) {
+        var sv = el('svg', {}, hs), g = linha(sv, P.res, 520, 80, '#86efac', 'rgba(134,239,172,.16)');
+        sv.setAttribute('preserveAspectRatio', 'none');
+        if (g) g.pts.forEach(function (p) {
+            el('circle', {cx: g.X(p[0]), cy: g.Y(p[1]), r: 3, fill: p[1] < 0 ? '#fca5a5' : '#bbf7d0', 'vector-effect': 'non-scaling-stroke'}, sv);
+        });
+        var lb = document.createElement('div'); lb.style.cssText = 'display:flex;justify-content:space-between;font-size:11px;font-weight:700;color:#a7d9c0;margin-top:4px';
+        lb.innerHTML = '<span>' + P.meses[ativos[0]] + '</span><span>resultado mês a mês</span><span>' + P.meses[ativos[ativos.length - 1]] + '</span>'; hs.appendChild(lb);
+    }
+    // variação do último mês com movimento contra o anterior
+    if (ativos.length > 1) {
+        var u = ativos[ativos.length - 1], a = ativos[ativos.length - 2];
+        [['drVarRec', 'rec'], ['drVarDesp', 'desp']].forEach(function (x) {
+            var v0 = P[x[1]][a], v1 = P[x[1]][u], t = document.getElementById(x[0]);
+            if (!t || !v0) return; var pc = (v1 - v0) / Math.abs(v0) * 100;
+            var hj = new Date(), parc = (P.ano === hj.getFullYear() && u === hj.getMonth()) ? ' (parcial)' : '';
+            t.innerHTML = '<em>' + (pc >= 0 ? '▲ ' : '▼ ') + Math.abs(pc).toLocaleString('pt-BR', {maximumFractionDigits: 0}) + '%</em>' + P.meses[u] + parc + ' x ' + P.meses[a];
+        });
+    }
+
+    // ── gráfico principal: barras de receita e despesa, linha do resultado ──
+    var sel = P.ini;
+    var box = document.getElementById('drChart');
+    function grafico() {
+        box.innerHTML = '';
+        var W = 900, H = 340, pl = 54, pr = 12, pt = 14, pb = 30, cw = W - pl - pr, ch = H - pt - pb;
+        var svg = el('svg', {viewBox: '0 0 ' + W + ' ' + H, role: 'img', 'aria-label': 'Receita, despesas e resultado por mês'}, box);
+        var vals = P.rec.concat(P.desp, P.res), mx = Math.max.apply(null, vals.concat([1])), mn = Math.min.apply(null, vals.concat([0]));
+        var passo = Math.pow(10, Math.floor(Math.log10(mx / 4))), m = mx / 4 / passo; passo *= m > 5 ? 10 : m > 2 ? 5 : m > 1 ? 2 : 1;
+        var top = Math.ceil(mx / passo) * passo, bot = Math.floor(mn / passo) * passo;
+        var Y = function (v) { return pt + (top - v) / (top - bot) * ch; }, sw = cw / 12, X = function (i) { return pl + sw * i + sw / 2; };
+        for (var v = bot; v <= top + 1e-6; v += passo) {
+            el('line', {x1: pl, x2: W - pr, y1: Y(v), y2: Y(v), stroke: v === 0 ? '#cbd5e1' : '#eef2f7', 'stroke-width': 1}, svg);
+            el('text', {x: pl - 8, y: Y(v) + 4, 'text-anchor': 'end', class: 'ax'}, svg).textContent = mil(v);
+        }
+        el('rect', {x: pl + sw * sel + 3, y: pt - 6, width: sw - 6, height: ch + 6, rx: 10, fill: '#ecfdf3'}, svg);
+        var bw = Math.min(16, sw * .26);
+        for (var i = 0; i < 12; i++) {
+            [[P.rec[i], '#16a34a', -bw - 1.5], [P.desp[i], '#f97316', 1.5]].forEach(function (b) {
+                if (!b[0]) return; var y = Y(Math.max(b[0], 0)), h = Math.abs(Y(0) - Y(b[0]));
+                el('path', {d: 'M' + (X(i) + b[2]) + ' ' + (y + h) + ' v' + (-(h - 4)) + ' q0 -4 4 -4 h' + (bw - 8) + ' q4 0 4 4 v' + (h - 4) + ' Z', fill: b[1]}, svg);
+            });
+            el('text', {x: X(i), y: H - 8, 'text-anchor': 'middle', class: 'mx' + (i === sel ? ' on' : '')}, svg).textContent = P.meses[i];
+        }
+        var pts = ativos.map(function (i) { return X(i) + ' ' + Y(P.res[i]); });
+        if (pts.length > 1) el('path', {d: 'M' + pts.join(' L'), fill: 'none', stroke: '#2563eb', 'stroke-width': 2.5, 'stroke-linejoin': 'round'}, svg);
+        ativos.forEach(function (i) {
+            el('circle', {cx: X(i), cy: Y(P.res[i]), r: i === sel ? 6 : 4.5, fill: P.res[i] < 0 ? '#dc2626' : '#2563eb', stroke: '#fff', 'stroke-width': 2}, svg);
+        });
+        if (P.rec[sel] || P.desp[sel]) {
+            var t = el('text', {x: X(sel), y: Y(Math.max(P.res[sel], P.rec[sel], P.desp[sel])) - 10, 'text-anchor': 'middle', 'font-size': 12.5, 'font-weight': 800,
+                                fill: P.res[sel] < 0 ? '#b91c1c' : '#1e40af'}, svg); t.textContent = mil(P.res[sel]);
+        }
+        for (var j = 0; j < 12; j++) (function (j) {
+            var r = el('rect', {x: pl + sw * j, y: pt - 6, width: sw, height: ch + pb, class: 'hit'}, svg);
+            r.addEventListener('mousemove', function (ev) { mostra(ev, '<b>' + P.meses[j] + '/' + P.ano + '</b><div><span>Receita</span><span>' + brl(P.rec[j]) + '</span></div><div><span>Despesas</span><span>' + brl(P.desp[j]) + '</span></div><div><span>Resultado</span><span>' + brl(P.res[j]) + '</span></div>'); });
+            r.addEventListener('mouseleave', esconde);
+            r.addEventListener('click', function () { escolhe(j); });
+        })(j);
+    }
+
+    // ── raio-X do mês escolhido ──
+    function raio() {
+        var r = P.rec[sel], d = P.desp[sel], s = P.res[sel];
+        document.getElementById('drRxMes').textContent = 'Raio-X de ' + ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'][sel] + ' de ' + P.ano;
+        var bx = document.getElementById('drRxRes'); bx.classList.toggle('neg', s < 0);
+        bx.querySelector('b').textContent = brl(s);
+        var ant = ativos.filter(function (i) { return i < sel; }).pop(), txt = r ? 'margem de ' + (s / r * 100).toLocaleString('pt-BR', {maximumFractionDigits: 1}) + '%' : 'sem receita no mês';
+        if (ant !== undefined) { var dif = s - P.res[ant]; txt += ' · ' + (dif >= 0 ? '▲ ' : '▼ ') + brl(Math.abs(dif)) + ' x ' + P.meses[ant]; }
+        bx.querySelector('span').textContent = txt;
+        var mx = Math.max(r, d, 1);
+        document.getElementById('drRxBR').style.width = (r / mx * 100) + '%'; document.getElementById('drRxBD').style.width = (d / mx * 100) + '%';
+        document.getElementById('drRxR').textContent = brl(r); document.getElementById('drRxD').textContent = brl(d);
+        var top = P.contas.filter(function (c) { return c.meses[sel] > 0; }).sort(function (a, b) { return b.meses[sel] - a.meses[sel]; }).slice(0, 6);
+        var m1 = top.length ? top[0].meses[sel] : 1;
+        document.getElementById('drRxTop').innerHTML = top.length ? top.map(function (c) {
+            return '<div class="dr-top" data-c="1" data-abre-conta="' + esc(c.nome) + '" data-abre-grupo="' + esc(c.grupo) + '" data-abre-mes="' + (sel + 1) + '"><span title=""' + esc(c.nome) + ' (' + esc(c.grupo) + ')">' + esc(c.nome) + ' <small>· ' + esc(c.grupo) + '</small></span><b>' + brl(c.meses[sel]) + '</b>' +
+                   '<div class="dr-bar"><i style="width:' + (c.meses[sel] / m1 * 100) + '%;background:#fdba74"></i></div></div>';
+        }).join('') : '<div class="dr-top"><span>Nenhuma despesa neste mês.</span></div>';
+        var pa = ativos.filter(function (i) { return i < sel; }).pop(), px = ativos.filter(function (i) { return i > sel; })[0];
+        var bA = document.getElementById('drRxAnt'), bP = document.getElementById('drRxProx');
+        bA.disabled = pa === undefined; bP.disabled = px === undefined;
+        bA.onclick = function () { if (pa !== undefined) escolhe(pa); }; bP.onclick = function () { if (px !== undefined) escolhe(px); };
+    }
+    function escolhe(i) { sel = i; grafico(); raio();
+        if (box.scrollWidth > box.clientWidth) box.scrollLeft = Math.max(0, box.scrollWidth * (i + .5) / 12 - box.clientWidth / 2); }
+
+    // ── para onde vai / de onde vem (ano) ──
+    var rb = P.rec.reduce(function (a, b) { return a + b; }, 0) || 1;
+    function barras(lista, cor, clicavel) {
+        var m = Math.max.apply(null, lista.map(function (x) { return x.total; }).concat([1]));
+        return lista.map(function (x) {
+            return '<div class="dr-og"' + (clicavel ? ' data-grupo="' + esc(x.nome) + '"' : '') + (x.grupo ? ' data-conta="1" data-abre-conta="' + esc(x.nome) + '" data-abre-grupo="' + esc(x.grupo) + '" data-abre-mes="0"' : '') + ' title=""' + esc(x.nome) + (x.grupo ? ' (' + esc(x.grupo) + ')' : '') + '"><span>' + esc(x.nome) + '</span>' +
+                   '<div class="dr-bar"><i style="width:' + (x.total / m * 100) + '%;background:' + cor + '"></i></div><b>' + brl(x.total) + '</b><em>' +
+                   (x.total / rb * 100).toLocaleString('pt-BR', {maximumFractionDigits: 1}) + '%</em></div>';
+        }).join('');
+    }
+    var desp = P.grupos.filter(function (g) { return g.tipo === 'P' && g.total > 0; }).sort(function (a, b) { return b.total - a.total; });
+    document.getElementById('drOnde').innerHTML = barras(desp, 'linear-gradient(90deg,#fb923c,#ea580c)', true);
+    var rec = P.grupos.filter(function (g) { return g.tipo === 'R' && g.total > 0; }).sort(function (a, b) { return b.total - a.total; });
+    var maiores = P.contas.filter(function (c) { return c.total > 0; }).sort(function (a, b) { return b.total - a.total; }).slice(0, 8);
+    document.getElementById('drVem').innerHTML = '<div class="dr-sub-t">De onde vem</div>' + barras(rec, 'linear-gradient(90deg,#4ade80,#16a34a)') +
+        '<div class="dr-sub-t">As 8 maiores contas de despesa</div>' + barras(maiores, 'linear-gradient(90deg,#fdba74,#f97316)');
+    document.querySelectorAll('.dr-og[data-grupo]').forEach(function (o) {
+        o.addEventListener('click', function () {
+            var nome = o.getAttribute('data-grupo');
+            var tr = [].slice.call(document.querySelectorAll('tr.dre-grupo')).filter(function (t) { return t.getAttribute('data-nome') === nome; })[0];
+            if (tr) { dreToggle(tr.id.replace('dre-g-', ''), true); tr.scrollIntoView({behavior: 'smooth', block: 'center'}); }
+        });
+    });
+
+    escolhe(sel);
+
+    // ── blocos que recolhem: lembra neste aparelho ──
+    var oper = function (k, v) { try { if (v === undefined) return localStorage.getItem('dre_sec_' + k); localStorage.setItem('dre_sec_' + k, v); } catch (e) { return null; } };
+    var mel = ativos.reduce(function (a, i) { return a === null || P.res[i] > P.res[a] ? i : a; }, null);
+    var u = ativos.length ? ativos[ativos.length - 1] : null;
+    if (u !== null) document.getElementById('drSecMes').innerHTML = '· ' + P.meses[u] + ': <b>' + brl(P.res[u]) + '</b> de resultado · melhor mês ' + P.meses[mel] + ' <b>' + brl(P.res[mel]) + '</b>';
+    if (desp.length) document.getElementById('drSecOnde').innerHTML = '· maior despesa: <b>' + esc(desp[0].nome) + '</b> (' + (desp[0].total / rb * 100).toLocaleString('pt-BR', {maximumFractionDigits: 1}) + '% da receita)';
+    document.querySelectorAll('.dr-sec').forEach(function (sec) {
+        var k = sec.getAttribute('data-sec'), h = sec.querySelector('.dr-sec-h');
+        var poe = function (fechada) { sec.classList.toggle('fechada', fechada); h.setAttribute('aria-expanded', fechada ? 'false' : 'true'); };
+        poe(oper(k) === '0');
+        h.addEventListener('click', function () { var f = !sec.classList.contains('fechada'); poe(f); oper(k, f ? '0' : '1'); });
+    });
+})();
+</script>
+{% endif %}
+<script>
+// cor por intensidade em cada linha da tabela: quanto maior o valor no ano daquela linha, mais forte
+document.querySelectorAll('.dre-wrap tbody tr').forEach(function (tr) {
+    if (tr.classList.contains('dre-sub')) return;
+    var tds = [].slice.call(tr.children).slice(1, 13), vs = tds.map(function (td) { return parseFloat(td.getAttribute('data-v') || '0'); });
+    var mx = Math.max.apply(null, vs.map(Math.abs)); if (!mx) return;
+    var rec = tr.classList.contains('rec') || (tr.getAttribute('data-tipo') === 'R');
+    tds.forEach(function (td, i) { if (vs[i] > 0) td.style.background = (rec ? 'rgba(22,163,74,' : 'rgba(249,115,22,') + (0.03 + 0.17 * vs[i] / mx).toFixed(3) + ')'; });
+});
+</script>
+<script>
+function dreToggle(bloco, abrir) {
+    var g = document.getElementById('dre-g-' + bloco);
+    if (abrir === undefined) abrir = !g.classList.contains('aberto');
+    g.classList.toggle('aberto', abrir);
+    document.querySelectorAll('tr[data-pai="' + bloco + '"]').forEach(function (tr) { tr.style.display = abrir ? '' : 'none'; });
+}
+function dreTodos(abrir) {
+    document.querySelectorAll('tr.dre-grupo').forEach(function (g) { dreToggle(g.id.replace('dre-g-', ''), abrir); });
 }
 function dreMes(btn) {
-    document.querySelectorAll('.dre-mes-chip').forEach(function (b) {
-        b.classList.remove('ativo');
-    });
+    document.querySelectorAll('.dre-mes-chip').forEach(function (b) { b.classList.remove('ativo'); });
     btn.classList.add('ativo');
     var m = btn.getAttribute('data-mes');
-    document.querySelectorAll('.dre-m-bloco').forEach(function (d) {
-        d.classList.toggle('ativo', d.getAttribute('data-mes') === m);
-    });
+    document.querySelectorAll('.dre-m-bloco').forEach(function (d) { d.classList.toggle('ativo', d.getAttribute('data-mes') === m); });
 }
 function dreMToggle(lin) {
-    var caret = lin.querySelector('i'), abriu = false;
-    var n = lin.nextElementSibling;
+    var caret = lin.querySelector('i'), abriu = false, n = lin.nextElementSibling;
     while (n && n.classList.contains('dre-m-cat')) {
         abriu = n.style.display === 'none';
         n.style.display = abriu ? '' : 'none';
@@ -383,11 +975,19 @@ function dreMToggle(lin) {
     }
     if (caret) caret.className = abriu ? 'fas fa-caret-down' : 'fas fa-caret-right';
 }
+// um filtro aberto por vez; clicar fora fecha
+document.addEventListener('click', function (e) {
+    document.querySelectorAll('.dr-ref[open]').forEach(function (d) { if (!d.contains(e.target)) d.removeAttribute('open'); });
+});
+document.querySelectorAll('.dr-ref').forEach(function (d) {
+    d.addEventListener('toggle', function () {
+        if (d.open) document.querySelectorAll('.dr-ref[open]').forEach(function (o) { if (o !== d) o.removeAttribute('open'); });
+    });
+});
 (function () {
-    var ativo = document.querySelector('.dre-mes-chip.ativo');
-    if (ativo && ativo.scrollIntoView) {
-        ativo.scrollIntoView({inline: 'center', block: 'nearest'});
-    }
+    // só a fila de meses anda de lado; a página não pula para baixo
+    var ativo = document.querySelector('.dre-mes-chip.ativo'), fila = document.querySelector('.dre-mob-meses');
+    if (ativo && fila) fila.scrollLeft = ativo.offsetLeft - fila.offsetLeft - (fila.clientWidth - ativo.offsetWidth) / 2;
 })();
 </script>
 {% endblock %}

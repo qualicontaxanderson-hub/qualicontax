@@ -1030,14 +1030,122 @@ def dre():
                    for i, v in enumerate(l['g']['meses']) if v), default=None)
     if mes_ini is None:
         mes_ini = date.today().month if ano == ano_atual else 12
+    # 19/11/2026 — DRE repaginado: os números do topo e o gráfico saem das MESMAS linhas da tabela (sem recálculo na
+    # tela). Com recorte de grupos não há receita x despesa do escritório, então o topo some.
+    kpi = None
+    if not grupos_sel:
+        sub = {l['rotulo']: l['meses'] for l in linhas if l['tipo'] == 'subtotal'}
+        rb = sub.get('RECEITA BRUTA', [Decimal('0')] * 12)
+        ro = sub.get('RESULTADO OPERACIONAL', [Decimal('0')] * 12)
+        desp = [rb[i] - ro[i] for i in range(12)]
+        ativos = [i for i in range(12) if rb[i] or desp[i]]
+        trb, tdesp, tro = sum(rb), sum(desp), sum(ro)
+        topo = max([float(x) for x in rb + desp] or [0]) or 1.0
+        meses_g = [{'mes': _DRE_MESES[i], 'rec': float(rb[i]), 'desp': float(desp[i]), 'res': float(ro[i]),
+                    'h_rec': round(float(rb[i]) / topo * 100, 1), 'h_desp': round(float(desp[i]) / topo * 100, 1),
+                    'tem': i in ativos} for i in range(12)]
+        com_mov = [m for m in meses_g if m['tem']]
+        kpi = {'rec': trb, 'desp': tdesp, 'res': tro, 'n': len(ativos),
+               'margem': (float(tro) / float(trb) * 100) if trb else None,
+               'media_res': (float(tro) / len(ativos)) if ativos else 0,
+               'melhor': max(com_mov, key=lambda m: m['res']) if com_mov else None,
+               'pior': min(com_mov, key=lambda m: m['res']) if com_mov else None,
+               'meses': meses_g,
+               'apos': sum(sub['RESULTADO APÓS INVESTIMENTOS']) if 'RESULTADO APÓS INVESTIMENTOS' in sub else None}
+        # o que o painel interativo precisa (gráfico, raio-X do mês, para onde vai o dinheiro) — tudo já somado aqui
+        f = lambda xs: [round(float(x), 2) for x in xs]
+        grupos_p, contas_p = [], []
+        for l in linhas:
+            if l['tipo'] != 'grupo':
+                continue
+            g = l['g']
+            grupos_p.append({'nome': g['grupo'], 'tipo': g['tipo'], 'meses': f(g['meses']), 'total': float(g['total'])})
+            if g['tipo'] == 'P':
+                for c in g['cats']:
+                    for s in (c['subs'] or [c]):
+                        nome = c['nome'] + (' · ' + s['nome'] if c['subs'] else '')
+                        contas_p.append({'nome': nome, 'grupo': g['grupo'], 'meses': f(s['meses']), 'total': float(s['total'])})
+        kpi['painel'] = {'meses': list(_DRE_MESES), 'rec': f(rb), 'desp': f(desp), 'res': f(ro),
+                         'grupos': grupos_p, 'contas': contas_p, 'ini': mes_ini - 1, 'ano': ano}
+    # % da receita bruta de cada grupo/conta (coluna nova da tabela)
+    base_rb = kpi['rec'] if kpi and kpi['rec'] else None
     return render_template('financeiro/dre.html', linhas=linhas,
-                           mes_ini=mes_ini,
+                           mes_ini=mes_ini, kpi=kpi, base_rb=base_rb,
                            grupos_todos=grupos_todos, grupos_sel=grupos_sel,
                            regime=regime,
                            fin_empresas=emps, sel_empresas=sel, emp_mapa=mapa,
                            centros=centros, centro_sel=centro_sel,
                            nota_centro=nota_centro, entre=entre,
                            ano=ano, anos=anos, meses=_DRE_MESES)
+
+
+# nome curto do banco na janela de lançamentos do DRE (o extrato guarda o texto do arquivo: 'CCPI DO CERRADO DE GO')
+_NOME_BANCO = {'237': 'Bradesco', '336': 'C6', '748': 'Sicredi', '260': 'Nubank', '364': 'Efí', '403': 'Cora', '348': 'XP',
+               '323': 'Mercado Pago', '341': 'Itaú', '033': 'Santander', '104': 'Caixa', '001': 'Banco do Brasil',
+               '077': 'Inter', '208': 'BTG', '422': 'Safra', '756': 'Sicoob'}
+
+
+@financeiro.route('/financeiro/dre/lancamentos')
+@permission_required('financeiro.dre')
+def dre_lancamentos():
+    """O que está lançado numa célula do DRE — a gaveta que abre ao clicar na tabela (19/11/2026). Mesmos filtros
+    da tela (regime, ano, empresas, centro com rateio, entre empresas); mes=0 é o ano inteiro."""
+    from models.fin_titulo import FinDre, FinCentroCusto
+    regime = request.args.get('regime') if request.args.get('regime') in ('competencia', 'caixa') else 'competencia'
+    try:
+        ano = int(request.args.get('ano') or date.today().year)
+        mes = int(request.args.get('mes') or 0)
+    except ValueError:
+        return jsonify(ok=False, erro='Mês ou ano inválido.'), 400
+    if not 0 <= mes <= 12:
+        mes = 0
+    emps, sel, mapa = _empresas_ctx()
+    entre = 'eliminar' if request.args.get('entre') == 'eliminar' else 'incluir'
+    grupo = (request.args.get('grupo') or '').strip() or None
+    conta = (request.args.get('conta') or '').strip() or None
+    sub = request.args.get('sub')
+    sub = sub.strip() if sub is not None and sub.strip() else None
+    if not grupo:
+        return jsonify(ok=False, erro='Escolha uma linha do DRE.'), 400
+    # centro: o mesmo rateio da tela (_aplicar_centro)
+    centros = FinCentroCusto.listar()
+    craw = (request.args.get('centro') or '').strip()
+    csel = int(craw) if craw.isdigit() and any(c['id'] == int(craw) for c in centros) else None
+    aceitos, parte = None, {}
+    if csel:
+        ativos = [c for c in centros if c['ativo']]
+        rateiam = {c['id'] for c in ativos if c['rateia']}
+        n = len([c for c in ativos if not c['rateia']]) or 1
+        aceitos = [csel] if csel in rateiam else [csel] + sorted(rateiam)
+        parte = {} if csel in rateiam else {r: 1.0 / n for r in rateiam}
+    rows = FinDre.titulos(ano, regime, sel, entre, mes or None, grupo, conta, sub, aceitos)
+    from utils import bancos_logo
+    hoje = date.today()
+    itens, total = [], 0.0
+    for r in rows:
+        fr = parte.get(r['centro_custo_id'], 1.0)
+        v = float(r['valor'] or 0) * fr
+        total += v
+        ext = None
+        if r.get('extrato'):
+            eid, banco, dia, vext, desc = (r['extrato'].split('|', 4) + ['', '', '', '', ''])[:5]
+            cod = bancos_logo.codigo(banco)
+            ext = {'id': eid, 'banco': _NOME_BANCO.get(cod, banco), 'data': dia, 'valor': vext, 'desc': desc,
+                   'logo': bancos_logo.url(banco)}
+        st = (r['status'] or '').lower()
+        if st not in ('liquidado', 'cancelado', 'perdido'):
+            st = 'vencido' if r['vencimento'] and r['vencimento'] < hoje else 'aberto'
+        origem = 'Extrato' if ext else ('Programação' if r['programacao_id'] else (r['origem'] or 'Manual').capitalize())
+        itens.append({'id': r['id'], 'data': r['data'].isoformat() if r['data'] else None,
+                      'competencia': r['competencia'].strftime('%m/%Y') if r['competencia'] else '',
+                      'pago_em': r['pago_em'].isoformat() if r['pago_em'] else None,
+                      'vencimento': r['vencimento'].isoformat() if r['vencimento'] else None,
+                      'valor': round(v, 2), 'parte': round(fr, 4) if fr != 1.0 else None,
+                      'nome': r['contraparte_nome'] or '', 'descricao': r['descricao'] or '',
+                      'conta': r['conta'], 'grupo': r['grupo'], 'status': st, 'origem': origem, 'extrato': ext,
+                      'empresa': mapa.get(r['empresa_id'], '')})
+    return jsonify(ok=True, itens=itens, total=round(total, 2), n=len(itens), limite=len(rows) >= 600,
+                   regime=regime)
 
 
 @financeiro.route('/financeiro/dre/equipe')

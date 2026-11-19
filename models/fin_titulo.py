@@ -381,6 +381,73 @@ class FinDre:
             (ano,) + extra, fetch=True) or []
 
     @staticmethod
+    def titulos(ano, regime='competencia', empresa_ids=None, entre_grupo='incluir', mes=None,
+                grupo=None, conta=None, sub=None, centros=None):
+        """O que está DENTRO de uma célula do DRE (19/11/2026 — Anderson: "ao clicar em cima abrir o que está lançado
+        para saber se está correto"). Mesmo filtro de por_ano: ano/mês pela competência (ou pela baixa no caixa),
+        empresas, eliminação entre empresas. Recorte: grupo inteiro, uma conta (com as subcontas dela) ou uma
+        subconta ('sem detalhar' = o que foi lançado direto na conta pai). ``centros``: ids aceitos (None = todos)."""
+        rotulo = "COALESCE(CONCAT(p.nome, ' · ', c.nome), c.nome)"
+        cond, extra = '', []
+        if empresa_ids:
+            marks = ','.join(['%s'] * len(empresa_ids))
+            cond += f' AND t.empresa_id IN ({marks})'
+            extra += list(empresa_ids)
+        if entre_grupo == 'eliminar':
+            dentro = ''
+            if empresa_ids:
+                dentro = f'AND l.empresa_id IN ({marks}) AND o.empresa_id IN ({marks})'
+                extra += list(empresa_ids) * 2
+            cond += f"""
+                AND t.id NOT IN (
+                    SELECT b2.titulo_id FROM fin_titulo_baixas b2
+                      JOIN extrato_lancamentos l ON l.id = b2.lancamento_id
+                      JOIN extrato_lancamentos o ON o.id = l.par_id
+                     WHERE l.par_estado = 'aprovado' AND l.empresa_id <> o.empresa_id {dentro})"""
+        if grupo:
+            cond += ' AND c.grupo = %s'
+            extra.append(grupo)
+        if sub is not None and conta:
+            if sub == 'sem detalhar':
+                cond += ' AND c.pai_id IS NULL AND c.nome = %s'
+                extra.append(conta)
+            else:
+                cond += f' AND {rotulo} = %s'
+                extra.append(conta + ' · ' + sub)
+        elif conta:
+            cond += f' AND ({rotulo} = %s OR p.nome = %s)'
+            extra += [conta, conta]
+        if centros is not None:
+            if not centros:
+                return []
+            cond += ' AND t.centro_custo_id IN (%s)' % ','.join(['%s'] * len(centros))
+            extra += list(centros)
+        if regime == 'caixa':
+            data, valor, base = 'b.data_baixa', 'b.valor + b.juros + b.multa', \
+                'fin_titulo_baixas b JOIN fin_titulos t ON t.id = b.titulo_id'
+            filtro = 'YEAR(b.data_baixa) = %s'
+        else:
+            data, valor, base = 't.competencia', 't.valor', 'fin_titulos t'
+            filtro = "YEAR(t.competencia) = %s AND t.status <> 'cancelado'"
+        if mes:
+            filtro += f' AND MONTH({data}) = %s'
+        args = [ano] + ([mes] if mes else []) + extra
+        return execute_query(
+            f"""SELECT t.id, t.empresa_id, t.tipo, {data} AS data, {valor} AS valor, t.valor AS valor_titulo,
+                       t.status, t.vencimento, t.competencia, t.descricao, t.contraparte_nome, t.origem,
+                       t.programacao_id, t.centro_custo_id, c.grupo, {rotulo} AS conta,
+                       (SELECT CONCAT_WS('|', e.id, e.banco, e.data, ABS(e.valor), e.descricao)
+                          FROM fin_titulo_baixas bx JOIN extrato_lancamentos e ON e.id = bx.lancamento_id
+                         WHERE bx.titulo_id = t.id ORDER BY bx.id LIMIT 1) AS extrato,
+                       (SELECT MAX(bx.data_baixa) FROM fin_titulo_baixas bx WHERE bx.titulo_id = t.id) AS pago_em
+                  FROM {base}
+                  JOIN fin_categorias c ON c.id = t.categoria_id
+                  LEFT JOIN fin_categorias p ON p.id = c.pai_id
+                 WHERE {filtro} {cond}
+                 ORDER BY {data}, valor DESC
+                 LIMIT 600""", tuple(args), fetch=True) or []
+
+    @staticmethod
     def anos_com_dado():
         rows = execute_query(
             """SELECT YEAR(competencia) AS a FROM fin_titulos
