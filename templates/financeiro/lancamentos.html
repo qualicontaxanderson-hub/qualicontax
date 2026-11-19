@@ -158,6 +158,7 @@
 .ns-res div span { color:#64748b; } .ns-res div b { color:#0f172a; text-align:right; }
 .ns-res .big { border:0; padding-top:10px; } .ns-res .big b { font-size:20px; color:#15803d; }
 .ns-aviso { background:#fffbeb; border:1px solid #fde68a; color:#92400e; border-radius:11px; padding:9px 12px; font-size:12.5px; display:flex; gap:8px; line-height:1.4; }
+.ns-aviso.red { background:#fef2f2; border-color:#fecaca; color:#991b1b; } .ns-op.sem { opacity:.6; border-style:dashed; } .ns-op.sem small { color:#b91c1c; }
 .ns-msg { color:#b91c1c; font-size:12.5px; font-weight:700; min-height:16px; }
 .ns-pe { display:flex; align-items:center; gap:10px; padding:13px 22px; background:#fff; border-top:1px solid #e6eeea; }
 .ns-pe-info { flex:1; font-size:12.5px; color:#64748b; min-width:0; }
@@ -198,6 +199,39 @@
 .lm-dre button { height:36px; border:0; border-radius:9px; background:#d97706; color:#fff; font-weight:800; font-size:13px; padding:0 12px; }
 .lm-nada { display:none; padding:18px; text-align:center; color:#64748b; font-size:13.5px; background:#fff; border:1px dashed #d7e3dc; border-radius:14px; margin-bottom:20px; }
 .lm-pagar.lm-pagar-c input { font-size:13.5px; } .lm-pagar.lm-pagar-c button { font-size:13.5px; height:36px; }
+/* 19/11/2026 — Anderson: "linhas de meses... para ficar fácil a consulta" e "a data de vencimento e o nome... uma sinalizada" */
+.lm-mes { margin-bottom:22px; }
+.lm-mes-h { display:flex; align-items:center; gap:12px; margin:4px 0 12px; }
+.lm-mes-h .ic { width:40px; height:40px; border-radius:12px; background:linear-gradient(135deg,#0f3d2e,#178a52); color:#fff; display:flex; flex-direction:column;
+                align-items:center; justify-content:center; line-height:1; flex:0 0 40px; box-shadow:0 6px 14px rgba(15,61,46,.18); }
+.lm-mes-h .ic b { font-size:13px; font-weight:800; text-transform:uppercase; letter-spacing:.04em; }
+.lm-mes-h .ic small { font-size:10px; opacity:.8; margin-top:2px; }
+.lm-mes-h h3 { margin:0; font-size:16px; font-weight:800; color:#0f172a; text-transform:capitalize; white-space:nowrap; }
+.lm-mes-h .lm-mes-n { font-size:12.5px; font-weight:700; color:#475569; background:#f1f5f9; border-radius:99px; padding:3px 10px; white-space:nowrap; }
+.lm-mes-h .lm-mes-v { font-size:13px; font-weight:800; color:#15803d; background:#ecfdf3; border-radius:99px; padding:3px 11px; font-variant-numeric:tabular-nums; white-space:nowrap; }
+.lm-mes-h .lm-mes-tag { font-size:11px; font-weight:800; letter-spacing:.05em; text-transform:uppercase; color:#fff; background:#16a34a; border-radius:99px; padding:3px 9px; }
+.lm-mes-h::after { content:''; flex:1; height:1px; background:linear-gradient(90deg,#d7e3dc,transparent); }
+.lm-mes.atual .lm-mes-h .ic { background:linear-gradient(135deg,#15803d,#22c55e); }
+.lm-mes.passado .lm-mes-h .ic { background:linear-gradient(135deg,#991b1b,#dc2626); }
+/* vencimento em destaque: cor pela distância até a data */
+.lm-venc { display:inline-flex; align-items:center; gap:7px; margin-top:7px; padding:4px 10px 4px 5px; border-radius:99px; font-size:12.5px; font-weight:700;
+           background:#eff6ff; color:#1d4ed8; border:1px solid #bfdbfe; white-space:nowrap; }
+.lm-venc .dd { display:inline-flex; flex-direction:column; align-items:center; justify-content:center; width:30px; height:24px; border-radius:99px; background:#1d4ed8; color:#fff;
+               font-size:12px; font-weight:800; line-height:1; }
+.lm-venc em { font-style:normal; font-weight:600; opacity:.85; }
+.lm-venc.hoje { background:#fff7ed; color:#c2410c; border-color:#fed7aa; } .lm-venc.hoje .dd { background:#ea580c; }
+.lm-venc.perto { background:#fffbeb; color:#b45309; border-color:#fde68a; } .lm-venc.perto .dd { background:#d97706; }
+.lm-venc.passou { background:#fef2f2; color:#b91c1c; border-color:#fecaca; } .lm-venc.passou .dd { background:#dc2626; }
+.lm-venc.longe { background:#f8fafc; color:#475569; border-color:#e2e8f0; } .lm-venc.longe .dd { background:#64748b; }
+.lm-venc.mensal { background:#f5f3ff; color:#6d28d9; border-color:#ddd6fe; } .lm-venc.mensal .dd { background:#7c3aed; width:auto; padding:0 8px; }
+/* quem pediu: selo com as iniciais na cor da pessoa */
+.lm-por.lm-quem2 { display:inline-flex; align-items:center; gap:8px; margin-top:8px; padding:3px 11px 3px 3px; border-radius:99px; background:var(--pf, #f1f5f9);
+                   color:var(--pc, #334155); font-weight:700; font-size:12.5px; max-width:100%; }
+.lm-por.lm-quem2 .av { width:24px; height:24px; border-radius:50%; background:var(--pc, #64748b); color:#fff; font-size:10.5px; font-weight:800; display:inline-flex;
+                       align-items:center; justify-content:center; flex:0 0 24px; letter-spacing:.02em; }
+.lm-por.lm-quem2 span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.lm-por.lm-quem2 small { font-weight:600; opacity:.7; }
+@media (max-width:700px) { .lm-mes-h { flex-wrap:wrap; gap:8px; } .lm-mes-h::after { display:none; } }
 @media (max-width:700px) { .lm-filtros { gap:8px; } .lm-fg > em { white-space:nowrap; } .lm-fg { flex-wrap:nowrap; overflow-x:auto; max-width:100%; padding-bottom:2px; } .lm-filtros .tx-f { white-space:nowrap; } }
 </style>
 {% endblock %}
@@ -241,7 +275,9 @@
   {% if adiantavel %}<input type="checkbox" name="lanc" value="{{ l.id if l.carteira else 'a' ~ l.id }}" hidden><span class="lm-ck"><i class="fas fa-check"></i></span>{% endif %}
   <div class="tx-c-top"><span class="tx-c-num">{{ l.numero_cliente or '—' }}</span><span class="tx-c-nome" title="{{ l.nome_razao_social }}">{{ l.nome_razao_social }}</span></div>
   <div class="tx-c-meio"><div><div class="tx-c-val">{{ l.valor_total | float | format_currency }}</div>
-    <div class="tx-c-desc">{{ l.descricao or l.servico_nome }} · {% if l.destino == 'MENSAL' %}mensalidade de {{ l.competencia.strftime('%m/%Y') }}{% elif l.titulo_vencimento or l.vencimento %}vence {{ (l.titulo_vencimento or l.vencimento).strftime('%d/%m/%Y') }}{% endif %}</div></div>
+    <div class="tx-c-desc">{{ l.descricao or l.servico_nome }}</div>
+    {% if l.destino == 'MENSAL' %}<span class="lm-venc mensal"><span class="dd"><i class="fas fa-calendar"></i></span>mensalidade de {{ l.competencia.strftime('%m/%Y') }}</span>
+    {% elif l.titulo_vencimento or l.vencimento %}{% set vd = l.titulo_vencimento or l.vencimento %}<span class="lm-venc" data-venc="{{ vd.isoformat() }}" data-pago="{{ '1' if fase == 'pag' else '' }}"><span class="dd">{{ vd.strftime('%d') }}</span>vence {{ vd.strftime('%d/%m/%Y') }}<em></em></span>{% endif %}</div>
     <span class="tx-c-st">{% if fase == 'apr' %}<i class="fas fa-hourglass-half"></i> {{ 'pedido ' ~ l.lancado_em.strftime('%d/%m') if l.lancado_em else 'aguardando' }}
       {% elif fase == 'pag' %}<i class="fas fa-circle-check"></i> pago
       {% elif fase == 'atr' %}<i class="fas fa-clock"></i> atrasado
@@ -255,7 +291,7 @@
   {% if adiantavel %}<div class="lm-adi"><i class="fas fa-forward"></i> {{ 'Cliente em atraso.' if fase == 'atr' else 'O cliente ainda não pagou.' }} Marque para pedir a comissão adiantada; se não recebermos, ela é descontada dos próximos pedidos.</div>
   {% elif adiantado %}<div class="lm-adi"><i class="fas fa-forward"></i> Comissão adiantada{% if l.fechamento_id %} no pedido nº {{ l.fechamento_id }}{% endif %}. O cliente ainda não pagou: se a cobrança for perdida, o valor é descontado do próximo pedido.</div>{% endif %}
   {% if l.lancado_pelo_admin %}<div class="lm-adm"><i class="fas fa-user-shield"></i> Lançado pelo administrador</div>{% endif %}
-  {% if aprov and l.lancado_por != eu.id %}<div class="lm-por"><i class="fas fa-user"></i> {{ l.lancado_por_nome }}</div>{% endif %}
+  {% if aprov and l.lancado_por != eu.id %}{% set pn = (l.lancado_por_nome or '?').split() %}<div class="lm-por lm-quem2" data-pessoa="{{ l.lancado_por_nome or '' }}" title="Quem pediu"><span class="av">{{ pn[0][:1] }}{{ pn[-1][:1] if pn | length > 1 else '' }}</span><span><small>pedido por</small> {{ pn[0] }}{{ ' ' ~ pn[-1] if pn | length > 1 else '' }}</span></div>{% endif %}
   {% if fase == 'apr' %}
     {% set pt = l.comissao_pedida_tipo or 'PADRAO' %}
     <div class="lm-com"><span>Comissão {% if pt == 'SEM' %}<b>não pediu</b>{% else %}<b>{{ ('%g' % (l.comissao_pedida_valor | float)) ~ '%' if pt == 'PCT' else ('fixo' if pt == 'FIXO' else 'padrão') }} · {{ l.com_prev | float | format_currency }}</b>{% endif %}</span>
@@ -278,6 +314,25 @@
     <div class="lm-ac"><button type="button" class="ok" onclick="lmCobrar({{ l.id }}, this)" data-cli="{{ (l.numero_cliente ~ ' · ' if l.numero_cliente else '') ~ l.nome_razao_social }}" data-v="{{ l.valor_total | float }}" data-como="{{ l.como }}"><i class="fas fa-rotate-right"></i> Cobrar de novo</button></div>
   {% endif %}
 </div>
+{% endmacro %}
+
+{# um bloco por mês (pelo vencimento; mensalidade pela competência) — 19/11/2026 #}
+{% macro por_mes(lista, fase) %}
+  {% set meses = {} %}{% set ordem = [] %}
+  {% for l in lista %}{% set d = l.titulo_vencimento or l.vencimento or l.competencia %}{% set k = d.strftime('%Y-%m') if d else '0000-00' %}
+    {% if k not in meses %}{% set _ = meses.update({k: []}) %}{% set _ = ordem.append(k) %}{% endif %}{% set _ = meses[k].append(l) %}{% endfor %}
+  {% set NOMES = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'] %}
+  <div class="lm-meses">
+  {% for k in (ordem | sort(reverse=(fase == 'pag'))) %}{% set itens = meses[k] %}{% set mm = k[5:7] | int %}
+    <div class="lm-mes" data-mes="{{ k }}" data-fase="{{ fase }}">
+      <div class="lm-mes-h"><span class="ic"><b>{{ NOMES[mm - 1][:3] if mm else '—' }}</b><small>{{ k[:4] if mm else '' }}</small></span>
+        <h3>{{ (NOMES[mm - 1] ~ ' de ' ~ k[:4]) if mm else 'sem data' }}</h3>
+        <span class="lm-mes-n"><b>{{ itens | length }}</b> lançamento{{ 's' if itens | length != 1 }}</span>
+        <span class="lm-mes-v">{{ itens | sum(attribute='valor_total') | float | format_currency }}</span></div>
+      <div class="tx-grade">{% for l in itens %}{{ cartao(l, fase) }}{% endfor %}</div>
+    </div>
+  {% endfor %}
+  </div>
 {% endmacro %}
 
 <div class="tx">
@@ -344,7 +399,7 @@
     <div class="tx-faixa"><div class="lm-sec" style="margin:0; flex:1">{{ titulo }} <small>{{ grupos[fase]|length }} lançamento{{ 's' if grupos[fase]|length != 1 }}</small></div>
       <div class="tx-busca"><i class="fas fa-magnifying-glass"></i><input type="search" placeholder="Cliente, serviço{{ ' ou quem pediu' if aprov else '' }}"></div></div>
     {{ filtros(grupos[fase]) }}
-    {% if grupos[fase] %}<div class="tx-grade">{% for l in grupos[fase] %}{{ cartao(l, fase) }}{% endfor %}</div><div class="lm-nada"><i class="fas fa-filter"></i> Nenhum lançamento com esse filtro.</div>
+    {% if grupos[fase] %}{{ por_mes(grupos[fase], fase) }}<div class="lm-nada"><i class="fas fa-filter"></i> Nenhum lançamento com esse filtro.</div>
     {% else %}<div class="tx-vazio"><i class="fas fa-mug-hot"></i>{{ vazio }}</div>{% endif %}
     {% if fase == 'apr' and fora %}
       <div class="lm-sec" style="margin-top:8px">Reprovados e cancelados <small>os últimos</small></div>
@@ -662,6 +717,7 @@
     var fdt = pn.querySelector('.lm-fdt'), on = fdt && fdt.querySelector('.tx-f.on'), fx = on ? faixa(on.dataset.v, fdt) : null;
     if (fdt) fdt.querySelector('.lm-per').hidden = !(on && on.dataset.v === 'per');
     var g = {}; pn.querySelectorAll('.lm-fg').forEach(function (x) { var on = x.querySelector('.tx-f.on'); g[x.dataset.g] = on ? on.dataset.v : ''; });
+    var visTot = 0, temMeses = !!pn.querySelector('.lm-meses');
     pn.querySelectorAll('.tx-grade').forEach(function (gr) {
       var vis = 0;
       gr.querySelectorAll('.tx-c[data-busca]').forEach(function (c) {
@@ -670,10 +726,43 @@
           && (!g.quem || !('quem' in c.dataset) || c.dataset.quem === g.quem) && naFaixa(c, fx);
         c.style.display = ok ? '' : 'none'; if (ok) vis++;
       });
+      visTot += vis;
+      var mes = gr.closest('.lm-mes');
+      if (mes) { mes.style.display = vis ? '' : 'none'; var n = mes.querySelector('.lm-mes-n b'); if (n) n.textContent = vis; }
       var nada = gr.nextElementSibling;
       if (nada && nada.classList.contains('lm-nada')) nada.style.display = vis ? 'none' : 'block';
     });
+    if (temMeses) { var nd = pn.querySelector('.lm-meses').nextElementSibling; if (nd && nd.classList.contains('lm-nada')) nd.style.display = visTot ? 'none' : 'block'; }
   }
+  // selo do vencimento: quantos dias faltam, com a cor (passou / hoje / até 7 dias / longe)
+  (function () {
+    var h = new Date(); h.setHours(0, 0, 0, 0);
+    var SEM = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'];
+    document.querySelectorAll('.lm-venc[data-venc]').forEach(function (el) {
+      var p = el.dataset.venc.split('-'), d = new Date(+p[0], +p[1] - 1, +p[2]), dias = Math.round((d - h) / 864e5), em = el.querySelector('em');
+      var txt = SEM[d.getDay()], cls = 'longe';
+      if (el.dataset.pago) { cls = 'longe'; }
+      else if (dias < 0) { cls = 'passou'; txt = 'venceu há ' + (-dias) + (dias === -1 ? ' dia' : ' dias'); }
+      else if (dias === 0) { cls = 'hoje'; txt = 'vence hoje'; }
+      else if (dias <= 7) { cls = 'perto'; txt = (dias === 1 ? 'amanhã' : 'em ' + dias + ' dias') + ' · ' + SEM[d.getDay()]; }
+      else if (dias <= 31) { cls = ''; txt = 'em ' + dias + ' dias'; }
+      if (cls) el.classList.add(cls);
+      if (em) em.textContent = '· ' + txt;
+    });
+    // o mês de hoje ganha o selo "este mês"; meses que já passaram (fora de Pagos) ficam em vermelho
+    var km = h.getFullYear() + '-' + String(h.getMonth() + 1).padStart(2, '0');
+    document.querySelectorAll('.lm-mes[data-mes]').forEach(function (m) {
+      if (m.dataset.mes === km) { m.classList.add('atual'); var t = document.createElement('span'); t.className = 'lm-mes-tag'; t.textContent = 'este mês';
+        var hh = m.querySelector('.lm-mes-h h3'); hh.parentNode.insertBefore(t, hh.nextSibling); }
+      else if (m.dataset.mes < km && m.dataset.fase !== 'pag') m.classList.add('passado');
+    });
+    // cada pessoa com a sua cor, sempre a mesma
+    var CORES = [['#1d4ed8', '#dbeafe'], ['#7c3aed', '#ede9fe'], ['#0f766e', '#ccfbf1'], ['#c2410c', '#ffedd5'], ['#be185d', '#fce7f3'], ['#15803d', '#dcfce7'], ['#0369a1', '#e0f2fe'], ['#a16207', '#fef9c3']];
+    document.querySelectorAll('.lm-quem2[data-pessoa]').forEach(function (el) {
+      var n = el.dataset.pessoa, s = 0; for (var i = 0; i < n.length; i++) s = (s * 31 + n.charCodeAt(i)) % 9973;
+      var c = CORES[s % CORES.length]; el.style.setProperty('--pc', c[0]); el.style.setProperty('--pf', c[1]);
+    });
+  })();
   document.querySelectorAll('.tx-painel .tx-busca input').forEach(function (inp) {
     inp.addEventListener('input', function () { lmFiltrar(inp.closest('.tx-painel')); });
   });
@@ -865,6 +954,14 @@
     else h += np > 1 ? '<div><span>Total</span><b>' + brl(valor) + '</b></div><div class="big"><span>Cada boleto</span><b>' + brl(valor / np) + '</b></div>'
                      : '<div class="big"><span>Total do boleto</span><b>' + brl(valor) + '</b></div>';
     $('nsRes').innerHTML = h;
+    // 19/11/2026 — "na mensalidade" só com contrato de honorários ativo: sem contrato não há boleto do mês para entrar
+    var bm = $('nsOps').querySelector('.ns-op[data-v="MENSAL"]');
+    if (bm) { bm.classList.toggle('sem', !!(c && !c.mensal)); var sm = bm.querySelector('small'); if (!bm.dataset.txt) bm.dataset.txt = sm.textContent; sm.textContent = c && !c.mensal ? 'esta empresa não tem honorários cadastrados' : bm.dataset.txt; }
+    if (como === 'MENSAL' && c && !c.mensal) {
+      $('nsAviso').innerHTML = '<b>Esta empresa não tem honorários mensais cadastrados:</b> não existe mensalidade para incluir esta cobrança. Emita avulso (boleto + nota ou só boleto) ou cadastre os honorários em Honorários › Sem honorários.';
+      $('nsAviso').classList.add('red'); $('nsEnviar').disabled = true; return;
+    }
+    $('nsAviso').classList.remove('red'); $('nsEnviar').disabled = false;
     if (D.aprovador) {      // quem aprova: tela única de emitir agora ou incluir no mensal
       $('nsAviso').innerHTML = como === 'MENSAL' ? 'Entra no boleto da mensalidade' + (comp ? ' de <b>' + comp.textContent + '</b>' : '') + ' e sai junto com o lote do mês.'
         : '<b>Sai agora:</b> ' + (como === 'BOLETO' ? 'o boleto é emitido' : 'a nota e o boleto são emitidos') + ' e vão por e-mail aos contatos do Financeiro do cliente.';

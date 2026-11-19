@@ -77,6 +77,17 @@ def _admin():
     return _admin_real() and not _vendo_como()
 
 
+def _contrato_ativo(cliente_id):
+    """19/11/2026 — "na mensalidade" só para quem tem contrato de honorários ATIVO (Anderson: "se não tem o MENSAL
+    REGISTRADO então não haverá envio"). Sem contrato não existe boleto do mês para a cobrança entrar."""
+    return bool(execute_query("SELECT 1 FROM fin_contratos WHERE cliente_id = %s AND empresa_id = %s AND situacao = 'ATIVO' LIMIT 1",
+                              (cliente_id, EMP), fetch=True))
+
+
+SEM_MENSAL = ('Esta empresa não tem contrato de honorários ativo: não existe mensalidade para incluir a cobrança. '
+              'Emita avulso (boleto agora ou na aprovação) ou cadastre os honorários em Honorários › Sem honorários.')
+
+
 def _aprovador():
     """Aprova as solicitações e paga as comissões: o admin ou quem tem a permissão (17/11/2026 — a Alessandra,
     que "não será ADMIN mas terá a prerrogativa de autorizar")."""
@@ -531,6 +542,8 @@ def lancamento_novo():
         if como not in ('BOLETO_NOTA', 'BOLETO', 'MENSAL'):
             raise ValueError('Escolha como cobrar.')
         destino = 'MENSAL' if como == 'MENSAL' else 'AVULSO'
+        if destino == 'MENSAL' and not _contrato_ativo(cliente_id):
+            raise ValueError(SEM_MENSAL)
         comp = _data(f.get('competencia')) if destino == 'MENSAL' else None
         lid = FinLancamento.criar(EMP, cliente_id, servico_id, (f.get('descricao') or s['nome']).strip() or s['nome'],
                                   Decimal('1'), _dec(f.get('valor')), destino, _eu().id,
@@ -790,6 +803,9 @@ def lancamento_aprovar(lid):
     if l['status'] == 'LANCADO' and como in ('BOLETO_NOTA', 'BOLETO', 'MENSAL'):
         try:
             if como == 'MENSAL':
+                if not _contrato_ativo(l['cliente_id']):
+                    flash(SEM_MENSAL, 'danger')
+                    return redirect(url_for('financeiro.lancamentos', aba='apr'))
                 destino, com_nota, venc = 'MENSAL', None, None
                 comp = FinLoteMensal.competencia_aberta(EMP, _data(request.form.get('competencia')) or l['competencia'])
             else:
