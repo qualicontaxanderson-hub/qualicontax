@@ -1694,3 +1694,9 @@ tr:hover { background-color: #fafafa; }
     .cliente-view-page { padding: 12px; }
     .data-table { min-width: 600px; }
 }
+
+/* 19/11/2026 — iPhone: campo com letra menor que 16px faz o Safari dar zoom na página ao tocar (a tela "avança para
+   frente" e fica com rolagem lateral — Anderson, em Honorários). No celular, todo campo de texto fica com 16px. */
+@media (max-width: 768px) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]), select, textarea { font-size: 16px !important; }
+}

@@ -313,7 +313,7 @@ span.hp-bco, span.hp-nf { cursor:default; }
     {% for dim, ico, rot in [('banco', 'fa-building-columns', 'Banco'), ('nota', 'fa-file-invoice', 'Nota fiscal'), ('grupo', 'fa-layer-group', 'Grupo'), ('dec', 'fa-gift', '13º'), ('valor', 'fa-coins', 'Valor')] %}
     <div class="tx-ref hp-ref" data-dim="{{ dim }}"><button type="button"><i class="fas {{ ico }} ico"></i><span class="hp-ref-t"><small>{{ rot }}</small><b class="hp-ref-v">Todos</b></span><i class="fas fa-chevron-down"></i></button><div class="tx-ref-pop"></div></div>
     {% endfor %}
-    <label class="hp-ref-busca"><i class="fas fa-magnifying-glass"></i><input type="search" id="hpBuscaG" placeholder="Buscar empresa, nº, CNPJ ou grupo" oninput="hpFiltrar()"></label>
+    <label class="hp-ref-busca"><i class="fas fa-magnifying-glass"></i><input type="search" id="hpBuscaG" name="q" placeholder="Buscar empresa, nº, CNPJ ou grupo" oninput="hpFiltrar()" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" inputmode="search" enterkeyhint="search"></label>
     <button type="button" class="tx-ref-limpar" id="hpRefLimpar" onclick="hpLimpar()"><i class="fas fa-xmark"></i> Limpar</button>
     <span class="hp-links">
       <a href="{{ url_for('financeiro.honorarios', aba='com') }}" title="Lista de contratos"><i class="fas fa-list"></i> Contratos <b>{{ resumo.n or 0 }}</b></a>
@@ -471,7 +471,7 @@ function hpOpcoes(dim) {
 function hpPop(ref) {
   var dim = ref.dataset.dim, pop = ref.querySelector('.tx-ref-pop'), ops = hpOpcoes(dim);
   var h = '<h5>' + HP_DIM_NOME[dim] + '</h5>';
-  if (ops.length > 6) h += '<label class="pop-busca"><i class="fas fa-magnifying-glass"></i><input type="search" placeholder="Buscar ' + HP_DIM_NOME[dim].toLowerCase() + '…" autocomplete="off"></label>';
+  if (ops.length > 6) h += '<label class="pop-busca"><i class="fas fa-magnifying-glass"></i><input type="search" placeholder="Buscar ' + HP_DIM_NOME[dim].toLowerCase() + '…" name="q" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" inputmode="search" enterkeyhint="search"></label>';
   h += '<div class="lista">';
   var maior = ops.reduce(function (m, o) { return Math.max(m, o.n); }, 0);
   ops.forEach(function (o) {
