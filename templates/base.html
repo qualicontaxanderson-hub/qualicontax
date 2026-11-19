@@ -213,8 +213,8 @@
                         {% set cat = 'danger' if category == 'error' else category %}
                         {% set fica = cat in ('danger', 'warning') %}
                         <div class="alert alert-{{ cat }} {{ 'fica' if fica else 'some' }}">
-                            <i class="fas fa-{{ 'circle-check' if cat == 'success' else 'triangle-exclamation' if cat == 'warning' else 'circle-info' if cat == 'info' else 'circle-xmark' }} alert-ico"></i>
-                            <span class="alert-txt">{{ message }}</span>
+                            <span class="alert-ico"><i class="fas fa-{{ 'check' if cat == 'success' else 'exclamation' if cat == 'warning' else 'info' if cat == 'info' else 'xmark' }}"></i></span>
+                            <span class="alert-corpo"><b class="alert-tit">{{ {'success': 'Pronto!', 'info': 'Para você saber', 'warning': 'Atenção', 'danger': 'Não deu certo'}[cat] }}</b><span class="alert-txt">{{ message }}</span></span>
                             {% if fica %}<button type="button" class="alert-fechar">Fechar</button>{% else %}<i class="alert-barra"></i>{% endif %}
                             <button type="button" class="alert-close" aria-label="Fechar">&times;</button>
                         </div>
