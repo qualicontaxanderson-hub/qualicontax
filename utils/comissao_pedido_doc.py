@@ -91,7 +91,7 @@ def texto_whatsapp(ctx):
     if pix.get('pix_chave'):
         linhas.append('Pix (%s): %s' % (PIX_ROT.get(pix.get('pix_tipo'), 'chave'), pix['pix_chave']))
         if pix.get('titular'):
-            linhas.append('Em nome de: %s%s' % (pix['titular'], (' (%s)' % pix['banco']) if pix.get('banco') else ''))
+            linhas.append('Em nome de: %s (o Pix vai para o banco dono da chave)' % pix['titular'])
     else:
         linhas.append('Ainda sem chave Pix no meu cadastro.')
     if quando:
@@ -198,7 +198,7 @@ def gerar_pdf(ctx):
         txt = [_p('PAGAR POR PIX', 7.5, ROXO, bold=True),
                _p('%s: <b>%s</b>' % (PIX_ROT.get(pix.get('pix_tipo'), 'Chave'), escape(pix.get('pix_chave') or '')), 10, TEXTO, leading=14),
                _p('Valor: <b>%s</b>' % brl(ctx.get('falta', 0)), 10, TEXTO, leading=14),
-               _p('Em nome de <b>%s</b>%s' % (escape(pix.get('titular') or f['usuario_nome']), (' · ' + escape(pix['banco'])) if pix.get('banco') else ''), 8.5, AMBAR if pix.get('outro') else CINZA, leading=12),
+               _p('Em nome de <b>%s</b> · o Pix vai para o banco dono da chave' % escape(pix.get('titular') or f['usuario_nome']), 8.5, AMBAR if pix.get('outro') else CINZA, leading=12),
                Spacer(1, 4), _p('Pix copia e cola:', 7.5, CINZA),
                _p(escape(ctx['codigo']), 6.6, colors.HexColor('#334155'), leading=8.5),
                Spacer(1, 4), _p('Depois de pagar não precisa fazer mais nada: quando o extrato puxar a saída, o pedido fica quitado sozinho.', 7.5, CINZA, leading=10)]
