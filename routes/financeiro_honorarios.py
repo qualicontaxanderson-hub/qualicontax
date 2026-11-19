@@ -44,7 +44,7 @@ def _servicos():
     rows = execute_query("""SELECT s.id, s.nome, s.valor_padrao,
                                    (SELECT COUNT(*) FROM fin_contrato_itens i JOIN fin_contratos c ON c.id = i.contrato_id AND c.situacao = 'ATIVO'
                                      WHERE i.servico_id = s.id) AS n
-                              FROM nfse_servicos s WHERE s.ativo = 1 ORDER BY s.ordem, s.nome""", fetch=True) or []
+                              FROM nfse_servicos s WHERE s.ativo = 1 AND s.nome <> 'Desconto' ORDER BY s.ordem, s.nome""", fetch=True) or []
     return [{'id': r['id'], 'nome': r['nome'], 'n': int(r['n'] or 0), 'valor_padrao': float(r['valor_padrao']) if r['valor_padrao'] is not None else None} for r in rows]
 
 

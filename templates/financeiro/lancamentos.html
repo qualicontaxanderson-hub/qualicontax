@@ -684,6 +684,7 @@
 </script>
 <script src="https://cdn.jsdelivr.net/npm/tom-select@2.4.3/dist/js/tom-select.complete.min.js"></script>
 <script src="{{ url_for('static', filename='js/caixa_servico.js') }}"></script>
+<script src="{{ url_for('static', filename='js/qc_data.js') }}"></script>
 <script>
 (function () {
   var D = JSON.parse(document.getElementById('lmDados').textContent);
@@ -1079,6 +1080,7 @@
       this.value = d ? (parseInt(d, 10) / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : ''; resumo();
     });
     nsServPinta();
+    if (window.QCData) QCData.ligarTodos($('nsFundo'));      // 19/11/2026: vencimento no calendário do sistema, não no do aparelho
     $('nsSeg').addEventListener('click', function (e) { var b = e.target.closest('button'); if (b) setCt(b.dataset.v); });
     ['nsVenc', 'nsComp', 'nsCv', 'nsParc'].forEach(function (id) { $(id).addEventListener('input', resumo); $(id).addEventListener('change', resumo); });
     $('nsValor').addEventListener('input', function () {     // como na maquininha: 100000 vira 1.000,00
