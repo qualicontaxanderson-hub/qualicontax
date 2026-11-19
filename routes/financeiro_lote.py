@@ -76,15 +76,31 @@ def lote_emitir():
         if venc < date.today():
             flash('O vencimento escolhido (%s) já passou. Escolha hoje ou uma data à frente.' % venc.strftime('%d/%m/%Y'), 'danger')
             return redirect(url_for('financeiro.honorarios', competencia=comp.strftime('%Y-%m')))
+    # 19/11/2026 — "Data por empresa": venc_<cliente_id> para cada marcada (Anderson: "escolher a mesma data nos dois e
+    # escolher diferentes" sem fazer dois procedimentos)
+    vencs = {}
+    for k, v in request.form.items():
+        if k.startswith('venc_') and k[5:].isdigit() and (v or '').strip():
+            try:
+                d = datetime.strptime(v.strip(), '%Y-%m-%d').date()
+            except ValueError:
+                flash('Data de vencimento inválida numa das empresas.', 'danger')
+                return redirect(url_for('financeiro.honorarios', competencia=comp.strftime('%Y-%m')))
+            if d < date.today():
+                flash('O vencimento escolhido para uma das empresas (%s) já passou.' % d.strftime('%d/%m/%Y'), 'danger')
+                return redirect(url_for('financeiro.honorarios', competencia=comp.strftime('%Y-%m')))
+            vencs[int(k[5:])] = d
     try:
-        lote_id = lote_mensal.rodar(current_app._get_current_object(), EMP, comp, current_user.id, so_clientes=so, vencimento=venc, so_decimo=sod)
+        lote_id = lote_mensal.rodar(current_app._get_current_object(), EMP, comp, current_user.id, so_clientes=so, vencimento=venc, so_decimo=sod,
+                                    vencimentos=vencs or None)
     except ValueError as e:
         flash(str(e), 'danger')
         return redirect(url_for('financeiro.honorarios', competencia=comp.strftime('%Y-%m')))
     registrar('escrita.emitiu_lote_mensal', 'financeiro', tabela='fin_lotes_mensais', registro_id=lote_id,
-              depois={'competencia': comp.strftime('%Y-%m'), 'so_clientes': so, 'so_decimo': sod, 'vencimento': venc.isoformat() if venc else 'dia do contrato'})
+              depois={'competencia': comp.strftime('%Y-%m'), 'so_clientes': so, 'so_decimo': sod, 'vencimento': venc.isoformat() if venc else ('por empresa' if vencs else 'dia do contrato'),
+                      'vencimentos': {str(k): v.isoformat() for k, v in vencs.items()} or None})
     flash('Cobrança de %s em emissão%s. Acompanhe no alto da tela; ela atualiza sozinha.'
-          % (comp.strftime('%m/%Y'), (' com vencimento em ' + venc.strftime('%d/%m/%Y')) if venc else ''), 'success')
+          % (comp.strftime('%m/%Y'), (' com vencimento em ' + venc.strftime('%d/%m/%Y')) if venc else (', cada empresa na data escolhida' if vencs else '')), 'success')
     return redirect(url_for('financeiro.honorarios', competencia=comp.strftime('%Y-%m')))
 
 

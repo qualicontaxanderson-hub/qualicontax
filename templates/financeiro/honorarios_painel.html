@@ -157,6 +157,15 @@
 .hp-em .hp-op.on { border-color:#ea580c; background:#fff7ed; box-shadow:0 0 0 3px #ffedd5; } .hp-em .hp-op.on .hp-ic { background:#ea580c; color:#fff; }
 .hp-em .hp-op small { display:block; line-height:1.35; } .hp-em .hp-op small b { display:inline; font-size:inherit; color:#9a3412; }
 .hp-dt-ops { display:flex; flex-wrap:wrap; gap:6px; margin-top:10px; }
+/* 19/11/2026: "Data por empresa" — uma linha por marcada, com o calendário do sistema */
+.hp-em-cada { display:none; flex-direction:column; gap:6px; margin-top:10px; max-height:270px; overflow:auto; padding-right:2px; }
+#hpEmOpCada.on .hp-em-cada { display:flex; }
+.hp-em-row { display:grid; grid-template-columns:auto minmax(0,1fr) 220px; gap:8px; align-items:center; font-size:12.5px; }
+.hp-em-row .n { font-size:10.5px; font-weight:800; color:#64748b; background:#f1f5f4; border-radius:6px; padding:2px 6px; font-variant-numeric:tabular-nums; }
+.hp-em-row .nome { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-weight:700; color:#0f172a; }
+.hp-em-row .nome small { display:block; font-weight:500; color:#64748b; font-size:11px; }
+.hp-em-row .qcd-bt { min-height:40px; }
+@media (max-width:640px) { .hp-em-row { grid-template-columns:auto minmax(0,1fr); } .hp-em-row .qcd { grid-column:1 / -1; } }
 .hp-dt { border:1.5px solid #e2e8f0; background:#fff; border-radius:12px; padding:7px 10px; cursor:pointer; font:inherit; text-align:left; display:flex; flex-direction:column; min-width:88px; line-height:1.15; color:#0f172a; }
 .hp-dt small { font-size:10.5px; font-weight:800; letter-spacing:.05em; text-transform:uppercase; color:#94a3b8; } .hp-dt b { font-size:14px; } .hp-dt i { font-style:normal; font-size:11.5px; color:#64748b; }
 .hp-dt:hover { border-color:#fdba74; } .hp-dt.on { border-color:#ea580c; background:#ea580c; color:#fff; box-shadow:0 6px 16px rgba(234,88,12,.3); } .hp-dt.on small, .hp-dt.on i { color:rgba(255,255,255,.85); }
@@ -379,6 +388,9 @@ span.hp-bco, span.hp-nf { cursor:default; }
           <input type="hidden" id="hpEmData" value="">
           <div class="hp-dt-ops" id="hpEmChips"></div>
           <div class="hp-cal" id="hpEmCal" hidden></div></span></label>
+      <label class="hp-op" id="hpEmOpCada" onclick="hpEmVenc('cada')"><input type="radio" name="hpvenc" value="cada"><span class="hp-ic"><i class="fas fa-calendar-days"></i></span>
+        <span class="tx"><b>Data por empresa</b><small>cada empresa marcada com a sua data (já vem a do contrato; mude a que quiser)</small>
+          <div class="hp-em-cada" id="hpEmCada"></div></span></label>
       <div class="hp-em-nota"><i class="fas fa-envelope"></i> Cada empresa recebe a nota (quando tiver) e o boleto por e-mail, nos contatos do Financeiro.</div>
       <div class="hp-msg" id="hpEmMsg"></div>
     </div>
@@ -420,6 +432,7 @@ span.hp-bco, span.hp-nf { cursor:default; }
 {% endblock %}
 
 {% block extra_js %}
+<script src="{{ url_for('static', filename='js/qc_data.js') }}"></script>
 <script>
 var BANCOS = {{ bancos_js | tojson }};
 var URL_ESC = "{{ url_for('financeiro.honorarios_escolha') if pode_rota('financeiro.honorarios_escolha') else '' }}";  {# o {% set %} do content não chega aqui #}
@@ -625,6 +638,7 @@ function hpBr(iso) { return iso ? iso.split('-').reverse().join('/') : ''; }
 function hpEmVenc(qual) {
   document.getElementById('hpEmOpContrato').classList.toggle('on', qual === 'contrato');
   document.getElementById('hpEmOpOutra').classList.toggle('on', qual === 'outra');
+  document.getElementById('hpEmOpCada').classList.toggle('on', qual === 'cada');
   document.querySelector('#hpEmCx input[name="hpvenc"][value="' + qual + '"]').checked = true;
   document.getElementById('hpEmMsg').textContent = '';
   hpEmRotulo();
@@ -680,9 +694,21 @@ function hpEmCalMonta() {
   cal.innerHTML = h;
 }
 function hpEmRotulo() {
-  var outra = document.getElementById('hpEmOpOutra').classList.contains('on'), d = document.getElementById('hpEmData').value;
+  var outra = document.getElementById('hpEmOpOutra').classList.contains('on'), cada = document.getElementById('hpEmOpCada').classList.contains('on'), d = document.getElementById('hpEmData').value;
   var n = parseInt(document.getElementById('hpEmQtd').textContent, 10) || 0;
-  document.getElementById('hpEmOk').querySelector('span').textContent = 'Emitir ' + (n === 1 ? '1 cobrança' : n + ' cobranças') + (outra && d ? ' para ' + hpBr(d) : '');
+  document.getElementById('hpEmOk').querySelector('span').textContent = 'Emitir ' + (n === 1 ? '1 cobrança' : n + ' cobranças') + (outra && d ? ' para ' + hpBr(d) : (cada ? (n === 1 ? ' na data escolhida' : ', cada uma na sua data') : ''));
+}
+function hpEmCadaMonta(cards) {   // 19/11/2026: uma linha por empresa marcada, já com a data do contrato (ou hoje, se passou)
+  var box = document.getElementById('hpEmCada'); if (!box) return;
+  box.innerHTML = '';
+  cards.forEach(function (c) {
+    var num = (c.querySelector('.tx-c-num') || {}).textContent || '', nome = (c.querySelector('.tx-c-nome') || {}).textContent || '';
+    var d = c.dataset.venc && c.dataset.venc >= HOJE ? c.dataset.venc : HOJE;
+    var r = document.createElement('div'); r.className = 'hp-em-row';
+    r.innerHTML = '<span class="n">' + num + '</span><span class="nome">' + nome + (c.dataset.dec13 === '1' ? '<small>a parcela do 13º fica na data combinada</small>' : '') + '</span><input type="date" class="hp-em-dt" data-cli="' + c.dataset.cli + '" min="' + HOJE + '">';
+    r.querySelector('input').value = d; box.appendChild(r);
+    if (window.QCData) QCData.ligar(r.querySelector('input'));
+  });
 }
 function hpEmAbrir() {
   var cards = [].slice.call(document.querySelectorAll('.tx-painel[data-p="emitir"] .hp-c.marcado'));
@@ -704,6 +730,7 @@ function hpEmAbrir() {
   document.getElementById('hpEmContratoTxt').innerHTML = txt;
   document.getElementById('hpEmData').value = ''; document.getElementById('hpEmMsg').textContent = '';
   document.getElementById('hpEmCal').hidden = true; hpEmChipsPinta();
+  hpEmCadaMonta(cards);
   hpEmVenc('contrato');
   document.getElementById('hpEmCx').classList.add('on'); document.body.style.overflow = 'hidden';
 }
@@ -713,6 +740,17 @@ function hpEmConfirmar() {
   msg.className = 'hp-msg erro';
   if (outra && !d) { msg.textContent = 'Escolha a data de vencimento: toque numa das datas ou abra o calendário.'; return; }
   if (outra && d < HOJE) { msg.textContent = 'Essa data já passou. Escolha hoje ou uma data à frente.'; return; }
+  var form = document.getElementById('hpForm'); form.querySelectorAll('.hp-vcada').forEach(function (i) { i.remove(); });
+  if (document.getElementById('hpEmOpCada').classList.contains('on')) {
+    var falta = null;
+    [].forEach.call(document.querySelectorAll('#hpEmCada .hp-em-dt'), function (i) {
+      if (falta) return;
+      if (!i.value) falta = 'Falta a data de ' + i.closest('.hp-em-row').querySelector('.nome').firstChild.textContent + '.';
+      else if (i.value < HOJE) falta = 'A data de ' + i.closest('.hp-em-row').querySelector('.nome').firstChild.textContent + ' (' + hpBr(i.value) + ') já passou.';
+      else { var h = document.createElement('input'); h.type = 'hidden'; h.className = 'hp-vcada'; h.name = 'venc_' + i.dataset.cli; h.value = i.value; form.appendChild(h); }
+    });
+    if (falta) { msg.textContent = falta; return; }
+  }
   document.getElementById('hpVencInput').value = outra ? d : '';
   var ok = document.getElementById('hpEmOk'); ok.disabled = true; ok.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> Emitindo…';
   document.getElementById('hpForm').submit();

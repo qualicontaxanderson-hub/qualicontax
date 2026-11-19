@@ -215,7 +215,7 @@ def _cobrar(linha, lote_id, usuario_id, conta, cfg, empresa_id):
     return fechar('ok', titulo_id=titulo_id, nfse_id=nfse_id, boleto_id=boleto_id, email='; '.join(a for a in avisos if a))
 
 
-def rodar(app, empresa_id, competencia, usuario_id, so_clientes=None, vencimento=None, so_decimo=None):
+def rodar(app, empresa_id, competencia, usuario_id, so_clientes=None, vencimento=None, so_decimo=None, vencimentos=None):
     """Emite o lote inteiro (ou só ``so_clientes``) numa thread. Devolve o id do lote.
     ``vencimento`` (date): a pessoa escolheu outra data na janela de emissão — vale para todas as empresas desta
     rodada no lugar do dia do contrato (19/11/2026, Anderson: "escolher data do contrato ou outra data")."""
@@ -249,8 +249,11 @@ def rodar(app, empresa_id, competencia, usuario_id, so_clientes=None, vencimento
                     if linha['feito'] and linha['feito']['status'] == 'ok':
                         continue
                     linha['competencia'] = competencia
-                    if vencimento and (linha.get('tipo') or 'MENSAL') == 'MENSAL':      # a parcela do 13º fica na data combinada
-                        linha['vencimento'] = vencimento
+                    if (linha.get('tipo') or 'MENSAL') == 'MENSAL':                      # a parcela do 13º fica na data combinada
+                        if vencimentos and linha['cliente_id'] in vencimentos:          # "Data por empresa" (19/11/2026)
+                            linha['vencimento'] = vencimentos[linha['cliente_id']]
+                        elif vencimento:
+                            linha['vencimento'] = vencimento
                     _cobrar(linha, lote_id, usuario_id, conta_da(linha), cfg, empresa_id)
                 r = execute_query("SELECT COUNT(*) n, COALESCE(SUM(total), 0) t FROM fin_lote_itens WHERE lote_id = %s AND status = 'ok'",
                                   (lote_id,), fetch=True, fetch_one=True)
