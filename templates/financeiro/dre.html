@@ -152,10 +152,14 @@
 .dr-acoes { margin-left:auto; display:flex; gap:6px; }
 .dr-acoes button { border:1px solid var(--linha); background:#fff; color:#475569; border-radius:99px; padding:5px 12px; font:inherit; font-size:12px; font-weight:700; cursor:pointer; }
 .dr-acoes button:hover { border-color:#9fc9b3; color:var(--verde); }
-.dre-wrap { overflow-x:auto; padding:10px 0 6px; }
+/* rola por dentro nos dois sentidos: o cabeçalho dos meses e a coluna dos nomes ficam sempre à vista */
+.dre-wrap { overflow:auto; max-height:calc(100vh - 150px); margin-top:10px; padding:0 0 6px; overscroll-behavior:contain; }
 .dre-wrap table { width:100%; min-width:1240px; border-collapse:collapse; font-size:13px; }
 .dre-wrap td, .dre-wrap th { white-space:nowrap; text-align:right; padding:8px 10px; font-variant-numeric:tabular-nums; border-bottom:1px solid #f1f5f9; }
-.dre-wrap th { font-size:12px; color:#64748b; font-weight:700; background:#f8fafc; border-bottom:1px solid #e2e8f0; }
+.dre-wrap th { font-size:12px; color:#64748b; font-weight:800; background:#f1f5f4; border-bottom:2px solid #dbe5df; position:sticky; top:0; z-index:3; padding-top:10px; padding-bottom:10px; }
+.dre-wrap thead th:first-child { z-index:5; background:#f1f5f4; }
+.dre-wrap th.col-on { background:#0f3d2e; color:#fff; }
+.dre-wrap td.col-on { box-shadow:inset 0 0 0 999px rgba(15,61,46,.035); }
 .dre-wrap td:first-child, .dre-wrap th:first-child { text-align:left; position:sticky; left:0; z-index:1; padding-left:18px; min-width:250px; }
 .dre-wrap td { background:#fff; }
 .dre-wrap th:last-child, .dre-wrap td:last-child { padding-right:18px; }
@@ -947,8 +951,26 @@ document.querySelectorAll('.dre-wrap tbody tr').forEach(function (tr) {
     var tds = [].slice.call(tr.children).slice(1, 13), vs = tds.map(function (td) { return parseFloat(td.getAttribute('data-v') || '0'); });
     var mx = Math.max.apply(null, vs.map(Math.abs)); if (!mx) return;
     var rec = tr.classList.contains('rec') || (tr.getAttribute('data-tipo') === 'R');
-    tds.forEach(function (td, i) { if (vs[i] > 0) td.style.background = (rec ? 'rgba(22,163,74,' : 'rgba(249,115,22,') + (0.03 + 0.17 * vs[i] / mx).toFixed(3) + ')'; });
+    // traço fino embaixo do valor, do tamanho dele na linha (antes era o fundo da célula inteira — cansava a vista)
+    tds.forEach(function (td, i) { if (vs[i] > 0) {
+        td.style.backgroundImage = 'linear-gradient(' + (rec ? '#86efac' : '#fdba74') + ',' + (rec ? '#86efac' : '#fdba74') + ')';
+        td.style.backgroundSize = Math.max(10, Math.round(vs[i] / mx * 64)) + '% 3px';
+        td.style.backgroundPosition = 'right 10px bottom 2px'; td.style.backgroundRepeat = 'no-repeat';
+    } });
 });
+// passar o mouse numa célula acende o mês lá em cima
+(function () {
+    var tab = document.querySelector('.dre-wrap table'); if (!tab) return;
+    var ths = tab.querySelectorAll('thead th'), aceso = -1;
+    function acende(k) {
+        if (k === aceso) return;
+        if (aceso >= 0) { ths[aceso] && ths[aceso].classList.remove('col-on'); tab.querySelectorAll('td.col-on').forEach(function (t) { t.classList.remove('col-on'); }); }
+        aceso = k;
+        if (k > 0 && k <= 12) { ths[k].classList.add('col-on'); tab.querySelectorAll('tbody tr').forEach(function (tr) { var td = tr.children[k]; if (td) td.classList.add('col-on'); }); }
+    }
+    tab.addEventListener('mouseover', function (e) { var td = e.target.closest('td'); acende(td ? [].indexOf.call(td.parentNode.children, td) : -1); });
+    tab.addEventListener('mouseleave', function () { acende(-1); });
+})();
 </script>
 <script>
 function dreToggle(bloco, abrir) {
