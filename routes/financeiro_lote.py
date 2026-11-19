@@ -61,14 +61,26 @@ def lote():
 def lote_emitir():
     comp = _competencia()
     so = [int(x) for x in request.form.getlist('cliente') if str(x).isdigit()] or None
+    # 19/11/2026 — vencimento escolhido na janela ("outra data"); vazio = dia do contrato
+    venc, raw = None, (request.form.get('vencimento') or '').strip()
+    if raw:
+        try:
+            venc = datetime.strptime(raw, '%Y-%m-%d').date()
+        except ValueError:
+            flash('Data de vencimento inválida.', 'danger')
+            return redirect(url_for('financeiro.honorarios', competencia=comp.strftime('%Y-%m')))
+        if venc < date.today():
+            flash('O vencimento escolhido (%s) já passou. Escolha hoje ou uma data à frente.' % venc.strftime('%d/%m/%Y'), 'danger')
+            return redirect(url_for('financeiro.honorarios', competencia=comp.strftime('%Y-%m')))
     try:
-        lote_id = lote_mensal.rodar(current_app._get_current_object(), EMP, comp, current_user.id, so_clientes=so)
+        lote_id = lote_mensal.rodar(current_app._get_current_object(), EMP, comp, current_user.id, so_clientes=so, vencimento=venc)
     except ValueError as e:
         flash(str(e), 'danger')
         return redirect(url_for('financeiro.honorarios', competencia=comp.strftime('%Y-%m')))
     registrar('escrita.emitiu_lote_mensal', 'financeiro', tabela='fin_lotes_mensais', registro_id=lote_id,
-              depois={'competencia': comp.strftime('%Y-%m'), 'so_clientes': so})
-    flash('Cobrança de %s em emissão. Acompanhe no alto da tela; ela atualiza sozinha.' % comp.strftime('%m/%Y'), 'success')
+              depois={'competencia': comp.strftime('%Y-%m'), 'so_clientes': so, 'vencimento': venc.isoformat() if venc else 'dia do contrato'})
+    flash('Cobrança de %s em emissão%s. Acompanhe no alto da tela; ela atualiza sozinha.'
+          % (comp.strftime('%m/%Y'), (' com vencimento em ' + venc.strftime('%d/%m/%Y')) if venc else ''), 'success')
     return redirect(url_for('financeiro.honorarios', competencia=comp.strftime('%Y-%m')))
 
 
