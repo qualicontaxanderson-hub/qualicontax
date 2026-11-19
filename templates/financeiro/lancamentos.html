@@ -12,6 +12,8 @@
 .ns-serv-bt .tx small { color:#64748b; font-size:11.5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; } .ns-serv-bt > i { color:#94a3b8; }
 .ns-serv-bt.vazio { border-style:dashed; border-color:#fdba74; } .ns-serv-bt.vazio b { color:#9a3412; } .ns-serv-bt:hover { border-color:#22c55e; }
 .ns-desc-un { color:#15803d; margin-left:4px; } #nsDescBox .ns-seg button:disabled { opacity:.35; cursor:not-allowed; }
+.ns-pag { margin-top:10px; } .ns-pag label small { display:block; font-weight:500; color:#64748b; font-size:11px; margin-top:2px; } .ns-pag[hidden] { display:none; }
+.lm-t-pag { background:#fef3c7; color:#92400e; }
 .lm-t-desc { background:#dcfce7; color:#166534; } .tx-c.desc .tx-c-val { color:#15803d; } .lm-junto { font-size:11.5px; color:#166534; background:#f0fdf4; border:1px solid #bbf7d0; border-radius:9px; padding:6px 9px; margin-top:8px; }
 </style>
 {# 17/11/2026 — LANÇAMENTOS refeito no molde aprovado pelo Anderson ("Aprova"): quadros coloridos e cartões como a tela
@@ -297,7 +299,7 @@
   {% if l.destino == 'MENSAL' %}<span class="lm-venc mensal"><span class="dd"><i class="fas fa-calendar"></i></span>mensalidade de {{ l.competencia.strftime('%m/%Y') }}</span>
   {% elif l.titulo_vencimento or l.vencimento %}{% set vd = l.titulo_vencimento or l.vencimento %}<span class="lm-venc" data-venc="{{ vd.isoformat() }}" data-pago="{{ '1' if fase == 'pag' else '' }}" title="Vencimento"><span class="dd">{{ vd.strftime('%d') }}</span>vence {{ vd.strftime('%d/%m') }}<em></em></span>{% endif %}
   {% if falhou %}{% set mf = motivo_nfse(l.motivo_falha) %}<div class="lm-falha"><i class="fas fa-circle-exclamation"></i> {% if mf.texto %}<b>{{ mf.texto }}</b>{% if mf.cod %} <small>({{ mf.cod }})</small>{% endif %}<br>{{ mf.fazer or 'Corrija o que o governo apontou e emita de novo.' }}{% if mf.bruto and mf.texto != mf.bruto %}<br><small title="{{ mf.bruto }}">Texto do governo: {{ mf.bruto[:160] }}{{ '…' if mf.bruto|length > 160 }}</small>{% endif %}{% else %}A nota ou o boleto não saíram na aprovação.{% endif %}{% if aprov %} {{ 'Depois toque em Cobrar de novo.' if mf.texto else 'Corrija o cadastro e cobre de novo.' }}{% else %} Quem aprova vai cobrar de novo.{% endif %}</div>{% endif %}
-  <div style="margin-top:8px">{% if l.origem == 'DESCONTO' %}<span class="lm-tipo lm-t-desc"><i class="fas fa-tag"></i> desconto {{ 'na mensalidade' if l.desc_sobre == 'MENSAL' else 'sobre o serviço' }}</span> {% endif %}<span class="lm-tipo {{ 'lm-t-me' if l.destino == 'MENSAL' else 'lm-t-av' }}"><i class="fas {{ 'fa-calendar' if l.destino == 'MENSAL' else 'fa-barcode' }}"></i> {{ l.como }}</span>
+  <div style="margin-top:8px">{% if l.pagador_cliente_id %}<span class="lm-tipo lm-t-pag" title="Boleto e nota no nome de quem paga; o serviço é desta empresa"><i class="fas fa-hand-holding-dollar"></i> paga: {{ (l.pagador_num ~ ' · ' if l.pagador_num else '') ~ (l.pagador_nome or '') }}</span> {% endif %}{% if l.origem == 'DESCONTO' %}<span class="lm-tipo lm-t-desc"><i class="fas fa-tag"></i> desconto {{ 'na mensalidade' if l.desc_sobre == 'MENSAL' else 'sobre o serviço' }}</span> {% endif %}<span class="lm-tipo {{ 'lm-t-me' if l.destino == 'MENSAL' else 'lm-t-av' }}"><i class="fas {{ 'fa-calendar' if l.destino == 'MENSAL' else 'fa-barcode' }}"></i> {{ l.como }}</span>
     {% if l.parcelas and l.parcelas > 1 and not l.parcela %}<span class="lm-tipo lm-t-parc"><i class="fas fa-layer-group"></i> em {{ l.parcelas }}x de {{ ((l.valor_total | float) / l.parcelas) | format_currency }}</span>
     {% elif l.parcela %}<span class="lm-tipo lm-t-parc"><i class="fas fa-layer-group"></i> parcela {{ l.parcela }}/{{ l.parcelas }}</span>{% endif %}</div>
   {% if adiantavel %}<div class="lm-adi"><i class="fas fa-forward"></i> {{ 'Cliente em atraso.' if fase == 'atr' else 'O cliente ainda não pagou.' }} Marque para pedir a comissão adiantada; se não recebermos, ela é descontada dos próximos pedidos.</div>
@@ -530,7 +532,9 @@
   {% if aprov %}<input type="hidden" name="emitir" value="1">{% endif %}
   <div class="ns-g"><div class="ns-f">
     <section class="ns-b"><div class="ns-h"><i class="fas fa-building"></i> Cliente</div>
-      <div class="ns-campo"><select id="nsCli" name="cliente_id" placeholder="Nome, número ou CNPJ/CPF"></select></div></section>
+      <div class="ns-campo"><select id="nsCli" name="cliente_id" placeholder="Nome, número ou CNPJ/CPF"></select></div>
+      <div class="ns-campo ns-pag" id="nsPagBox"><label>Quem paga <small>só se for outra empresa · o serviço fica no histórico da empresa acima; boleto e nota saem no nome de quem paga</small></label>
+        <select id="nsPag" name="pagador_cliente_id" placeholder="A própria empresa (padrão)"></select></div></section>
     {% if aprov %}
     <section class="ns-b"><div class="ns-h"><i class="fas fa-route"></i> O que fazer</div><div class="ns-ops ns-ops-a" id="nsOps">
       <button type="button" class="ns-op on" data-v="BOLETO_NOTA"><span class="ns-op-tag"><i class="fas fa-bolt"></i> agora</span><i class="fas fa-file-invoice-dollar"></i><b>Emitir boleto + nota</b><small>a nota e o boleto saem agora e vão por e-mail</small></button>
@@ -933,7 +937,8 @@
   window.rpFechar = function () { $('rpFundo').classList.remove('on'); document.body.style.overflow = ''; };
 
   // ── caixa Nova solicitação ──
-  var tsCli = null, tsServ = null, como = 'BOLETO_NOTA', ct = D.aprovador ? 'SEM' : 'PADRAO';   // quem aprova emite sem comissão para si
+  var tsCli = null, tsServ = null, tsPag = null, como = 'BOLETO_NOTA', ct = D.aprovador ? 'SEM' : 'PADRAO';   // quem aprova emite sem comissão para si
+  function pagador() { var v = tsPag && tsPag.getValue(); var c = cliente(); if (!v || (c && String(c.id) === String(v))) return null; return D.clientes.filter(function (x) { return String(x.id) === String(v); })[0] || null; }
   function acordo(sid) {
     // acordo da pessoa para o serviço > padrão do serviço (para quem tem acordo geral) > acordo geral
     var esp = D.acordos.filter(function (x) { return String(x.servico_id) === String(sid); })[0];
@@ -971,6 +976,8 @@
     var linhas = [['Cliente', c ? (c.num ? c.num + ' · ' : '') + c.nome : '—'], ['Cobrança', { BOLETO_NOTA: 'Boleto + nota fiscal', BOLETO: 'Só boleto', MENSAL: 'Na mensalidade' + (comp ? ' de ' + comp.textContent : '') }[como]],
                   ['Serviço', s ? s.nome : (ds.valor && ds.sobre === 'MENSAL' ? 'só o desconto' : '—')]];
     if (ds.valor) linhas.push(['Desconto', (ds.sobre === 'MENSAL' ? 'na mensalidade' : 's/ ' + (s ? s.nome : 'o serviço')) + ' − ' + brl(ds.valor) + (ds.pct ? ' (' + ds.pct.toLocaleString('pt-BR') + '%)' : '')]);
+    var pg = como === 'MENSAL' ? null : pagador(); $('nsPagBox').hidden = como === 'MENSAL';
+    if (pg) linhas.push(['Quem paga', (pg.num ? pg.num + ' · ' : '') + pg.nome]);
     var np = +$('nsParc').value || 1;
     if (como !== 'MENSAL' && np <= 1) linhas.push(['Vencimento', dbr($('nsVenc').value) || '—']);
     if (np > 1) linhas.push(['Parcelas', np + 'x de ' + brl(liq / np)]);
@@ -994,7 +1001,7 @@
     $('nsAviso').classList.remove('red'); $('nsEnviar').disabled = false;
     if (D.aprovador) {      // quem aprova: tela única de emitir agora ou incluir no mensal
       $('nsAviso').innerHTML = como === 'MENSAL' ? 'Entra no boleto da mensalidade' + (comp ? ' de <b>' + comp.textContent + '</b>' : '') + ' e sai junto com o lote do mês.'
-        : '<b>Sai agora:</b> ' + (como === 'BOLETO' ? 'o boleto é emitido' : 'a nota e o boleto são emitidos') + ' e vão por e-mail aos contatos do Financeiro do cliente.';
+        : '<b>Sai agora:</b> ' + (como === 'BOLETO' ? 'o boleto é emitido' : 'a nota e o boleto são emitidos') + (pg ? ' <b>no nome de ' + esc(pg.nome) + '</b> e vão por e-mail aos contatos do Financeiro dela; o serviço fica registrado em ' + esc(c ? c.nome : 'na empresa') + '.' : ' e vão por e-mail aos contatos do Financeiro do cliente.');
       $('nsEnviar').innerHTML = como === 'MENSAL' ? '<i class="fas fa-calendar-plus"></i> Incluir na mensalidade' + (comp ? ' de ' + comp.textContent : '')
         : '<i class="fas fa-bolt"></i> Emitir agora';
     } else {
@@ -1052,6 +1059,14 @@
                 no_results: function () { return '<div class="no-results">Nenhum cadastro com esse nome</div>'; } },
       onChange: resumo
     });
+    tsPag = new TomSelect('#nsPag', {      // 19/11/2026: "Quem paga" — outra empresa paga este serviço (só avulso)
+      options: D.clientes.map(function (c) { return { value: String(c.id), text: (c.num ? c.num + ' · ' : '') + c.nome, busca: c.num + ' ' + c.nome + ' ' + c.doc, c: c }; }),
+      searchField: ['text', 'busca'], maxOptions: 60, dropdownParent: 'body', dropdownClass: 'ts-dropdown ns-dd', closeAfterSelect: true, allowEmptyOption: true,
+      render: { option: function (o) { return '<div class="ns-o"><span>' + esc(o.text) + '</span><small>' + esc(docf(o.c.doc)) + '</small></div>'; },
+                no_results: function () { return '<div class="no-results">Nenhum cadastro com esse nome</div>'; } },
+      onChange: resumo
+    });
+    tsCli.on('change', function () { var c = cliente(); if (tsPag) tsPag.setValue(c && c.pag ? String(c.pag) : '', true); resumo(); });
     tsServ = new TomSelect('#nsServ', {
       options: D.servicos.map(function (s) { return { value: String(s.id), text: s.nome, s: s }; }), searchField: ['text'], maxOptions: 200,
       dropdownParent: 'body', dropdownClass: 'ts-dropdown ns-dd',

@@ -143,9 +143,11 @@ class FinLancamento:
     SELECT = """SELECT l.*, c.numero_cliente, c.nome_razao_social, c.cpf_cnpj, s.nome AS servico_nome, s.emite_nota,
                        u.nome AS lancado_por_nome, ua.nome AS aprovado_por_nome,
                        t.status AS titulo_status, t.vencimento AS titulo_vencimento, t.valor_baixado,
-                       f.status AS fechamento_status
+                       f.status AS fechamento_status,
+                       pg.numero_cliente AS pagador_num, pg.nome_razao_social AS pagador_nome
                   FROM fin_lancamentos l
                   JOIN clientes c ON c.id = l.cliente_id
+                  LEFT JOIN clientes pg ON pg.id = l.pagador_cliente_id
                   JOIN nfse_servicos s ON s.id = l.servico_id
                   JOIN usuarios u ON u.id = l.lancado_por
                   LEFT JOIN usuarios ua ON ua.id = l.aprovado_por
@@ -187,7 +189,8 @@ class FinLancamento:
 
     @staticmethod
     def criar(empresa_id, cliente_id, servico_id, descricao, quantidade, valor_unitario, destino, lancado_por,
-              vencimento=None, observacao=None, competencia=None, com_nota=None, comissao_tipo=None, comissao_valor=None):
+              vencimento=None, observacao=None, competencia=None, com_nota=None, comissao_tipo=None, comissao_valor=None,
+              pagador_cliente_id=None):
         if destino not in DESTINOS:
             raise ValueError('Escolha se a cobrança é avulsa ou entra no mensal.')
         q = _d(quantidade or 1)
@@ -211,11 +214,12 @@ class FinLancamento:
         return execute_query(
             """INSERT INTO fin_lancamentos (empresa_id, cliente_id, servico_id, descricao, quantidade, valor_unitario,
                    valor_total, destino, competencia, vencimento, observacao, lancado_por, com_nota,
-                   comissao_pedida_tipo, comissao_pedida_valor)
-               VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
+                   comissao_pedida_tipo, comissao_pedida_valor, pagador_cliente_id)
+               VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
             (empresa_id, cliente_id, servico_id, (descricao or '')[:200], q, vu, (q * vu).quantize(Decimal('0.01')),
              destino, competencia, vencimento, observacao, lancado_por,
-             None if com_nota is None else (1 if com_nota else 0), comissao_tipo, cv), fetch=False)
+             None if com_nota is None else (1 if com_nota else 0), comissao_tipo, cv,
+             (pagador_cliente_id if destino == 'AVULSO' and pagador_cliente_id and int(pagador_cliente_id) != int(cliente_id) else None)), fetch=False)
 
     @staticmethod
     def comissao_calculada(l, tipo=None, valor=None, base=None):

@@ -265,7 +265,7 @@ def lancamentos():
     cats_dre = usuario_dre.categorias_despesa() if sem_dre else []
     acordos = [a for a in FinComissaoAcordo.listar(usuario_id=_eu().id) if a['base'] == 'SERVICO']
     clientes = execute_query(
-        """SELECT id, numero_cliente AS num, nome_razao_social AS nome, cpf_cnpj AS doc, COALESCE(avulso, 0) AS av
+        """SELECT id, numero_cliente AS num, nome_razao_social AS nome, cpf_cnpj AS doc, COALESCE(avulso, 0) AS av, cobranca_pagador_id AS pag
              FROM clientes WHERE COALESCE(situacao, 'ATIVO') <> 'INATIVO' ORDER BY nome_razao_social""", fetch=True) or []
     mensal = {r['cliente_id']: float(r['v'] or 0) for r in execute_query(
         """SELECT cliente_id, SUM(valor) v FROM fin_contratos WHERE ativo = 1 AND COALESCE(situacao, 'ATIVO') = 'ATIVO'
@@ -276,7 +276,7 @@ def lancamentos():
         comps.append(date(comps[-1].year + (comps[-1].month == 12), comps[-1].month % 12 + 1, 1))
     caixa = {
         'clientes': [{'id': c['id'], 'num': str(c['num'] or ''), 'nome': c['nome'], 'doc': c['doc'] or '', 'av': bool(c['av']),
-                      'mensal': mensal.get(c['id'], 0)} for c in clientes],
+                      'mensal': mensal.get(c['id'], 0), 'pag': c.get('pag') or None} for c in clientes],
         'servicos': [{'id': s['id'], 'nome': s['nome'], 'valor': float(s['valor_padrao'] or 0), 'nota': bool(s['emite_nota']),
                       'ct': s.get('comissao_tipo') or '', 'cv': float(s.get('comissao_valor') or 0), 'n': int(s.get('n') or 0)}
                      for s in _servicos() if s['nome'] != 'Desconto'],
@@ -592,6 +592,13 @@ def lancamento_novo():
         comp = _data(f.get('competencia')) if destino == 'MENSAL' else None
         venc = _data(f.get('vencimento')) if destino == 'AVULSO' else None
         valor = _dec(f.get('valor')) if servico_id else Decimal('0')
+        # 19/11/2026 — "Quem paga": outra empresa paga este serviço (só avulso). O serviço fica na dona; boleto e nota saem no nome de quem paga.
+        pagador = f.get('pagador_cliente_id', type=int) if destino == 'AVULSO' else None
+        if pagador and pagador != cliente_id:
+            if not execute_query("SELECT 1 FROM clientes WHERE id = %s AND COALESCE(situacao, 'ATIVO') <> 'INATIVO'", (pagador,), fetch=True):
+                raise ValueError('A empresa que paga não está no cadastro (ou está inativa).')
+        else:
+            pagador = None
         dv = None
         if desc:
             dv = _valor_desconto(desc, valor if desc['sobre'] == 'SERVICO' else _mensal_de(cliente_id),
@@ -604,7 +611,8 @@ def lancamento_novo():
                                       observacao=(f.get('observacao') or '').strip() or None, competencia=comp,
                                       com_nota=None if destino == 'MENSAL' else (como == 'BOLETO_NOTA'),
                                       comissao_tipo='SEM' if FinLancamento.servico_travado(servico_id) else (f.get('comissao_tipo') or 'PADRAO'),
-                                      comissao_valor=None if FinLancamento.servico_travado(servico_id) else (f.get('comissao_valor') or None))
+                                      comissao_valor=None if FinLancamento.servico_travado(servico_id) else (f.get('comissao_valor') or None),
+                                      pagador_cliente_id=pagador)
             _marcar_pelo_admin(lid)
             n = _parcelas_do_form(f)
             datas = _datas_parcelas(f, n, destino == 'MENSAL')
@@ -615,7 +623,7 @@ def lancamento_novo():
             rot = ('Desconto s/ ' + (s['nome'] if desc['sobre'] == 'SERVICO' and s else 'a mensalidade')) + ' — ' + desc['motivo']
             did = FinLancamento.criar(EMP, cliente_id, FinLancamento.servico_desconto_id(EMP), rot[:200], Decimal('1'), dv, destino, _eu().id,
                                       vencimento=venc, observacao=desc['motivo'], competencia=comp,
-                                      com_nota=None if destino == 'MENSAL' else False, comissao_tipo='SEM')
+                                      com_nota=None if destino == 'MENSAL' else False, comissao_tipo='SEM', pagador_cliente_id=pagador)
             execute_query('UPDATE fin_lancamentos SET desc_lancamento_id = %s, desc_sobre = %s WHERE id = %s', (lid, desc['sobre'], did), fetch=False)
             _marcar_pelo_admin(did)
             dl = FinLancamento.get(did)
@@ -628,7 +636,7 @@ def lancamento_novo():
                   depois={'empresa': l['nome_razao_social'], 'servico': l['servico_nome'], 'valor': str(l['valor_total']),
                           'como': _como(l), 'vencimento': str(l['vencimento'] or ''),
                           'comissao_pedida': (l.get('comissao_pedida_tipo') or '') + (' ' + str(l['comissao_pedida_valor']) if l.get('comissao_pedida_valor') else ''),
-                          'parcelas': n, 'desconto': str(dv) if dv else None})
+                          'parcelas': n, 'desconto': str(dv) if dv else None, 'quem_paga': l.get('pagador_nome')})
         if _aprovador() and f.get('emitir') == '1':
             # 17/11/2026 — Anderson: "numa tela só para emissão imediata ou para incluir no mensal". Quem aprova não
             # precisa aprovar a própria: já sai aprovado — avulso emite agora, mensal entra no lote do mês.
@@ -703,15 +711,17 @@ def _cobrar_avulso(l, usuario_id, conta_id=None):
         conta = FinCobrancaConta.padrao_da_empresa(l['empresa_id'])
     if not conta:
         return False, ['Não há conta de cobrança ativa para emitir o boleto.']
-    t = tomador_do_cliente(l['cliente_id'])
+    paga = l.get('pagador_cliente_id') or l['cliente_id']        # 19/11/2026: "Quem paga" — boleto e nota em nome de quem paga
+    t = tomador_do_cliente(paga)
     if not t or not t.get('documento'):
-        return False, ['O cadastro da empresa não tem CPF/CNPJ para o boleto.']
+        return False, ['O cadastro da empresa %s não tem CPF/CNPJ para o boleto.' % ('que paga' if paga != l['cliente_id'] else '')]
+    dona = (' — serviço de %s' % l['nome_razao_social']) if paga != l['cliente_id'] else ''
     vencimento = l['vencimento'] or (date.today())
     if vencimento < date.today():
         vencimento = date.today()
     competencia = l['competencia']
     _venc, mensagem = sugestao_boleto(conta, competencia)
-    itens = [{'servico_id': l['servico_id'], 'nome': l['descricao'] or l['servico_nome'], 'valor': Decimal(str(l['valor_total'])),
+    itens = [{'servico_id': l['servico_id'], 'nome': (l['descricao'] or l['servico_nome']) + dona, 'valor': Decimal(str(l['valor_total'])),
               'emite_nota': bool(l['com_nota'] if l.get('com_nota') is not None else l.get('emite_nota')), 'origem': 'honorarios'}]
     total = Decimal(str(l['valor_total']))
     # 19/11/2026: desconto pedido junto (aprovado): a linha do serviço sai pelo líquido dizendo de onde veio; a página do
@@ -730,7 +740,7 @@ def _cobrar_avulso(l, usuario_id, conta_id=None):
     if cfg:
         serie = cfg.get('serie_nacional') if (cfg.get('emissor') or 'nacional') == 'nacional' else cfg.get('serie_sp')
         form = MultiDict([('serie', str(serie or '')), ('competencia', competencia.isoformat()),
-                          ('tomador_cliente_id', str(l['cliente_id'])), ('descricao', (l['descricao'] or l['servico_nome']) + ((' Desconto de R$ %s já abatido.' % desc_total) if desc_total > 0 else '')),
+                          ('tomador_cliente_id', str(paga)), ('descricao', (l['descricao'] or l['servico_nome']) + dona + ((' Desconto de R$ %s já abatido.' % desc_total) if desc_total > 0 else '')),
                           ('item_servico_id', str(l['servico_id'])), ('item_valor', str(itens[0]['valor']))])
         try:
             pedido = nfse_emissor.pedido_do_form(form, l['empresa_id'], cfg)
@@ -838,7 +848,7 @@ def _dividir(l, n, datas=None):
             l['empresa_id'], l['cliente_id'], l['servico_id'], '%s (parcela %d/%d)' % (base, k + 1, n), Decimal('1'), valores[k],
             l['destino'], l['lancado_por'],
             vencimento=vencs[k], observacao=l.get('observacao'), competencia=comps[k],
-            com_nota=l.get('com_nota'), comissao_tipo=pt, comissao_valor=pvs[k])
+            com_nota=l.get('com_nota'), comissao_tipo=pt, comissao_valor=pvs[k], pagador_cliente_id=l.get('pagador_cliente_id'))
         execute_query("""UPDATE fin_lancamentos SET parcela = %s, parcelas = %s, parcela_grupo = %s, lancado_pelo_admin = %s
                           WHERE id = %s""", (k + 1, n, l['id'], l.get('lancado_pelo_admin'), nid), fetch=False)
         ids.append(nid)
@@ -852,7 +862,7 @@ def _dividir(l, n, datas=None):
         for k in range(1, n):
             nd = FinLancamento.criar(d['empresa_id'], d['cliente_id'], d['servico_id'], '%s (parcela %d/%d)' % (bd, k + 1, n), Decimal('1'), partes[k],
                                      d['destino'], d['lancado_por'], vencimento=vencs[k], observacao=d.get('observacao'), competencia=comps[k],
-                                     com_nota=d.get('com_nota'), comissao_tipo='SEM')
+                                     com_nota=d.get('com_nota'), comissao_tipo='SEM', pagador_cliente_id=d.get('pagador_cliente_id'))
             execute_query("""UPDATE fin_lancamentos SET parcela = %s, parcelas = %s, parcela_grupo = %s, desc_lancamento_id = %s, desc_sobre = %s,
                                  status = %s, lancado_pelo_admin = %s WHERE id = %s""",
                           (k + 1, n, d['id'], ids[k], d.get('desc_sobre'), d['status'], d.get('lancado_pelo_admin'), nd), fetch=False)
@@ -921,8 +931,9 @@ def lancamento_aprovar(lid):
         mudou = (destino != l['destino'] or venc != l['vencimento'] or comp != l['competencia']
                  or (destino == 'AVULSO' and bool(com_nota) != bool(nota_antes)))
         if mudou:
-            execute_query("UPDATE fin_lancamentos SET destino = %s, com_nota = %s, vencimento = %s, competencia = %s "
-                          "WHERE id = %s AND status = 'LANCADO'", (destino, com_nota, venc, comp, lid), fetch=False)
+            execute_query("UPDATE fin_lancamentos SET destino = %s, com_nota = %s, vencimento = %s, competencia = %s, "
+                          "pagador_cliente_id = IF(%s = 'MENSAL', NULL, pagador_cliente_id) WHERE id = %s AND status = 'LANCADO'",
+                          (destino, com_nota, venc, comp, destino, lid), fetch=False)
             execute_query("UPDATE fin_lancamentos SET destino = %s, com_nota = %s, vencimento = %s, competencia = %s "
                           "WHERE desc_lancamento_id = %s AND origem = 'DESCONTO' AND status = 'LANCADO'",
                           (destino, None if destino == 'MENSAL' else 0, venc, comp, lid), fetch=False)
