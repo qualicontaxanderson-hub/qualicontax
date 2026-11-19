@@ -47,13 +47,21 @@ def contas(empresa_id=EMPRESA_QUALICONTAX):
     return linhas
 
 
+def _nome_chave(nome):
+    """Razão social só com letras e números maiúsculos, sem acento: 'LTDA.' e 'LTDA' viram a mesma coisa."""
+    import re, unicodedata
+    s = unicodedata.normalize('NFD', str(nome or '')).encode('ascii', 'ignore').decode()
+    return re.sub(r'[^A-Z0-9]+', '', s.upper())
+
+
 def _historico(clientes, de, ate):
     """{cliente_id: {'AAAA-MM': {'status', 'valor', 'pago', 'venc', 'id'}}} das mensalidades por VENCIMENTO."""
     if not clientes:
         return {}
     por_doc = {_so_digitos(c['cpf_cnpj']): c['cliente_id'] for c in clientes if _so_digitos(c['cpf_cnpj'])}
     # boleto pago que entrou pelo extrato sem cliente: "Recebimento de cobrança: <nº> de <RAZÃO SOCIAL>"
-    por_nome = {(c.get('nome') or '').strip().upper(): c['cliente_id'] for c in clientes if c.get('nome')}
+    # 19/11/2026: o extrato escreve "AUTO POSTO SIM DE ITU LTDA" e o cadastro tem "LTDA." (ponto no fim) — compara só letras e números
+    por_nome = {_nome_chave(c.get('nome')): c['cliente_id'] for c in clientes if c.get('nome')}
     ids = [c['cliente_id'] for c in clientes]
     ph = ','.join(['%s'] * len(ids))
     tits = execute_query(
@@ -69,7 +77,7 @@ def _historico(clientes, de, ate):
     for t in tits:
         cid = t['cliente_id'] or por_doc.get(_so_digitos(t['contraparte_doc']))
         if not cid and (t['descricao'] or '').startswith('Recebimento de cobrança:') and ' de ' in t['descricao']:
-            cid = por_nome.get(t['descricao'].split(':', 1)[1].split(' de ', 1)[-1].strip().upper())
+            cid = por_nome.get(_nome_chave(t['descricao'].split(':', 1)[1].split(' de ', 1)[-1]))
         if not cid:
             continue
         k = t['vencimento'].strftime('%Y-%m')
