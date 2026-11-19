@@ -61,7 +61,7 @@
 .hp-it { display:flex; justify-content:space-between; gap:10px; font-size:12px; color:#475569; }
 .hp-it span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0; }
 .hp-it b { font-weight:700; color:#334155; font-variant-numeric:tabular-nums; white-space:nowrap; }
-.hp-it.dec span { color:#7c3aed; } .hp-it.lan span { color:#0369a1; }
+.hp-it.dec span { color:#7c3aed; } .hp-it.lan span { color:#0369a1; } .hp-it.desc span, .hp-it.desc b { color:#15803d; }
 .hp-it.lan span i, .hp-it.dec span i { font-size:10px; margin-right:3px; }
 .hp-linha { display:flex; align-items:center; gap:6px; flex-wrap:wrap; margin-top:10px; }
 .hp-bco { display:inline-flex; align-items:center; gap:6px; border:1px solid #e2e8f0; background:#fff; border-radius:99px; padding:3px 9px 3px 4px; font:inherit; font-size:11.5px;
@@ -244,8 +244,8 @@ span.hp-bco, span.hp-nf { cursor:default; }
     <div class="hp-venc">{{ 'venceu' if f == 'pagas' else 'vence' }}<b>{{ (l.atual.venc if l.atual else l.vencimento).strftime('%d/%m/%Y') }}</b></div>
   </div>
   <div class="hp-itens">
-    {% for i in l.itens %}<div class="hp-it{{ ' dec' if i.origem == 'decimo' else (' lan' if i.origem == 'lancamento' else '') }}">
-      <span>{% if i.origem == 'decimo' %}<i class="fas fa-gift"></i>{% elif i.origem == 'lancamento' %}<i class="fas fa-plus"></i>{% endif %}{{ i.nome }}</span><b>{{ i.valor | float | format_currency }}</b></div>{% endfor %}
+    {% for i in l.itens %}<div class="hp-it{{ ' dec' if i.origem == 'decimo' else (' lan' if i.origem == 'lancamento' else (' desc' if i.origem == 'desconto' else '')) }}">
+      <span>{% if i.origem == 'decimo' %}<i class="fas fa-gift"></i>{% elif i.origem == 'lancamento' %}<i class="fas fa-plus"></i>{% elif i.origem == 'desconto' %}<i class="fas fa-tag"></i>{% endif %}{{ i.nome }}</span><b>{% if i.origem == 'desconto' %}− {{ (i.valor | float | abs) | format_currency }}{% else %}{{ i.valor | float | format_currency }}{% endif %}</b></div>{% endfor %}
   </div>
   {% if f == 'erro' %}{% set mf = motivo_nfse(l.feito.erro) if motivo_nfse is defined else {} %}<div class="hp-err"><i class="fas fa-triangle-exclamation"></i> {% if mf and mf.texto %}<b>{{ mf.texto }}</b>{% if mf.fazer %}<br>{{ mf.fazer }}{% endif %}{% else %}{{ l.feito.erro or 'A nota ou o boleto não saíram.' }}{% endif %} Corrija e emita de novo.</div>{% endif %}
   <div class="hp-linha">

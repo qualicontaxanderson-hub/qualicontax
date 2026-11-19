@@ -47,6 +47,13 @@ def itens_da_empresa(contrato, competencia, itens_contrato=None, lancamentos=Non
     for i in itens_contrato:
         itens.append({'origem': 'honorarios', 'servico_id': i['servico_id'] or SERVICO_HONORARIOS,
                       'nome': i['descricao'], 'valor': str(_d(i['valor']))})
+    # 19/11/2026 — desconto mensal do contrato: linha própria, negativa; o total da empresa já sai líquido
+    honor = sum((_d(i['valor']) for i in itens_contrato if (i['servico_id'] or SERVICO_HONORARIOS) == SERVICO_HONORARIOS), Decimal('0')) \
+        or sum((_d(i['valor']) for i in itens_contrato), Decimal('0'))
+    desc = FinContrato.desconto_de(contrato, honor, competencia)
+    if desc > 0:
+        itens.append({'origem': 'desconto', 'servico_id': None, 'valor': str(-desc),
+                      'nome': 'Desconto mensal' + ((' — ' + contrato['desconto_motivo']) if contrato.get('desconto_motivo') else '')})
     tipo = contrato.get('decimo_tipo') or 'NENHUM'
     for n, (comp, valor) in enumerate(FinContrato.parcelas_decimo(contrato, competencia.year)):
         if comp == competencia and valor > 0:
@@ -138,6 +145,35 @@ def previa(empresa_id, competencia, so_clientes=None, so_decimo=None):
     return lote, linhas
 
 
+def _abate_desconto(itens, desconto):
+    """Itens que vão para a nota e para o boleto quando há desconto mensal: a linha dos honorários sai pelo LÍQUIDO e
+    diz de onde veio ("Honorários contábeis (R$ 1.000,00 − desconto mensal R$ 33,55)"); se não couber nela, abate das
+    outras. Banco e governo não aceitam linha negativa; a página do cliente e o e-mail mostram as duas linhas."""
+    resta = _d(desconto)
+    out = []
+    ordem = sorted(range(len(itens)), key=lambda k: 0 if itens[k].get('origem') == 'honorarios' else 1)
+    novos = {}
+    for k in ordem:
+        v = _d(itens[k]['valor'])
+        if resta <= 0 or v <= 0:
+            continue
+        corte = min(v, resta)
+        resta -= corte
+        novos[k] = (v, corte)
+    for k, i in enumerate(itens):
+        if k in novos:
+            v, corte = novos[k]
+            nome = '%s (R$ %s − desconto mensal R$ %s)' % (i['nome'], _brl(v), _brl(corte))
+            out.append(dict(i, nome=nome[:255], valor=str((v - corte).quantize(Decimal('0.01')))))
+        else:
+            out.append(dict(i))
+    return [i for i in out if _d(i['valor']) > 0]
+
+
+def _brl(v):
+    return ('%.2f' % _d(v)).replace('.', ',')
+
+
 def _cobrar(linha, lote_id, usuario_id, conta, cfg, empresa_id):
     """Nota + boleto + e-mail de UMA empresa. Grava a linha em fin_lote_itens. Devolve o status."""
     from models.fin_cobranca import FinBoleto
@@ -165,6 +201,11 @@ def _cobrar(linha, lote_id, usuario_id, conta, cfg, empresa_id):
     if not t or not t.get('documento'):
         return fechar('erro', 'cadastro sem CPF/CNPJ')
     _v, mensagem = sugestao_boleto(conta, competencia)
+    # 19/11/2026 — desconto mensal: a linha negativa vira abatimento na linha dos honorários (banco e nota só aceitam positivo)
+    desconto = sum((-_d(i['valor']) for i in itens if i.get('origem') == 'desconto'), Decimal('0'))
+    itens_lin = itens                                              # o que fica gravado no lote (com a linha do desconto)
+    if desconto > 0:
+        itens = _abate_desconto([i for i in itens if i.get('origem') != 'desconto'], desconto)
     emite_nota = bool(cfg) and linha['nota'] and any(i['servico_id'] for i in itens)
     nfse_id = boleto_id = titulo_id = None
     avisos = []
@@ -173,7 +214,8 @@ def _cobrar(linha, lote_id, usuario_id, conta, cfg, empresa_id):
             serie = cfg.get('serie_nacional') if (cfg.get('emissor') or 'nacional') == 'nacional' else cfg.get('serie_sp')
             form = MultiDict([('serie', str(serie or '')), ('competencia', competencia.isoformat()),
                               ('tomador_cliente_id', str(linha['cliente_id'])),
-                              ('descricao', NfseConfig.descricao_para(cfg, competencia))]
+                              ('descricao', NfseConfig.descricao_para(cfg, competencia)
+                               + (' Desconto mensal de R$ %s já abatido dos honorários.' % _brl(desconto) if desconto > 0 else ''))]
                              + [('item_servico_id', str(i['servico_id'])) for i in itens]
                              + [('item_valor', i['valor']) for i in itens])
             pedido = nfse_emissor.pedido_do_form(form, empresa_id, cfg)
@@ -194,7 +236,8 @@ def _cobrar(linha, lote_id, usuario_id, conta, cfg, empresa_id):
         else:
             itens_b = [{'servico_id': i['servico_id'], 'nome': i['nome'], 'valor': Decimal(i['valor']), 'emite_nota': False} for i in itens]
             boleto_id, ok, msg, aviso = emitir_boleto_avulso(empresa_id, conta, _pagador_do_tomador(t), itens_b, total,
-                                                             competencia, venc, mensagem, None, usuario_id)
+                                                             competencia, venc, mensagem, None, usuario_id,
+                                                             desconto=desconto if desconto > 0 else None)
             if not ok:
                 return fechar('erro', msg)
             titulo_id = (FinBoleto.get(boleto_id) or {}).get('titulo_id')
@@ -202,10 +245,10 @@ def _cobrar(linha, lote_id, usuario_id, conta, cfg, empresa_id):
     except Exception as exc:
         logger.exception('[lote] empresa %s', linha['cliente_id'])
         return fechar('erro', str(exc)[:1000], nfse_id=nfse_id, boleto_id=boleto_id)
-    for i in itens:
+    for i in itens_lin:
         if i.get('lancamento_id'):
             FinLancamento.marcar_faturado(i['lancamento_id'], titulo_id=titulo_id, nfse_id=nfse_id, boleto_id=boleto_id, lote_id=lote_id)
-    # comissão de honorários (cliente "dele") e de indicação: nasce aqui, liberada quando o título for pago
+    # comissão de honorários (cliente "dele") e de indicação: nasce aqui, liberada quando o título for pago — pelo líquido
     honor = sum(_d(i['valor']) for i in itens if i['origem'] == 'honorarios')
     if tipo == 'MENSAL':                           # o 13º não tem comissão
         try:

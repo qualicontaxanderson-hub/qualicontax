@@ -67,11 +67,31 @@ def _gravar_grupo(cliente_id, f):
                   antes={'grupos': mudou[0]}, depois={'grupo': mudou[1], 'origem': 'contrato de honorários'})
 
 
+def _desconto_form(f, valor):
+    """19/11/2026 — desconto mensal do contrato (fixo ou %), motivo e validade, vindos da janela."""
+    tipo = (f.get('desconto_tipo') or '').strip().upper() or None
+    if tipo not in (None, 'FIXO', 'PCT'):
+        raise ValueError('Tipo de desconto inválido.')
+    if not tipo:
+        return dict(desconto_tipo=None, desconto_valor=None, desconto_motivo=None, desconto_ate=None)
+    v = _dec(f.get('desconto_valor'))
+    if v is None or v <= 0:
+        raise ValueError('Informe o valor do desconto mensal.')
+    if tipo == 'PCT' and v >= 100:
+        raise ValueError('O desconto em porcentagem precisa ser menor que 100%.')
+    if tipo == 'FIXO' and v >= valor:
+        raise ValueError('O desconto mensal não pode ser igual ou maior que os honorários.')
+    return dict(desconto_tipo=tipo, desconto_valor=v, desconto_motivo=(f.get('desconto_motivo') or '').strip()[:200] or None,
+                desconto_ate=_data(f.get('desconto_ate')))
+
+
 def _foto(c):
     """O que vai para o log: só o que importa, em texto."""
     if not c:
         return None
     return {'valor': str(c.get('valor')), 'dia_vencimento': c.get('dia_vencimento'),
+            'desconto': ('%s %s%s%s' % (c.get('desconto_tipo'), c.get('desconto_valor'), (' · ' + c['desconto_motivo']) if c.get('desconto_motivo') else '',
+                                         (' · até ' + str(c['desconto_ate'])) if c.get('desconto_ate') else '')) if c.get('desconto_tipo') else None,
             'inicio': str(c.get('inicio') or ''), 'fim': str(c.get('fim') or ''), 'plano': c.get('plano'),
             'decimo_tipo': c.get('decimo_tipo'), 'decimo_parcelas': c.get('decimo_parcelas'), 'decimo_desde': str(c.get('decimo_desde') or ''),
             'reajuste_tipo': c.get('reajuste_tipo'), 'proximo_reajuste': str(c.get('proximo_reajuste') or ''),
@@ -307,7 +327,7 @@ def honorarios_salvar():
         if reajuste_tipo == 'SALARIO_MINIMO' and not prox:
             prox = primeiro_reajuste(inicio)
         dados = dict(valor=valor, dia_vencimento=dia, inicio=inicio, fim=_data(f.get('fim')),
-                     decimo_tipo=decimo_tipo, decimo_parcelas=parcelas,
+                     decimo_tipo=decimo_tipo, decimo_parcelas=parcelas, **_desconto_form(f, valor),
                      decimo_desde=decimo_desde_de(f.get('decimo_inicio') or 'PROPORCIONAL', inicio, _data(f.get('decimo_desde'))),
                      reajuste_tipo=reajuste_tipo, proximo_reajuste=prox,
                      reajuste_obs=(f.get('reajuste_obs') or '').strip() or None,
@@ -533,7 +553,7 @@ def _ler_form(f):
     if reajuste_tipo == 'SALARIO_MINIMO' and not prox:
         prox = primeiro_reajuste(inicio)
     dados = dict(valor=sum(i['valor'] for i in itens), dia_vencimento=dia, inicio=inicio, fim=_data(f.get('fim')),
-                 decimo_tipo=decimo_tipo, decimo_parcelas=parcelas,
+                 decimo_tipo=decimo_tipo, decimo_parcelas=parcelas, **_desconto_form(f, sum(i['valor'] for i in itens)),
                  decimo_desde=decimo_desde_de(f.get('decimo_inicio') or 'PROPORCIONAL', inicio, _data(f.get('decimo_desde'))), reajuste_tipo=reajuste_tipo, proximo_reajuste=prox,
                  reajuste_obs=(f.get('reajuste_obs') or '').strip() or None,
                  gerar_nfse=1 if f.get('gerar_nfse') else 0, gerar_boleto=1 if f.get('gerar_boleto') else 0,

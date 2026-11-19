@@ -1833,6 +1833,17 @@ def _apply_migrations():
                            "AND TABLE_NAME = 'fin_lote_itens' AND INDEX_NAME = 'uq_li_lote_cliente_tipo'", fetch=True, fetch_one=True) or {}
         if _i.get('cnt', 0) == 0:
             _migrate("ALTER TABLE fin_lote_itens DROP INDEX uq_li_lote_cliente, ADD UNIQUE KEY uq_li_lote_cliente_tipo (lote_id, cliente_id, tipo)")
+    # 19/11/2026: desconto mensal no contrato de honorários (fixo ou %), com motivo e validade
+    _t = execute_query("SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = DATABASE() "
+                       "AND TABLE_NAME = 'fin_contratos'", fetch=True, fetch_one=True) or {}
+    if _t.get('cnt', 0):
+        for _col_name, _col_def in [('desconto_tipo', "VARCHAR(4) NULL COMMENT 'FIXO|PCT'"), ('desconto_valor', 'DECIMAL(12,2) NULL'),
+                                    ('desconto_motivo', 'VARCHAR(200) NULL'), ('desconto_ate', 'DATE NULL')]:
+            _c = execute_query(
+                "SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() "
+                "AND TABLE_NAME = 'fin_contratos' AND COLUMN_NAME = %s", (_col_name,), fetch=True, fetch_one=True) or {}
+            if _c.get('cnt', 0) == 0:
+                _migrate(f"ALTER TABLE fin_contratos ADD COLUMN {_col_name} {_col_def}")
 
     # 19/11/2026 — em que conta do DRE cai o salário, a ajuda de custo e a comissão de cada pessoa (utils/usuario_dre.py)
     _migrate("""CREATE TABLE IF NOT EXISTS fin_usuario_dre (

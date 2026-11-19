@@ -151,7 +151,8 @@ class FinContrato:
               plano=None, decimo_tipo='NENHUM', decimo_parcelas=None, reajuste_tipo='SALARIO_MINIMO',
               proximo_reajuste=None, reajuste_obs=None, situacao='ATIVO', fim=None, decimo_desde=None,
               servico_id=SERVICO_HONORARIOS, categoria_id=CATEGORIA_HONORARIOS, gerar_nfse=1, gerar_boleto=1,
-              conexa_contrato_id=None, criado_por=None, aprovado_por=None, empresa_id=EMPRESA_QUALICONTAX, observacao=None):
+              conexa_contrato_id=None, criado_por=None, aprovado_por=None, empresa_id=EMPRESA_QUALICONTAX, observacao=None,
+              desconto_tipo=None, desconto_valor=None, desconto_motivo=None, desconto_ate=None):
         """Devolve o id. Recusa (ValueError) se a soma dos itens não bate com o valor ou se a empresa
         já tem contrato vigente (um por empresa)."""
         itens = [i for i in (itens or []) if i.get('descricao') and _d(i.get('valor'))]
@@ -174,14 +175,17 @@ class FinContrato:
             """INSERT INTO fin_contratos (empresa_id, cliente_id, descricao, valor, dia_vencimento, categoria_id,
                    gerar_nfse, gerar_boleto, discriminacao, inicio, fim, reajuste_mes, ativo,
                    servico_id, plano, decimo_tipo, decimo_parcelas, reajuste_tipo, proximo_reajuste, reajuste_obs,
-                   situacao, conexa_contrato_id, criado_por, aprovado_por, aprovado_em, decimo_desde, observacao)
-               VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
+                   situacao, conexa_contrato_id, criado_por, aprovado_por, aprovado_em, decimo_desde, observacao,
+                   desconto_tipo, desconto_valor, desconto_motivo, desconto_ate)
+               VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
             (empresa_id, cliente_id, descricao, _d(valor), int(dia_vencimento), categoria_id, gerar_nfse, gerar_boleto,
              '; '.join('%s = R$ %s' % (i['descricao'], _d(i['valor'])) for i in itens), inicio, fim,
              1 if reajuste_tipo == 'SALARIO_MINIMO' else None, 1 if situacao == 'ATIVO' else 0,
              servico_id, plano, decimo_tipo, json.dumps(decimo_parcelas) if decimo_parcelas else None,
              reajuste_tipo, proximo_reajuste, reajuste_obs, situacao, conexa_contrato_id, criado_por,
-             aprovado_por, None, decimo_desde, observacao), fetch=False)
+             aprovado_por, None, decimo_desde, observacao,
+             desconto_tipo or None, _d(desconto_valor) if desconto_tipo and desconto_valor is not None else None,
+             (desconto_motivo or None) if desconto_tipo else None, desconto_ate if desconto_tipo else None), fetch=False)
         if aprovado_por:
             execute_query('UPDATE fin_contratos SET aprovado_em = NOW() WHERE id = %s', (cid,), fetch=False)
         FinContrato._gravar_itens(cid, itens)
@@ -200,7 +204,8 @@ class FinContrato:
         precisam somar o valor."""
         permitidas = ('valor', 'dia_vencimento', 'inicio', 'fim', 'plano', 'decimo_tipo', 'decimo_parcelas', 'decimo_desde', 'observacao',
                       'reajuste_tipo', 'proximo_reajuste', 'reajuste_obs', 'situacao', 'gerar_nfse', 'gerar_boleto',
-                      'servico_id', 'descricao', 'aprovado_por', 'banco_boleto')   # banco_boleto: id da conta de cobrança (18/11/2026)
+                      'servico_id', 'descricao', 'aprovado_por', 'banco_boleto',    # banco_boleto: id da conta de cobrança (18/11/2026)
+                      'desconto_tipo', 'desconto_valor', 'desconto_motivo', 'desconto_ate')   # desconto mensal (19/11/2026)
         sets, params = [], []
         for k in permitidas:
             if k in dados:
@@ -266,6 +271,22 @@ class FinContrato:
             acumulado += v
             out.append((date(ano, mes, 1), v))
         return out
+
+    @staticmethod
+    def desconto_de(contrato, base_honorarios, competencia=None):
+        """19/11/2026 — desconto MENSAL do contrato (Anderson: "Desconto Mensal: Fixo ou Porcentagem... aquele que deixamos
+        no cadastro"). FIXO = o valor; PCT = % sobre os honorários (a linha 'Honorários contábeis' do contrato). Vale até
+        ``desconto_ate`` (competência inclusive). Nunca passa da base. O 13º não é afetado (segue o valor cheio)."""
+        tipo = contrato.get('desconto_tipo')
+        v = _d(contrato.get('desconto_valor'))
+        if tipo not in ('FIXO', 'PCT') or v <= 0:
+            return Decimal('0')
+        ate = contrato.get('desconto_ate')
+        if ate and competencia and competencia.replace(day=1) > ate.replace(day=1):
+            return Decimal('0')
+        base = _d(base_honorarios)
+        d = (base * v / 100).quantize(Decimal('0.01')) if tipo == 'PCT' else v
+        return min(d, base) if base > 0 else Decimal('0')
 
     @staticmethod
     def base_decimo(contrato, ano):
