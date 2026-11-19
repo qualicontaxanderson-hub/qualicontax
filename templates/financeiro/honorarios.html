@@ -527,6 +527,7 @@
 {% block extra_js %}
 <script src="{{ url_for('static', filename='js/dinheiro.js') }}"></script>
 <script src="{{ url_for('static', filename='js/caixa_grupo.js') }}"></script>
+<script src="{{ url_for('static', filename='js/qc_data.js') }}"></script>
 <script>
 var HO_SERVICOS = {{ servicos | tojson }};
 var HO_SERV_HON = {{ SERVICO_HONORARIOS }};
@@ -659,7 +660,7 @@ function hoAtalhos() {
     el.innerHTML = html;
 }
 function hoMesesEntre(ini) { if (!ini) return ''; var a = HO_ANO * 12 + HO_MES - (ini.y * 12 + ini.m); if (a < 1) return 'começa agora'; var y = Math.floor(a / 12), m = a % 12; return 'cliente há ' + (y ? y + (y === 1 ? ' ano' : ' anos') : '') + (y && m ? ' e ' : '') + (m ? m + (m === 1 ? ' mês' : ' meses') : ''); }
-function hoEncAbrir() { document.getElementById('ho-enc-box').style.display = 'flex'; document.getElementById('ho-enc-bt').style.display = 'none'; var d = document.getElementById('ho-enc-data'); if (!d.value) d.value = '{{ hoje.isoformat() }}'; d.focus(); }
+function hoEncAbrir() { setTimeout(function () { if (window.QCData) QCData.pintarTodos(); }, 0); document.getElementById('ho-enc-box').style.display = 'flex'; document.getElementById('ho-enc-bt').style.display = 'none'; var d = document.getElementById('ho-enc-data'); if (!d.value) d.value = '{{ hoje.isoformat() }}'; d.focus(); }
 function hoEncFechar() { document.getElementById('ho-enc-box').style.display = 'none'; document.getElementById('ho-enc-bt').style.display = 'inline-flex'; }
 function hoEncConfirmar() {
     var fim = document.getElementById('ho-enc-data').value, cid = document.getElementById('ho-id').value; if (!fim || !cid) return;
@@ -701,7 +702,7 @@ function hoDecimo() {
 function hoLimpar() {
     ['ho-id', 'ho-cliente-id', 'ho-cli-q', 'ho-fim', 'ho-prox', 'ho-reaj-obs', 'ho-dec-desde', 'ho-grupo', 'ho-banco'].forEach(function (i) { var e = document.getElementById(i); if (e) e.value = ''; });
     document.querySelector('#ho-itens tbody').innerHTML = ''; document.getElementById('ho-dec-rows').innerHTML = '';
-    document.getElementById('ho-chips').innerHTML = ''; document.getElementById('ho-rede').style.display = 'none'; document.getElementById('ho-grupo-aviso').style.display = 'none'; hoGrupoPinta();
+    document.getElementById('ho-chips').innerHTML = ''; document.getElementById('ho-rede').style.display = 'none'; document.getElementById('ho-grupo-aviso').style.display = 'none'; hoGrupoPinta(); if (window.QCData) QCData.pintarTodos();
     document.getElementById('ho-dia').value = 10; document.getElementById('ho-inicio').value = '{{ hoje.strftime("%Y-%m") }}-01';
     document.getElementById('ho-decimo').value = 'NENHUM'; document.getElementById('ho-dec-inicio').value = 'PROPORCIONAL'; document.getElementById('ho-reajuste').value = 'SALARIO_MINIMO';
     document.getElementById('ho-nfse').checked = true; document.getElementById('ho-boleto').checked = true;
@@ -831,7 +832,7 @@ function hoEditar(cid) {
         document.getElementById('ho-cli-trocar').style.display = 'none';
         (c.itens || []).forEach(function (i) { hoAddItem(i.descricao, i.valor, i.servico_id); });
         document.getElementById('ho-dia').value = c.dia_vencimento; document.getElementById('ho-inicio').value = c.inicio || '';
-        document.getElementById('ho-fim').value = c.fim || ''; document.getElementById('ho-grupo').value = c.grupo_id || ''; hoGrupoPinta();
+        document.getElementById('ho-fim').value = c.fim || ''; document.getElementById('ho-grupo').value = c.grupo_id || ''; hoGrupoPinta(); if (window.QCData) QCData.pintarTodos();
         document.getElementById('ho-decimo').value = c.decimo_tipo || 'NENHUM';
         document.getElementById('ho-dec-inicio').value = c.decimo_inicio || 'PROPORCIONAL';
         document.getElementById('ho-dec-desde').value = c.decimo_desde || '';
@@ -893,5 +894,6 @@ document.getElementById('ho-form').addEventListener('submit', function (e) {
 (function () { var q = new URLSearchParams(location.search);
   if (q.get('novo') && typeof hoNovo === 'function') hoNovo();
   else if (q.get('editar') && typeof hoEditar === 'function') hoEditar(parseInt(q.get('editar'), 10)); })();
+if (window.QCData) QCData.ligarTodos();
 </script>
 {% endblock %}

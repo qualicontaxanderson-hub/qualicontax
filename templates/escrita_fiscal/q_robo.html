@@ -409,7 +409,7 @@ function qrMaq(id, cliente, acao, atual, nome) {
             <input type="hidden" name="cliente_id" id="qrClienteId" value="">
             <div style="position:relative;">
                 <label for="qrBusca">Número, nome ou CNPJ</label>
-                <input type="text" id="qrBusca" name="numero" required
+                <input type="text" id="qrBusca" name="numero" required autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" inputmode="search" enterkeyhint="search"
                        style="width:320px;" placeholder="ex.: 23 ou aliança">
                 <div class="qr-lista" id="qrLista" hidden></div>
             </div>

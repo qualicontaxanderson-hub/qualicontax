@@ -119,7 +119,7 @@
         {% if k.sem_cad %}<a class="tx-f{{ ' on' if sit == 'sem_cadastro' }}" href="{{ url_for('contabil.irpf', ex=ex, sit='sem_cadastro', **_f) }}"><i class="fas fa-user-slash"></i> Sem cadastro <b>{{ k.sem_cad }}</b></a>{% endif %}
         {% if retificadas %}<a class="tx-f{{ ' on' if sit == 'retificadas' }}" href="{{ url_for('contabil.irpf', ex=ex, sit='retificadas', **_f) }}"><i class="fas fa-rotate"></i> Substituídas <b>{{ retificadas }}</b></a>{% endif %}
       </div>
-      <div class="tx-busca"><i class="fas fa-magnifying-glass"></i><input type="search" name="q" value="{{ busca }}" placeholder="Nome ou CPF"></div>
+      <div class="tx-busca"><i class="fas fa-magnifying-glass"></i><input type="search" name="q" value="{{ busca }}" placeholder="Nome ou CPF" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" inputmode="search" enterkeyhint="search"></div>
       <div class="tx-ref-resumo{{ ' filtrado' if (modelo or cad or busca or sit != 'todas') }}">{{ n_linhas }} declaraç{{ 'ão' if n_linhas == 1 else 'ões' }}{% if k.sem_recibo %} <span style="opacity:.8">· {{ k.sem_recibo }} sem recibo</span>{% endif %}</div>
     </form>
 

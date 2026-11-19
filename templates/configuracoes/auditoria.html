@@ -54,7 +54,7 @@
         {% if request.args.get('data_fim') %}<input type="hidden" name="data_fim" value="{{ request.args.get('data_fim') }}">{% endif %}
         <div class="au-q">
             <i class="fas fa-magnifying-glass"></i>
-            <input type="search" name="q" id="auQ" value="{{ q }}"
+            <input type="search" name="q" id="auQ" value="{{ q }}" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" inputmode="search" enterkeyhint="search"
                    placeholder='Escreva como fala: "henrique ontem", "#92 e-mail", "exclusões esta semana", "senha", "fora do horário"…'>
             <button type="submit">Buscar</button>
             <div class="au-sug" id="auSug" hidden></div>
