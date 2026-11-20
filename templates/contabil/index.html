@@ -48,48 +48,62 @@
 
     <div class="ef-section-label">Contabilidade</div>
     <div class="ef-grid">
+        {% if pode_rota('contabil.plano_contas') %}
         <a href="{{ url_for('contabil.plano_contas') }}" class="ef-card">
             <div class="ef-card-ico" style="background:#ede9fe;color:#6d28d9;"><i class="fas fa-sitemap"></i></div>
             <h3 class="ef-card-title">Plano de Contas</h3>
             <div class="ef-card-num" data-counter="planos"></div>
             <p class="ef-card-desc">Grupos e contas contábeis por grupo de clientes</p>
         </a>
+        {% endif %}
+        {% if pode_rota('contabil.conciliacoes') %}
         <a href="{{ url_for('contabil.conciliacoes') }}" class="ef-card">
             <div class="ef-card-ico" style="background:#dbeafe;color:#1d4ed8;"><i class="fas fa-file-invoice-dollar"></i></div>
             <h3 class="ef-card-title">Conciliações Bancárias</h3>
             <div class="ef-card-num"></div>
             <p class="ef-card-desc">Conciliações abertas e histórico de lançamentos</p>
         </a>
+        {% endif %}
+        {% if pode_rota('contabil.contas_correntes') %}
         <a href="{{ url_for('contabil.contas_correntes') }}" class="ef-card">
             <div class="ef-card-ico" style="background:#d1fae5;color:#047857;"><i class="fas fa-university"></i></div>
             <h3 class="ef-card-title">Contas Correntes</h3>
             <div class="ef-card-num" data-counter="contas"></div>
             <p class="ef-card-desc">Contas bancárias cadastradas por cliente</p>
         </a>
+        {% endif %}
+        {% if pode_rota('contabil.importar_ofx') %}
         <a href="{{ url_for('contabil.importar_ofx') }}" class="ef-card">
             <div class="ef-card-ico" style="background:#fef3c7;color:#b45309;"><i class="fas fa-file-upload"></i></div>
             <h3 class="ef-card-title">Importar OFX</h3>
             <div class="ef-card-num"></div>
             <p class="ef-card-desc">Extrato bancário no formato OFX</p>
         </a>
+        {% endif %}
+        {% if pode_rota('contabil.importar_pdf') %}
         <a href="{{ url_for('contabil.importar_pdf') }}" class="ef-card">
             <div class="ef-card-ico" style="background:#fee2e2;color:#b91c1c;"><i class="fas fa-file-pdf"></i></div>
             <h3 class="ef-card-title">Importar PDF</h3>
             <div class="ef-card-num"></div>
             <p class="ef-card-desc">Extrato bancário em PDF</p>
         </a>
+        {% endif %}
+        {% if pode_rota('contabil.extrato_conciliacao') %}
         <a href="{{ url_for('contabil.extrato_conciliacao') }}" class="ef-card">
             <div class="ef-card-ico" style="background:#cffafe;color:#0e7490;"><i class="fas fa-chart-line"></i></div>
             <h3 class="ef-card-title">Extrato</h3>
             <div class="ef-card-num"></div>
             <p class="ef-card-desc">Extrato de conciliação classificado</p>
         </a>
+        {% endif %}
+        {% if pode_rota('escrita_fiscal.memorizacoes') %}
         <a href="{{ url_for('escrita_fiscal.memorizacoes') }}" class="ef-card">
             <div class="ef-card-ico" style="background:#fce7f3;color:#be185d;"><i class="fas fa-brain"></i></div>
             <h3 class="ef-card-title">Memorizações</h3>
             <div class="ef-card-num"></div>
             <p class="ef-card-desc">As regras de classificação moram no Fiscal › Memorizações</p>
         </a>
+        {% endif %}
     </div>
 
 </div>

@@ -29,12 +29,16 @@
                 <p class="ef-hero-sub">Usuários, perfis de acesso, auditoria e armazenamento</p>
             </div>
             <div class="ef-hero-actions">
+                {% if pode_rota('configuracoes.auditoria') %}
                 <a href="{{ url_for('configuracoes.auditoria') }}" class="ef-btn">
                     <i class="fas fa-clipboard-list"></i> Auditoria
                 </a>
+                {% endif %}
+                {% if pode_rota('configuracoes.usuario_novo') %}
                 <a href="{{ url_for('configuracoes.usuario_novo') }}" class="ef-btn ef-btn-primary">
                     <i class="fas fa-plus"></i> Novo Usuário
                 </a>
+                {% endif %}
             </div>
         </div>
         <!-- carrossel: preenchido por fetch; some se falhar ou se o dado tiver
@@ -55,12 +59,15 @@
         {# 17/11/2026: Usuários e Perfis são só do administrador (a rota é @admin_required); o resto da equipe clicava e
            batia em "Você não tem permissão" (o Miguel). Para quem não é admin, o cartão leva ao MEU CADASTRO. #}
         {% if current_user.is_admin() %}
+        {% if pode_rota('configuracoes.usuarios') %}
         <a href="{{ url_for('configuracoes.usuarios') }}" class="ef-card">
             <div class="ef-card-ico" style="background:#dbeafe;color:#1d4ed8;"><i class="fas fa-users-cog"></i></div>
             <h3 class="ef-card-title">Usuários</h3>
             <div class="ef-card-num" data-counter="usuarios"></div>
             <p class="ef-card-desc">Cadastro e gerenciamento de usuários do sistema</p>
         </a>
+        {% endif %}
+        {% if pode_rota('configuracoes.perfis') %}
         <a href="{{ url_for('configuracoes.perfis') }}" class="ef-card">
             <div class="ef-card-ico" style="background:#ede9fe;color:#6d28d9;"><i class="fas fa-shield-halved"></i></div>
             <h3 class="ef-card-title">Perfis de Acesso</h3>
@@ -68,11 +75,14 @@
             <p class="ef-card-desc">Defina permissões e níveis de acesso por perfil ou usuário</p>
         </a>
         {% endif %}
+        {% endif %}
+        {% if pode_rota('meu_cadastro.index') %}
         <a href="{{ url_for('meu_cadastro.index') }}" class="ef-card">
             <div class="ef-card-ico" style="background:#dcfce7;color:#15803d;"><i class="fas fa-id-card"></i></div>
             <h3 class="ef-card-title">Meu cadastro</h3>
             <p class="ef-card-desc">Seus dados pessoais, endereço, banco e chave Pix</p>
         </a>
+        {% endif %}
         {% if pode_rota('configuracoes.auditoria') %}
         <a href="{{ url_for('configuracoes.auditoria') }}" class="ef-card">
             <div class="ef-card-ico" style="background:#dcfce7;color:#15803d;"><i class="fas fa-clipboard-list"></i></div>
@@ -83,31 +93,39 @@
         {# Só admin — a rota é @admin_required; sem esta guarda o cartão apareceria
            para todo mundo e o clique bateria num 403. #}
         {% if current_user.is_admin() %}
+        {% if pode_rota('configuracoes.departamentos') %}
         <a href="{{ url_for('configuracoes.departamentos') }}" class="ef-card">
             <div class="ef-card-ico" style="background:#fef3c7;color:#b45309;"><i class="fas fa-sitemap"></i></div>
             <h3 class="ef-card-title">Departamentos</h3>
             <p class="ef-card-desc">Fiscal, DP, Contábil, Legalização: quem está em cada um e a caixa de e-mail de cada</p>
         </a>
+        {% endif %}
+        {% if pode_rota('configuracoes.emails_automaticos') %}
         <a href="{{ url_for('configuracoes.emails_automaticos') }}" class="ef-card">
             <div class="ef-card-ico" style="background:#e0f2fe;color:#0369a1;"><i class="fas fa-envelope"></i></div>
             <h3 class="ef-card-title">E-mails automáticos</h3>
             <p class="ef-card-desc">Avisos de certificado vencendo e de empresas novas: qual departamento recebe cada um</p>
         </a>
+        {% endif %}
+        {% if pode_rota('configuracoes.colabore_envios') %}
         <a href="{{ url_for('configuracoes.colabore_envios') }}" class="ef-card">
             <div class="ef-card-ico" style="background:#d1fae5;color:#047857;"><i class="fas fa-paper-plane"></i></div>
             <h3 class="ef-card-title">Q-Colabore · Envios</h3>
             <p class="ef-card-desc">Quem está mandando arquivo e quem está com o programa aberto sem mandar nada</p>
         </a>
         {% endif %}
+        {% endif %}
         {# Só para quem tem a permissão: sem isto o cartão apareceria para todo
            mundo que acessa Configurações e o clique bateria num 403. Admin
            enxerga sempre — has_permission devolve True para admin. #}
         {% if current_user.has_permission('configuracoes.caixa_entrada') %}
+        {% if pode_rota('configuracoes.caixa_entrada') %}
         <a href="{{ url_for('configuracoes.caixa_entrada') }}" class="ef-card">
             <div class="ef-card-ico" style="background:#ccfbf1;color:#0d9488;"><i class="fas fa-inbox"></i></div>
             <h3 class="ef-card-title">Caixa de entrada</h3>
             <p class="ef-card-desc">Arquivos recebidos aguardando destino</p>
         </a>
+        {% endif %}
         {% endif %}
     </div>
 
