@@ -963,7 +963,7 @@ def lancamento_aprovar(lid):
                 destino, com_nota = 'AVULSO', 1 if como == 'BOLETO_NOTA' else 0
                 if com_nota and not l.get('emite_nota', 1):
                     com_nota = 0            # trava do cadastro do serviço: nunca sai em nota
-                    flash('"%s" nunca sai em nota fiscal (trava do cadastro do serviço): a cobrança sai só com boleto.' % l['servico_nome'], 'info')
+                    flash('"%s" não entra na nota fiscal (trava do cadastro do serviço): sozinho sai só com boleto; na mensalidade entra no boleto e fica fora da nota.' % l['servico_nome'], 'info')
                 venc = _data(request.form.get('vencimento')) or l['vencimento']
                 if not venc or venc < _hoje_br():
                     raise ValueError

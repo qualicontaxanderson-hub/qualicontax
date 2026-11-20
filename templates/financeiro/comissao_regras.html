@@ -205,7 +205,7 @@
     {% for sec, cls, ico, titulo, sub in [('propria', 'sv-pct', 'fa-percent', 'Com comissão própria', 'quem lança recebe o % ou o valor fixo do serviço'),
                                           ('acordo', 'sv-pad', 'fa-user-check', 'Padrão da pessoa', 'a comissão segue o padrão de quem lança'),
                                           ('SEM', 'sv-sem', 'fa-lock', 'Nunca pagam comissão', 'ninguém recebe, nem pedindo, nem aprovando'),
-                                          ('semnota', 'sv-nota', 'fa-barcode', 'Só boleto: taxas e repasses', 'nunca saem em nota fiscal, para todo mundo')] %}
+                                          ('semnota', 'sv-nota', 'fa-barcode', 'Só boleto: taxas e repasses', 'entram no boleto e ficam fora da nota fiscal')] %}
     {% set ns = namespace(n=0) %}
     {% for s in ordenados %}
       {% set t = s.comissao_tipo or '' %}
@@ -225,7 +225,7 @@
         </div>
         <div class="hp-itens">
           <div class="hp-it{{ ' trava' if t == 'SEM' }}"><span><i class="fas fa-hand-holding-dollar"></i> Comissão</span><b>{% if t == 'SEM' %}<i class="fas fa-lock"></i> nunca paga{% elif t == 'PCT' and s.comissao_valor %}{{ rot_com }}{% if s.valor_padrao %} <small>≈ {{ ((s.valor_padrao | float) * (s.comissao_valor | float) / 100) | format_currency }}</small>{% endif %}{% else %}{{ rot_com }}{% endif %}</b></div>
-          <div class="hp-it{{ ' nf' if nota else ' sem' }}"><span><i class="fas fa-file-invoice"></i> Nota fiscal</span><b>{% if nota %}sai na nota{% else %}<i class="fas fa-lock"></i> nunca sai em nota · só boleto{% endif %}</b></div>
+          <div class="hp-it{{ ' nf' if nota else ' sem' }}"><span><i class="fas fa-file-invoice"></i> Nota fiscal</span><b>{% if nota %}sai na nota{% else %}<i class="fas fa-lock"></i> fora da nota · só no boleto{% endif %}</b></div>
         </div>
         <div class="hp-linha">
           <button type="button" class="sv-chip nf{{ ' sem' if not nota }}" onclick="svEditar(this, 'nota')" title="Clique para mudar se este serviço sai em nota fiscal"><i class="fas {{ 'fa-file-invoice' if nota else 'fa-lock' }}"></i> {{ 'sai na nota' if nota else 'só boleto' }} <small>{{ 'nota fiscal' if nota else 'trava' }}</small> <i class="fas fa-pen"></i></button>
@@ -237,7 +237,7 @@
             <div class="rg-lin"><span class="rg-seg rg-seg-n">
               <label><input type="radio" name="emite_nota" value="1"{{ ' checked' if nota }} onchange="rgNota(this)"><span><i class="fas fa-check"></i> Sai na nota</span></label>
               <label title="Trava: este serviço nunca sai em nota fiscal, só no boleto"><input type="radio" name="emite_nota" value="0"{{ ' checked' if not nota }} onchange="rgNota(this)"><span><i class="fas fa-lock"></i> Nunca sai em nota</span></label></span></div>
-            <small class="rg-muted">{{ 'Serviço prestado: entra na nota. "Nunca" é trava para todo mundo e salva na hora.' if nota else 'Taxa ou despesa repassada: sai só no boleto, para todo mundo. "Sai na nota" salva na hora.' }}</small></div>
+            <small class="rg-muted">{{ 'Serviço prestado: entra na nota e no boleto. "Nunca" é trava para todo mundo e salva na hora.' if nota else 'Taxa ou despesa repassada: vai no boleto e fica fora da nota (ex.: honorários 1.000 + esta taxa 200 = boleto 1.200, nota 1.000). "Sai na nota" salva na hora.' }}</small></div>
           <div class="rg-bl" data-ed="com"><span class="rg-lbl"><i class="fas fa-hand-holding-dollar"></i> Comissão</span>
             <div class="rg-lin"><span class="rg-seg">
               <label><input type="radio" name="tipo" value=""{{ ' checked' if not t }} onchange="rgTipo(this)"><span>Padrão da pessoa</span></label>
@@ -388,7 +388,7 @@
   window.rgNota = function (r) {
     var f = r.form, nome = f.querySelector('.tx-c-nome').textContent;
     if (r.value === '0') {
-      pergunta({ titulo: '"' + nome + '" nunca sai em nota fiscal?', texto: 'Trava para todo mundo: a cobrança deste serviço sai só com boleto. Ninguém consegue pedir nem aprovar "boleto + nota" nele; os pedidos aguardando aprovação passam para só boleto. Na mensalidade, a linha fica fora da nota.',
+      pergunta({ titulo: '"' + nome + '" nunca sai em nota fiscal?', texto: 'Ele continua sendo cobrado no boleto; só não entra na nota fiscal. Junto com a mensalidade: Honorários 1.000,00 + esta taxa 200,00 = boleto de 1.200,00 e nota de 1.000,00. Sozinho, sai só com boleto. Vale para todo mundo: ninguém consegue pôr este serviço em nota, nem pedindo, nem aprovando.',
                  cor: 'pk-rubro', icone: 'fa-lock', ok: 'Travar: nunca sai em nota', okIcone: 'fa-lock', onOk: function () { f.submit(); }, onNao: function () { f.querySelector('[name=emite_nota][value="1"]').checked = true; } });
     } else f.submit();
   };
