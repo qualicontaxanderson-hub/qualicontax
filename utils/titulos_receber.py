@@ -100,6 +100,24 @@ def _status(venc, hoje):
     return 'vence ' + venc.strftime('%d/%m'), 'tx-fut'
 
 
+def _faixas_de_mes(grupos, chave='venc'):
+    """20/11/2026 — Anderson: "só queria que algo me informasse nessa tela que é Nov e a partir de tal é Dezembro".
+    Marca o primeiro grupo de cada mês com a faixa ('Novembro de 2026', total e quantidade do mês inteiro).
+    Vale para os grupos por dia (A receber e Atrasados recentes); grupo que já é mensal não ganha faixa."""
+    tot, n = defaultdict(float), defaultdict(int)
+    for g in grupos:
+        k = g.get('_mes')
+        if k:
+            tot[k] += sum(float(i['saldo']) for i in g['itens']); n[k] += len(g['itens'])
+    antes = None
+    for g in grupos:
+        k = g.pop('_mes', None)
+        if k and k != antes:
+            y, m = k
+            g['mes'] = {'rot': '%s de %d' % (MES_LONGO[m], y), 'tot': brl(tot[k]), 'n': n[k], 'k': '%04d-%02d' % (y, m)}
+        antes = k or antes
+
+
 def _cab(d, hoje):
     """Cabeçalho de data dos grupos: ('15/11', 'sábado · em 3 dias')."""
     n = (d - hoje).days
@@ -358,8 +376,9 @@ def montar(empresa_ids=None, mes=None, per=None):
         faixa = 'sem' if d.toordinal() <= fim_sem else ('mes' if (d.year, d.month) == (hoje.year, hoje.month) else 'dep')
         for i in por_venc[v]:
             i['per'] = faixa
-        abe_g.append({'data': dt, 'sub': sub, 'n': len(por_venc[v]), 'hoje': d == hoje,
+        abe_g.append({'data': dt, 'sub': sub, 'n': len(por_venc[v]), 'hoje': d == hoje, '_mes': (d.year, d.month),
                       'tot': brl(sum(float(i['saldo']) for i in por_venc[v])), 'itens': por_venc[v]})
+    _faixas_de_mes(abe_g)
     abe_f = [('todos', 'Todos', len(itens)),
              ('sem', 'Esta semana', sum(1 for i in itens if i['per'] == 'sem')),
              ('mes', 'Resto do mês', sum(1 for i in itens if i['per'] == 'mes')),
@@ -379,9 +398,10 @@ def montar(empresa_ids=None, mes=None, per=None):
                 dt, sub = _cab(d, hoje)
             else:
                 dt, sub = f'{MES[d.month]}/{d.year}', 'venceu no mês'
-            atr_g.append({'data': dt, 'sub': sub, 'n': 0, 'v': 0, 'itens': []})
+            atr_g.append({'data': dt, 'sub': sub, 'n': 0, 'v': 0, 'itens': [], '_mes': (d.year, d.month) if i['dias'] <= 60 else None})
         g = atr_g[-1]
         g['itens'].append(i); g['n'] += 1; g['v'] += float(i['saldo'])
+    _faixas_de_mes(atr_g)
     for g in atr_g:
         g['tot'] = brl(g.pop('v'))
     atr_f = [('todos', 'Todos', len(atr_i)),

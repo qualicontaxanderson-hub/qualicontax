@@ -59,6 +59,14 @@
 .tx-data em { font-style:normal; font-size:12px; font-weight:600; color:var(--mudo); }
 .tx-dia-hoje .tx-data b, .tx-dia-hoje .tx-data em { color:#2563eb; }
 .tx-dia h4 { margin:0; font-size:12px; font-weight:800; letter-spacing:.6px; text-transform:uppercase; color:var(--verde); }
+/* 20/11/2026 — Anderson: "algo que me informe nessa tela que é Nov e a partir de tal é Dezembro": faixa do mês antes do 1º dia dele */
+.tx-mesb { display:flex; align-items:center; gap:12px; margin:26px 0 12px; }
+.tx-mesb:first-child { margin-top:4px; }
+.tx-mesb b { font-size:13px; font-weight:800; letter-spacing:.8px; text-transform:uppercase; color:#fff; background:var(--verde);
+             border-radius:9px; padding:6px 12px; white-space:nowrap; }
+.tx-mesb small { font-size:12px; color:var(--mudo); font-variant-numeric:tabular-nums; white-space:nowrap; }
+.tx-mesb small b { font-size:12px; color:var(--verde); background:none; padding:0; letter-spacing:0; text-transform:none; }
+.tx-mesb span { flex:1; height:2px; background:var(--verde); opacity:.25; border-radius:2px; }
 .tx-dia span { flex:1; height:1px; background:var(--linha); align-self:center; }
 .tx-dia small { font-size:12px; color:var(--mudo); font-variant-numeric:tabular-nums; }
 .tx-dia small b { color:var(--verde); }
@@ -624,6 +632,7 @@ a.tx-c { text-decoration:none; color:inherit; }
       </div>
 {% endmacro %}
 {% macro cab(g, palavra) %}
+    {% if g.mes %}<div class="tx-mesb" data-mes="{{ g.mes.k }}"><b>{{ g.mes.rot }}</b><span></span><small><b>{{ g.mes.tot }}</b> · {{ g.mes.n }} {{ palavra }}{{ 's' if g.mes.n != 1 }} no mês</small></div>{% endif %}
     <div class="tx-dia{{ ' tx-dia-hoje' if g.hoje }}" data-sec><div class="tx-data"><b>{{ g.data }}</b><em>{{ g.sub }}</em></div><span></span><small><b>{{ g.tot }}</b> · {{ g.n }} {{ palavra }}{{ 's' if g.n != 1 }}</small></div>
 {% endmacro %}
   <div class="tx-abas">
@@ -1065,6 +1074,12 @@ a.tx-c { text-decoration:none; color:inherit; }
         g.style.display = tem ? '' : 'none';
         var cab = g.previousElementSibling;
         if (cab && cab.hasAttribute('data-sec')) cab.style.display = tem ? '' : 'none';
+      });
+      // faixa do mês: some quando nenhum dia dela ficou visível
+      pn.querySelectorAll('[data-mes]').forEach(function (f) {
+        var el = f.nextElementSibling, tem = false;
+        while (el && !el.hasAttribute('data-mes')) { if (el.hasAttribute('data-sec') && el.style.display !== 'none') { tem = true; break; } el = el.nextElementSibling; }
+        f.style.display = tem ? '' : 'none';
       });
       if (nada) nada.style.display = (cards.length && !vis) ? '' : 'none';
       if (mais) { mais.style.display = escondidos ? '' : 'none'; mais.textContent = 'Mostrar mais ' + escondidos; }
