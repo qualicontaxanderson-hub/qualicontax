@@ -49,3 +49,32 @@ def nome_proprio(texto):
         primeira = p.endswith((',', '.', ';', ':', '-', '(')) or p in ('-', '/', '•', '·')
         anterior = p
     return ' '.join(saida)
+
+
+_MIUDAS = {'de', 'da', 'do', 'das', 'dos', 'e', 'em', 'a', 'o', 'as', 'os', 'ao', 'aos', 'à', 'às', 'para', 'por', 'com', 'sem', 'no', 'na', 'nos', 'nas', 'ou', 'um', 'uma'}
+
+
+def titulo_servico(nome):
+    """Nome de serviço com as iniciais maiúsculas (20/11/2026 — Anderson: "Alteração contratual para Alteração Contratual...
+    com as primeiras letras maiúsculas"). Palavrinhas de ligação ficam minúsculas (menos no início); palavras com maiúscula
+    no meio ou toda em maiúsculas (ANP, ANTT, CT-e, DRE, ICMS, LMC, Jucesp) ficam como estão; "13º", "1ª" ficam como estão."""
+    nome = ' '.join((nome or '').split())
+    if not nome:
+        return nome
+    if nome.isupper() and ' ' in nome:      # digitado tudo em maiúsculas: vira iniciais (ALVARÁ DE FUNCIONAMENTO -> Alvará de Funcionamento)
+        nome = nome.lower()
+    partes = nome.split(' ')
+    saida = []
+    for i, p in enumerate(partes):
+        if not p or not p[0].isalpha() and not p[0] in '(\"\'':
+            saida.append(p); continue
+        if p.lower() in _MIUDAS and i > 0 and partes[i - 1] not in ('—', '–', '-', '/'):
+            saida.append(p.lower()); continue
+        if any(c.isupper() for c in p[1:]) or p.isupper():
+            saida.append(p); continue
+        # mantém pontuação de abertura ("(abc" -> "(Abc")
+        j = 0
+        while j < len(p) and not p[j].isalpha():
+            j += 1
+        saida.append(p[:j] + p[j:j + 1].upper() + p[j + 1:])
+    return ' '.join(saida)

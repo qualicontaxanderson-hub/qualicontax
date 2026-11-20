@@ -57,7 +57,12 @@
 .rg-cart-bt .tx { flex:1; min-width:0; display:flex; flex-direction:column; line-height:1.25; } .rg-cart-bt .tx b { font-size:13px; } .rg-cart-bt .tx small { color:#64748b; font-size:11.5px; }
 .rg-cart-bt > i { color:#94a3b8; }
 .pk-cart { width:min(640px, 96vw); top:8vh; }
-.rg-btn-novo { background:#fff; color:#0f3d2e; border-color:#fff; } .rg-btn-novo i { color:#16a34a; }
+.rg-btn-novo { display:inline-flex; align-items:center; gap:12px; padding:8px 20px 8px 8px; border-radius:16px; border:0; background:#fff; color:#0f3d2e; font:inherit; cursor:pointer;
+  box-shadow:0 12px 28px rgba(0,0,0,.22); transition:transform .15s ease, box-shadow .15s ease; text-align:left; }
+.rg-btn-novo:hover { transform:translateY(-1px); box-shadow:0 16px 32px rgba(0,0,0,.26); }
+.rg-btn-novo .mais { width:40px; height:40px; border-radius:12px; background:linear-gradient(135deg,#22c55e,#15803d); color:#fff; display:inline-flex; align-items:center; justify-content:center; font-size:16px; flex-shrink:0; }
+.rg-btn-novo .tx { display:flex; flex-direction:column; line-height:1.15; } .rg-btn-novo .tx b { font-size:15px; font-weight:800; } .rg-btn-novo .tx small { font-size:11.5px; color:#64748b; font-weight:600; }
+@media (max-width:760px) { .rg-btn-novo { width:100%; } }
 #svNovoFundo[hidden] { display:none; } .svn [hidden] { display:none !important; }
 /* caixa Novo serviço: molde da Nova cobrança (ns-*), só nesta caixa */
 .svn.ns { position:absolute; left:50%; top:3vh; transform:translateX(-50%); width:min(1100px, calc(100vw - 32px)); max-height:94vh; display:flex; flex-direction:column;
@@ -101,7 +106,7 @@
 @media (max-width:860px) { .svn .ns-g { display:flex; flex-direction:column; overflow:auto; } .svn .ns-f, .svn .ns-r { overflow:visible; flex:none; } .svn .ns-r { border-left:0; border-top:1px solid #e6eeea; } .svn .svn-ops4 { grid-template-columns:repeat(2, minmax(0,1fr)); }
   .svn.ns { left:0; right:0; top:auto; bottom:0; transform:none; width:100%; max-height:94vh; border-radius:20px 20px 0 0; } .svn .ns-prev { display:none; }
   .svn .ns-pe { flex-wrap:wrap; } .svn .ns-pe-info { flex-basis:100%; } .svn .ns-bt { flex:1; justify-content:center; } }
-.rg-btn-novo { background:#fff; color:#0f3d2e; border-color:#fff; } .rg-btn-novo i { color:#16a34a; }
+
 .pk-cart [hidden] { display:none !important; } .pk-cart .pk-quem span { white-space:normal; line-height:1.4; } .pk-cart .pk-corpo { padding:14px 16px 16px; display:flex; flex-direction:column; gap:10px; }
 .pk-cart .rg-cart-det { display:flex; flex-direction:column; gap:10px; }
 .pk-cart .rg-chips { max-height:46vh; overflow:auto; }
@@ -188,7 +193,7 @@
 <div class="tx">
 <div class="ef-hero"><div class="ef-hero-inner ef-hero-head">
   <div><h1 class="ef-hero-title">Serviços</h1><p class="ef-hero-sub">O que cobramos: valor sugerido, comissão e o que sai em nota fiscal · e quem recebe comissão e quanto</p></div>
-  <div class="ef-hero-actions"><button type="button" class="rg-btn rg-btn-novo" onclick="svNovoAbrir()"><i class="fas fa-plus"></i> Novo serviço</button><a class="rg-btn" href="{{ url_for('financeiro.lancamentos', aba='com') }}"><i class="fas fa-receipt"></i> Lançamentos</a></div>
+  <div class="ef-hero-actions"><button type="button" class="rg-btn-novo" onclick="svNovoAbrir()"><span class="mais"><i class="fas fa-plus"></i></span><span class="tx"><b>Novo serviço</b><small>nome, nota fiscal, comissão e valor</small></span></button></div>
 </div></div>
 
 <div class="ef-body">

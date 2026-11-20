@@ -21,6 +21,7 @@ from models.fin_lancamento import (COMISSAO, DESTINOS, STATUS, FinComissaoAcordo
                                    FinLancamento, FinLoteMensal)
 from routes.financeiro import financeiro
 from utils.atividade import registrar
+from utils.texto import titulo_servico
 from utils.auth_helper import permission_required
 from utils.db_helper import execute_query
 
@@ -510,7 +511,7 @@ def servico_comissao():
     if request.form.get('emite_nota') in ('0', '1'):
         emite = int(request.form.get('emite_nota'))
     # 20/11/2026 — Anderson: "Como editar os nomes?": o nome do serviço se edita no próprio cartão (antes, só em Configuração fiscal)
-    nome = ' '.join((request.form.get('nome') or '').split())[:80] or s['nome']
+    nome = titulo_servico(request.form.get('nome'))[:80] or s['nome']
     if nome != s['nome'] and execute_query('SELECT id FROM nfse_servicos WHERE empresa_id = %s AND LOWER(nome) = LOWER(%s) AND id <> %s',
                                            (EMP, nome, sid), fetch=True):
         flash('Já existe um serviço chamado "%s". Escolha outro nome.' % nome, 'danger')
@@ -567,7 +568,7 @@ def servico_novo():
         abort(403)
     f = request.form
     volta = url_for('financeiro.servicos', aba='servicos')
-    nome = ' '.join((f.get('nome') or '').split())[:80]
+    nome = titulo_servico(f.get('nome'))[:80]
     tipo = f.get('tipo') if f.get('tipo') in ('', 'PCT', 'FIXO', 'SEM') else ''
     emite = 0 if f.get('emite_nota') == '0' else 1
     if not nome:
