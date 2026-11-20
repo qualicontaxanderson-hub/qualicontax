@@ -47,6 +47,14 @@
 .rg-ok.v { background:#7c3aed; } .rg-ok:disabled { opacity:.45; cursor:default; }
 .rg-muted { color:#94a3b8; font-size:12.5px; }
 .rg-cart { border-top:1px dashed #e2e8f0; padding-top:10px; }
+.rg-cart-bt { display:flex; align-items:center; gap:10px; width:100%; min-height:48px; padding:6px 10px 6px 6px; text-align:left; cursor:pointer; border:1px solid #e2e8f0; border-radius:12px; background:#fff; font:inherit; color:inherit; }
+.rg-cart-bt:hover { border-color:#c4b5fd; background:#faf8ff; } .rg-cart-bt.cheio { border-color:#ddd6fe; background:#faf8ff; }
+.rg-cart-bt .sg { width:34px; height:34px; border-radius:10px; background:#ede9fe; color:#6d28d9; display:inline-flex; align-items:center; justify-content:center; flex:0 0 auto; font-size:13px; }
+.rg-cart-bt .tx { flex:1; min-width:0; display:flex; flex-direction:column; line-height:1.25; } .rg-cart-bt .tx b { font-size:13px; } .rg-cart-bt .tx small { color:#64748b; font-size:11.5px; }
+.rg-cart-bt > i { color:#94a3b8; }
+.pk-cart { width:min(640px, 96vw); top:8vh; } .pk-cart [hidden] { display:none !important; } .pk-cart .pk-quem span { white-space:normal; line-height:1.4; } .pk-cart .pk-corpo { padding:14px 16px 16px; display:flex; flex-direction:column; gap:10px; }
+.pk-cart .rg-cart-det { display:flex; flex-direction:column; gap:10px; }
+.pk-cart .rg-chips { max-height:46vh; overflow:auto; }
 .rg-chip { display:flex; align-items:center; gap:8px; background:#faf8ff; border:1px solid #ede9fe; border-radius:11px; padding:7px 7px 7px 11px; font-size:12.5px; }
 .rg-chip span { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; } .rg-chip b { color:#6d28d9; white-space:nowrap; } .rg-chip small { color:#94a3b8; white-space:nowrap; }
 .rg-chip button { border:0; width:26px; height:26px; border-radius:8px; background:#fff; color:#b91c1c; cursor:pointer; flex-shrink:0; }
@@ -165,7 +173,12 @@
         </div>
         </form>
         <div class="rg-corpo rg-cart">
-          <span class="rg-lbl"><i class="fas fa-building" style="color:#7c3aed"></i> Carteira de mensalidade <span style="text-transform:none; letter-spacing:0; font-weight:600">· {{ p.carteira|length }} empresa{{ 's' if p.carteira|length != 1 }}</span></span>
+          {% set pcts = p.carteira | map(attribute='valor') | map('float') | unique | list %}
+          <button type="button" class="rg-cart-bt{{ ' cheio' if p.carteira }}" onclick="rgCartAbrir(this)" data-pessoa="{{ pn[0] }}" data-n="{{ p.carteira|length }}">
+            <span class="sg"><i class="fas {{ 'fa-building' if p.carteira else 'fa-plus' }}"></i></span>
+            <span class="tx">{% if p.carteira %}<b>Comissão mensal · {{ p.carteira|length }} empresa{{ 's' if p.carteira|length != 1 }}</b><small>{{ ('%g%%' % pcts[0]) if pcts|length == 1 else ('%g%% a %g%%' % (pcts|min, pcts|max)) }} da mensalidade · toque para ver a relação</small>
+                             {% else %}<b>Sem carteira de mensalidade</b><small>toque para pôr uma empresa na carteira</small>{% endif %}</span><i class="fas fa-chevron-right"></i></button>
+          <div class="rg-cart-det" hidden>
           {% if p.carteira %}<div class="rg-chips">
           {% for a in p.carteira|sort(attribute='cliente_nome') %}
           <form class="rg-chip" method="POST" action="{{ url_for('financeiro.acordo_encerrar', aid=a.id) }}" data-pergunta="Tirar {{ a.cliente_nome }} da carteira de {{ pn[0] }}? {{ pn[0] }} deixa de receber {{ ('%g%%' % (a.valor | float)) if a.tipo == 'PCT' else (a.valor | float | format_currency) }} da mensalidade desta empresa a partir de agora. O que já foi pago fica.">
@@ -184,6 +197,7 @@
               <div class="rg-lin" style="justify-content:flex-end"><button type="button" class="rg-ok" style="background:#fff; color:#475569; border:1px solid #e2e8f0" onclick="rgAddLimpar(this)">Desistir</button><button class="rg-ok v"><i class="fas fa-plus"></i> Pôr na carteira</button></div>
             </div>
           </form>
+          </div>
         </div>
       </div>
     {% endfor %}
@@ -317,6 +331,23 @@
   }
 
   // ── QUEM RECEBE ──
+  // a relação da carteira abre numa caixa nossa (20/11/2026 — Anderson: "mostrar simplesmente que tem comissões mensais o
+  // Guilherme e se clicar em cima aí abre a relação das empresas"); o bloco sai do cartão para a caixa e volta ao fechar
+  window.rgCartAbrir = function (bt) {
+    var det = bt.parentNode.querySelector('.rg-cart-det'), casa = det.parentNode, n = parseInt(bt.dataset.n || '0', 10);
+    var f = document.createElement('div'); f.className = 'pk-fundo'; f.style.zIndex = 1200;
+    f.innerHTML = '<div class="pk pk-cart pk-roxo" role="dialog" aria-modal="true"><header class="pk-cab"><span class="pk-av"><i class="fas fa-building"></i></span>'
+      + '<div class="pk-quem"><b>Carteira de ' + esc(bt.dataset.pessoa) + '</b><span>' + (n ? n + ' empresa' + (n !== 1 ? 's' : '') + ' · recebe o % da mensalidade de cada uma, todo mês que o cliente pagar' : 'ainda sem empresa: escolha a primeira') + '</span></div>'
+      + '<button type="button" class="pk-x" title="Fechar (Esc)"><i class="fas fa-xmark"></i></button></header><div class="pk-corpo"></div>'
+      + '<footer class="pk-pe"><div class="pk-pe-info">O x tira a empresa da carteira (pergunta antes). "Pôr uma empresa" abre a lista de clientes.</div><button type="button" class="pk-canc">Fechar</button></footer></div>';
+    f.querySelector('.pk-corpo').appendChild(det); det.hidden = false;
+    document.body.appendChild(f); var trava = document.body.style.overflow; document.body.style.overflow = 'hidden';
+    function fechar() { document.removeEventListener('keydown', tecla, true); det.hidden = true; casa.appendChild(det); f.remove(); document.body.style.overflow = trava; }
+    function tecla(e) { if (e.key === 'Escape' && document.querySelectorAll('.pk-fundo').length === 1) { e.preventDefault(); fechar(); } }
+    document.addEventListener('keydown', tecla, true);
+    f.querySelector('.pk-x').addEventListener('click', fechar); f.querySelector('.pk-canc').addEventListener('click', fechar);
+    f.addEventListener('mousedown', function (e) { if (e.target === f) fechar(); });
+  };
   window.rgSw = function (cx) {
     var f = cx.form;
     f.querySelector('.rg-cfg').hidden = !cx.checked; f.querySelector('.rg-off').hidden = cx.checked;
@@ -341,7 +372,7 @@
   }
   window.rgCliAbrir = function (bt) {
     var f = bt.closest('form'), h = f.querySelector('[name=cliente_id]');
-    var ja = {}; f.closest('.rg-cart').querySelectorAll('.rg-chip span[title]').forEach(function (s) { ja[s.title] = 1; });
+    var ja = {}; f.closest('.rg-cart-det').querySelectorAll('.rg-chip span[title]').forEach(function (s) { ja[s.title] = 1; });
     if (!window.CaixaCliente) return;
     CaixaCliente.abrir({ clientes: CLI.filter(function (c) { return !ja[c.nome]; }), atual: h.value, titulo: 'Carteira de ' + f.dataset.pessoa, sub: 'a empresa cuja mensalidade paga comissão', z: 1300,
       onUsar: function (c) {
