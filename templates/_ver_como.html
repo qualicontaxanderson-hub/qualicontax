@@ -55,8 +55,7 @@
   </form>
   {% endif %}
   <div class="vc-pn" id="vcPn" hidden>
-    <div class="vc-pn-h"><b><i class="fas fa-user-shield"></i> Ver o sistema como…</b>
-      <small>O menu, as abas e as telas ficam como a pessoa vê. Só para olhar: nada se grava (em Lançamentos dá para lançar por ela).</small></div>
+    <div class="vc-pn-h"><b><i class="fas fa-user-shield"></i> Ver o sistema como…</b></div>
     <div class="vc-q"><i class="fas fa-search"></i><input type="search" id="vcQ" placeholder="Buscar pessoa" autocomplete="off"></div>
     <form method="POST" action="{{ url_for('ver_como.trocar') }}" class="vc-ls" id="vcLs" style="margin:0">
       <input type="hidden" name="volta" value="{{ _vc_volta }}">
