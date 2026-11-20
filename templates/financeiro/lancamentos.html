@@ -711,7 +711,7 @@
   var D = JSON.parse(document.getElementById('lmDados').textContent);
   var APR = {
     {% for l in grupos.apr %}{{ l.id }}: { cli: {{ l.nome_razao_social | tojson }}, num: {{ (l.numero_cliente or '') | string | tojson }}, serv: {{ (l.descricao or l.servico_nome) | tojson }},
-      valor: {{ l.valor_total | float }}, como: {{ l.como | tojson }}, por: {{ l.lancado_por_nome | tojson }}, venc: {{ ((l.vencimento.strftime('%d/%m/%Y')) if l.vencimento else '') | tojson }}, vi: {{ ((l.vencimento.isoformat()) if l.vencimento else '') | tojson }}, pc: {{ l.parcelas or 1 }}, pd: {{ (l.parcelas_datas or '') | tojson }}, cc: {{ ('MENSAL' if l.destino == 'MENSAL' else ('BOLETO_NOTA' if (l.com_nota if l.com_nota is not none else l.emite_nota) else 'BOLETO')) | tojson }}, ci: {{ (l.competencia.isoformat() if l.competencia else '') | tojson }},
+      valor: {{ l.valor_total | float }}, como: {{ l.como | tojson }}, por: {{ l.lancado_por_nome | tojson }}, venc: {{ ((l.vencimento.strftime('%d/%m/%Y')) if l.vencimento else '') | tojson }}, vi: {{ ((l.vencimento.isoformat()) if l.vencimento else '') | tojson }}, pc: {{ l.parcelas or 1 }}, pd: {{ (l.parcelas_datas or '') | tojson }}, cc: {{ ('MENSAL' if l.destino == 'MENSAL' else ('BOLETO_NOTA' if (l.emite_nota and (l.com_nota if l.com_nota is not none else l.emite_nota)) else 'BOLETO')) | tojson }}, nota: {{ 'true' if l.emite_nota else 'false' }}, ci: {{ (l.competencia.isoformat() if l.competencia else '') | tojson }},
       pt: {{ (l.comissao_pedida_tipo or 'PADRAO') | tojson }}, pv: {{ (l.comissao_pedida_valor | float) if l.comissao_pedida_valor else 0 }}, prev: {{ l.com_prev | float }}, trava: {{ 'true' if l.com_trava else 'false' }},
       obs: {{ (l.observacao or '') | tojson }} }{{ ',' if not loop.last }}{% endfor %}
   };
@@ -864,6 +864,8 @@
     $('apComoPed').textContent = 'pediu: ' + l.como + (l.pc > 1 ? ' em ' + l.pc + 'x' : '');
     $('apParc').value = String(l.pc || 1);
     $('apParcL').dataset.sig = ''; l._pd = l.pd;
+    var bn = $('apComoSeg').querySelector('button[data-v="BOLETO_NOTA"]'); bn.disabled = !l.nota; bn.title = l.nota ? '' : 'Este serviço nunca sai em nota fiscal (trava do cadastro do serviço)';
+    if (!l.nota) $('apComoPed').textContent += ' · nunca sai em nota (trava do cadastro)';
     apComo(l.cc);
     $('apSeg').querySelectorAll('button').forEach(function (b) { b.disabled = l.trava && b.dataset.v !== 'SEM'; });
     if (l.trava) { apSeg('SEM'); $('apPedida').innerHTML = '<i class="fas fa-lock"></i> serviço que nunca paga comissão'; }
@@ -906,6 +908,7 @@
     if (p1 && principal) { principal.value = p1.value; p1.addEventListener('change', function () { principal.value = p1.value; }); }
   }
   function apComo(v) {
+    if (v === 'BOLETO_NOTA' && apL && !apL.nota) v = 'BOLETO';      // trava: serviço que nunca sai em nota
     var m = v === 'MENSAL';
     $('apComoIn').value = v;
     $('apComoSeg').querySelectorAll('button').forEach(function (b) { b.classList.toggle('on', b.dataset.v === v); });
@@ -1051,6 +1054,8 @@
     }
   }
   function setComo(v) {
+    var sv = servico();
+    if (v === 'BOLETO_NOTA' && sv && !sv.nota) v = 'BOLETO';        // trava do cadastro do serviço: nunca sai em nota
     como = v; $('nsComo').value = v;
     $('nsOps').querySelectorAll('.ns-op').forEach(function (b) { b.classList.toggle('on', b.dataset.v === v); });
     $('nsVencBox').hidden = v === 'MENSAL'; $('nsCompBox').hidden = v !== 'MENSAL';
@@ -1117,6 +1122,9 @@
         var s = servico(); nsServPinta();
         if (s) { if (s.valor && !num($('nsValor').value)) $('nsValor').value = brl(s.valor).replace('R$ ', ''); if (!$('nsDesc').value) $('nsDesc').placeholder = s.nome;
                  if (como !== 'MENSAL') setComo(s.nota ? 'BOLETO_NOTA' : 'BOLETO'); }
+        var bn = $('nsOps').querySelector('.ns-op[data-v="BOLETO_NOTA"]');
+        if (bn) { var semNota = !!(s && !s.nota); bn.classList.toggle('sem', semNota); var sn = bn.querySelector('small'); if (!bn.dataset.txt) bn.dataset.txt = sn.textContent;
+                  sn.textContent = semNota ? 'este serviço nunca sai em nota (trava do cadastro)' : bn.dataset.txt; if (semNota && como === 'BOLETO_NOTA') setComo('BOLETO'); }
         // serviço travado (nunca paga comissão): só "Sem comissão"
         var trava = !!(s && s.ct === 'SEM');
         $('nsSeg').querySelectorAll('button').forEach(function (b) { b.disabled = trava && b.dataset.v !== 'SEM'; });

@@ -188,8 +188,22 @@ def _como(l):
     """Como o cliente é cobrado: 'Boleto + nota', 'Só boleto' ou 'Mensalidade 11/2026'."""
     if l['destino'] == 'MENSAL':
         return 'Mensalidade ' + l['competencia'].strftime('%m/%Y')
-    nota = l['com_nota'] if l.get('com_nota') is not None else l.get('emite_nota')
-    return 'Boleto + nota' if nota else 'Só boleto'
+    return 'Boleto + nota' if _sai_na_nota(l) else 'Só boleto'
+
+
+def _sai_na_nota(l):
+    """Se a cobrança avulsa deste lançamento leva nota fiscal. O que a pessoa pediu (com_nota) vale, MAS o cadastro do
+    serviço manda: emite_nota = 0 (taxa da Junta, ressarcimento, cartório, Correios) é trava — nunca sai em nota, nem
+    pedindo, nem aprovando (20/11/2026 — Anderson: "precisamos ter isso no cadastro pra travar")."""
+    if not l.get('emite_nota', 1):
+        return False
+    return bool(l['com_nota'] if l.get('com_nota') is not None else l.get('emite_nota'))
+
+
+def _servico_sem_nota(servico_id):
+    """Serviço travado no cadastro: nunca sai em nota fiscal (nfse_servicos.emite_nota = 0)."""
+    s = execute_query('SELECT emite_nota FROM nfse_servicos WHERE id = %s', (servico_id,), fetch=True, fetch_one=True) or {}
+    return not s.get('emite_nota', 1)
 
 
 @financeiro.route('/financeiro/lancamentos')
@@ -475,7 +489,7 @@ def comissao_regras():
                             carteira=[a for a in meus if a['base'] == 'HONORARIOS']))
     pessoas.sort(key=lambda p: (not p['geral'] and not p['carteira'], p['nome']))
     servicos = _servicos()
-    clientes = execute_query("""SELECT c.id, c.numero_cliente AS num, c.nome_razao_social AS nome,
+    clientes = execute_query("""SELECT c.id, c.numero_cliente AS num, c.nome_razao_social AS nome, c.cpf_cnpj AS doc,
                                     (SELECT SUM(k.valor) FROM fin_contratos k WHERE k.cliente_id = c.id AND k.ativo = 1) AS mensal
                                FROM clientes c WHERE COALESCE(c.situacao, 'ATIVO') <> 'INATIVO' AND COALESCE(c.avulso, 0) = 0
                               ORDER BY c.nome_razao_social""", fetch=True) or []
@@ -484,7 +498,8 @@ def comissao_regras():
                            n_recebem=sum(1 for p in pessoas if p['geral']), n_carteira=sum(len(p['carteira']) for p in pessoas),
                            n_serv_regra=sum(1 for s in servicos if s.get('comissao_tipo')),
                            n_serv_sem=sum(1 for s in servicos if s.get('comissao_tipo') == 'SEM'),
-                           clientes_json=json.dumps([{'id': c['id'], 'num': str(c['num'] or ''), 'nome': c['nome'],
+                           n_serv_sem_nota=sum(1 for s in servicos if not s.get('emite_nota')),
+                           clientes_json=json.dumps([{'id': c['id'], 'num': str(c['num'] or ''), 'nome': c['nome'], 'doc': c['doc'] or '',
                                                       'mensal': float(c['mensal'] or 0)} for c in clientes], ensure_ascii=False))
 
 
@@ -531,10 +546,14 @@ def servico_comissao():
         abort(403)
     sid = request.form.get('servico_id', type=int)
     tipo = request.form.get('tipo') or ''
-    s = execute_query('SELECT id, nome, comissao_tipo, comissao_valor, valor_padrao FROM nfse_servicos WHERE id = %s AND empresa_id = %s',
+    s = execute_query('SELECT id, nome, comissao_tipo, comissao_valor, valor_padrao, emite_nota FROM nfse_servicos WHERE id = %s AND empresa_id = %s',
                       (sid, EMP), fetch=True, fetch_one=True)
     if not s or tipo not in ('', 'PCT', 'FIXO', 'SEM'):
         abort(400)
+    # 20/11/2026 — trava de NOTA FISCAL no cadastro do serviço: 0 = nunca sai em nota (só boleto), 1 = sai na nota
+    emite = s['emite_nota']
+    if request.form.get('emite_nota') in ('0', '1'):
+        emite = int(request.form.get('emite_nota'))
     try:
         valor = _dec(request.form.get('valor')) if tipo in ('PCT', 'FIXO') else None
         if tipo in ('PCT', 'FIXO') and (valor is None or valor <= 0 or (tipo == 'PCT' and valor > 100)):
@@ -550,12 +569,26 @@ def servico_comissao():
         if request.form.get('volta') == 'regras':
             return redirect(url_for('financeiro.comissao_regras', aba='servicos') + '#s%d' % sid)
         return redirect(url_for('financeiro.lancamentos', aba='com') + '#servicos-comissao')
-    execute_query('UPDATE nfse_servicos SET comissao_tipo = %s, comissao_valor = %s, valor_padrao = %s WHERE id = %s',
-                  (tipo or None, valor, sugerido, sid), fetch=False)
+    execute_query('UPDATE nfse_servicos SET comissao_tipo = %s, comissao_valor = %s, valor_padrao = %s, emite_nota = %s WHERE id = %s',
+                  (tipo or None, valor, sugerido, emite, sid), fetch=False)
+    destravados = 0
+    if not emite and s['emite_nota']:
+        # travou agora: os pedidos ainda não aprovados que pediam nota passam a "só boleto"
+        pend = execute_query("SELECT id FROM fin_lancamentos WHERE servico_id = %s AND status = 'LANCADO' AND destino = 'AVULSO' AND com_nota = 1",
+                             (sid,), fetch=True) or []
+        if pend:
+            execute_query("UPDATE fin_lancamentos SET com_nota = 0 WHERE id IN (%s)" % ','.join(str(p['id']) for p in pend), fetch=False)
+            destravados = len(pend)
     registrar('escrita.alterou_comissao_servico', 'financeiro', tabela='nfse_servicos', registro_id=sid,
-              antes={'comissao_tipo': s['comissao_tipo'], 'comissao_valor': str(s['comissao_valor'] or ''), 'valor_sugerido': str(s['valor_padrao'] or '')},
-              depois={'servico': s['nome'], 'comissao_tipo': tipo or None, 'comissao_valor': str(valor or ''), 'valor_sugerido': str(sugerido or '')})
-    flash('"%s" salvo.' % s['nome'], 'success')
+              antes={'comissao_tipo': s['comissao_tipo'], 'comissao_valor': str(s['comissao_valor'] or ''), 'valor_sugerido': str(s['valor_padrao'] or ''),
+                     'emite_nota': int(s['emite_nota'])},
+              depois={'servico': s['nome'], 'comissao_tipo': tipo or None, 'comissao_valor': str(valor or ''), 'valor_sugerido': str(sugerido or ''),
+                      'emite_nota': int(emite), 'pedidos_passados_para_so_boleto': destravados or None})
+    if int(emite) != int(s['emite_nota']):
+        flash(('"%s" não sai mais em nota fiscal: só boleto, para todo mundo.' % s['nome']) + ((' %d pedido%s aguardando aprovação passaram para só boleto.' % (destravados, 's' if destravados > 1 else '')) if destravados else '')
+              if not emite else '"%s" volta a sair na nota fiscal.' % s['nome'], 'success')
+    else:
+        flash('"%s" salvo.' % s['nome'], 'success')
     if request.form.get('volta') == 'regras':
         return redirect(url_for('financeiro.comissao_regras', aba='servicos') + '#s%d' % sid)
     return redirect(url_for('financeiro.lancamentos', aba='com') + '#servicos-comissao')
@@ -609,7 +642,7 @@ def lancamento_novo():
             lid = FinLancamento.criar(EMP, cliente_id, servico_id, (f.get('descricao') or s['nome']).strip() or s['nome'],
                                       Decimal('1'), valor, destino, _eu().id, vencimento=venc,
                                       observacao=(f.get('observacao') or '').strip() or None, competencia=comp,
-                                      com_nota=None if destino == 'MENSAL' else (como == 'BOLETO_NOTA'),
+                                      com_nota=None if destino == 'MENSAL' else (como == 'BOLETO_NOTA' and not _servico_sem_nota(servico_id)),
                                       comissao_tipo='SEM' if FinLancamento.servico_travado(servico_id) else (f.get('comissao_tipo') or 'PADRAO'),
                                       comissao_valor=None if FinLancamento.servico_travado(servico_id) else (f.get('comissao_valor') or None),
                                       pagador_cliente_id=pagador)
@@ -722,7 +755,7 @@ def _cobrar_avulso(l, usuario_id, conta_id=None):
     competencia = l['competencia']
     _venc, mensagem = sugestao_boleto(conta, competencia)
     itens = [{'servico_id': l['servico_id'], 'nome': (l['descricao'] or l['servico_nome']) + dona, 'valor': Decimal(str(l['valor_total'])),
-              'emite_nota': bool(l['com_nota'] if l.get('com_nota') is not None else l.get('emite_nota')), 'origem': 'honorarios'}]
+              'emite_nota': _sai_na_nota(l), 'origem': 'honorarios'}]
     total = Decimal(str(l['valor_total']))
     # 19/11/2026: desconto pedido junto (aprovado): a linha do serviço sai pelo líquido dizendo de onde veio; a página do
     # cliente e o e-mail mostram as duas linhas
@@ -919,6 +952,9 @@ def lancamento_aprovar(lid):
                 comp = FinLoteMensal.competencia_aberta(EMP, _data(request.form.get('competencia')) or l['competencia'])
             else:
                 destino, com_nota = 'AVULSO', 1 if como == 'BOLETO_NOTA' else 0
+                if com_nota and not l.get('emite_nota', 1):
+                    com_nota = 0            # trava do cadastro do serviço: nunca sai em nota
+                    flash('"%s" nunca sai em nota fiscal (trava do cadastro do serviço): a cobrança sai só com boleto.' % l['servico_nome'], 'info')
                 venc = _data(request.form.get('vencimento')) or l['vencimento']
                 if not venc or venc < _hoje_br():
                     raise ValueError
@@ -927,7 +963,7 @@ def lancamento_aprovar(lid):
             flash('Vencimento inválido: escolha hoje ou uma data à frente.', 'danger')
             return redirect(url_for('financeiro.lancamentos', aba='apr'))
         antes = {'como': _como(l), 'vencimento': str(l['vencimento'] or '')}
-        nota_antes = l['com_nota'] if l.get('com_nota') is not None else l.get('emite_nota')
+        nota_antes = _sai_na_nota(l)
         mudou = (destino != l['destino'] or venc != l['vencimento'] or comp != l['competencia']
                  or (destino == 'AVULSO' and bool(com_nota) != bool(nota_antes)))
         if mudou:
