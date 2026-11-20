@@ -62,13 +62,39 @@
 .rg-meses { display:inline-flex; flex-wrap:wrap; gap:4px; }
 .rg-meses button { border:1px solid #e2e8f0; background:#fff; color:#475569; border-radius:99px; padding:5px 10px; font:inherit; font-size:12px; font-weight:700; cursor:pointer; }
 .rg-meses button.on { background:#7c3aed; border-color:#7c3aed; color:#fff; }
-.rg-sv { display:flex; flex-direction:column; gap:12px; padding:14px 16px 14px; }
-.rg-sv-top { display:flex; align-items:flex-start; gap:11px; } .rg-sv-top i.ic { width:38px; height:38px; border-radius:12px; display:inline-flex; align-items:center; justify-content:center; font-size:15px; flex-shrink:0; }
-.rg-sv-top > div { flex:1; min-width:0; } .rg-sv-top b { display:block; font-size:14.5px; line-height:1.3; } .rg-sv-top small { color:#64748b; font-size:12px; }
-.rg-tags { display:flex; flex-direction:column; align-items:flex-end; gap:4px; flex-shrink:0; }
-.rg-t-pct { background:#f5f3ff; color:#6d28d9; } .rg-t-fixo { background:#eff6ff; color:#1d4ed8; } .rg-t-sem { background:#fef2f2; color:#b91c1c; } .rg-t-acordo { background:#f1f5f9; color:#64748b; }
-.rg-t-nota { background:#dcfce7; color:#166534; } .rg-t-sonota { background:#fef3c7; color:#b45309; }
-.rg-tag { font-size:10.5px; font-weight:800; border-radius:99px; padding:3px 9px; white-space:nowrap; display:inline-flex; align-items:center; gap:4px; } .rg-tag i { font-size:9px; }
+/* cartão do serviço no molde do cartão de Honorários (20/11/2026 — Anderson: "está feio os cards nos serviços, deve ser
+   melhorado, melhor que o honorários"): faixa colorida pelo tipo de comissão, valor sugerido grande, linhas, chips com lápis */
+.sv-grade { display:grid; grid-template-columns:repeat(auto-fill, minmax(330px, 1fr)); gap:12px; margin-bottom:22px; }
+.sv-c { padding-bottom:12px; display:block; cursor:default; }
+.sv-c:hover { transform:none; }
+.sv-pad  { --cor:#0f766e; --cor-e:#115e59; --cor-f:#f0fdfa; --cor-b:#99f6e4; }
+.sv-pct  { --cor:#7c3aed; --cor-e:#5b21b6; --cor-f:#f5f3ff; --cor-b:#e2dafd; }
+.sv-fixo { --cor:#2563eb; --cor-e:#1e40af; --cor-f:#eff6ff; --cor-b:#bfdbfe; }
+.sv-sem  { --cor:#475569; --cor-e:#1e293b; --cor-f:#f5f7fa; --cor-b:#e2e8f0; }
+.sv-c .tx-c-top { margin:-12px -14px 0 -16px; padding:9px 14px 9px 16px; background:linear-gradient(135deg, var(--cor) 0%, var(--cor-e) 100%); border-radius:13px 13px 0 0; }
+.sv-c .tx-c-nome { color:#fff; white-space:normal; line-height:1.25; font-size:13px; }
+.sv-c .tx-c-num { background:rgba(255,255,255,.22); color:#fff; width:22px; height:22px; display:inline-flex; align-items:center; justify-content:center; padding:0; border-radius:7px; font-size:10px; }
+.sv-c .tx-c-meio { margin-top:10px; align-items:flex-start; }
+.sv-c .tx-c-val { color:var(--cor-e); font-size:19px; }
+.sv-c .tx-c-val.sv-semv { color:#94a3b8; font-size:14px; font-weight:700; padding-top:3px; }
+.sv-c .tx-c-desc { font-size:11.5px; color:#64748b; font-weight:600; }
+.sv-c .hp-venc { text-align:right; font-size:11px; color:#64748b; line-height:1.3; } .sv-c .hp-venc b { display:block; font-size:15px; color:#0f172a; font-variant-numeric:tabular-nums; }
+.sv-c .hp-itens { margin-top:9px; display:flex; flex-direction:column; gap:4px; }
+.sv-c .hp-it { display:flex; justify-content:space-between; gap:10px; font-size:12px; color:#475569; }
+.sv-c .hp-it span i { font-size:10px; margin-right:4px; color:#94a3b8; width:12px; }
+.sv-c .hp-it b { font-weight:800; color:#334155; font-variant-numeric:tabular-nums; white-space:nowrap; } .sv-c .hp-it b small { font-weight:700; color:#94a3b8; }
+.sv-c .hp-it b i { font-size:9px; margin-right:2px; }
+.sv-c .hp-it.nf b { color:#15803d; } .sv-c .hp-it.sem b { color:#b45309; } .sv-c .hp-it.trava b { color:#475569; }
+.sv-c .hp-linha { display:flex; align-items:center; gap:6px; flex-wrap:wrap; margin-top:10px; padding-top:10px; border-top:1px dashed #e2e8f0; }
+.sv-chip { display:inline-flex; align-items:center; gap:6px; border:1px solid #e2e8f0; background:#fff; border-radius:99px; padding:3px 9px; font:inherit; font-size:11.5px; font-weight:800; color:#334155; cursor:pointer; }
+.sv-chip small { font-weight:600; color:#64748b; } .sv-chip i.fa-pen { font-size:9px; color:#94a3b8; } .sv-chip:hover { border-color:#9fc9b3; }
+.sv-chip.nf { border-color:#bbf7d0; background:#f0fdf4; color:#166534; } .sv-chip.nf.sem { border-color:#fde68a; background:#fffbeb; color:#92400e; } .sv-chip.nf.sem small { color:#b45309; }
+.sv-chip.com.pro { border-color:var(--cor-b); background:var(--cor-f); color:var(--cor-e); } .sv-chip.com.sem { background:#f1f5f9; color:#475569; }
+.sv-c.editando .hp-linha { display:none; }
+.sv-ed { margin-top:10px; padding:10px 12px 12px; border-radius:12px; background:var(--cor-f); border:1px solid var(--cor-b); display:flex; flex-direction:column; gap:10px; }
+.sv-ed .rg-bl[hidden] { display:none !important; }
+.sv-ed .rg-acoes { border-top:1px dashed var(--cor-b); margin-top:0; }
+.rg-canc { height:36px; border:1px solid #e2e8f0; border-radius:10px; background:#fff; color:#64748b; font:inherit; font-weight:700; font-size:12.5px; padding:0 14px; cursor:pointer; margin-right:auto; }
 .rg-bl { display:flex; flex-direction:column; gap:7px; }
 .rg-bl .rg-lin { gap:8px; }
 .rg-rs { display:inline-flex; align-items:center; border:1px solid #d7e3dc; border-radius:10px; background:#fff; padding-left:9px; height:36px; }
@@ -78,7 +104,7 @@
 .rg-rs .pos, .rg-rs.pct .pre { display:none; } .rg-rs.pct .pos { display:inline; }
 .rg-acoes { display:flex; justify-content:flex-end; align-items:center; gap:10px; border-top:1px dashed #e6eeea; padding-top:10px; margin-top:2px; }
 .rg-acoes .rg-muted { margin-right:auto; }
-.rg-c [hidden] { display:none !important; }
+.rg-c [hidden], .sv-c [hidden] { display:none !important; }
 .tx-painel[data-p="pessoas"] { --sec:#7c3aed; --sec-e:#5b21b6; --sec-f:#f5f3ff; --sec-b:#ddd6fe; }
 .tx-painel[data-p="servicos"] { --sec:#0f766e; --sec-e:#115e59; --sec-f:#f0fdfa; --sec-b:#99f6e4; }
 .tx-painel .tx-f.on { background:var(--sec); border-color:var(--sec); color:#fff; }
@@ -86,8 +112,7 @@
 .pk.pk-peq { width:min(560px, 96vw); top:18vh; } .pk.pk-peq .pk-quem span { white-space:normal; line-height:1.4; }
 .pk.pk-rubro { --cor:#dc2626; --cor-e:#991b1b; --cor-f:#fef2f2; --cor-b:#fecaca; } .pk.pk-roxo { --cor:#7c3aed; --cor-e:#5b21b6; --cor-f:#f5f3ff; --cor-b:#ddd6fe; }
 .pk-peq .pk-pe .pk-ok.rubro { background:linear-gradient(135deg,#dc2626,#991b1b); }
-@media (max-width:760px) { .rg-grade { grid-template-columns:minmax(0,1fr); } .rg-faixa .tx-busca { margin-left:0; width:100%; } .rg-tags { flex-direction:row; flex-wrap:wrap; justify-content:flex-end; }
-  .rg-sv-top { flex-wrap:wrap; } .rg-sv-top > div { flex-basis:calc(100% - 50px); } .rg-tags { flex-basis:100%; justify-content:flex-start; } .rg-acoes .rg-ok { flex:1; justify-content:center; } }
+@media (max-width:760px) { .rg-grade { grid-template-columns:minmax(0,1fr); } .rg-faixa .tx-busca { margin-left:0; width:100%; } .sv-grade { grid-template-columns:minmax(0,1fr); } .rg-acoes .rg-ok { flex:1; justify-content:center; } }
 </style>
 {% endblock %}
 
@@ -168,36 +193,47 @@
         <button type="button" class="tx-f" data-v="semnota"><i class="fas fa-file-circle-xmark" style="font-size:10px"></i> Sem nota fiscal <b>{{ n_serv_sem_nota }}</b></button></div>
       <div class="tx-busca"><i class="fas fa-magnifying-glass"></i><input type="search" placeholder="Buscar serviço" data-busca="servicos"></div>
     </div>
-    <div class="rg-grade">
+    <div class="sv-grade">
     {% for s in servicos %}
       {% set t = s.comissao_tipo or '' %}
       {% set nota = s.emite_nota != 0 %}
-      <form class="rg-c" id="s{{ s.id }}" method="POST" action="{{ url_for('financeiro.servico_comissao') }}" data-b="{{ s.nome }}" data-t="{{ t or 'acordo' }}" data-n="{{ 1 if nota else 0 }}">
+      {% set rot_com = {'PCT': ('%g%%' % (s.comissao_valor | float)) if s.comissao_valor else '% a definir', 'FIXO': (s.comissao_valor | float | format_currency) if s.comissao_valor else 'valor a definir', 'SEM': 'nunca paga'}.get(t, 'padrão da pessoa') %}
+      <form class="tx-c sv-c {{ {'PCT': 'sv-pct', 'FIXO': 'sv-fixo', 'SEM': 'sv-sem'}.get(t, 'sv-pad') }}" id="s{{ s.id }}" method="POST" action="{{ url_for('financeiro.servico_comissao') }}" data-b="{{ s.nome }}" data-t="{{ t or 'acordo' }}" data-n="{{ 1 if nota else 0 }}">
         <input type="hidden" name="servico_id" value="{{ s.id }}"><input type="hidden" name="volta" value="regras">
-        <div class="rg-sv">
-          <div class="rg-sv-top"><i class="ic fas {{ {'PCT': 'fa-percent rg-t-pct', 'FIXO': 'fa-coins rg-t-fixo', 'SEM': 'fa-lock rg-t-sem'}.get(t, 'fa-user-check rg-t-acordo') }}"></i>
-            <div><b>{{ s.nome }}</b><small>{% if s.valor_padrao %}valor sugerido {{ s.valor_padrao | float | format_currency }}{% else %}sem valor sugerido{% endif %}{% if s.n %} · {{ s.n }} lançamento{{ 's' if s.n != 1 }}{% endif %}</small></div>
-            <div class="rg-tags">
-              <span class="rg-tag {{ {'PCT': 'rg-t-pct', 'FIXO': 'rg-t-fixo', 'SEM': 'rg-t-sem'}.get(t, 'rg-t-acordo') }}">{% if t == 'SEM' %}<i class="fas fa-lock"></i> {% endif %}{{ {'PCT': ('comissão %g%%' % (s.comissao_valor | float)) if s.comissao_valor else 'comissão %', 'FIXO': ('comissão ' + (s.comissao_valor | float | format_currency)) if s.comissao_valor else 'comissão fixa', 'SEM': 'nunca paga comissão'}.get(t, 'comissão: padrão da pessoa') }}</span>
-              {% if nota %}<span class="rg-tag rg-t-nota"><i class="fas fa-file-invoice"></i> sai na nota fiscal</span>{% else %}<span class="rg-tag rg-t-sonota"><i class="fas fa-lock"></i> só boleto · nunca sai em nota</span>{% endif %}
-            </div></div>
-          <div class="rg-bl"><span class="rg-lbl"><i class="fas fa-file-invoice"></i> Nota fiscal</span>
+        <div class="tx-c-top"><span class="tx-c-num" title="{{ {'PCT': 'comissão em %', 'FIXO': 'comissão em valor fixo', 'SEM': 'nunca paga comissão'}.get(t, 'comissão no padrão da pessoa') }}"><i class="fas {{ {'PCT': 'fa-percent', 'FIXO': 'fa-coins', 'SEM': 'fa-lock'}.get(t, 'fa-user-check') }}"></i></span><span class="tx-c-nome" title="{{ s.nome }}">{{ s.nome }}</span></div>
+        <div class="tx-c-meio">
+          <div>{% if s.valor_padrao %}<div class="tx-c-val">{{ s.valor_padrao | float | format_currency }}</div><div class="tx-c-desc">valor sugerido · vem preenchido na Nova cobrança</div>
+               {% else %}<div class="tx-c-val sv-semv">sem valor sugerido</div><div class="tx-c-desc">quem lança digita o valor</div>{% endif %}</div>
+          <div class="hp-venc">lançamentos<b>{{ s.n or 0 }}</b></div>
+        </div>
+        <div class="hp-itens">
+          <div class="hp-it{{ ' trava' if t == 'SEM' }}"><span><i class="fas fa-hand-holding-dollar"></i> Comissão</span><b>{% if t == 'SEM' %}<i class="fas fa-lock"></i> nunca paga{% elif t == 'PCT' and s.comissao_valor %}{{ rot_com }}{% if s.valor_padrao %} <small>≈ {{ ((s.valor_padrao | float) * (s.comissao_valor | float) / 100) | format_currency }}</small>{% endif %}{% else %}{{ rot_com }}{% endif %}</b></div>
+          <div class="hp-it{{ ' nf' if nota else ' sem' }}"><span><i class="fas fa-file-invoice"></i> Nota fiscal</span><b>{% if nota %}sai na nota{% else %}<i class="fas fa-lock"></i> nunca sai em nota · só boleto{% endif %}</b></div>
+        </div>
+        <div class="hp-linha">
+          <button type="button" class="sv-chip nf{{ ' sem' if not nota }}" onclick="svEditar(this, 'nota')" title="Clique para mudar se este serviço sai em nota fiscal"><i class="fas {{ 'fa-file-invoice' if nota else 'fa-lock' }}"></i> {{ 'sai na nota' if nota else 'só boleto' }} <small>{{ 'nota fiscal' if nota else 'trava' }}</small> <i class="fas fa-pen"></i></button>
+          <button type="button" class="sv-chip com{{ ' sem' if t == 'SEM' }}{{ ' pro' if t in ('PCT', 'FIXO') }}" onclick="svEditar(this, 'com')" title="Clique para mudar a comissão deste serviço"><i class="fas {{ {'PCT': 'fa-percent', 'FIXO': 'fa-coins', 'SEM': 'fa-lock'}.get(t, 'fa-user-check') }}"></i> {{ rot_com }} <small>comissão</small> <i class="fas fa-pen"></i></button>
+          {% if t != 'SEM' %}<button type="button" class="sv-chip val" onclick="svEditar(this, 'valor')" title="Clique para mudar o valor sugerido"><i class="fas fa-tag"></i> valor <i class="fas fa-pen"></i></button>{% endif %}
+        </div>
+        <div class="sv-ed" hidden>
+          <div class="rg-bl" data-ed="nota"><span class="rg-lbl"><i class="fas fa-file-invoice"></i> Nota fiscal</span>
             <div class="rg-lin"><span class="rg-seg rg-seg-n">
               <label><input type="radio" name="emite_nota" value="1"{{ ' checked' if nota }} onchange="rgNota(this)"><span><i class="fas fa-check"></i> Sai na nota</span></label>
-              <label title="Trava: este serviço nunca sai em nota fiscal, só no boleto"><input type="radio" name="emite_nota" value="0"{{ ' checked' if not nota }} onchange="rgNota(this)"><span><i class="fas fa-lock"></i> Nunca sai em nota</span></label></span>
-              <small class="rg-muted">{{ 'serviço prestado: entra na nota' if nota else 'só no boleto: taxa ou despesa repassada' }}</small></div></div>
-          <div class="rg-bl"><span class="rg-lbl"><i class="fas fa-hand-holding-dollar"></i> Comissão</span>
+              <label title="Trava: este serviço nunca sai em nota fiscal, só no boleto"><input type="radio" name="emite_nota" value="0"{{ ' checked' if not nota }} onchange="rgNota(this)"><span><i class="fas fa-lock"></i> Nunca sai em nota</span></label></span></div>
+            <small class="rg-muted">{{ 'Serviço prestado: entra na nota. "Nunca" é trava para todo mundo e salva na hora.' if nota else 'Taxa ou despesa repassada: sai só no boleto, para todo mundo. "Sai na nota" salva na hora.' }}</small></div>
+          <div class="rg-bl" data-ed="com"><span class="rg-lbl"><i class="fas fa-hand-holding-dollar"></i> Comissão</span>
             <div class="rg-lin"><span class="rg-seg">
               <label><input type="radio" name="tipo" value=""{{ ' checked' if not t }} onchange="rgTipo(this)"><span>Padrão da pessoa</span></label>
               <label><input type="radio" name="tipo" value="PCT"{{ ' checked' if t == 'PCT' }} onchange="rgTipo(this)"><span>%</span></label>
               <label><input type="radio" name="tipo" value="FIXO"{{ ' checked' if t == 'FIXO' }} onchange="rgTipo(this)"><span>R$</span></label>
               <label title="Trava: ninguém recebe comissão neste serviço, nem pedindo, nem aprovando"><input type="radio" name="tipo" value="SEM"{{ ' checked' if t == 'SEM' }} onchange="rgTipo(this)"><span><i class="fas fa-lock"></i> Nunca</span></label></span>
-              <span class="rg-rs rg-cv{{ ' pct' if t != 'FIXO' }}"{{ ' hidden' if t not in ('PCT', 'FIXO') }}><i class="pre">R$</i><input class="rg-in" name="valor" inputmode="decimal" value="{{ (('%g' % (s.comissao_valor | float)) | replace('.', ',')) if s.comissao_valor else '' }}" placeholder="{{ '10' if t != 'FIXO' else '0,00' }}"><i class="pos">%</i></span></div></div>
-          <div class="rg-bl rg-vs"{{ ' hidden' if t == 'SEM' }}><span class="rg-lbl"><i class="fas fa-tag"></i> Valor sugerido <small style="text-transform:none; letter-spacing:0; font-weight:600; color:#94a3b8">· vem preenchido ao escolher o serviço</small></span>
+              <span class="rg-rs rg-cv{{ ' pct' if t != 'FIXO' }}"{{ ' hidden' if t not in ('PCT', 'FIXO') }}><i class="pre">R$</i><input class="rg-in" name="valor" inputmode="decimal" value="{{ (('%g' % (s.comissao_valor | float)) | replace('.', ',')) if s.comissao_valor else '' }}" placeholder="{{ '10' if t != 'FIXO' else '0,00' }}"><i class="pos">%</i></span></div>
+            <small class="rg-muted">"Padrão da pessoa" e "Nunca" salvam na hora; % e R$ pedem o número e Salvar.</small></div>
+          <div class="rg-bl rg-vs" data-ed="valor"{{ ' hidden' if t == 'SEM' }}><span class="rg-lbl"><i class="fas fa-tag"></i> Valor sugerido</span>
             <div class="rg-lin"><span class="rg-rs"><i>R$</i><input class="rg-in rg-din" name="valor_padrao" inputmode="numeric" placeholder="0,00" autocomplete="off"
-              value="{{ ('%.2f' % (s.valor_padrao | float)) | replace('.', ',') if s.valor_padrao else '' }}"></span>
-            {% if s.valor_padrao and s.comissao_tipo == 'PCT' and s.comissao_valor %}<small class="rg-muted">comissão ≈ {{ ((s.valor_padrao | float) * (s.comissao_valor | float) / 100) | format_currency }}</small>{% endif %}</div></div>
-          <div class="rg-acoes"><small class="rg-muted">Nota e "Nunca" salvam na hora</small><button class="rg-ok"><i class="fas fa-check"></i> Salvar</button></div>
+              value="{{ ('%.2f' % (s.valor_padrao | float)) | replace('.', ',') if s.valor_padrao else '' }}"></span></div>
+            <small class="rg-muted">Digite os centavos: 150000 vira 1.500,00. Vem preenchido na Nova cobrança; quem lança pode mudar.</small></div>
+          <div class="rg-acoes"><button type="button" class="rg-canc" onclick="svFechar(this)">Desistir</button><button class="rg-ok"><i class="fas fa-check"></i> Salvar</button></div>
         </div>
       </form>
     {% endfor %}
@@ -226,7 +262,7 @@
   var filtro = '';
   function aplicar(pn) {
     var q = semAc((pn.querySelector('[data-busca]') || {}).value || '');
-    pn.querySelectorAll('.rg-c').forEach(function (c) {
+    pn.querySelectorAll('.rg-c, .sv-c').forEach(function (c) {
       var ok = !q || semAc(c.dataset.b).indexOf(q) >= 0;
       if (ok && pn.dataset.p === 'servicos' && filtro) ok = filtro === 'propria' ? (c.dataset.t === 'PCT' || c.dataset.t === 'FIXO') : filtro === 'semnota' ? c.dataset.n === '0' : c.dataset.t === filtro;
       c.style.display = ok ? '' : 'none';
@@ -306,6 +342,20 @@
       el.value = d ? (parseInt(d, 10) / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '';
     });
   });
+  // o lápis do chip abre a edição dentro do cartão, só do bloco pedido (nota, comissão ou valor); Desistir fecha e volta ao que estava
+  window.svEditar = function (bt, qual) {
+    var f = bt.closest('form'), ed = f.querySelector('.sv-ed');
+    f.querySelectorAll('.sv-ed .rg-bl').forEach(function (b) { b.hidden = b.dataset.ed !== qual; });
+    ed.hidden = false; f.classList.add('editando');
+    var r = f.querySelector('[name=tipo]:checked');
+    if (qual === 'com' && r && (r.value === 'PCT' || r.value === 'FIXO')) f.querySelector('.rg-cv input').focus();
+    if (qual === 'valor') f.querySelector('.rg-din').focus();
+    ed.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  };
+  window.svFechar = function (bt) {
+    var f = bt.closest('form'); f.reset(); f.querySelector('.sv-ed').hidden = true; f.classList.remove('editando');
+    var t = f.dataset.t, cv = f.querySelector('.rg-cv'); cv.hidden = !(t === 'PCT' || t === 'FIXO'); cv.classList.toggle('pct', t !== 'FIXO');
+  };
   window.rgTipo = function (r) {
     var rs = r.form.querySelector('.rg-cv'), v = rs.querySelector('input');
     rs.hidden = !(r.value === 'PCT' || r.value === 'FIXO'); rs.classList.toggle('pct', r.value !== 'FIXO'); v.placeholder = r.value === 'FIXO' ? '0,00' : '10';
@@ -313,7 +363,7 @@
     if (r.value === 'SEM' || r.value === '') r.form.submit(); else v.focus();
   };
   window.rgNota = function (r) {
-    var f = r.form, nome = f.querySelector('.rg-sv-top b').textContent;
+    var f = r.form, nome = f.querySelector('.tx-c-nome').textContent;
     if (r.value === '0') {
       pergunta({ titulo: '"' + nome + '" nunca sai em nota fiscal?', texto: 'Trava para todo mundo: a cobrança deste serviço sai só com boleto. Ninguém consegue pedir nem aprovar "boleto + nota" nele; os pedidos aguardando aprovação passam para só boleto. Na mensalidade, a linha fica fora da nota.',
                  cor: 'pk-rubro', icone: 'fa-lock', ok: 'Travar: nunca sai em nota', okIcone: 'fa-lock', onOk: function () { f.submit(); }, onNao: function () { f.querySelector('[name=emite_nota][value="1"]').checked = true; } });
