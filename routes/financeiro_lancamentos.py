@@ -563,6 +563,12 @@ def servico_comissao():
     emite = s['emite_nota']
     if request.form.get('emite_nota') in ('0', '1'):
         emite = int(request.form.get('emite_nota'))
+    # 20/11/2026 — Anderson: "Como editar os nomes?": o nome do serviço se edita no próprio cartão (antes, só em Configuração fiscal)
+    nome = ' '.join((request.form.get('nome') or '').split())[:80] or s['nome']
+    if nome != s['nome'] and execute_query('SELECT id FROM nfse_servicos WHERE empresa_id = %s AND LOWER(nome) = LOWER(%s) AND id <> %s',
+                                           (EMP, nome, sid), fetch=True):
+        flash('Já existe um serviço chamado "%s". Escolha outro nome.' % nome, 'danger')
+        return redirect(url_for('financeiro.servicos', aba='servicos') + '#s%d' % sid)
     try:
         valor = _dec(request.form.get('valor')) if tipo in ('PCT', 'FIXO') else None
         if tipo in ('PCT', 'FIXO') and (valor is None or valor <= 0 or (tipo == 'PCT' and valor > 100)):
@@ -578,8 +584,8 @@ def servico_comissao():
         if request.form.get('volta') == 'regras':
             return redirect(url_for('financeiro.servicos', aba='servicos') + '#s%d' % sid)
         return redirect(url_for('financeiro.lancamentos', aba='com') + '#servicos-comissao')
-    execute_query('UPDATE nfse_servicos SET comissao_tipo = %s, comissao_valor = %s, valor_padrao = %s, emite_nota = %s WHERE id = %s',
-                  (tipo or None, valor, sugerido, emite, sid), fetch=False)
+    execute_query('UPDATE nfse_servicos SET nome = %s, comissao_tipo = %s, comissao_valor = %s, valor_padrao = %s, emite_nota = %s WHERE id = %s',
+                  (nome, tipo or None, valor, sugerido, emite, sid), fetch=False)
     destravados = 0
     if not emite and s['emite_nota']:
         # travou agora: os pedidos ainda não aprovados que pediam nota passam a "só boleto"
@@ -589,13 +595,15 @@ def servico_comissao():
             execute_query("UPDATE fin_lancamentos SET com_nota = 0 WHERE id IN (%s)" % ','.join(str(p['id']) for p in pend), fetch=False)
             destravados = len(pend)
     registrar('escrita.alterou_comissao_servico', 'financeiro', tabela='nfse_servicos', registro_id=sid,
-              antes={'comissao_tipo': s['comissao_tipo'], 'comissao_valor': str(s['comissao_valor'] or ''), 'valor_sugerido': str(s['valor_padrao'] or ''),
+              antes={'nome': s['nome'], 'comissao_tipo': s['comissao_tipo'], 'comissao_valor': str(s['comissao_valor'] or ''), 'valor_sugerido': str(s['valor_padrao'] or ''),
                      'emite_nota': int(s['emite_nota'])},
-              depois={'servico': s['nome'], 'comissao_tipo': tipo or None, 'comissao_valor': str(valor or ''), 'valor_sugerido': str(sugerido or ''),
+              depois={'servico': s['nome'], 'nome': nome, 'comissao_tipo': tipo or None, 'comissao_valor': str(valor or ''), 'valor_sugerido': str(sugerido or ''),
                       'emite_nota': int(emite), 'pedidos_passados_para_so_boleto': destravados or None})
     if int(emite) != int(s['emite_nota']):
         flash(('"%s" não sai mais em nota fiscal: só boleto, para todo mundo.' % s['nome']) + ((' %d pedido%s aguardando aprovação passaram para só boleto.' % (destravados, 's' if destravados > 1 else '')) if destravados else '')
               if not emite else '"%s" volta a sair na nota fiscal.' % s['nome'], 'success')
+    elif nome != s['nome']:
+        flash('"%s" agora se chama "%s".' % (s['nome'], nome), 'success')
     else:
         flash('"%s" salvo.' % s['nome'], 'success')
     if request.form.get('volta') == 'regras':

@@ -48,7 +48,11 @@
 .rg-muted { color:#94a3b8; font-size:12.5px; }
 .rg-cart { border-top:1px dashed #e2e8f0; padding-top:10px; }
 .rg-cart-bt { display:flex; align-items:center; gap:10px; width:100%; min-height:48px; padding:6px 10px 6px 6px; text-align:left; cursor:pointer; border:1px solid #e2e8f0; border-radius:12px; background:#fff; font:inherit; color:inherit; }
-.rg-cart-bt:hover { border-color:#c4b5fd; background:#faf8ff; } .rg-cart-bt.cheio { border-color:#ddd6fe; background:#faf8ff; }
+.rg-cart-bt:hover { border-color:#c4b5fd; background:#faf8ff; }
+/* com empresas na carteira, o resumo fica roxo cheio (20/11/2026 — Anderson: "tem que ter uma cor diferente... para ficar de fácil visualização") */
+.rg-cart-bt.cheio { border-color:#5b21b6; background:linear-gradient(135deg,#7c3aed,#5b21b6); color:#fff; box-shadow:0 8px 18px rgba(124,58,237,.28); }
+.rg-cart-bt.cheio:hover { background:linear-gradient(135deg,#6d28d9,#4c1d95); }
+.rg-cart-bt.cheio .sg { background:rgba(255,255,255,.2); color:#fff; } .rg-cart-bt.cheio .tx small { color:#ede9fe; } .rg-cart-bt.cheio > i { color:#ddd6fe; }
 .rg-cart-bt .sg { width:34px; height:34px; border-radius:10px; background:#ede9fe; color:#6d28d9; display:inline-flex; align-items:center; justify-content:center; flex:0 0 auto; font-size:13px; }
 .rg-cart-bt .tx { flex:1; min-width:0; display:flex; flex-direction:column; line-height:1.25; } .rg-cart-bt .tx b { font-size:13px; } .rg-cart-bt .tx small { color:#64748b; font-size:11.5px; }
 .rg-cart-bt > i { color:#94a3b8; }
@@ -83,6 +87,8 @@
 .sv-c .tx-c-top { margin:-12px -14px 0 -16px; padding:9px 14px 9px 16px; background:linear-gradient(135deg, var(--cor) 0%, var(--cor-e) 100%); border-radius:13px 13px 0 0; }
 .sv-c .tx-c-nome { color:#fff; white-space:normal; line-height:1.25; font-size:13px; }
 .sv-c .tx-c-num { background:rgba(255,255,255,.22); color:#fff; width:22px; height:22px; display:inline-flex; align-items:center; justify-content:center; padding:0; border-radius:7px; font-size:10px; }
+.sv-nome-bt { margin-left:auto; flex-shrink:0; width:26px; height:26px; border-radius:8px; border:1px solid rgba(255,255,255,.35); background:rgba(255,255,255,.14); color:#fff; font-size:10px; cursor:pointer; display:inline-flex; align-items:center; justify-content:center; }
+.sv-nome-bt:hover { background:rgba(255,255,255,.3); } .sv-nome-in { width:100%; font-weight:700; }
 .sv-c .tx-c-meio { margin-top:10px; align-items:flex-start; }
 .sv-c .tx-c-val { color:var(--cor-e); font-size:19px; }
 .sv-c .tx-c-val.sv-semv { color:#94a3b8; font-size:14px; font-weight:700; padding-top:3px; }
@@ -231,7 +237,7 @@
       {% set rot_com = {'PCT': ('%g%%' % (s.comissao_valor | float)) if s.comissao_valor else '% a definir', 'FIXO': (s.comissao_valor | float | format_currency) if s.comissao_valor else 'valor a definir', 'SEM': 'nunca paga'}.get(t, 'padrão da pessoa') %}
       <form class="tx-c sv-c {{ {'PCT': 'sv-pct', 'FIXO': 'sv-fixo', 'SEM': 'sv-sem'}.get(t, 'sv-pad') }}" id="s{{ s.id }}" method="POST" action="{{ url_for('financeiro.servico_comissao') }}" data-b="{{ s.nome }}" data-t="{{ t or 'acordo' }}" data-n="{{ 1 if nota else 0 }}">
         <input type="hidden" name="servico_id" value="{{ s.id }}"><input type="hidden" name="volta" value="regras">
-        <div class="tx-c-top"><span class="tx-c-num" title="{{ {'PCT': 'comissão em %', 'FIXO': 'comissão em valor fixo', 'SEM': 'nunca paga comissão'}.get(t, 'comissão no padrão da pessoa') }}"><i class="fas {{ {'PCT': 'fa-percent', 'FIXO': 'fa-coins', 'SEM': 'fa-lock'}.get(t, 'fa-user-check') }}"></i></span><span class="tx-c-nome" title="{{ s.nome }}">{{ s.nome }}</span></div>
+        <div class="tx-c-top"><span class="tx-c-num" title="{{ {'PCT': 'comissão em %', 'FIXO': 'comissão em valor fixo', 'SEM': 'nunca paga comissão'}.get(t, 'comissão no padrão da pessoa') }}"><i class="fas {{ {'PCT': 'fa-percent', 'FIXO': 'fa-coins', 'SEM': 'fa-lock'}.get(t, 'fa-user-check') }}"></i></span><span class="tx-c-nome" title="{{ s.nome }}">{{ s.nome }}</span><button type="button" class="sv-nome-bt" onclick="svEditar(this, 'nome')" title="Mudar o nome do serviço"><i class="fas fa-pen"></i></button></div>
         <div class="tx-c-meio">
           <div>{% if s.valor_padrao %}<div class="tx-c-val">{{ s.valor_padrao | float | format_currency }}</div><div class="tx-c-desc">valor sugerido · vem preenchido na Nova cobrança</div>
                {% else %}<div class="tx-c-val sv-semv">sem valor sugerido</div><div class="tx-c-desc">quem lança digita o valor</div>{% endif %}</div>
@@ -247,6 +253,9 @@
           <button type="button" class="sv-chip val{{ ' falta' if not s.valor_padrao }}" onclick="svEditar(this, 'valor')" title="Clique para mudar o valor sugerido"><i class="fas fa-tag"></i> {{ 'valor' if s.valor_padrao else 'sem valor' }} <i class="fas fa-pen"></i></button>
         </div>
         <div class="sv-ed" hidden>
+          <div class="rg-bl" data-ed="nome"><span class="rg-lbl"><i class="fas fa-pen"></i> Nome do serviço</span>
+            <div class="rg-lin"><input class="rg-in sv-nome-in" name="nome" value="{{ s.nome }}" maxlength="80" required autocomplete="off"></div>
+            <small class="rg-muted">É o nome que aparece na Nova cobrança, na nota fiscal e no boleto. Os lançamentos antigos passam a mostrar o nome novo.</small></div>
           <div class="rg-bl" data-ed="nota"><span class="rg-lbl"><i class="fas fa-file-invoice"></i> Nota fiscal</span>
             <div class="rg-lin"><span class="rg-seg rg-seg-n">
               <label><input type="radio" name="emite_nota" value="1"{{ ' checked' if nota }} onchange="rgNota(this)"><span><i class="fas fa-check"></i> Sai na nota</span></label>
@@ -405,6 +414,7 @@
     var r = f.querySelector('[name=tipo]:checked');
     if (qual === 'com' && r && (r.value === 'PCT' || r.value === 'FIXO')) f.querySelector('.rg-cv input').focus();
     if (qual === 'valor') f.querySelector('.rg-din').focus();
+    if (qual === 'nome') { var ni = f.querySelector('.sv-nome-in'); ni.focus(); ni.select(); }
     ed.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
   };
   window.svFechar = function (bt) {
