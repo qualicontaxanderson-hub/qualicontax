@@ -114,7 +114,8 @@
       {% endif %}
 
       {% if boleto %}
-      {% if boleto.linha_digitavel and not copias.linha %}
+      {# 19/11/2026 (Anderson): "pagos abre e dá para ver os boletos, melhor travar": linha, Pix, PDF e página só com boleto em aberto #}
+      {% if vivo and boleto.linha_digitavel and not copias.linha %}
       <div class="tj-copia"><dt>Linha digitável</dt><code>{{ boleto.linha_digitavel }}</code><button type="button" class="tj-cp" data-copiar data-copiar-rotulo="Linha digitável" data-copiar-texto="{{ boleto.linha_digitavel }}" title="Copiar"><i class="fas fa-copy"></i></button></div>
       {% endif %}
       {% if boleto.erro %}<div class="tj-aviso tj-aviso-erro"><i class="fas fa-triangle-exclamation"></i> {{ boleto.erro }}</div>{% endif %}
@@ -133,11 +134,12 @@
       </div>
       {% endif %}
       {% if not restrito %}<div class="tj-bol-acoes">
-        {% if boleto.pdf_url %}
+        {% if boleto.pdf_url and vivo %}
         <a class="tj-ib" href="{{ url_for('financeiro.boleto_pdf', boleto_id=boleto.id) }}" target="_blank" rel="noopener"><i class="fas fa-eye"></i>Ver boleto</a>
         <a class="tj-ib" href="{{ url_for('financeiro.boleto_pdf', boleto_id=boleto.id, baixar=1) }}"><i class="fas fa-download"></i>Baixar PDF</a>
         {% endif %}
-        {% if boleto.link and not copias.pagina %}<a class="tj-ib" href="{{ boleto.link }}" target="_blank" rel="noopener"><i class="fas fa-arrow-up-right-from-square"></i>Página</a>{% endif %}
+        {% if boleto.situacao in ('paid', 'settled') %}<span class="tj-ib" style="cursor:default; opacity:.75" title="Boleto pago: a linha digitável, o Pix e o PDF saem da tela para ninguém pagar de novo"><i class="fas fa-lock"></i>Pago · código fora do ar</span>{% endif %}
+        {% if boleto.link and not copias.pagina and vivo %}<a class="tj-ib" href="{{ boleto.link }}" target="_blank" rel="noopener"><i class="fas fa-arrow-up-right-from-square"></i>Página</a>{% endif %}
         {% if (vivo or boleto.situacao == 'identified') and pode_rota('financeiro.boleto_sincronizar') %}<form method="POST" action="{{ url_for('financeiro.boleto_sincronizar', boleto_id=boleto.id) }}"><input type="hidden" name="volta" value="{{ volta }}"><button class="tj-ib"><i class="fas fa-rotate"></i>Conferir</button></form>{% endif %}
         {% if vivo and pode_rota('financeiro.boleto_cancelar') %}<button type="button" class="tj-ib tj-ib-verm" onclick="var m=document.getElementById('tjCanc{{ boleto.id }}');document.body.appendChild(m);m.classList.add('on');document.body.style.overflow='hidden'"><i class="fas fa-ban"></i>Cancelar</button>
         <div class="tj-canc" id="tjCanc{{ boleto.id }}" role="dialog" aria-modal="true" aria-labelledby="tjCancTit{{ boleto.id }}" onclick="if(event.target===this){this.classList.remove('on');document.body.style.overflow=''}">

@@ -108,24 +108,27 @@
         {% else %}
           <div class="cp-aviso" style="text-align:left"><i class="fas fa-key"></i> {{ f.usuario_nome.split()[0] }} não tem chave Pix no cadastro. {% if f.usuario_id == current_user.id %}Preencha em <a href="{{ url_for('meu_cadastro.index') }}"><b>Meu cadastro</b></a> e o código aparece aqui.{% else %}Peça para preencher em Meu cadastro (menu da esquerda).{% endif %}</div>
         {% endif %}
-        <button type="button" class="cp-bt cl" onclick="cpLink(this)"><i class="fas fa-link"></i> Copiar link deste pedido</button>
+        {# 19/11/2026 (Anderson): pago = "não quero ter mais acesso a chave, copiar o link e tudo mais" #}
+        {% if f.status not in ('PAGO', 'CANCELADO') %}<button type="button" class="cp-bt cl" onclick="cpLink(this)"><i class="fas fa-link"></i> Copiar link deste pedido</button>{% endif %}
         {% if f.status not in ('PAGO', 'CANCELADO') and (f.valor_pago | float) == 0 and (aprov or f.usuario_id == current_user.id) %}
         <button type="button" class="cp-bt cl canc" onclick="document.getElementById('cpCanc').classList.add('on')"><i class="fas fa-ban"></i> Cancelar este pedido</button>
         {% endif %}
       </div>
       {% if f.status == 'CANCELADO' %}<div class="cp-aviso" style="margin-top:16px"><i class="fas fa-ban"></i> Este pedido foi cancelado. As comissões voltaram para a tela de quem pediu.</div>{% endif %}
       {# 18/11/2026 — Anderson: "no fechamento teremos imagem, pdf e até texto de whatsapp a ser enviado para o financeiro" #}
-      {% if f.status != 'CANCELADO' %}
+      {# 19/11/2026 (Anderson): só botões, sem o texto à mostra ("não ter opção de escolher o texto, mande só Copiar");
+         e nada disso depois de pago, para ninguém tentar pagar de novo. #}
+      {% if f.status not in ('PAGO', 'CANCELADO') %}
       <div class="cp-b" style="margin-top:16px">
         <div class="cp-h"><i class="fas fa-paper-plane"></i> Mandar para o financeiro</div>
-        <textarea class="cp-cod" id="cpWa" readonly style="height:150px">{{ texto_wa }}</textarea>
-        <div class="cp-env">
+        <textarea id="cpWa" readonly hidden>{{ texto_wa }}</textarea>
+        <div class="cp-env" style="margin-top:4px">
           <a class="cp-bt wa" href="{{ link_wa }}" target="_blank" rel="noopener"><i class="fab fa-whatsapp"></i> Abrir no WhatsApp</a>
           <button type="button" class="cp-bt cl" onclick="cpCopiar('cpWa', this)"><i class="fas fa-copy"></i> Copiar o texto</button>
           <a class="cp-bt cl" href="{{ url_for('financeiro.comissao_pedido_arquivo', fid=f.id, fmt='png') }}" target="_blank" rel="noopener"><i class="fas fa-image"></i> Imagem para colar</a>
           <a class="cp-bt cl" href="{{ url_for('financeiro.comissao_pedido_arquivo', fid=f.id, fmt='pdf') }}"><i class="fas fa-file-pdf"></i> Baixar PDF</a>
         </div>
-        <div style="font-size:12px; color:#64748b; margin-top:8px; line-height:1.45">O texto leva o total, a chave Pix e o link desta página. A imagem abre em outra aba: segure (ou clique com o direito) para copiar e colar na conversa.</div>
+        <div style="font-size:12px; color:#64748b; margin-top:8px; line-height:1.45">O texto pronto leva o total, a chave Pix e o link desta página: é só colar na conversa. A imagem abre em outra aba: segure (ou clique com o direito) para copiar e colar.</div>
       </div>
       {% endif %}
       {% if aprov and f.status not in ('PAGO', 'CANCELADO') and pode_rota('financeiro.fechamento_pagar') %}

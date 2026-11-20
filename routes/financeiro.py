@@ -985,9 +985,10 @@ def _montar_dre(rows, grupos_vis=None):
 def dre():
     """DRE gerencial do escritório — competência OU caixa, sempre rotulado."""
     from models.fin_titulo import FinDre
-    regime = request.args.get('regime', 'competencia')
+    # 20/11/2026 (Anderson): "a regra é entrou, aparece" — a tela abre no CAIXA; competência é a segunda opção.
+    regime = request.args.get('regime', 'caixa')
     if regime not in ('competencia', 'caixa'):
-        regime = 'competencia'
+        regime = 'caixa'
     ano_atual = date.today().year
     anos = FinDre.anos_com_dado()
     if ano_atual not in anos:
@@ -1091,7 +1092,7 @@ def dre_lancamentos():
     """O que está lançado numa célula do DRE — a gaveta que abre ao clicar na tabela (19/11/2026). Mesmos filtros
     da tela (regime, ano, empresas, centro com rateio, entre empresas); mes=0 é o ano inteiro."""
     from models.fin_titulo import FinDre, FinCentroCusto
-    regime = request.args.get('regime') if request.args.get('regime') in ('competencia', 'caixa') else 'competencia'
+    regime = request.args.get('regime') if request.args.get('regime') in ('competencia', 'caixa') else 'caixa'
     try:
         ano = int(request.args.get('ano') or date.today().year)
         mes = int(request.args.get('mes') or 0)

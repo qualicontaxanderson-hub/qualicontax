@@ -8,8 +8,10 @@
             <div><dt>Vencimento</dt><dd>{{ boleto.vencimento.strftime('%d/%m/%Y') }}</dd></div>
             <div><dt>Nº no banco</dt><dd>{{ numero_boleto(boleto) if boleto.charge_id else '—' }}</dd></div>
             {% if boleto.pago_em %}<div class="nd-span"><dt>Pago em</dt><dd>{{ boleto.pago_em.strftime('%d/%m/%Y') }} · {{ boleto.valor_pago | float | format_currency }}</dd></div>{% endif %}
-            {% if boleto.linha_digitavel %}<div class="nd-span"><dt>Linha digitável</dt><dd><code class="nd-mono" data-copiar data-copiar-rotulo="Linha digitável" title="Clique para copiar">{{ boleto.linha_digitavel }}</code></dd></div>{% endif %}
-            {% if boleto.pix_copia_cola %}<div class="nd-span"><dt>Pix copia e cola</dt><dd><code class="nd-mono" data-copiar data-copiar-rotulo="Pix" title="Clique para copiar">{{ boleto.pix_copia_cola }}</code></dd></div>{% endif %}
+            {# 19/11/2026 (Anderson): código e PDF só enquanto o boleto está em aberto #}
+            {% set bol_vivo = boleto.situacao in ('waiting', 'unpaid', 'new') %}
+            {% if bol_vivo and boleto.linha_digitavel %}<div class="nd-span"><dt>Linha digitável</dt><dd><code class="nd-mono" data-copiar data-copiar-rotulo="Linha digitável" title="Clique para copiar">{{ boleto.linha_digitavel }}</code></dd></div>{% endif %}
+            {% if bol_vivo and boleto.pix_copia_cola %}<div class="nd-span"><dt>Pix copia e cola</dt><dd><code class="nd-mono" data-copiar data-copiar-rotulo="Pix" title="Clique para copiar">{{ boleto.pix_copia_cola }}</code></dd></div>{% endif %}
             {% if boleto.erro %}<div class="nd-span"><dt>Erro</dt><dd style="color:#b91c1c;">{{ boleto.erro }}</dd></div>{% endif %}
             <div class="nd-span"><dt>E-mail ao cliente</dt><dd>{% if boleto.email_enviado_em %}enviado em {{ boleto.email_enviado_em.strftime('%d/%m/%Y %H:%M') }}{{ (' para ' ~ boleto.email_enviado_para) if boleto.email_enviado_para }}{% else %}ainda não enviado{% endif %}</dd></div>
             {% if boleto.email_enviado_em %}
@@ -43,11 +45,12 @@
         </table>
         {% endif %}
         <div class="nd-acoes">
-            {% if boleto.pdf_url %}
+            {% if boleto.pdf_url and bol_vivo %}
             <a class="btn btn-primary" href="{{ url_for('financeiro.boleto_pdf', boleto_id=boleto.id) }}" target="_blank" rel="noopener" title="Abre o boleto na tela"><i class="fas fa-eye"></i> Ver o boleto</a>
             <a class="btn btn-primary" href="{{ url_for('financeiro.boleto_pdf', boleto_id=boleto.id, baixar=1) }}" title="Salva o PDF com o nome do cliente e o vencimento"><i class="fas fa-download"></i> Baixar PDF</a>
             {% endif %}
-            {% if boleto.link %}<a class="btn btn-outline" href="{{ boleto.link }}" target="_blank" rel="noopener"><i class="fas fa-external-link-alt"></i> Página do boleto</a>{% endif %}
+            {% if boleto.situacao in ('paid', 'settled') %}<span class="btn btn-outline" style="cursor:default; opacity:.75" title="Boleto pago: a linha digitável, o Pix e o PDF saem da tela para ninguém pagar de novo"><i class="fas fa-lock"></i> Pago · código fora do ar</span>{% endif %}
+            {% if boleto.link and bol_vivo %}<a class="btn btn-outline" href="{{ boleto.link }}" target="_blank" rel="noopener"><i class="fas fa-external-link-alt"></i> Página do boleto</a>{% endif %}
             {% if boleto.situacao in ('waiting', 'unpaid', 'new', 'identified') %}
             <form method="POST" action="{{ url_for('financeiro.boleto_sincronizar', boleto_id=boleto.id) }}"><input type="hidden" name="volta" value="{{ volta }}"><button class="btn btn-outline"><i class="fas fa-sync-alt"></i> Conferir na Efí</button></form>
             {% endif %}
