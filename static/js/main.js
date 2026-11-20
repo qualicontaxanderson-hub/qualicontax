@@ -2,6 +2,34 @@
 
 document.addEventListener('DOMContentLoaded', function() {
 
+    // ── Barra de abas do departamento (.nav-fiscal): setas nas pontas quando não cabe tudo + roda do mouse ──
+    // 20/11/2026 — Anderson, num monitor menor: "vai até Fluxo de Caixa e não consigo ir para frente mais".
+    document.querySelectorAll('.nav-fiscal').forEach(function (nav) {
+        var tr = nav.querySelector('.nav-fiscal-track');
+        if (!tr) return;
+        function seta(lado, ico) {
+            var b = document.createElement('button');
+            b.type = 'button'; b.className = 'nff-seta ' + lado; b.setAttribute('aria-label', lado === 'esq' ? 'Abas anteriores' : 'Mais abas');
+            b.innerHTML = '<i class="fas ' + ico + '"></i>';
+            b.addEventListener('click', function () { tr.scrollBy({ left: (lado === 'esq' ? -1 : 1) * Math.max(160, tr.clientWidth * 0.6), behavior: 'smooth' }); });
+            nav.appendChild(b); return b;
+        }
+        seta('esq', 'fa-chevron-left'); seta('dir', 'fa-chevron-right');
+        function medir() {
+            var sobra = tr.scrollWidth - tr.clientWidth;
+            nav.classList.toggle('tem-esq', sobra > 4 && tr.scrollLeft > 4);
+            nav.classList.toggle('tem-dir', sobra > 4 && tr.scrollLeft < sobra - 4);
+        }
+        tr.addEventListener('scroll', medir, { passive: true });
+        window.addEventListener('resize', medir);
+        if (window.ResizeObserver) new ResizeObserver(medir).observe(tr);
+        tr.addEventListener('wheel', function (e) {
+            if (tr.scrollWidth - tr.clientWidth <= 4 || Math.abs(e.deltaX) > Math.abs(e.deltaY)) return;
+            e.preventDefault(); tr.scrollLeft += e.deltaY;
+        }, { passive: false });
+        setTimeout(medir, 50);
+    });
+
     // ── Nav panel toggle (hamburger button in top bar) ──
     const navPanel    = document.querySelector('.nav-panel');
     const mainArea    = document.querySelector('.main-area');

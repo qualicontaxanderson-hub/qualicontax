@@ -39,6 +39,22 @@
 .nff-tab:hover { color: #fff; border-color: rgba(255,255,255,.5); }
 .nff-tab.active { color: #0f3d2e; background: #fff; border-color: #fff; font-weight: 800; }
 
+/* ── Setas da barra (20/11/2026 — Anderson, num monitor menor: "vai até Fluxo de Caixa e não consigo ir para frente
+   mais"). A barra rola de lado, mas no PC não há como arrastar: quando não cabe tudo, aparece uma seta em cada ponta
+   que tem mais abas escondidas (main.js liga, mede e esconde), e a roda do mouse também rola a barra. */
+.nav-fiscal { position: sticky; }
+.nff-seta {
+    position: absolute; top: 0; bottom: 0; width: 44px; border: 0; padding: 0; cursor: pointer;
+    display: none; align-items: center; justify-content: center;
+    color: #fff; font-size: 15px; background: transparent;
+}
+.nff-seta i { width: 26px; height: 26px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center;
+    background: rgba(255,255,255,.18); border: 1px solid rgba(255,255,255,.45); transition: background .15s ease; }
+.nff-seta:hover i { background: rgba(255,255,255,.32); }
+.nff-seta.esq { left: 0; background: linear-gradient(90deg, #0b3b2b 45%, rgba(11,59,43,0)); justify-content: flex-start; padding-left: 10px; }
+.nff-seta.dir { right: 0; background: linear-gradient(270deg, #116a43 45%, rgba(17,106,67,0)); justify-content: flex-end; padding-right: 10px; }
+.nav-fiscal.tem-esq .nff-seta.esq, .nav-fiscal.tem-dir .nff-seta.dir { display: flex; }
+
 /* ── Hero verde + corpo claro ──────────────────────────────────────────────
    Hero e corpo sangram sobre o padding do .content (28px 32px / 16px no mobile). */
 .ef-hero, .ef-body { margin-left:-32px; margin-right:-32px; box-sizing:border-box; }
