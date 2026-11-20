@@ -16,6 +16,7 @@
     ('financeiro.honorarios',        '/financeiro/honorarios',   'HONORÁRIOS'),
     ('financeiro.honorarios_cadastrar', '/financeiro/honorarios/cadastrar', 'CADASTRAR HONORÁRIOS'),
     ('financeiro.lancamentos',       '/financeiro/lancamentos',  'LANÇAMENTOS'),
+    ('financeiro.servicos',          '/financeiro/servicos',     'SERVIÇOS'),
     ('financeiro.contratos',         '/financeiro/contratos',    'CONTRATOS'),
     ('financeiro.extrato',           '/financeiro/extrato',      'EXTRATO'),
     ('financeiro.contas',            '/financeiro/contas',       'CONTAS'),
@@ -39,7 +40,8 @@
         {% for _ep, _pref, _label in _abas %}
         {# NOTAS FISCAIS nasceu só-admin (01/11/2026): a aba só aparece para quem o portão deixa entrar #}
         {# CADASTRAR HONORÁRIOS é a porta de quem não tem a tela cheia (Melke, Gabriel, Guilherme, Alessandra) #}
-        {% set _escondida = _ep == 'financeiro.honorarios_cadastrar' and pode_rota('financeiro.honorarios') %}
+        {# SERVIÇOS (20/11/2026) é só do administrador: o cadastro do que cobramos e quem recebe comissão #}
+        {% set _escondida = (_ep == 'financeiro.honorarios_cadastrar' and pode_rota('financeiro.honorarios')) or (_ep == 'financeiro.servicos' and not current_user.is_admin()) %}
         {% if not _escondida and (_ep not in ('financeiro.index', 'financeiro.cobrancas', 'financeiro.honorarios', 'financeiro.honorarios_cadastrar', 'financeiro.lancamentos', 'financeiro.lote', 'financeiro.contratos') or pode_rota(_ep)) %}
         <a class="nff-tab {% if _pref == _ativa.pref %}active{% endif %}"
            href="{{ url_for(_ep) }}"

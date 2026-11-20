@@ -319,7 +319,7 @@ _TELAS = [   # (endpoint, rótulo) — as abas do Financeiro e as outras áreas 
     ('financeiro.lote', 'Lote mensal'), ('financeiro.contratos', 'Contratos'), ('financeiro.extrato', 'Extrato'),
     ('financeiro.contas', 'Contas'), ('financeiro.programacoes', 'Programações'), ('financeiro.fluxo', 'Fluxo de caixa'),
     ('financeiro.dre', 'DRE'), ('financeiro.categorias', 'Categorias'), ('financeiro.empresas', 'Empresas'),
-    ('financeiro.cobrancas', 'Notas e boletos'), ('financeiro.comissao_regras', 'Regras de comissão'),
+    ('financeiro.cobrancas', 'Notas e boletos'), ('financeiro.servicos', 'Serviços'),
 ]
 _AREAS = [('clientes.index', 'Cadastros (clientes)'), ('modulos.comercial', 'Comercial'), ('contabil.index', 'Contábil'),
           ('escrita_fiscal.index', 'Fiscal'), ('modulos.dp', 'DP'), ('modulos.legalizacao', 'Legalização'),
@@ -474,9 +474,18 @@ def comissao_pedido_arquivo(fid, fmt):
 @financeiro.route('/financeiro/lancamentos/regras')
 @permission_required(PERM)
 def comissao_regras():
-    """REGRAS DE COMISSÃO (17/11/2026 — Anderson: "como farei o cadastramento do que tem Comissão e o que não tem e quem
-    recebe ou não?"). Só o administrador. Duas partes: QUEM RECEBE (cada pessoa: liga/desliga e o % padrão; carteira de
-    mensalidades, ex.: Guilherme 25% das empresas dele) e SERVIÇOS (o que tem comissão, quanto, e o que não tem)."""
+    """Endereço antigo das Regras de comissão: desde 20/11/2026 é a aba SERVIÇOS do Financeiro (links antigos seguem valendo)."""
+    return redirect(url_for('financeiro.servicos', aba=request.args.get('aba')), code=301)
+
+
+@financeiro.route('/financeiro/servicos')
+@permission_required(PERM)
+def servicos():
+    """SERVIÇOS — aba do Financeiro (20/11/2026 — Anderson: "Criar uma aba de serviços e dentro temos a opção de ver
+    quem recebe comissão"). Nasceu como "Regras de comissão" dentro de Lançamentos (17/11/2026: "como farei o cadastramento
+    do que tem Comissão e o que não tem e quem recebe ou não?"). Só o administrador. Duas partes: SERVIÇOS (o cadastro do que
+    cobramos: valor sugerido, comissão e a trava de nota fiscal) e QUEM RECEBE COMISSÃO (cada pessoa: liga/desliga e o %
+    padrão; carteira de mensalidades, ex.: Guilherme 25% das empresas dele)."""
     if not _admin():
         abort(403)
     import json
@@ -494,7 +503,7 @@ def comissao_regras():
                                FROM clientes c WHERE COALESCE(c.situacao, 'ATIVO') <> 'INATIVO' AND COALESCE(c.avulso, 0) = 0
                               ORDER BY c.nome_razao_social""", fetch=True) or []
     return render_template('financeiro/comissao_regras.html', pessoas=pessoas, servicos=servicos, hoje=date.today(),
-                           aba=request.args.get('aba') if request.args.get('aba') in ('pessoas', 'servicos') else 'pessoas',
+                           aba=request.args.get('aba') if request.args.get('aba') in ('pessoas', 'servicos') else 'servicos',
                            n_recebem=sum(1 for p in pessoas if p['geral']), n_carteira=sum(len(p['carteira']) for p in pessoas),
                            n_serv_regra=sum(1 for s in servicos if s.get('comissao_tipo')),
                            n_serv_sem=sum(1 for s in servicos if s.get('comissao_tipo') == 'SEM'),
@@ -519,7 +528,7 @@ def comissao_regra_pessoa():
             raise ValueError
     except (ValueError, InvalidOperation):
         flash('Comissão inválida.', 'danger')
-        return redirect(url_for('financeiro.comissao_regras'))
+        return redirect(url_for('financeiro.servicos', aba='pessoas'))
     atuais = [a for a in FinComissaoAcordo.listar(usuario_id=uid) if a['base'] == 'SERVICO' and not a['servico_id']]
     igual = recebe and atuais and atuais[0]['tipo'] == tipo and Decimal(str(atuais[0]['valor'])) == valor
     if not igual:
@@ -533,7 +542,7 @@ def comissao_regra_pessoa():
                   depois={'pessoa': nome, 'recebe': recebe, 'tipo': tipo if recebe else None, 'valor': str(valor) if recebe else None})
         flash(('%s recebe comissão: %s.' % (nome, ('%g%%' % valor) if tipo == 'PCT' else 'R$ %s fixo' % valor)) if recebe
               else '%s não recebe comissão de serviço.' % nome, 'success')
-    return redirect(url_for('financeiro.comissao_regras') + '#p%d' % uid)
+    return redirect(url_for('financeiro.servicos', aba='pessoas') + '#p%d' % uid)
 
 
 @financeiro.route('/financeiro/lancamentos/servico-comissao', methods=['POST'])
@@ -567,7 +576,7 @@ def servico_comissao():
     except (ValueError, InvalidOperation):
         flash('Comissão ou valor sugerido inválido para %s.' % s['nome'], 'danger')
         if request.form.get('volta') == 'regras':
-            return redirect(url_for('financeiro.comissao_regras', aba='servicos') + '#s%d' % sid)
+            return redirect(url_for('financeiro.servicos', aba='servicos') + '#s%d' % sid)
         return redirect(url_for('financeiro.lancamentos', aba='com') + '#servicos-comissao')
     execute_query('UPDATE nfse_servicos SET comissao_tipo = %s, comissao_valor = %s, valor_padrao = %s, emite_nota = %s WHERE id = %s',
                   (tipo or None, valor, sugerido, emite, sid), fetch=False)
@@ -590,7 +599,7 @@ def servico_comissao():
     else:
         flash('"%s" salvo.' % s['nome'], 'success')
     if request.form.get('volta') == 'regras':
-        return redirect(url_for('financeiro.comissao_regras', aba='servicos') + '#s%d' % sid)
+        return redirect(url_for('financeiro.servicos', aba='servicos') + '#s%d' % sid)
     return redirect(url_for('financeiro.lancamentos', aba='com') + '#servicos-comissao')
 
 
@@ -1231,7 +1240,7 @@ def acordo_novo():
     except (ValueError, InvalidOperation) as e:
         flash(str(e) if isinstance(e, ValueError) else 'Valor inválido.', 'danger')
     if f.get('volta') == 'regras':
-        return redirect(url_for('financeiro.comissao_regras') + ('#p%s' % f.get('usuario_id') if f.get('usuario_id') else ''))
+        return redirect(url_for('financeiro.servicos', aba='pessoas') + ('#p%s' % f.get('usuario_id') if f.get('usuario_id') else ''))
     return redirect(url_for('financeiro.lancamentos', aba='com') + '#acordos')
 
 
@@ -1247,5 +1256,5 @@ def acordo_encerrar(aid):
                   antes={'usuario_id': a['usuario_id'], 'base': a['base'], 'valor': str(a['valor'])}, depois={'ativo': 0})
         flash('Acordo encerrado.', 'info')
     if request.form.get('volta') == 'regras':
-        return redirect(url_for('financeiro.comissao_regras') + ('#p%s' % a['usuario_id'] if a else ''))
+        return redirect(url_for('financeiro.servicos', aba='pessoas') + ('#p%s' % a['usuario_id'] if a else ''))
     return redirect(url_for('financeiro.lancamentos', aba='com') + '#acordos')

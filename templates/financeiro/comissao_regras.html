@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Regras de comissão - Financeiro - Qualicontax{% endblock %}
+{% block title %}Serviços - Financeiro - Qualicontax{% endblock %}
 
 {% block extra_css %}
 {# 17/11/2026 — Anderson: "como farei o cadastramento do que tem Comissão e o que não tem e quem recebe ou não?". Só o
@@ -8,7 +8,9 @@
    20/11/2026 — Anderson: "precisamos no cadastro dos serviços liberado para colocarmos bloqueio de emitir notas fiscais...
    Taxa da Junta não emite nota... precisamos ter isso no cadastro pra travar. E já melhora essas telas serviços e quem
    recebe": cada serviço ganhou a trava NOTA FISCAL (sai na nota / nunca sai em nota); a carteira escolhe a empresa na
-   caixa nossa; as perguntas (desligar, tirar da carteira) são caixas nossas, sem janela do navegador. #}
+   caixa nossa; as perguntas (desligar, tirar da carteira) são caixas nossas, sem janela do navegador.
+   20/11/2026 (tarde) — Anderson: "Criar uma aba de serviços e dentro temos a opção de ver quem recebe comissão": virou a
+   aba SERVIÇOS do Financeiro (/financeiro/servicos); Serviços é a primeira parte, Quem recebe comissão a segunda. #}
 {% include 'financeiro/_lanc_tx_css.html' %}
 <style>{% include 'clientes/_pk_css.html' %}
 .rg-btn { display:inline-flex; align-items:center; gap:9px; padding:10px 15px; border-radius:13px; border:1px solid rgba(255,255,255,.35); background:rgba(255,255,255,.14);
@@ -95,18 +97,18 @@
 {% include 'financeiro/_nav_financeiro.html' %}
 <div class="tx">
 <div class="ef-hero"><div class="ef-hero-inner ef-hero-head">
-  <div><h1 class="ef-hero-title">Regras de comissão</h1><p class="ef-hero-sub">Quem recebe comissão e quanto · o que tem comissão, o que não tem e o que sai em nota fiscal</p></div>
-  <div class="ef-hero-actions"><a class="rg-btn" href="{{ url_for('financeiro.lancamentos', aba='com') }}"><i class="fas fa-arrow-left"></i> Lançamentos</a></div>
+  <div><h1 class="ef-hero-title">Serviços</h1><p class="ef-hero-sub">O que cobramos: valor sugerido, comissão e o que sai em nota fiscal · e quem recebe comissão e quanto</p></div>
+  <div class="ef-hero-actions"><a class="rg-btn" href="{{ url_for('financeiro.lancamentos', aba='com') }}"><i class="fas fa-receipt"></i> Lançamentos</a></div>
 </div></div>
 
 <div class="ef-body">
   <div class="tx-abas rg-abas">
-    <button type="button" class="tx-aba tx-a-pes{{ ' on' if aba == 'pessoas' }}" data-p="pessoas"><span class="tx-aba-ico"><i class="fas fa-users"></i></span>
-      <span class="tx-aba-txt"><span class="tx-aba-lbl">Quem recebe</span><span class="tx-aba-val">{{ n_recebem }} de {{ pessoas|length }} pessoas</span>
-      <span class="tx-aba-sub">recebem comissão de serviço · {{ n_carteira }} empresa{{ 's' if n_carteira != 1 }} em carteira de mensalidade</span></span></button>
     <button type="button" class="tx-aba tx-a-ser{{ ' on' if aba == 'servicos' }}" data-p="servicos"><span class="tx-aba-ico"><i class="fas fa-briefcase"></i></span>
       <span class="tx-aba-txt"><span class="tx-aba-lbl">Serviços</span><span class="tx-aba-val">{{ servicos|length }} serviços</span>
       <span class="tx-aba-sub">{{ n_serv_regra - n_serv_sem }} com comissão própria · {{ n_serv_sem }} nunca paga{{ 'm' if n_serv_sem != 1 }} comissão · {{ n_serv_sem_nota }} nunca sa{{ 'em' if n_serv_sem_nota != 1 else 'i' }} em nota fiscal</span></span></button>
+    <button type="button" class="tx-aba tx-a-pes{{ ' on' if aba == 'pessoas' }}" data-p="pessoas"><span class="tx-aba-ico"><i class="fas fa-users"></i></span>
+      <span class="tx-aba-txt"><span class="tx-aba-lbl">Quem recebe comissão</span><span class="tx-aba-val">{{ n_recebem }} de {{ pessoas|length }} pessoas</span>
+      <span class="tx-aba-sub">recebem comissão de serviço · {{ n_carteira }} empresa{{ 's' if n_carteira != 1 }} em carteira de mensalidade</span></span></button>
   </div>
 
   {# ── QUEM RECEBE ── #}

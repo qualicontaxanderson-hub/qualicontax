@@ -395,7 +395,7 @@
       {% if aprov %}
         {% if pode_rota('financeiro.cobrancas') %}<a class="lm-btn lm-btn2" href="{{ url_for('financeiro.cobrancas') }}"><i class="fas fa-file-invoice"></i> Notas e boletos</a>{% endif %}
         {% if pode_rota('financeiro.notas_config') %}<a class="lm-btn lm-btn2" href="{{ url_for('financeiro.notas_config') }}"><i class="fas fa-sliders-h"></i> Configuração fiscal</a>{% endif %}
-        {% if admin %}<a class="lm-btn lm-btn2" href="{{ url_for('financeiro.comissao_regras') }}"><i class="fas fa-sliders"></i> Regras de comissão</a>{% endif %}
+        {% if admin %}<a class="lm-btn lm-btn2" href="{{ url_for('financeiro.servicos') }}"><i class="fas fa-briefcase"></i> Serviços e comissões</a>{% endif %}
         {% if ctr_aprovar %}<a class="lm-btn lm-btn2" style="background:#f59e0b;color:#fff;border-color:#f59e0b" href="{{ url_for('financeiro.contratos', aba='aprovacao') }}"><i class="fas fa-file-signature"></i> Contratos para aprovar · {{ ctr_aprovar }}</a>{% endif %}
         {% if pode_rota('financeiro.nota_nova') %}<a class="lm-btn lm-btn2" href="{{ url_for('financeiro.nota_nova') }}" title="Emite agora, sem passar por aprovação"><i class="fas fa-bolt"></i> Emitir direto</a>{% endif %}
       {% endif %}
@@ -525,9 +525,9 @@
     {% endif %}
   {% endif %}
   {% if admin %}
-    <a class="lm-regras" href="{{ url_for('financeiro.comissao_regras') }}" id="acordos">
-      <span class="ic"><i class="fas fa-sliders"></i></span>
-      <span class="tx"><b>Regras de comissão</b><small>Quem recebe e quanto (Gabriel 10%, Guilherme 25% da mensalidade…) e o que tem comissão ou não (taxa da Junta, cartório…)</small></span>
+    <a class="lm-regras" href="{{ url_for('financeiro.servicos') }}" id="acordos">
+      <span class="ic"><i class="fas fa-briefcase"></i></span>
+      <span class="tx"><b>Serviços e comissões</b><small>Aba SERVIÇOS: o que cobramos (valor sugerido, comissão, nota fiscal) e quem recebe comissão (Gabriel 10%, Guilherme 25% da mensalidade…)</small></span>
       <i class="fas fa-arrow-right"></i></a>
   {% endif %}
   </div>
