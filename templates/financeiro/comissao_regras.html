@@ -56,9 +56,53 @@
 .rg-cart-bt .sg { width:34px; height:34px; border-radius:10px; background:#ede9fe; color:#6d28d9; display:inline-flex; align-items:center; justify-content:center; flex:0 0 auto; font-size:13px; }
 .rg-cart-bt .tx { flex:1; min-width:0; display:flex; flex-direction:column; line-height:1.25; } .rg-cart-bt .tx b { font-size:13px; } .rg-cart-bt .tx small { color:#64748b; font-size:11.5px; }
 .rg-cart-bt > i { color:#94a3b8; }
-.pk-cart { width:min(640px, 96vw); top:8vh; } .pk-verde { --cor:#0f766e; --cor-e:#115e59; --cor-f:#f0fdfa; --cor-b:#99f6e4; }
+.pk-cart { width:min(640px, 96vw); top:8vh; }
 .rg-btn-novo { background:#fff; color:#0f3d2e; border-color:#fff; } .rg-btn-novo i { color:#16a34a; }
-#svNovoFundo[hidden] { display:none; } #svNovoForm .pk-corpo { gap:14px; } #svNovoForm .rg-bl { gap:8px; } .pk-cart [hidden] { display:none !important; } .pk-cart .pk-quem span { white-space:normal; line-height:1.4; } .pk-cart .pk-corpo { padding:14px 16px 16px; display:flex; flex-direction:column; gap:10px; }
+#svNovoFundo[hidden] { display:none; } .svn [hidden] { display:none !important; }
+/* caixa Novo serviço: molde da Nova cobrança (ns-*), só nesta caixa */
+.svn.ns { position:absolute; left:50%; top:3vh; transform:translateX(-50%); width:min(1100px, calc(100vw - 32px)); max-height:94vh; display:flex; flex-direction:column;
+  background:#f6faf7; border-radius:22px; box-shadow:0 30px 80px rgba(2,44,22,.35); overflow:hidden; font-size:14px; color:#0f172a; margin:0; }
+.svn .ns-cab { display:flex; align-items:center; gap:16px; padding:18px 22px; color:#fff; background:radial-gradient(120% 140% at 0% 0%, #22c55e 0%, #15803d 45%, #0f3d2e 100%); }
+.svn .ns-logo { background:#fff; border-radius:14px; padding:6px 10px; display:inline-flex; box-shadow:0 6px 16px rgba(0,0,0,.18); } .svn .ns-logo img { height:36px; display:block; }
+.svn .ns-tit { flex:1; min-width:0; } .svn .ns-tit b { display:block; font-size:20px; font-weight:800; } .svn .ns-tit span { font-size:13px; opacity:.88; }
+.svn .ns-prev { text-align:right; } .svn .ns-prev small { display:block; font-size:10.5px; font-weight:800; letter-spacing:.08em; text-transform:uppercase; opacity:.8; }
+.svn .ns-prev b { display:block; font-size:24px; font-weight:800; line-height:1.1; } .svn .ns-prev span { font-size:12.5px; opacity:.9; }
+.svn .ns-x { width:38px; height:38px; border-radius:99px; border:0; background:rgba(255,255,255,.18); color:#fff; font-size:16px; cursor:pointer; flex-shrink:0; }
+.svn .ns-g { flex:1; min-height:0; display:grid; grid-template-columns:minmax(0,1fr) 360px; }
+.svn .ns-f { padding:16px 18px 18px 22px; display:flex; flex-direction:column; gap:12px; overflow:auto; }
+.svn .ns-r { padding:16px 22px; border-left:1px solid #e6eeea; background:#fff; display:flex; flex-direction:column; gap:12px; overflow:auto; }
+.svn .ns-b { background:#fff; border:1px solid #e6eeea; border-radius:16px; padding:13px 15px; }
+.svn .ns-h { display:flex; align-items:center; gap:8px; font-size:11.5px; font-weight:800; letter-spacing:.07em; text-transform:uppercase; color:#0f3d2e; margin-bottom:10px; }
+.svn .ns-h i { color:#16a34a; } .svn .ns-h em { margin-left:auto; font-style:normal; text-transform:none; letter-spacing:0; font-weight:600; color:#64748b; font-size:12px; text-align:right; }
+.svn .ns-in { width:100%; box-sizing:border-box; height:40px; border:1px solid #d7e3dc; border-radius:10px; padding:0 12px; background:#fff; font:inherit; font-size:13.5px; color:#0f172a; }
+.svn .ns-in:focus { outline:0; border-color:#22c55e; box-shadow:0 0 0 3px rgba(34,197,94,.14); }
+.svn .svn-nome { height:50px; font-size:18px; font-weight:800; }
+.svn .ns-ops { display:grid; gap:9px; } .svn .svn-ops2 { grid-template-columns:repeat(2, minmax(0,1fr)); } .svn .svn-ops4 { grid-template-columns:repeat(4, minmax(0,1fr)); }
+.svn .ns-op { text-align:left; border:1.5px solid #e2e8f0; border-radius:14px; padding:12px 12px 11px; background:#fff; cursor:pointer; font:inherit; --c:#16a34a; --cf:#f0fdf4; --cb:#dcfce7; }
+.svn .ns-op.amb { --c:#d97706; --cf:#fffbeb; --cb:#fef3c7; } .svn .ns-op.rox { --c:#7c3aed; --cf:#faf8ff; --cb:#ede9fe; } .svn .ns-op.azu { --c:#2563eb; --cf:#eff6ff; --cb:#dbeafe; } .svn .ns-op.cin { --c:#475569; --cf:#f8fafc; --cb:#e2e8f0; }
+.svn .ns-op b { display:block; font-size:13.5px; color:#0f172a; } .svn .ns-op small { font-size:11.5px; color:#64748b; line-height:1.35; display:block; }
+.svn .ns-op > i { font-size:18px; color:var(--c); margin-bottom:6px; display:block; }
+.svn .ns-op.on { border-color:var(--c); background:var(--cf); box-shadow:0 0 0 3px var(--cb); }
+.svn .ns-money { display:flex; align-items:center; height:46px; border:1px solid #d7e3dc; border-radius:10px; background:#fff; overflow:hidden; }
+.svn .ns-money > span { padding:0 10px 0 12px; font-size:13px; font-weight:800; color:#15803d; background:#f0fdf4; height:100%; display:inline-flex; align-items:center; border-right:1px solid #dcfce7; flex:0 0 auto; }
+.svn .ns-money > input.ns-in { border:0; box-shadow:none; height:100%; flex:1; min-width:0; font-size:17px; font-weight:800; text-align:right; font-variant-numeric:tabular-nums; border-radius:0; }
+.svn .ns-money:focus-within { border-color:#22c55e; box-shadow:0 0 0 3px rgba(34,197,94,.14); }
+.svn .ns-money.fixo { border-color:#86efac; } .svn .ns-money.fixo > span { background:#dcfce7; color:#15803d; } .svn .ns-money.fixo > input.ns-in { color:#15803d; }
+.svn .ns-money.pct { border-color:#c4b5fd; } .svn .ns-money.pct > span { order:2; background:#ede9fe; color:#6d28d9; border-right:0; border-left:1px solid #ddd6fe; } .svn .ns-money.pct > input.ns-in { color:#6d28d9; text-align:left; }
+.svn .ns-money.azul { border-color:#93c5fd; } .svn .ns-money.azul > span { background:#dbeafe; color:#1d4ed8; } .svn .ns-money.azul > input.ns-in { color:#1d4ed8; }
+.svn .svn-val { display:flex; align-items:center; gap:12px; margin-top:10px; } .svn .svn-val-l { font-size:12.5px; font-weight:700; color:#475569; } .svn .svn-val .ns-money { width:170px; }
+.svn .svn-din { display:flex; align-items:center; gap:12px; flex-wrap:wrap; } .svn .svn-din .ns-money { width:220px; } .svn .svn-din small { color:#64748b; font-size:12px; flex:1; min-width:200px; }
+.svn .svn-prev { cursor:default; } .svn .svn-prev .hp-linha .sv-chip { cursor:default; }
+.svn .svn-nota { display:flex; gap:10px; font-size:12.5px; color:#475569; line-height:1.45; background:#f6faf7; border:1px solid #e6eeea; border-radius:12px; padding:10px 12px; } .svn .svn-nota i { color:#16a34a; margin-top:2px; }
+.svn .ns-pe { display:flex; align-items:center; gap:10px; padding:13px 22px; background:#fff; border-top:1px solid #e6eeea; }
+.svn .ns-pe-info { flex:1; font-size:12.5px; color:#64748b; min-width:0; } .svn .ns-pe-info.ok { color:#15803d; font-weight:700; }
+.svn .ns-bt { height:42px; border-radius:11px; border:1px solid #e2e8f0; background:#fff; color:#475569; font:inherit; font-size:14px; font-weight:700; padding:0 18px; cursor:pointer; display:inline-flex; align-items:center; gap:8px; }
+.svn .ns-bt.prim { border:0; background:linear-gradient(135deg,#16a34a,#15803d); color:#fff; box-shadow:0 8px 18px rgba(22,163,74,.28); } .svn .ns-bt.prim:disabled { opacity:.45; cursor:not-allowed; box-shadow:none; }
+@media (max-width:860px) { .svn .ns-g { display:flex; flex-direction:column; overflow:auto; } .svn .ns-f, .svn .ns-r { overflow:visible; flex:none; } .svn .ns-r { border-left:0; border-top:1px solid #e6eeea; } .svn .svn-ops4 { grid-template-columns:repeat(2, minmax(0,1fr)); }
+  .svn.ns { left:0; right:0; top:auto; bottom:0; transform:none; width:100%; max-height:94vh; border-radius:20px 20px 0 0; } .svn .ns-prev { display:none; }
+  .svn .ns-pe { flex-wrap:wrap; } .svn .ns-pe-info { flex-basis:100%; } .svn .ns-bt { flex:1; justify-content:center; } }
+.rg-btn-novo { background:#fff; color:#0f3d2e; border-color:#fff; } .rg-btn-novo i { color:#16a34a; }
+.pk-cart [hidden] { display:none !important; } .pk-cart .pk-quem span { white-space:normal; line-height:1.4; } .pk-cart .pk-corpo { padding:14px 16px 16px; display:flex; flex-direction:column; gap:10px; }
 .pk-cart .rg-cart-det { display:flex; flex-direction:column; gap:10px; }
 .pk-cart .rg-chips { max-height:46vh; overflow:auto; }
 .rg-chip { display:flex; align-items:center; gap:8px; background:#faf8ff; border:1px solid #ede9fe; border-radius:11px; padding:7px 7px 7px 11px; font-size:12.5px; }
@@ -287,33 +331,49 @@
 </div>
 <script id="rgCli" type="application/json">{{ clientes_json | safe }}</script>
 
-{# ── NOVO SERVIÇO: caixa nossa (20/11/2026 — Anderson: "e os Novos?") ── #}
+{# ── NOVO SERVIÇO: caixa no molde da Nova cobrança (20/11/2026 — Anderson: "e os Novos?" / "está horrível essa nova,
+   preciso que melhore muito"): cartões grandes de escolha, valor com R$ dentro do campo, prévia do cartão à direita ── #}
 <div class="pk-fundo" id="svNovoFundo" hidden style="z-index:1200">
-  <form class="pk pk-cart pk-verde" id="svNovoForm" method="POST" action="{{ url_for('financeiro.servico_novo') }}" role="dialog" aria-modal="true">
-    <header class="pk-cab"><span class="pk-av"><i class="fas fa-briefcase"></i></span>
-      <div class="pk-quem"><b>Novo serviço</b><span>Entra no catálogo da Nova cobrança e do contrato de honorários. A nota fiscal usa o código de tributação padrão da Configuração fiscal.</span></div>
-      <button type="button" class="pk-x" title="Fechar (Esc)" onclick="svNovoFechar()"><i class="fas fa-xmark"></i></button></header>
-    <div class="pk-corpo">
-      <div class="rg-bl"><span class="rg-lbl"><i class="fas fa-pen"></i> Nome do serviço</span>
-        <div class="rg-lin"><input class="rg-in sv-nome-in" name="nome" maxlength="80" required autocomplete="off" placeholder="Ex.: Certidão negativa federal"></div></div>
-      <div class="rg-bl"><span class="rg-lbl"><i class="fas fa-file-invoice"></i> Nota fiscal</span>
-        <div class="rg-lin"><span class="rg-seg rg-seg-n">
-          <label><input type="radio" name="emite_nota" value="1" checked onchange="svNovoNota(this)"><span><i class="fas fa-check"></i> Sai na nota</span></label>
-          <label title="Trava: entra no boleto e fica fora da nota"><input type="radio" name="emite_nota" value="0" onchange="svNovoNota(this)"><span><i class="fas fa-lock"></i> Nunca sai em nota</span></label></span></div>
-        <small class="rg-muted" id="svNovoNotaTx">Serviço prestado: entra na nota e no boleto.</small></div>
-      <div class="rg-bl"><span class="rg-lbl"><i class="fas fa-hand-holding-dollar"></i> Comissão</span>
-        <div class="rg-lin"><span class="rg-seg">
-          <label><input type="radio" name="tipo" value="" checked onchange="svNovoTipo(this)"><span>Padrão da pessoa</span></label>
-          <label><input type="radio" name="tipo" value="PCT" onchange="svNovoTipo(this)"><span>%</span></label>
-          <label><input type="radio" name="tipo" value="FIXO" onchange="svNovoTipo(this)"><span>R$</span></label>
-          <label title="Trava: ninguém recebe comissão neste serviço"><input type="radio" name="tipo" value="SEM" onchange="svNovoTipo(this)"><span><i class="fas fa-lock"></i> Nunca</span></label></span>
-          <span class="rg-rs rg-cv pct" hidden><i class="pre">R$</i><input class="rg-in" name="valor" inputmode="decimal" placeholder="10"><i class="pos">%</i></span></div>
-        <small class="rg-muted">"Padrão da pessoa" = o % de quem lançar. % ou R$ = comissão própria deste serviço. "Nunca" = ninguém recebe.</small></div>
-      <div class="rg-bl"><span class="rg-lbl"><i class="fas fa-tag"></i> Valor sugerido</span>
-        <div class="rg-lin"><span class="rg-rs"><i>R$</i><input class="rg-in rg-din" name="valor_padrao" inputmode="numeric" placeholder="0,00" autocomplete="off"></span></div>
-        <small class="rg-muted">Digite os centavos: 150000 vira 1.500,00. Vem preenchido na Nova cobrança; quem lança pode mudar. Pode deixar vazio.</small></div>
+  <form class="ns svn" id="svNovoForm" method="POST" action="{{ url_for('financeiro.servico_novo') }}" role="dialog" aria-modal="true" autocomplete="off">
+    <header class="ns-cab"><span class="ns-logo"><img src="{{ url_for('static', filename='images/logo.png') }}" alt="Qualicontax"></span>
+      <div class="ns-tit"><b>Novo serviço</b><span>entra no catálogo da Nova cobrança e do contrato de honorários</span></div>
+      <div class="ns-prev"><small>valor sugerido</small><b id="svnPrevVal">—</b><span id="svnPrevCom">comissão: padrão da pessoa</span></div>
+      <button type="button" class="ns-x" title="Fechar (Esc)" onclick="svNovoFechar()"><i class="fas fa-xmark"></i></button></header>
+    <div class="ns-g">
+      <div class="ns-f">
+        <section class="ns-b"><div class="ns-h"><i class="fas fa-pen"></i> Nome do serviço <em>como vai aparecer na cobrança, na nota e no boleto</em></div>
+          <input class="ns-in svn-nome" name="nome" maxlength="80" required placeholder="Ex.: Certidão negativa federal" oninput="svnPrev()"></section>
+        <section class="ns-b"><div class="ns-h"><i class="fas fa-file-invoice"></i> Nota fiscal <em>vale para todo mundo</em></div>
+          <div class="ns-ops svn-ops2" data-campo="emite_nota">
+            <button type="button" class="ns-op on" data-v="1" onclick="svnOp(this)"><i class="fas fa-file-invoice"></i><b>Sai na nota fiscal</b><small>serviço prestado: entra na nota e no boleto</small></button>
+            <button type="button" class="ns-op amb" data-v="0" onclick="svnOp(this)"><i class="fas fa-lock"></i><b>Nunca sai em nota</b><small>taxa ou despesa repassada: entra no boleto e fica fora da nota. Honorários 1.000 + taxa 200 = boleto 1.200, nota 1.000</small></button>
+          </div><input type="hidden" name="emite_nota" value="1"></section>
+        <section class="ns-b"><div class="ns-h"><i class="fas fa-hand-holding-dollar"></i> Comissão <em>de quem lançar este serviço</em></div>
+          <div class="ns-ops svn-ops4" data-campo="tipo">
+            <button type="button" class="ns-op on" data-v="" onclick="svnOp(this)"><i class="fas fa-user-check"></i><b>Padrão da pessoa</b><small>o % de quem lançar (ex.: 10%)</small></button>
+            <button type="button" class="ns-op rox" data-v="PCT" onclick="svnOp(this)"><i class="fas fa-percent"></i><b>% do serviço</b><small>comissão própria, para todos</small></button>
+            <button type="button" class="ns-op azu" data-v="FIXO" onclick="svnOp(this)"><i class="fas fa-coins"></i><b>R$ fixo</b><small>um valor por lançamento</small></button>
+            <button type="button" class="ns-op cin" data-v="SEM" onclick="svnOp(this)"><i class="fas fa-lock"></i><b>Nunca paga</b><small>ninguém recebe, nem pedindo, nem aprovando</small></button>
+          </div><input type="hidden" name="tipo" value="">
+          <div class="svn-val" id="svnValBox" hidden><span class="svn-val-l" id="svnValL">Quanto, em %</span>
+            <div class="ns-money pct" id="svnComBox"><span id="svnComUn">%</span><input class="ns-in" name="valor" inputmode="decimal" placeholder="10" oninput="svnPrev()"></div></div></section>
+        <section class="ns-b"><div class="ns-h"><i class="fas fa-tag"></i> Valor sugerido <em>pode ficar vazio</em></div>
+          <div class="svn-din"><div class="ns-money fixo"><span>R$</span><input class="ns-in rg-din" name="valor_padrao" inputmode="numeric" placeholder="0,00"></div>
+            <small>digite os centavos: 150000 vira 1.500,00 · vem preenchido na Nova cobrança e quem lança pode mudar</small></div></section>
+      </div>
+      <aside class="ns-r"><div class="ns-h"><i class="fas fa-eye"></i> Como vai ficar</div>
+        <div class="tx-c sv-c sv-pad svn-prev" id="svnPrev">
+          <div class="tx-c-top"><span class="tx-c-num"><i class="fas fa-user-check" id="svnPvIco"></i></span><span class="tx-c-nome" id="svnPvNome">Nome do serviço</span></div>
+          <div class="tx-c-meio"><div><div class="tx-c-val sv-semv" id="svnPvVal">sem valor sugerido</div><div class="tx-c-desc" id="svnPvDesc">quem lança digita o valor</div></div><div class="hp-venc">lançamentos<b>0</b></div></div>
+          <div class="hp-itens">
+            <div class="hp-it" id="svnPvComL"><span><i class="fas fa-hand-holding-dollar"></i> Comissão</span><b id="svnPvCom">padrão da pessoa</b></div>
+            <div class="hp-it nf" id="svnPvNotaL"><span><i class="fas fa-file-invoice"></i> Nota fiscal</span><b id="svnPvNota">sai na nota</b></div></div>
+          <div class="hp-linha"><span class="sv-chip nf" id="svnPvChipN"><i class="fas fa-file-invoice"></i> sai na nota <small>nota fiscal</small></span><span class="sv-chip com" id="svnPvChipC"><i class="fas fa-user-check"></i> padrão da pessoa <small>comissão</small></span><span class="sv-chip val falta" id="svnPvChipV"><i class="fas fa-tag"></i> sem valor</span></div>
+        </div>
+        <div class="svn-nota"><i class="fas fa-circle-info"></i><span>A nota fiscal usa o código de tributação padrão da Configuração fiscal, como todos os serviços do catálogo. Depois de criado, tudo isso se muda no próprio cartão.</span></div>
+      </aside>
     </div>
-    <footer class="pk-pe"><div class="pk-pe-info">Depois de criado, tudo isso se muda no cartão do serviço.</div><button type="button" class="pk-canc" onclick="svNovoFechar()">Cancelar</button><button type="submit" class="pk-ok"><i class="fas fa-plus"></i> Criar serviço</button></footer>
+    <footer class="ns-pe"><div class="ns-pe-info" id="svnMsg">Dê um nome ao serviço para criar.</div><button type="button" class="ns-bt" onclick="svNovoFechar()">Cancelar</button><button type="submit" class="ns-bt prim" id="svnCriar" disabled><i class="fas fa-plus"></i> Criar serviço</button></footer>
   </form>
 </div>
 {% endblock %}
@@ -371,21 +431,54 @@
     f.querySelector('.pk-ok').focus();
   }
 
-  // ── NOVO SERVIÇO (caixa nossa) ──
+  // ── NOVO SERVIÇO (caixa no molde da Nova cobrança, com prévia do cartão) ──
   var svNovoTrava;
   window.svNovoAbrir = function () {
     var fd = document.getElementById('svNovoFundo'); fd.hidden = false; svNovoTrava = document.body.style.overflow; document.body.style.overflow = 'hidden';
-    document.addEventListener('keydown', svNovoTecla, true); setTimeout(function () { fd.querySelector('[name=nome]').focus(); }, 50);
+    document.addEventListener('keydown', svNovoTecla, true); svnPrev(); setTimeout(function () { fd.querySelector('[name=nome]').focus(); }, 50);
   };
   window.svNovoFechar = function () { var fd = document.getElementById('svNovoFundo'); fd.hidden = true; document.body.style.overflow = svNovoTrava || ''; document.removeEventListener('keydown', svNovoTecla, true); };
   function svNovoTecla(e) { if (e.key === 'Escape' && document.querySelectorAll('.pk-fundo:not([hidden])').length === 1) { e.preventDefault(); svNovoFechar(); } }
   document.getElementById('svNovoFundo').addEventListener('mousedown', function (e) { if (e.target === this) svNovoFechar(); });
-  window.svNovoNota = function (r) { document.getElementById('svNovoNotaTx').textContent = r.value === '1' ? 'Serviço prestado: entra na nota e no boleto.' : 'Taxa ou despesa repassada: entra no boleto e fica fora da nota (honorários 1.000 + taxa 200 = boleto 1.200, nota 1.000).'; };
-  window.svNovoTipo = function (r) {
-    var rs = r.form.querySelector('.rg-cv'), v = rs.querySelector('input');
-    rs.hidden = !(r.value === 'PCT' || r.value === 'FIXO'); rs.classList.toggle('pct', r.value !== 'FIXO'); v.placeholder = r.value === 'FIXO' ? '0,00' : '10';
-    if (!rs.hidden) v.focus();
+  window.svnOp = function (bt) {
+    var ops = bt.parentNode, f = bt.closest('form');
+    ops.querySelectorAll('.ns-op').forEach(function (b) { b.classList.toggle('on', b === bt); });
+    f.querySelector('[name=' + ops.dataset.campo + ']').value = bt.dataset.v;
+    if (ops.dataset.campo === 'tipo') {
+      var box = document.getElementById('svnValBox'), m = document.getElementById('svnComBox'), inp = m.querySelector('input'), v = bt.dataset.v;
+      box.hidden = !(v === 'PCT' || v === 'FIXO');
+      m.classList.toggle('pct', v !== 'FIXO'); m.classList.toggle('azul', v === 'FIXO');
+      document.getElementById('svnComUn').textContent = v === 'FIXO' ? 'R$' : '%'; document.getElementById('svnValL').textContent = v === 'FIXO' ? 'Quanto, em reais' : 'Quanto, em %';
+      inp.placeholder = v === 'FIXO' ? '0,00' : '10'; if (!box.hidden) inp.focus();
+    }
+    svnPrev();
   };
+  var FMT = function (n) { return 'R$ ' + n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); };
+  window.svnPrev = function () {
+    var f = document.getElementById('svNovoForm'), nome = f.querySelector('[name=nome]').value.trim(), nota = f.querySelector('[name=emite_nota]').value === '1';
+    var t = f.querySelector('[name=tipo]').value, cv = parseFloat((f.querySelector('[name=valor]').value || '').replace(/\./g, '').replace(',', '.')) || 0;
+    var vp = parseFloat((f.querySelector('[name=valor_padrao]').value || '').replace(/\./g, '').replace(',', '.')) || 0;
+    var card = document.getElementById('svnPrev');
+    card.className = 'tx-c sv-c svn-prev ' + ({ PCT: 'sv-pct', FIXO: 'sv-fixo', SEM: 'sv-sem' }[t] || 'sv-pad');
+    document.getElementById('svnPvIco').className = 'fas ' + ({ PCT: 'fa-percent', FIXO: 'fa-coins', SEM: 'fa-lock' }[t] || 'fa-user-check');
+    document.getElementById('svnPvNome').textContent = nome || 'Nome do serviço';
+    var pv = document.getElementById('svnPvVal'); pv.textContent = vp ? FMT(vp) : 'sem valor sugerido'; pv.classList.toggle('sv-semv', !vp);
+    document.getElementById('svnPvDesc').textContent = vp ? 'valor sugerido · vem preenchido na Nova cobrança' : 'quem lança digita o valor';
+    var com = t === 'SEM' ? 'nunca paga' : t === 'PCT' ? (cv ? cv.toLocaleString('pt-BR') + '%' + (vp ? ' ≈ ' + FMT(vp * cv / 100) : '') : '% a definir') : t === 'FIXO' ? (cv ? FMT(cv) : 'valor a definir') : 'padrão da pessoa';
+    document.getElementById('svnPvCom').innerHTML = (t === 'SEM' ? '<i class="fas fa-lock"></i> ' : '') + esc(com);
+    document.getElementById('svnPvComL').className = 'hp-it' + (t === 'SEM' ? ' trava' : '');
+    document.getElementById('svnPvNota').innerHTML = nota ? 'sai na nota' : '<i class="fas fa-lock"></i> fora da nota · só no boleto';
+    document.getElementById('svnPvNotaL').className = 'hp-it ' + (nota ? 'nf' : 'sem');
+    var cn = document.getElementById('svnPvChipN'); cn.className = 'sv-chip nf' + (nota ? '' : ' sem'); cn.innerHTML = '<i class="fas ' + (nota ? 'fa-file-invoice' : 'fa-lock') + '"></i> ' + (nota ? 'sai na nota' : 'só boleto') + ' <small>' + (nota ? 'nota fiscal' : 'trava') + '</small>';
+    var cc = document.getElementById('svnPvChipC'); cc.className = 'sv-chip com' + (t === 'SEM' ? ' sem' : (t ? ' pro' : '')); cc.innerHTML = '<i class="fas ' + ({ PCT: 'fa-percent', FIXO: 'fa-coins', SEM: 'fa-lock' }[t] || 'fa-user-check') + '"></i> ' + esc(com.split(' ≈ ')[0]) + ' <small>comissão</small>';
+    var cvv = document.getElementById('svnPvChipV'); cvv.className = 'sv-chip val' + (vp ? '' : ' falta'); cvv.innerHTML = '<i class="fas fa-tag"></i> ' + (vp ? 'valor' : 'sem valor');
+    document.getElementById('svnPrevVal').textContent = vp ? FMT(vp) : '—';
+    document.getElementById('svnPrevCom').textContent = 'comissão: ' + com + ' · ' + (nota ? 'sai na nota' : 'só boleto');
+    var falta = !nome ? 'Dê um nome ao serviço para criar.' : ((t === 'PCT' || t === 'FIXO') && !cv) ? 'Diga quanto é a comissão (' + (t === 'PCT' ? '%' : 'R$') + ').' : '';
+    var msg = document.getElementById('svnMsg'); msg.textContent = falta || ('Pronto: "' + nome + '" entra no catálogo' + (nota ? '' : ', só no boleto') + '.'); msg.classList.toggle('ok', !falta);
+    document.getElementById('svnCriar').disabled = !!falta;
+  };
+  document.getElementById('svNovoForm').addEventListener('submit', function (e) { svnPrev(); if (document.getElementById('svnCriar').disabled) e.preventDefault(); });
 
   // ── QUEM RECEBE ──
   // a relação da carteira abre numa caixa nossa (20/11/2026 — Anderson: "mostrar simplesmente que tem comissões mensais o
@@ -452,6 +545,7 @@
     el.addEventListener('input', function () {
       var d = el.value.replace(/\D/g, '').replace(/^0+/, '').slice(0, 11);
       el.value = d ? (parseInt(d, 10) / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '';
+      if (el.form && el.form.id === 'svNovoForm') svnPrev();      // a prévia lê o valor já mascarado
     });
   });
   // o lápis do chip abre a edição dentro do cartão, só do bloco pedido (nota, comissão ou valor); Desistir fecha e volta ao que estava
