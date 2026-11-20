@@ -101,7 +101,9 @@ def load_user(user_id):
     u = Usuario.get_by_id(int(user_id))
     if u and u.senha_pendente:
         return None
-    return u
+    # 20/11/2026 — "Ver como": o admin escolhe uma pessoa e o sistema inteiro fica como ela (utils/ver_como.py)
+    from utils.ver_como import carregar as _ver_como
+    return _ver_como(u)
 
 
 # Registra Blueprints
@@ -184,6 +186,8 @@ from routes.novidades import novidades as novidades_bp   # noqa: E402  (o que mu
 app.register_blueprint(novidades_bp)
 from routes.meu_cadastro import meu_cadastro as meu_cadastro_bp   # noqa: E402  (cada um altera os próprios dados; 17/11/2026)
 app.register_blueprint(meu_cadastro_bp)
+from routes.ver_como import ver_como as ver_como_bp   # noqa: E402  (admin vê o sistema como a pessoa; 20/11/2026)
+app.register_blueprint(ver_como_bp)
 
 # Gate do Portal do Instalador — DENY BY DEFAULT para a sessão de escopo
 # restrito. Registrado no APP (não no blueprint) de propósito: precisa rodar
@@ -195,6 +199,10 @@ from utils.login_seguro import vigia_sessao as _vigia_sessao, renovar_depois as 
 app.before_request(_vigia_sessao)
 app.after_request(_renovar_navegador)
 app.before_request(gate_escopo_instalador)
+# Ver como (20/11/2026): admin vendo como outra pessoa só olha — nada se grava fora de Lançamentos.
+from utils.ver_como import trava_escrita as _ver_como_trava, contexto as _ver_como_ctx
+app.before_request(_ver_como_trava)
+app.context_processor(_ver_como_ctx)
 
 # Portão central de PERFIL e EMPRESA RESERVADA — também DENY BY DEFAULT: rota
 # que não está classificada em utils/acesso.py é só admin. Roda depois do gate

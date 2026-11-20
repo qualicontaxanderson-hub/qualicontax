@@ -238,10 +238,11 @@ def vigia_sessao():
         session['qc_vis'] = agora
     if agora - int(session.get('qc_db') or 0) >= 300:
         session['qc_db'] = agora
-        g.qc_renovar = current_user.id
+        quem = g.get('admin_real') or current_user     # 20/11/2026: no "ver como" o acesso é do admin
+        g.qc_renovar = quem.id
         try:
             execute_query("UPDATE usuarios SET ultimo_acesso = NOW(), ultimo_ip = %s WHERE id = %s",
-                          (ip_cliente(), current_user.id), fetch=False)
+                          (ip_cliente(), quem.id), fetch=False)
         except Exception as e:
             logger.warning('[login] não gravou o último acesso: %s', e)
     return None

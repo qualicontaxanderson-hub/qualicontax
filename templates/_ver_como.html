@@ -1,0 +1,93 @@
+{# Ver como (20/11/2026) — caixa da barra de cima, ao lado da busca. Só o admin de verdade vê (utils/ver_como.py). #}
+{% if vc %}
+{% set _vc_volta = request.full_path %}
+{% macro _av(nome, uid) %}<span class="vc-av" style="--h:{{ (uid * 47) % 360 }}">{{ ((nome or '?').split()[0][:1] ~ ((nome or '').split()[-1][:1] if (nome or '').split() | length > 1 else ''))|upper }}</span>{% endmacro %}
+<style>
+.vc { position:relative; display:flex; align-items:center; gap:8px; flex-shrink:0; }
+.vc-bt { display:flex; align-items:center; gap:9px; height:38px; padding:0 12px 0 10px; border-radius:8px; border:1px solid rgba(255,255,255,.35);
+  background:rgba(255,255,255,.2); color:#fff; font:inherit; font-size:14px; cursor:pointer; transition:background .15s, border-color .15s; max-width:280px; }
+.vc-bt:hover, .vc-bt[aria-expanded="true"] { background:rgba(255,255,255,.3); border-color:rgba(255,255,255,.7); }
+.vc-bt > i:first-child { font-size:15px; opacity:.9; }
+.vc-bt .vc-tx { display:flex; flex-direction:column; line-height:1.1; text-align:left; min-width:0; }
+.vc-bt .vc-tx small { font-size:10px; font-weight:800; letter-spacing:.06em; text-transform:uppercase; opacity:.85; }
+.vc-bt .vc-tx b { font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.vc-bt .vc-seta { font-size:11px; opacity:.8; margin-left:2px; }
+.vc-bt.on { background:#fbbf24; border-color:#fde68a; color:#422006; box-shadow:0 0 0 3px rgba(251,191,36,.35); }
+.vc-bt.on:hover, .vc-bt.on[aria-expanded="true"] { background:#fcd34d; }
+.vc-av { width:26px; height:26px; flex:0 0 26px; border-radius:50%; display:inline-flex; align-items:center; justify-content:center; font-size:11px; font-weight:800;
+  color:#fff; background:hsl(var(--h) 55% 42%); letter-spacing:.02em; }
+.vc-sair { display:flex; align-items:center; gap:7px; height:38px; padding:0 13px; border-radius:8px; border:0; background:#fff; color:#92400e; font:inherit;
+  font-size:13.5px; font-weight:800; cursor:pointer; box-shadow:0 2px 8px rgba(0,0,0,.12); }
+.vc-sair:hover { background:#fffbeb; }
+.vc-pn { position:absolute; top:calc(100% + 8px); left:0; width:340px; max-height:min(560px, calc(100vh - 90px)); display:flex; flex-direction:column;
+  background:#fff; border-radius:14px; box-shadow:0 18px 50px rgba(2,44,22,.28), 0 0 0 1px rgba(15,23,42,.06); overflow:hidden; z-index:1200; color:#0f172a; }
+.vc-pn[hidden] { display:none; }
+.vc-pn-h { padding:14px 16px 12px; background:linear-gradient(135deg,#065f46,#16a34a); color:#fff; }
+.vc-pn-h b { display:flex; align-items:center; gap:8px; font-size:15px; } .vc-pn-h small { display:block; margin-top:3px; font-size:12px; opacity:.9; line-height:1.35; }
+.vc-q { margin:10px 12px 6px; position:relative; } .vc-q i { position:absolute; left:11px; top:50%; transform:translateY(-50%); color:#94a3b8; font-size:12px; }
+.vc-q input { width:100%; height:36px; border:1px solid #e2e8f0; border-radius:9px; padding:0 10px 0 32px; font:inherit; font-size:13.5px; background:#f8fafc; }
+.vc-q input:focus { outline:none; border-color:#16a34a; background:#fff; box-shadow:0 0 0 3px rgba(22,163,74,.15); }
+.vc-ls { overflow:auto; padding:2px 8px 10px; }
+.vc-dep { font-size:10.5px; font-weight:800; letter-spacing:.07em; text-transform:uppercase; color:#64748b; padding:10px 8px 4px; }
+.vc-it { display:flex; align-items:center; gap:10px; width:100%; border:0; background:none; padding:7px 8px; border-radius:9px; font:inherit; font-size:13.5px;
+  color:#0f172a; text-align:left; cursor:pointer; }
+.vc-it:hover, .vc-it:focus-visible { background:#f0fdf4; outline:none; }
+.vc-it.on { background:#fef3c7; font-weight:700; } .vc-it.on::after { content:'vendo'; margin-left:auto; font-size:10.5px; font-weight:800; color:#92400e; text-transform:uppercase; letter-spacing:.05em; }
+.vc-it[hidden], .vc-dep[hidden], .vc-vazio[hidden] { display:none; }
+.vc-vazio { padding:14px; text-align:center; color:#94a3b8; font-size:13px; }
+@media (max-width: 760px) {
+  .vc-bt .vc-tx, .vc-bt .vc-seta, .vc-sair span { display:none; }
+  .vc-bt { padding:0 10px; } .vc-sair { padding:0 11px; }
+  .vc-pn { position:fixed; left:12px; right:12px; top:64px; width:auto; }
+}
+</style>
+<div class="vc" id="vcBox">
+  <button type="button" class="vc-bt{{ ' on' if vc.vendo }}" id="vcBt" aria-haspopup="true" aria-expanded="false"
+          title="{{ 'Vendo o sistema como ' ~ vc.pessoa.nome ~ ' — trocar' if vc.vendo else 'Ver o sistema como outra pessoa (só você, admin, vê isto)' }}">
+    {% if vc.vendo %}{{ _av(vc.pessoa.nome, vc.pessoa.id) }}<span class="vc-tx"><small>vendo como</small><b>{{ vc.pessoa.nome.split()[0] }} {{ vc.pessoa.nome.split()[-1] if vc.pessoa.nome.split() | length > 1 }}</b></span>
+    {% else %}<i class="fas fa-user-group"></i><span class="vc-tx"><b>Escolher pessoa</b></span>{% endif %}
+    <i class="fas fa-chevron-down vc-seta"></i>
+  </button>
+  {% if vc.vendo %}
+  <form method="POST" action="{{ url_for('ver_como.trocar') }}" style="margin:0">
+    <input type="hidden" name="sair" value="1"><input type="hidden" name="volta" value="{{ _vc_volta }}">
+    <button class="vc-sair" title="Voltar a ser você ({{ vc.admin.nome }})"><i class="fas fa-right-from-bracket"></i><span>Voltar a ser eu</span></button>
+  </form>
+  {% endif %}
+  <div class="vc-pn" id="vcPn" hidden>
+    <div class="vc-pn-h"><b><i class="fas fa-user-shield"></i> Ver o sistema como…</b>
+      <small>O menu, as abas e as telas ficam como a pessoa vê. Só para olhar: nada se grava (em Lançamentos dá para lançar por ela).</small></div>
+    <div class="vc-q"><i class="fas fa-search"></i><input type="search" id="vcQ" placeholder="Buscar pessoa" autocomplete="off"></div>
+    <form method="POST" action="{{ url_for('ver_como.trocar') }}" class="vc-ls" id="vcLs" style="margin:0">
+      <input type="hidden" name="volta" value="{{ _vc_volta }}">
+      {% for dep, ps in vc.pessoas | groupby('departamento') %}
+      <div class="vc-dep">{{ dep }}</div>
+      {% for p in ps %}<button class="vc-it{{ ' on' if vc.vendo and vc.pessoa.id == p.id }}" name="usuario_id" value="{{ p.id }}" data-n="{{ p.nome | lower }}">{{ _av(p.nome, p.id) }}<span>{{ p.nome }}</span></button>{% endfor %}
+      {% endfor %}
+      <div class="vc-vazio" id="vcVazio" hidden>Ninguém com esse nome.</div>
+    </form>
+  </div>
+</div>
+<script>
+(function () {
+  var bt = document.getElementById('vcBt'), pn = document.getElementById('vcPn'), q = document.getElementById('vcQ'), box = document.getElementById('vcBox');
+  function abre(on) { pn.hidden = !on; bt.setAttribute('aria-expanded', on ? 'true' : 'false'); if (on) { q.value = ''; filtra(); setTimeout(function () { q.focus(); }, 20); } }
+  function sem(s) { return (s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase(); }
+  function filtra() {
+    var t = sem(q.value.trim()), n = 0;
+    pn.querySelectorAll('.vc-it').forEach(function (b) { var ok = !t || sem(b.dataset.n).indexOf(t) >= 0; b.hidden = !ok; if (ok) n++; });
+    pn.querySelectorAll('.vc-dep').forEach(function (d) { var x = d.nextElementSibling, vis = false;
+      while (x && x.classList.contains('vc-it')) { if (!x.hidden) vis = true; x = x.nextElementSibling; } d.hidden = !vis; });
+    document.getElementById('vcVazio').hidden = n > 0;
+  }
+  bt.addEventListener('click', function (e) { e.stopPropagation(); abre(pn.hidden); });
+  q.addEventListener('input', filtra);
+  q.addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') { e.preventDefault(); var v = [].filter.call(pn.querySelectorAll('.vc-it'), function (b) { return !b.hidden; }); if (v.length === 1) v[0].click(); else if (v[0]) v[0].focus(); }
+    if (e.key === 'ArrowDown') { e.preventDefault(); var f = [].find.call(pn.querySelectorAll('.vc-it'), function (b) { return !b.hidden; }); if (f) f.focus(); }
+  });
+  document.addEventListener('click', function (e) { if (!pn.hidden && !box.contains(e.target)) abre(false); });
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && !pn.hidden) abre(false); });
+})();
+</script>
+{% endif %}

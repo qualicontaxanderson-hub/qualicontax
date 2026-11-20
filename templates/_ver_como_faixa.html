@@ -1,0 +1,32 @@
+{# Ver como (20/11/2026) — faixa amarela embaixo da barra enquanto o admin vê o sistema como outra pessoa #}
+{% if vc and vc.vendo %}{% set _pn = vc.pessoa.nome.split()[0] %}
+<style>
+.vcf { margin:0; padding:9px 24px; background:#fef3c7; border-bottom:1px solid #fcd34d; color:#78350f; font-size:13px; }
+.vcf-l { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+.vcf-l > i { font-size:15px; color:#b45309; } .vcf-l > span { flex:1; min-width:220px; }
+.vcf details { flex-basis:100%; } .vcf summary { display:inline-flex; align-items:center; gap:6px; cursor:pointer; font-weight:800; color:#92400e; list-style:none; margin-top:2px; }
+.vcf summary::-webkit-details-marker { display:none; } .vcf summary i { transition:transform .15s; font-size:11px; } .vcf details[open] summary i { transform:rotate(90deg); }
+.vcf-g { display:flex; flex-direction:column; gap:7px; margin-top:8px; padding-top:8px; border-top:1px dashed #f59e0b; }
+.vcf-g > div { display:flex; flex-wrap:wrap; gap:5px; align-items:center; } .vcf-g b { margin-right:4px; min-width:92px; }
+.vcf-g em { font-style:normal; font-weight:700; font-size:11.5px; border-radius:99px; padding:2px 9px; }
+.vcf-g em.ok { background:#dcfce7; color:#166534; } .vcf-g em.no { background:#fff; color:#94a3b8; text-decoration:line-through; border:1px solid #e5e7eb; }
+.vcf-g em i { text-decoration:none; margin-right:3px; }
+@media (max-width: 760px) { .vcf { padding:8px 12px; font-size:12.5px; } .vcf-mais { display:none; } .vcf-l > i { display:none; } .vcf-g b { min-width:0; flex-basis:100%; } }
+</style>
+<div class="vcf" role="status">
+  <div class="vcf-l">
+    <i class="fas fa-user-shield"></i>
+    <span><b>Você está vendo o sistema como {{ vc.pessoa.nome }}.</b> <span class="vcf-mais">Menu, abas e telas como {{ _pn }} vê; tela que {{ _pn }} não abre é recusada, como seria para {{ _pn }}. </span>Só para olhar: nada se grava<span class="vcf-mais"> (em Lançamentos dá para lançar no nome de {{ _pn }}, marcado "lançado pelo administrador")</span>.</span>
+    {% if vc.acessos %}
+    <details>
+      <summary><i class="fas fa-chevron-right"></i> O que {{ _pn }} abre e o que não abre</summary>
+      <div class="vcf-g">
+        <div><b>Áreas</b>{% for x in vc.acessos.areas %}<em class="{{ 'ok' if x.pode else 'no' }}"><i class="fas {{ 'fa-check' if x.pode else 'fa-lock' }}"></i>{{ x.rot }}</em>{% endfor %}</div>
+        <div><b>Financeiro</b>{% for x in vc.acessos.fin %}<em class="{{ 'ok' if x.pode else 'no' }}"><i class="fas {{ 'fa-check' if x.pode else 'fa-lock' }}"></i>{{ x.rot }}</em>{% endfor %}</div>
+        <div><b>Perfis</b>{{ vc.acessos.perfis | join(', ') or 'nenhum' }}{% if vc.acessos.extras %} · <b style="min-width:0">permissões a mais:</b> {{ vc.acessos.extras | join(', ') }}{% endif %}</div>
+      </div>
+    </details>
+    {% endif %}
+  </div>
+</div>
+{% endif %}

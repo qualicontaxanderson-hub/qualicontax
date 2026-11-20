@@ -50,27 +50,24 @@ def _hoje_br():
 
 
 def _admin_real():
-    return bool(getattr(current_user, 'is_admin', lambda: False)())
+    from utils.ver_como import admin_real
+    return admin_real() is not None
 
 
 # ── "Entrar como" (18/11/2026 — Anderson: "quero somente no Financeiro ter uma opção pra MIM como Admin somente a mim
 # eu entrar como o funcionário até para testar e até lançar por eles... Quando isso acontecer aparecer uma msg
 # lançado pelo administrador"). Só o ADMIN; vale só nas telas de Lançamentos; o que for lançado fica no nome da
 # pessoa e marcado lancado_pelo_admin; a Auditoria continua gravando o admin (quem de fato clicou).
+# 20/11/2026: o "ver como" passou a valer no sistema todo (barra de cima, utils/ver_como.py) — o current_user JÁ é a
+# pessoa escolhida e o admin fica em g.admin_real.
 def _eu():
     """A pessoa que a tela de Lançamentos está mostrando: o próprio usuário, ou o funcionário que o admin escolheu."""
-    if 'fin_eu' not in g:
-        u = None
-        uid = session.get('fin_como') if _admin_real() else None
-        if uid and uid != current_user.id:
-            from models.usuario import Usuario
-            u = Usuario.get_by_id(uid)
-        g.fin_eu = u or current_user._get_current_object()
-    return g.fin_eu
+    return current_user._get_current_object()
 
 
 def _vendo_como():
-    return _eu().id != current_user.id
+    from utils.ver_como import vendo_como
+    return vendo_como()
 
 
 def _admin():
@@ -307,66 +304,15 @@ def lancamentos():
         caixa_json=json.dumps(caixa, ensure_ascii=False), STATUS=STATUS, COMISSAO=COMISSAO,
         acordos_todos=FinComissaoAcordo.listar(so_ativos=True) if _admin() else [],
         pessoas=ClienteResponsavel.usuarios_disponiveis() if _admin() else [], servicos=_servicos(),
-        eu=_eu(), vendo_como=_vendo_como(), admin_real=_admin_real(), acessos=_acessos_de(_eu()) if _vendo_como() else None,
-        pessoas_como=[p for p in ClienteResponsavel.usuarios_disponiveis() if p['id'] != current_user.id] if _admin_real() else [],
+        eu=_eu(), vendo_como=_vendo_como(), admin_real=_admin_real(),
         ctr_aprovar=(execute_query("SELECT COUNT(*) n FROM prest_contratos WHERE status = 'APROVACAO'", fetch=True, fetch_one=True) or {}).get('n', 0) if _aprovador() else 0,
         pix=_pix_de(_eu().id), PIX_TIPOS=PIX_TIPOS, contas_cobranca=_contas_cobranca() if aprov else [])
 
 
-_TELAS = [   # (endpoint, rótulo) — as abas do Financeiro e as outras áreas do sistema
-    ('financeiro.index', 'Início'), ('financeiro.titulos', 'Cobranças'), ('financeiro.honorarios', 'Honorários'),
-    ('financeiro.honorarios_cadastrar', 'Cadastrar honorários'), ('financeiro.lancamentos', 'Lançamentos'),
-    ('financeiro.lote', 'Lote mensal'), ('financeiro.contratos', 'Contratos'), ('financeiro.extrato', 'Extrato'),
-    ('financeiro.contas', 'Contas'), ('financeiro.programacoes', 'Programações'), ('financeiro.fluxo', 'Fluxo de caixa'),
-    ('financeiro.dre', 'DRE'), ('financeiro.categorias', 'Categorias'), ('financeiro.empresas', 'Empresas'),
-    ('financeiro.cobrancas', 'Notas e boletos'), ('financeiro.servicos', 'Serviços'),
-]
-_AREAS = [('clientes.index', 'Cadastros (clientes)'), ('modulos.comercial', 'Comercial'), ('contabil.index', 'Contábil'),
-          ('escrita_fiscal.index', 'Fiscal'), ('modulos.dp', 'DP'), ('modulos.legalizacao', 'Legalização'),
-          ('modulos.analise', 'Análise'), ('relatorios.index', 'Relatórios'), ('atendimento.index', 'Atendimento'),
-          ('configuracoes.index', 'Config.')]
-
-
-def _acessos_de(u):
-    """O que a pessoa consegue abrir (18/11/2026 — Anderson: "ver como Gabriel consigo saber se ele tem acesso a
-    outras telas como extrato e outros?"). Mesma regra do portão (utils/acesso.py)."""
-    from flask import current_app
-    from utils.acesso import pode_rota_de
-    vf = current_app.view_functions
-
-    def lista(itens):
-        return [{'rot': r, 'pode': pode_rota_de(u, ep)} for ep, r in itens if ep in vf]
-    perfis = execute_query("""SELECT p.nome FROM usuario_perfis up JOIN perfis_acesso p ON p.id = up.perfil_id
-                               WHERE up.usuario_id = %s ORDER BY p.nome""", (u.id,), fetch=True) or []
-    extras = execute_query('SELECT permissao_codigo FROM usuario_permissoes_extra WHERE usuario_id = %s ORDER BY permissao_codigo',
-                           (u.id,), fetch=True) or []
-    return {'fin': lista(_TELAS), 'areas': lista(_AREAS), 'perfis': [p['nome'] for p in perfis],
-            'extras': [e['permissao_codigo'] for e in extras]}
-
-
 def _marcar_pelo_admin(lid):
     if lid and _vendo_como():
-        execute_query('UPDATE fin_lancamentos SET lancado_pelo_admin = %s WHERE id = %s', (current_user.id, lid), fetch=False)
-
-
-@financeiro.route('/financeiro/lancamentos/como', methods=['POST'])
-@permission_required(PERM)
-def lancamento_entrar_como():
-    """Admin escolhe o funcionário para ver e lançar como ele (só nas telas de Lançamentos)."""
-    if not _admin_real():
-        abort(403)
-    uid = None if request.form.get('sair') else request.form.get('usuario_id', type=int)
-    if uid and uid != current_user.id:
-        from models.usuario import Usuario
-        u = Usuario.get_by_id(uid)
-        if not u:
-            abort(404)
-        session['fin_como'] = uid
-        registrar('leitura.entrou_como_funcionario', 'financeiro', tabela='usuarios', registro_id=uid, depois={'como': u.nome})
-        flash('Você está vendo Lançamentos como %s. O que lançar fica no nome dele(a), marcado "lançado pelo administrador".' % u.nome, 'warning')
-    else:
-        session.pop('fin_como', None)
-    return redirect(url_for('financeiro.lancamentos'))
+        from utils.ver_como import admin_real
+        execute_query('UPDATE fin_lancamentos SET lancado_pelo_admin = %s WHERE id = %s', (admin_real().id, lid), fetch=False)
 
 
 @financeiro.route('/financeiro/lancamentos/minha-pix', methods=['POST'])

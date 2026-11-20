@@ -164,5 +164,7 @@ def logout():
     registrar('escrita.saiu', 'acesso', tabela='usuarios',
               registro_id=getattr(current_user, 'id', None))
     logout_user()
+    session.pop('ver_como', None)
+    session.pop('fin_como', None)
     flash('Você saiu da sua conta.', 'info')
     return redirect(url_for('auth.login'))

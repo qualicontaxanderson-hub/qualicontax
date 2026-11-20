@@ -208,13 +208,18 @@ def registrar(acao, modulo, tabela=None, registro_id=None, antes=None, depois=No
             return
         if not getattr(current_user, 'is_authenticated', False):
             return
-        usuario_id = getattr(current_user, 'id', None)
+        # 20/11/2026 — "Ver como": quem clicou é o admin, não a pessoa que ele está vendo.
+        from flask import g as _g
+        quem = _g.get('admin_real') or current_user
+        usuario_id = getattr(quem, 'id', None)
         # Nome e login COPIADOS no momento da ação: a auditoria não pode depender
         # da FK usuario_id (ON DELETE SET NULL). Apagar o usuário zera o id, mas
         # estes dois continuam dizendo quem fez.
-        usuario_nome = (getattr(current_user, 'nome', None) or '')[:120] or None
-        usuario_login = (getattr(current_user, 'login', None)
-                         or getattr(current_user, 'nick', None) or '')[:80] or None
+        usuario_nome = (getattr(quem, 'nome', None) or '')[:120] or None
+        if quem is not current_user and usuario_nome:
+            usuario_nome = (usuario_nome + ' (vendo como ' + (getattr(current_user, 'nome', '') or '?') + ')')[:120]
+        usuario_login = (getattr(quem, 'login', None)
+                         or getattr(quem, 'nick', None) or '')[:80] or None
 
         a_json, d_json = _diff(antes, depois)
         # Edição em que NADA mudou (salvar sem mexer): não vira linha vazia

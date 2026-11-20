@@ -69,6 +69,7 @@ _FISCAL_NOTA = ('escrita_fiscal.conf_compras', 'escrita_fiscal.conf_saidas')
 MAPA = {
     # --- comuns a todo usuário logado ---------------------------------------
     'dashboard.index':                 'LOGIN',
+    'ver_como.trocar':                 'LOGIN',   # 20/11/2026: a própria rota só aceita o admin de verdade (g.admin_real)
     'meu_cadastro.index':              'LOGIN',   # cada um só os PRÓPRIOS dados (17/11/2026)
     'meu_cadastro.conta_usar':         'LOGIN',   # 18/11/2026: várias contas para receber; a pessoa escolhe a sua
     'meu_cadastro.conta_excluir':      'LOGIN',
@@ -269,7 +270,6 @@ MAPA = {
     'financeiro.fechamento_pagar':         'financeiro.lancamentos.aprovar',
     'financeiro.lancamento_minha_pix':     'financeiro.lancamentos',          # a própria chave Pix (17/11/2026)
     'financeiro.lancamento_cobranca':      'financeiro.lancamentos',          # a cobrança do que a pessoa lançou (18/11/2026)
-    'financeiro.lancamento_entrar_como':   'ADMIN',                           # admin vê/lança como o funcionário (18/11/2026)
     'financeiro.comissao_pedido':          'financeiro.lancamentos',          # quem pediu ou quem aprova (a rota confere)
     'financeiro.comissao_pedido_arquivo':  'financeiro.lancamentos',          # o mesmo pedido em PDF ou imagem (18/11/2026)
     'financeiro.carteira_cobranca':        'financeiro.lancamentos',          # boleto da mensalidade da carteira (a rota confere)

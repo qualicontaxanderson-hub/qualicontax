@@ -197,10 +197,12 @@
                 <i class="fas fa-search"></i>
                 <input type="text" name="q" placeholder="Buscar..." autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" inputmode="search" enterkeyhint="search">
             </div>
+            {% include '_ver_como.html' %}
 
             <div class="top-bar-actions">
             </div>
         </header>
+        {% include '_ver_como_faixa.html' %}
 
         <!-- Flash Messages -->
         {% with messages = get_flashed_messages(with_categories=true) %}
