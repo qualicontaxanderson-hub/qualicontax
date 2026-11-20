@@ -611,6 +611,48 @@ def servico_comissao():
     return redirect(url_for('financeiro.lancamentos', aba='com') + '#servicos-comissao')
 
 
+@financeiro.route('/financeiro/servicos/novo', methods=['POST'])
+@permission_required(PERM)
+def servico_novo():
+    """Serviço novo no catálogo, pela aba SERVIÇOS (20/11/2026 — Anderson: "e os Novos?"). Só o administrador. Nome,
+    nota fiscal (sai / nunca sai), comissão (padrão da pessoa, %, R$ fixo ou nunca) e valor sugerido. A nota usa o código de
+    tributação padrão da Configuração fiscal, como todos os outros serviços do catálogo."""
+    if not _admin():
+        abort(403)
+    f = request.form
+    volta = url_for('financeiro.servicos', aba='servicos')
+    nome = ' '.join((f.get('nome') or '').split())[:80]
+    tipo = f.get('tipo') if f.get('tipo') in ('', 'PCT', 'FIXO', 'SEM') else ''
+    emite = 0 if f.get('emite_nota') == '0' else 1
+    if not nome:
+        flash('Dê um nome ao serviço.', 'danger')
+        return redirect(volta)
+    if execute_query('SELECT id FROM nfse_servicos WHERE empresa_id = %s AND LOWER(nome) = LOWER(%s)', (EMP, nome), fetch=True):
+        flash('Já existe um serviço chamado "%s".' % nome, 'danger')
+        return redirect(volta)
+    try:
+        valor = _dec(f.get('valor')) if tipo in ('PCT', 'FIXO') else None
+        if tipo in ('PCT', 'FIXO') and (valor is None or valor <= 0 or (tipo == 'PCT' and valor > 100)):
+            raise ValueError('Comissão inválida.')
+        vp = (f.get('valor_padrao') or '').strip()
+        sugerido = _dec(vp) if vp else None
+        if sugerido is not None and sugerido <= 0:
+            sugerido = None
+    except (ValueError, InvalidOperation):
+        flash('Comissão ou valor sugerido inválido para "%s".' % nome, 'danger')
+        return redirect(volta)
+    ordem = (execute_query('SELECT COALESCE(MAX(ordem), 0) + 1 AS o FROM nfse_servicos WHERE empresa_id = %s AND ordem < 999', (EMP,),
+                           fetch=True, fetch_one=True) or {}).get('o') or 1
+    sid = execute_query("""INSERT INTO nfse_servicos (empresa_id, nome, emite_nota, ordem, ativo, comissao_tipo, comissao_valor, valor_padrao, alterado_por)
+                            VALUES (%s, %s, %s, %s, 1, %s, %s, %s, %s)""",
+                        (EMP, nome, emite, ordem, tipo or None, valor, sugerido, current_user.id), fetch=False)
+    registrar('escrita.criou_servico', 'financeiro', tabela='nfse_servicos', registro_id=sid,
+              depois={'nome': nome, 'emite_nota': emite, 'comissao_tipo': tipo or None, 'comissao_valor': str(valor or ''),
+                      'valor_sugerido': str(sugerido or ''), 'origem': 'aba Serviços'})
+    flash('Serviço "%s" criado.' % nome + (' Nunca sai em nota fiscal: entra só no boleto.' if not emite else ''), 'success')
+    return redirect(volta + '#s%s' % sid)
+
+
 @financeiro.route('/financeiro/lancamentos/novo', methods=['POST'])
 @permission_required(PERM)
 def lancamento_novo():

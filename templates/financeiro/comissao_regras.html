@@ -56,7 +56,9 @@
 .rg-cart-bt .sg { width:34px; height:34px; border-radius:10px; background:#ede9fe; color:#6d28d9; display:inline-flex; align-items:center; justify-content:center; flex:0 0 auto; font-size:13px; }
 .rg-cart-bt .tx { flex:1; min-width:0; display:flex; flex-direction:column; line-height:1.25; } .rg-cart-bt .tx b { font-size:13px; } .rg-cart-bt .tx small { color:#64748b; font-size:11.5px; }
 .rg-cart-bt > i { color:#94a3b8; }
-.pk-cart { width:min(640px, 96vw); top:8vh; } .pk-cart [hidden] { display:none !important; } .pk-cart .pk-quem span { white-space:normal; line-height:1.4; } .pk-cart .pk-corpo { padding:14px 16px 16px; display:flex; flex-direction:column; gap:10px; }
+.pk-cart { width:min(640px, 96vw); top:8vh; } .pk-verde { --cor:#0f766e; --cor-e:#115e59; --cor-f:#f0fdfa; --cor-b:#99f6e4; }
+.rg-btn-novo { background:#fff; color:#0f3d2e; border-color:#fff; } .rg-btn-novo i { color:#16a34a; }
+#svNovoFundo[hidden] { display:none; } #svNovoForm .pk-corpo { gap:14px; } #svNovoForm .rg-bl { gap:8px; } .pk-cart [hidden] { display:none !important; } .pk-cart .pk-quem span { white-space:normal; line-height:1.4; } .pk-cart .pk-corpo { padding:14px 16px 16px; display:flex; flex-direction:column; gap:10px; }
 .pk-cart .rg-cart-det { display:flex; flex-direction:column; gap:10px; }
 .pk-cart .rg-chips { max-height:46vh; overflow:auto; }
 .rg-chip { display:flex; align-items:center; gap:8px; background:#faf8ff; border:1px solid #ede9fe; border-radius:11px; padding:7px 7px 7px 11px; font-size:12.5px; }
@@ -142,7 +144,7 @@
 <div class="tx">
 <div class="ef-hero"><div class="ef-hero-inner ef-hero-head">
   <div><h1 class="ef-hero-title">Serviços</h1><p class="ef-hero-sub">O que cobramos: valor sugerido, comissão e o que sai em nota fiscal · e quem recebe comissão e quanto</p></div>
-  <div class="ef-hero-actions"><a class="rg-btn" href="{{ url_for('financeiro.lancamentos', aba='com') }}"><i class="fas fa-receipt"></i> Lançamentos</a></div>
+  <div class="ef-hero-actions"><button type="button" class="rg-btn rg-btn-novo" onclick="svNovoAbrir()"><i class="fas fa-plus"></i> Novo serviço</button><a class="rg-btn" href="{{ url_for('financeiro.lancamentos', aba='com') }}"><i class="fas fa-receipt"></i> Lançamentos</a></div>
 </div></div>
 
 <div class="ef-body">
@@ -284,6 +286,36 @@
 </div>
 </div>
 <script id="rgCli" type="application/json">{{ clientes_json | safe }}</script>
+
+{# ── NOVO SERVIÇO: caixa nossa (20/11/2026 — Anderson: "e os Novos?") ── #}
+<div class="pk-fundo" id="svNovoFundo" hidden style="z-index:1200">
+  <form class="pk pk-cart pk-verde" id="svNovoForm" method="POST" action="{{ url_for('financeiro.servico_novo') }}" role="dialog" aria-modal="true">
+    <header class="pk-cab"><span class="pk-av"><i class="fas fa-briefcase"></i></span>
+      <div class="pk-quem"><b>Novo serviço</b><span>Entra no catálogo da Nova cobrança e do contrato de honorários. A nota fiscal usa o código de tributação padrão da Configuração fiscal.</span></div>
+      <button type="button" class="pk-x" title="Fechar (Esc)" onclick="svNovoFechar()"><i class="fas fa-xmark"></i></button></header>
+    <div class="pk-corpo">
+      <div class="rg-bl"><span class="rg-lbl"><i class="fas fa-pen"></i> Nome do serviço</span>
+        <div class="rg-lin"><input class="rg-in sv-nome-in" name="nome" maxlength="80" required autocomplete="off" placeholder="Ex.: Certidão negativa federal"></div></div>
+      <div class="rg-bl"><span class="rg-lbl"><i class="fas fa-file-invoice"></i> Nota fiscal</span>
+        <div class="rg-lin"><span class="rg-seg rg-seg-n">
+          <label><input type="radio" name="emite_nota" value="1" checked onchange="svNovoNota(this)"><span><i class="fas fa-check"></i> Sai na nota</span></label>
+          <label title="Trava: entra no boleto e fica fora da nota"><input type="radio" name="emite_nota" value="0" onchange="svNovoNota(this)"><span><i class="fas fa-lock"></i> Nunca sai em nota</span></label></span></div>
+        <small class="rg-muted" id="svNovoNotaTx">Serviço prestado: entra na nota e no boleto.</small></div>
+      <div class="rg-bl"><span class="rg-lbl"><i class="fas fa-hand-holding-dollar"></i> Comissão</span>
+        <div class="rg-lin"><span class="rg-seg">
+          <label><input type="radio" name="tipo" value="" checked onchange="svNovoTipo(this)"><span>Padrão da pessoa</span></label>
+          <label><input type="radio" name="tipo" value="PCT" onchange="svNovoTipo(this)"><span>%</span></label>
+          <label><input type="radio" name="tipo" value="FIXO" onchange="svNovoTipo(this)"><span>R$</span></label>
+          <label title="Trava: ninguém recebe comissão neste serviço"><input type="radio" name="tipo" value="SEM" onchange="svNovoTipo(this)"><span><i class="fas fa-lock"></i> Nunca</span></label></span>
+          <span class="rg-rs rg-cv pct" hidden><i class="pre">R$</i><input class="rg-in" name="valor" inputmode="decimal" placeholder="10"><i class="pos">%</i></span></div>
+        <small class="rg-muted">"Padrão da pessoa" = o % de quem lançar. % ou R$ = comissão própria deste serviço. "Nunca" = ninguém recebe.</small></div>
+      <div class="rg-bl"><span class="rg-lbl"><i class="fas fa-tag"></i> Valor sugerido</span>
+        <div class="rg-lin"><span class="rg-rs"><i>R$</i><input class="rg-in rg-din" name="valor_padrao" inputmode="numeric" placeholder="0,00" autocomplete="off"></span></div>
+        <small class="rg-muted">Digite os centavos: 150000 vira 1.500,00. Vem preenchido na Nova cobrança; quem lança pode mudar. Pode deixar vazio.</small></div>
+    </div>
+    <footer class="pk-pe"><div class="pk-pe-info">Depois de criado, tudo isso se muda no cartão do serviço.</div><button type="button" class="pk-canc" onclick="svNovoFechar()">Cancelar</button><button type="submit" class="pk-ok"><i class="fas fa-plus"></i> Criar serviço</button></footer>
+  </form>
+</div>
 {% endblock %}
 
 {% block extra_js %}
@@ -338,6 +370,22 @@
     f.addEventListener('mousedown', function (e) { if (e.target === f) fechar(false); });
     f.querySelector('.pk-ok').focus();
   }
+
+  // ── NOVO SERVIÇO (caixa nossa) ──
+  var svNovoTrava;
+  window.svNovoAbrir = function () {
+    var fd = document.getElementById('svNovoFundo'); fd.hidden = false; svNovoTrava = document.body.style.overflow; document.body.style.overflow = 'hidden';
+    document.addEventListener('keydown', svNovoTecla, true); setTimeout(function () { fd.querySelector('[name=nome]').focus(); }, 50);
+  };
+  window.svNovoFechar = function () { var fd = document.getElementById('svNovoFundo'); fd.hidden = true; document.body.style.overflow = svNovoTrava || ''; document.removeEventListener('keydown', svNovoTecla, true); };
+  function svNovoTecla(e) { if (e.key === 'Escape' && document.querySelectorAll('.pk-fundo:not([hidden])').length === 1) { e.preventDefault(); svNovoFechar(); } }
+  document.getElementById('svNovoFundo').addEventListener('mousedown', function (e) { if (e.target === this) svNovoFechar(); });
+  window.svNovoNota = function (r) { document.getElementById('svNovoNotaTx').textContent = r.value === '1' ? 'Serviço prestado: entra na nota e no boleto.' : 'Taxa ou despesa repassada: entra no boleto e fica fora da nota (honorários 1.000 + taxa 200 = boleto 1.200, nota 1.000).'; };
+  window.svNovoTipo = function (r) {
+    var rs = r.form.querySelector('.rg-cv'), v = rs.querySelector('input');
+    rs.hidden = !(r.value === 'PCT' || r.value === 'FIXO'); rs.classList.toggle('pct', r.value !== 'FIXO'); v.placeholder = r.value === 'FIXO' ? '0,00' : '10';
+    if (!rs.hidden) v.focus();
+  };
 
   // ── QUEM RECEBE ──
   // a relação da carteira abre numa caixa nossa (20/11/2026 — Anderson: "mostrar simplesmente que tem comissões mensais o

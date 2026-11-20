@@ -277,6 +277,7 @@ MAPA = {
     'financeiro.servico_comissao':         'financeiro.lancamentos.aprovar',  # e a rota só deixa o admin
     'financeiro.comissao_regras':          'financeiro.lancamentos.aprovar',  # endereço antigo: redireciona para SERVIÇOS
     'financeiro.servicos':                 'financeiro.lancamentos.aprovar',  # aba SERVIÇOS (20/11/2026): a rota só deixa o admin
+    'financeiro.servico_novo':             'financeiro.lancamentos.aprovar',  # serviço novo pela aba SERVIÇOS; a rota só deixa o admin
     'financeiro.comissao_regra_pessoa':    'financeiro.lancamentos.aprovar',
     'financeiro.acordo_novo':              'financeiro.lancamentos',
     'financeiro.acordo_encerrar':          'financeiro.lancamentos',
