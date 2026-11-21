@@ -49,6 +49,11 @@
 .tx-painel[data-p="pag"] { --sec:#16a34a; --sec-e:#166534; --sec-f:#ecfdf3; --sec-b:#bbf7d0; }
 .tx-painel[data-p="atr"] { --sec:#dc2626; --sec-e:#991b1b; --sec-f:#fef1f1; --sec-b:#fecaca; }
 .tx-painel[data-p="com"] { --sec:#7c3aed; --sec-e:#5b21b6; --sec-f:#f5f3ff; --sec-b:#ddd6fe; }
+/* Reprovados e cancelados em cartões (21/11/2026) */
+.lm-fc .tx-c-meio { margin-top:10px; align-items:flex-start; }
+.lm-fc-s { font-size:11.5px; color:#94a3b8; margin-top:2px; }
+.lm-fc-m { display:flex; gap:8px; margin-top:10px; padding:8px 10px; border-radius:10px; background:var(--cor-f); border:1px solid var(--cor-b); font-size:12px; line-height:1.45; color:var(--cor-e); }
+.lm-fc-m i { margin-top:2px; opacity:.7; }
 /* Pagos aguardando pedido (21/11/2026) */
 .lm-pend { display:inline-flex; align-items:center; gap:5px; margin-top:4px; font-size:11.5px; font-weight:800; color:#fff; background:linear-gradient(135deg,#f97316,#c2410c);
            border:2px solid #fed7aa; border-radius:99px; padding:2px 10px 2px 7px; box-shadow:0 0 0 3px rgba(249,115,22,.35); white-space:nowrap; }
@@ -414,10 +419,17 @@
     {% if grupos[fase] %}{{ por_mes(grupos[fase], fase) }}<div class="lm-nada"><i class="fas fa-filter"></i> Nenhum lançamento com esse filtro.</div>
     {% else %}<div class="tx-vazio"><i class="fas fa-mug-hot"></i>{{ vazio }}</div>{% endif %}
     {% if fase == 'apr' and fora %}
+      {# 21/11/2026 — Anderson: "Arruma essa parte de Reprovados e Cancelados": cartões como os das outras abas #}
       <div class="lm-sec" style="margin-top:8px">Reprovados e cancelados <small>os últimos</small></div>
-      {% for l in fora %}<div class="lm-fora"><i class="fas {{ 'fa-xmark' if l.status == 'REPROVADO' else 'fa-ban' }}"></i>
-        <span style="flex:1"><b>{{ l.nome_razao_social }}</b> · {{ l.servico_nome }} · {{ l.valor_total | float | format_currency }}{% if aprov %} · {{ l.lancado_por_nome }}{% endif %}{% if l.motivo %} — <em>{{ l.motivo }}</em>{% endif %}</span>
-        <span>{{ 'reprovado' if l.status == 'REPROVADO' else 'cancelado' }}</span></div>{% endfor %}
+      <div class="tx-grade">{% for l in fora %}{% set rep_ = l.status == 'REPROVADO' %}
+        <div class="tx-c {{ 'tx-ina' if rep_ else 'tx-perd' }} lm-fc">
+          <div class="tx-c-top"><span class="tx-c-num">{{ l.numero_cliente or '—' }}</span><span class="tx-c-nome" title="{{ l.nome_razao_social }}">{{ l.nome_razao_social }}</span></div>
+          <div class="tx-c-meio"><div><div class="tx-c-val">{{ l.valor_total | float | format_currency }}</div>
+            <div class="tx-c-desc">{{ l.descricao or l.servico_nome }}</div>{% if l.descricao and l.servico_nome %}<div class="lm-fc-s">{{ l.servico_nome }}</div>{% endif %}</div>
+            <span class="tx-c-st"><i class="fas {{ 'fa-xmark' if rep_ else 'fa-ban' }}"></i> {{ 'reprovado' if rep_ else 'cancelado' }}</span></div>
+          {% if l.motivo %}<div class="lm-fc-m"><i class="fas fa-comment"></i><span>{{ l.motivo }}</span></div>{% endif %}
+          {% if aprov and l.lancado_por_nome %}{% set pn = l.lancado_por_nome.split() %}<div class="lm-por lm-quem2" style="margin-top:9px" title="Quem pediu"><span class="av">{{ pn[0][:1] }}{{ pn[-1][:1] if pn | length > 1 else '' }}</span><span><small>pedido por</small> {{ pn[0] }}{{ ' ' ~ pn[-1] if pn | length > 1 else '' }}</span></div>{% endif %}
+        </div>{% endfor %}</div>
     {% endif %}
   </div>
   {% endfor %}
@@ -471,7 +483,7 @@
     {% else %}<div class="tx-vazio"><i class="fas fa-mug-hot"></i>Nenhum pedido de comissão esperando pagamento.</div>{% endif %}
     {# 21/11/2026 — Anderson: "quando pagar já pode aparecer aqui uma outra linha com Pagos aguardando Pedido" #}
     {% if sem_pedido %}
-    <div class="lm-sec" style="margin-top:8px">Pagos aguardando pedido <small>{{ sem_pedido|length }} pessoa{{ 's' if sem_pedido|length != 1 }} · {{ tot_sem_pedido | format_currency }} · o cliente já pagou, falta a pessoa pedir</small></div>
+    <div class="lm-sec" style="margin-top:8px">Pagos aguardando pedido</div>
     <div class="tx-grade lm-sp-g">{% for p in sem_pedido %}{% set pn_ = (p.nome or '?').split() %}
       <div class="tx-c tx-venc lm-sp" data-quem="{{ p.nome }}" data-busca="{{ p.nome }}">
         <div class="tx-c-top"><span class="lm-sp-av" style="--h:{{ (p.id * 47) % 360 }}">{{ (pn_[0][:1] ~ (pn_[-1][:1] if pn_|length > 1 else ''))|upper }}</span><span class="tx-c-nome" title="{{ p.nome }}">{{ p.nome }}</span></div>
