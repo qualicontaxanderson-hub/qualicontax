@@ -245,12 +245,21 @@ def parse_bradesco(paginas, doc=None):
 
     lancs = []
     saldo_fim = None     # 21/11/2026: o último saldo da coluna Saldo é o saldo do banco no fim do extrato
+    # ... mas não o do quadro "Saldos Invest Fácil / Plus" do pé (a aplicação automática: o 0,00 de 17/06 virou
+    # o saldo da conta) nem o do dia da data-base, que ainda não fechou (o PDF tirado 02/10 às 21h02 não tinha o
+    # IOF de 47,51 daquele dia e a conferência acusava diferença que não existia)
+    invest = False       # o quadro já passou (páginas seguintes)
+    invest_y = None
     cortes = None
     data = None          # a data só é escrita quando muda — atravessa a página
     sobra = []           # descrição que ficou no pé da página, sem o valor dela
     for pagina in doc:
         cels = []
+        invest = invest or invest_y is not None
+        invest_y = None  # altura do título do quadro nesta página: dali para baixo não é saldo da conta
         for l in _linhas_com_x(pagina):
+            if invest_y is None and 'SALDOS INVEST' in ' '.join(t for _x, t in l['w']).upper():
+                invest_y = l['y']
             achado = _titulos(l)
             if achado:
                 cortes = achado           # a tabela (re)começa aqui
@@ -294,7 +303,8 @@ def parse_bradesco(paginas, doc=None):
             if d:
                 data = d
             s_ = _dec(c.get('saldo'))
-            if s_ is not None and data and not (base and data > base):
+            fora = invest or (invest_y is not None and c['y'] >= invest_y)
+            if s_ is not None and data and not fora and not (base and data >= base):
                 saldo_fim = {'valor': s_, 'data': data}
             if j not in descricao:
                 continue
