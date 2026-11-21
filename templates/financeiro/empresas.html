@@ -161,36 +161,82 @@
   <p class="me-nota"><i class="fas fa-circle-info"></i><span><b>Na visão Todas</b> diz quem entra por padrão quando a tela está em TODAS as empresas. Em qualquer tela dá para juntar só algumas clicando nos chips. Desativar tira a empresa dos chips e dos lançamentos novos; o histórico continua guardado.</span></p>
 </div>
 
-<!-- ── Modal: adicionar empresa ──────────────────────────────────── -->
-<div id="meModalNova" class="modal" style="display:none;">
-    <div class="modal-content" style="max-width:560px;">
-        <div class="modal-header">
-            <h3>Adicionar empresa ao financeiro</h3>
-            <button class="modal-close" onclick="meFecharNova()">&times;</button>
-        </div>
-        <form method="POST" action="{{ url_for('financeiro.empresa_marcar') }}" id="meForm">
-            <div class="modal-body">
-                <div class="form-group" id="meBuscaBox">
-                    <label>Busque no cadastro de clientes</label>
-                    <input type="text" id="meBusca" class="form-control" autocomplete="off" placeholder="Nome, CNPJ/CPF ou número do cliente">
-                    <div id="meResultados"></div>
-                </div>
-                <div class="form-group" id="meEscolhida" style="display:none;">
-                    <label>Escolhida</label>
-                    <div style="padding-top:8px; font-weight:700;" id="meEscNome"></div>
-                </div>
-                <div class="form-group">
-                    <label>Apelido (nome do chip)</label>
-                    <input type="text" name="apelido" id="meApelido" class="form-control" maxlength="40" placeholder="Ex.: BRILHO">
-                </div>
-                <div class="modal-footer">
-                    <input type="hidden" name="cliente_id" id="meClienteId">
-                    <button type="button" class="btn btn-outline" onclick="meFecharNova()">Cancelar</button>
-                    <button type="submit" class="btn btn-primary" id="meBtnAdd" disabled>Adicionar</button>
-                </div>
-            </div>
-        </form>
+<!-- ── Caixa: adicionar empresa (21/11/2026 — Anderson: "estou aqui tentando cadastrar ela e precisamos melhorar") ── -->
+<style>
+.ma-fundo { position:fixed; inset:0; z-index:1200; background:rgba(15,23,42,.5); backdrop-filter:blur(2px); display:none; align-items:flex-start; justify-content:center; padding:7vh 12px 12px; }
+.ma-fundo.on { display:flex; }
+.ma-cx { width:min(620px, 100%); max-height:86vh; display:flex; flex-direction:column; background:#f6faf7; border-radius:22px; box-shadow:0 30px 80px rgba(2,44,22,.35); overflow:hidden; margin:0; }
+.ma-cab { display:flex; align-items:center; gap:12px; padding:16px 18px; color:#fff; background:linear-gradient(135deg,#0f3d2e,#16a34a); }
+.ma-cab .ic { width:40px; height:40px; border-radius:12px; background:rgba(255,255,255,.18); display:flex; align-items:center; justify-content:center; font-size:17px; }
+.ma-cab b { display:block; font-size:16.5px; } .ma-cab small { display:block; font-size:12.5px; opacity:.85; }
+.ma-x { margin-left:auto; width:34px; height:34px; border:0; border-radius:10px; background:rgba(255,255,255,.16); color:#fff; cursor:pointer; font-size:15px; }
+.ma-x:hover { background:rgba(255,255,255,.28); }
+.ma-corpo { padding:16px 18px; overflow:auto; display:flex; flex-direction:column; gap:14px; }
+.ma-rot { font-size:11px; font-weight:800; letter-spacing:.06em; text-transform:uppercase; color:#64748b; margin-bottom:6px; display:flex; align-items:center; gap:6px; }
+.ma-sug { display:flex; flex-direction:column; gap:8px; }
+.ma-sug-c { display:flex; align-items:center; gap:12px; background:#fff7ed; border:1.5px solid #fed7aa; border-radius:14px; padding:11px 12px; }
+.ma-sug-c .ic { width:36px; height:36px; border-radius:11px; background:linear-gradient(135deg,#f97316,#c2410c); color:#fff; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+.ma-sug-c .tx { flex:1; min-width:0; font-size:12.5px; color:#7c2d12; line-height:1.4; }
+.ma-sug-c .tx b { display:block; font-size:13.5px; color:#0f172a; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.ma-sug-c .tx code { font-size:11.5px; background:#ffedd5; border-radius:5px; padding:0 5px; color:#9a3412; word-break:break-all; }
+.ma-sug-c button { flex-shrink:0; border:0; border-radius:10px; padding:8px 12px; font:inherit; font-size:12.5px; font-weight:800; background:#c2410c; color:#fff; cursor:pointer; }
+.ma-q { position:relative; } .ma-q > i { position:absolute; left:14px; top:50%; transform:translateY(-50%); color:#94a3b8; }
+.ma-q input { width:100%; height:46px; border:1.5px solid #dbe7e0; border-radius:13px; padding:0 14px 0 40px; font:inherit; font-size:14.5px; background:#fff; box-sizing:border-box; }
+.ma-q input:focus { outline:none; border-color:#16a34a; box-shadow:0 0 0 3px rgba(22,163,74,.15); }
+.ma-dica { font-size:12px; color:#64748b; margin-top:6px; }
+.ma-res { display:flex; flex-direction:column; gap:7px; }
+.ma-it { display:flex; align-items:center; gap:12px; width:100%; text-align:left; background:#fff; border:1.5px solid #e6eeea; border-radius:13px; padding:10px 12px; font:inherit; cursor:pointer; transition:border-color .15s, box-shadow .15s; }
+.ma-it:hover:not([disabled]) { border-color:#16a34a; box-shadow:0 8px 20px rgba(15,61,46,.08); }
+.ma-it[disabled] { cursor:not-allowed; opacity:.6; background:#f8fafc; }
+.ma-num { min-width:44px; height:30px; padding:0 6px; border-radius:9px; background:#ecfdf3; color:#15803d; font-weight:800; font-size:12.5px; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+.ma-it .tx { flex:1; min-width:0; } .ma-it .tx b { display:block; font-size:13.5px; color:#0f172a; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.ma-it .tx small { display:block; font-size:12px; color:#64748b; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.ma-tags { display:flex; gap:4px; flex-wrap:wrap; justify-content:flex-end; flex-shrink:0; }
+.ma-tag { font-size:10.5px; font-weight:800; border-radius:99px; padding:2px 8px; white-space:nowrap; }
+.ma-tag.res { color:#92400e; background:#fef3c7; } .ma-tag.ja { color:#475569; background:#e2e8f0; } .ma-tag.ina { color:#b91c1c; background:#fee2e2; }
+.ma-vazio { background:#fff; border:1.5px dashed #cbd5e1; border-radius:13px; padding:14px; font-size:13px; color:#475569; line-height:1.5; }
+.ma-esc { display:flex; align-items:center; gap:12px; background:linear-gradient(135deg,#f0fdf4,#fff 70%); border:1.5px solid #16a34a; box-shadow:0 0 0 3px #dcfce7; border-radius:14px; padding:12px; }
+.ma-esc .tx { flex:1; min-width:0; } .ma-esc .tx b { display:block; font-size:14px; color:#0f172a; } .ma-esc .tx small { font-size:12px; color:#64748b; }
+.ma-esc button { border:1.5px solid #cbd5e1; background:#fff; border-radius:10px; padding:6px 10px; font:inherit; font-size:12px; font-weight:700; color:#334155; cursor:pointer; }
+.ma-ap { display:flex; gap:10px; align-items:center; }
+.ma-ap input { flex:1; height:44px; border:1.5px solid #dbe7e0; border-radius:12px; padding:0 12px; font:inherit; font-size:14px; text-transform:uppercase; background:#fff; min-width:0; }
+.ma-ap input:focus { outline:none; border-color:#16a34a; box-shadow:0 0 0 3px rgba(22,163,74,.15); }
+.ma-chip { flex-shrink:0; font-size:12px; font-weight:800; letter-spacing:.03em; color:#fff; background:#0f3d2e; border-radius:99px; padding:6px 13px; max-width:180px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.ma-pe { display:flex; gap:8px; justify-content:flex-end; padding:12px 18px 16px; border-top:1px solid #e6eeea; background:#fff; }
+.ma-pe button { border:0; border-radius:12px; padding:11px 18px; font:inherit; font-size:14px; font-weight:800; cursor:pointer; }
+.ma-pe .no { background:#f1f5f9; color:#334155; }
+.ma-pe .ok { background:linear-gradient(135deg,#16a34a,#166534); color:#fff; box-shadow:0 8px 18px rgba(22,163,74,.3); }
+.ma-pe .ok[disabled] { opacity:.45; box-shadow:none; cursor:not-allowed; }
+@media (max-width:640px) { .ma-fundo { padding:0; align-items:flex-end; } .ma-cx { border-radius:22px 22px 0 0; max-height:94vh; } .ma-sug-c { flex-wrap:wrap; } .ma-sug-c button { width:100%; } }
+</style>
+<div class="ma-fundo" id="meModalNova" onclick="if (event.target === this) meFecharNova()">
+  <form class="ma-cx" method="POST" action="{{ url_for('financeiro.empresa_marcar') }}" id="meForm" role="dialog" aria-modal="true" aria-label="Adicionar empresa ao financeiro">
+    <header class="ma-cab"><span class="ic"><i class="fas fa-building-circle-check"></i></span>
+      <div><b>Adicionar empresa ao financeiro</b><small>Ela vira um chip em todas as telas do Financeiro</small></div>
+      <button type="button" class="ma-x" onclick="meFecharNova()" title="Fechar (Esc)"><i class="fas fa-xmark"></i></button></header>
+    <div class="ma-corpo">
+      {% if sugestoes %}
+      <div><div class="ma-rot"><i class="fas fa-file-invoice-dollar"></i> Extrato esperando empresa</div>
+        <div class="ma-sug">{% for s in sugestoes %}
+          <div class="ma-sug-c"><span class="ic"><i class="fas fa-file-arrow-down"></i></span>
+            <div class="tx"><b>{{ s.cli.numero_cliente ~ ' · ' if s.cli.numero_cliente }}{{ s.cli.nome }}</b>
+              <code>{{ s.pend.arquivo }}</code> · {{ s.pend.banco_nome or 'banco' }}{% if s.pend.conta %} {{ s.pend.conta }}{% endif %} · {{ s.pend.qtd_lancamentos or 0 }} lançamentos{% if s.pend.periodo %} · {{ s.pend.periodo }}{% endif %}</div>
+            <button type="button" data-cli="{{ s.cli | tojson | forceescape }}" onclick="meEscolher(JSON.parse(this.dataset.cli))">Usar esta</button></div>{% endfor %}</div></div>
+      {% endif %}
+      <div id="meBuscaBox"><div class="ma-rot"><i class="fas fa-magnifying-glass"></i> Busque no cadastro de clientes</div>
+        <div class="ma-q"><i class="fas fa-magnifying-glass"></i><input type="search" id="meBusca" autocomplete="off" placeholder="Nome, nome fantasia, número ou CNPJ/CPF"></div>
+        <div class="ma-dica">As palavras valem em qualquer ordem: "ma pecas" acha MA PECAS E EQUIPAMENTOS.</div>
+        <div class="ma-res" id="meResultados" style="margin-top:10px"></div></div>
+      <div id="meEscolhida" style="display:none"><div class="ma-rot"><i class="fas fa-circle-check"></i> Empresa escolhida</div>
+        <div class="ma-esc"><span class="ma-num" id="meEscNum">—</span><div class="tx"><b id="meEscNome"></b><small id="meEscDoc"></small></div>
+          <button type="button" onclick="meTrocar()"><i class="fas fa-rotate"></i> Trocar</button></div></div>
+      <div><div class="ma-rot"><i class="fas fa-tag"></i> Apelido (nome do chip)</div>
+        <div class="ma-ap"><input type="text" name="apelido" id="meApelido" maxlength="40" placeholder="Ex.: MA PEÇAS"><span class="ma-chip" id="meChip">CHIP</span></div></div>
     </div>
+    <footer class="ma-pe"><input type="hidden" name="cliente_id" id="meClienteId">
+      <button type="button" class="no" onclick="meFecharNova()">Cancelar</button>
+      <button type="submit" class="ok" id="meBtnAdd" disabled><i class="fas fa-plus"></i> Adicionar</button></footer>
+  </form>
 </div>
 
 <!-- ── Modal: trocar apelido ─────────────────────────────────────── -->
@@ -222,11 +268,42 @@
 var ME_URL_ATU = "{{ url_for('financeiro.empresa_atualizar', emp_id=0) }}";
 
 function meAbrirNova() {
-    document.getElementById('meModalNova').style.display = 'block';
-    document.getElementById('meBusca').focus();
+    document.getElementById('meModalNova').classList.add('on');
+    setTimeout(function () { document.getElementById('meBusca').focus(); }, 30);
 }
 function meFecharNova() {
-    document.getElementById('meModalNova').style.display = 'none';
+    document.getElementById('meModalNova').classList.remove('on');
+}
+document.addEventListener('keydown', function (e) { if (e.key === 'Escape') meFecharNova(); });
+function meChipPinta() {
+    var ap = document.getElementById('meApelido');
+    document.getElementById('meChip').textContent = (ap.value || 'CHIP').toUpperCase();
+}
+function meApelidoDe(nome) {
+    var fora = {'LTDA': 1, 'ME': 1, 'EPP': 1, 'EIRELI': 1, 'S/A': 1, 'SA': 1, 'E': 1, 'DE': 1, 'DA': 1, 'DO': 1, 'DOS': 1, 'DAS': 1};
+    var p = String(nome || '').toUpperCase().split(/\s+/).filter(function (w) { return w && !fora[w] && !/^[\d.\/-]+$/.test(w); });
+    return p.slice(0, p.length && p[0].length <= 3 ? 2 : 1).join(' ');
+}
+function meEscolher(p) {
+    document.getElementById('meClienteId').value = p.id;
+    document.getElementById('meEscNome').textContent = p.nome;
+    document.getElementById('meEscNum').textContent = p.numero_cliente || '—';
+    document.getElementById('meEscDoc').textContent = [p.doc, p.fantasia, p.reservada ? 'reservada (só admin vê)' : ''].filter(Boolean).join(' · ');
+    document.getElementById('meEscolhida').style.display = '';
+    document.getElementById('meBuscaBox').style.display = 'none';
+    document.getElementById('meBtnAdd').disabled = false;
+    var ap = document.getElementById('meApelido');
+    if (!ap.value) ap.value = meApelidoDe(p.fantasia || p.nome);
+    meChipPinta();
+    ap.focus();
+}
+function meTrocar() {
+    document.getElementById('meClienteId').value = '';
+    document.getElementById('meEscolhida').style.display = 'none';
+    document.getElementById('meBuscaBox').style.display = '';
+    document.getElementById('meBtnAdd').disabled = true;
+    document.getElementById('meApelido').value = ''; meChipPinta();
+    document.getElementById('meBusca').focus();
 }
 
 function meRenomear(el) {
@@ -245,6 +322,7 @@ function meFechar() {
     if (!busca) return;
     var caixa = document.getElementById('meResultados');
     var timer = null;
+    document.getElementById('meApelido').addEventListener('input', meChipPinta);
     busca.addEventListener('input', function () {
         clearTimeout(timer);
         var q = busca.value.trim();
@@ -256,30 +334,30 @@ function meFechar() {
                     caixa.innerHTML = '';
                     if (!lista.length) {
                         var v = document.createElement('div');
-                        v.className = 'socio-res-vazio';
-                        v.textContent = 'Nenhum cadastro livre com "' + q + '".';
+                        v.className = 'ma-vazio';
+                        var t = document.createElement('b'); t.textContent = 'Nada com "' + q + '".';
+                        v.appendChild(t);
+                        v.appendChild(document.createElement('br'));
+                        v.appendChild(document.createTextNode('Tente outra parte do nome (em qualquer ordem), o número do cadastro ou o CNPJ. Se a empresa ainda não existe, cadastre primeiro em Cadastros.'));
                         caixa.appendChild(v);
                         return;
                     }
                     lista.forEach(function (p) {
                         var b = document.createElement('button');
                         b.type = 'button';
-                        b.className = 'socio-res-item';
-                        var n = document.createElement('strong');
-                        n.textContent = (p.numero_cliente ? p.numero_cliente + ' · ' : '') + p.nome;
-                        b.appendChild(n);
-                        b.addEventListener('click', function () {
-                            document.getElementById('meClienteId').value = p.id;
-                            document.getElementById('meEscNome').textContent = p.nome;
-                            document.getElementById('meEscolhida').style.display = '';
-                            document.getElementById('meBtnAdd').disabled = false;
-                            var sugestao = String(p.nome || '').split(' ')[0].toUpperCase();
-                            var ap = document.getElementById('meApelido');
-                            if (!ap.value) ap.value = sugestao;
-                            caixa.innerHTML = '';
-                            busca.value = '';
-                            ap.focus();
-                        });
+                        b.className = 'ma-it';
+                        var num = document.createElement('span'); num.className = 'ma-num'; num.textContent = p.numero_cliente || '—';
+                        var tx = document.createElement('span'); tx.className = 'tx';
+                        var n = document.createElement('b'); n.textContent = p.nome;
+                        var sm = document.createElement('small'); sm.textContent = [p.doc, p.fantasia].filter(Boolean).join(' · ');
+                        tx.appendChild(n); tx.appendChild(sm);
+                        var tg = document.createElement('span'); tg.className = 'ma-tags';
+                        function tag(c, t) { var e = document.createElement('span'); e.className = 'ma-tag ' + c; e.textContent = t; tg.appendChild(e); }
+                        if (p.reservada) tag('res', 'reservada · só admin');
+                        if (p.situacao === 'INATIVO') tag('ina', 'inativa');
+                        if (p.ja) { tag('ja', 'já está no financeiro'); b.disabled = true; }
+                        b.appendChild(num); b.appendChild(tx); b.appendChild(tg);
+                        if (!p.ja) b.addEventListener('click', function () { caixa.innerHTML = ''; busca.value = ''; meEscolher(p); });
                         caixa.appendChild(b);
                     });
                 });

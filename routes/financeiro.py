@@ -3529,30 +3529,73 @@ def empresas():
             'atualizado_em': cfg['atualizado_em'].strftime('%d/%m/%Y') if cfg.get('atualizado_em') else '',
             'cert': c_st, 'cert_dias': c_dias, 'cert_validade': val.strftime('%d/%m/%Y') if val else '',
         }
-    return render_template('financeiro/empresas.html', empresas=lista,
+    return render_template('financeiro/empresas.html', empresas=lista, sugestoes=_sugestoes_extrato(),
                            ativas=sum(1 for e in lista if e['ativo']), inativas=sum(1 for e in lista if not e['ativo']))
+
+
+def _buscar_cadastro_empresa(q, limite=12):
+    """Busca do "Adicionar empresa" (21/11/2026 — Anderson: "não consegui incluir essa empresa... precisamos
+    melhorar"): cada palavra precisa aparecer na razão social OU no nome fantasia (em qualquer ordem: "ma pecas"
+    acha "MA PECAS E EQUIPAMENTOS"); número do cliente e CNPJ/CPF também valem. Volta os já marcados com 'ja'."""
+    import re as _re
+    from models.fin_empresa import FinEmpresa
+    from utils.db_helper import execute_query as _q
+    q = (q or '').strip()
+    dig = ''.join(ch for ch in q if ch.isdigit())
+    palavras = [w for w in _re.split(r'[\s\-_.,/]+', q) if w][:6]
+    if not palavras:
+        return []
+    conds, args = [], []
+    for w in palavras:
+        conds.append('(c.nome_razao_social LIKE %s OR c.nome_fantasia LIKE %s)')
+        args += [f'%{w}%', f'%{w}%']
+    where = '(' + ' AND '.join(conds) + ')'
+    if dig:
+        where += " OR c.numero_cliente = %s"
+        args.append(dig)
+        if len(dig) >= 5:
+            where += " OR REPLACE(REPLACE(REPLACE(c.cpf_cnpj, '.', ''), '-', ''), '/', '') LIKE %s"
+            args.append(f'%{dig}%')
+    rows = _q(f"""SELECT c.id, c.numero_cliente, c.nome_razao_social AS nome, c.nome_fantasia AS fantasia, c.cpf_cnpj AS doc,
+                         COALESCE(c.acesso_reservado, 0) AS reservada, COALESCE(c.situacao, 'ATIVO') AS situacao
+                    FROM clientes c WHERE {where}
+                   ORDER BY (COALESCE(c.situacao, 'ATIVO') = 'INATIVO'), (c.nome_razao_social LIKE %s) DESC, c.nome_razao_social LIMIT {int(limite)}""",
+              tuple(args) + (palavras[0] + ' %',), fetch=True) or []
+    ja = {e['cliente_id'] for e in FinEmpresa.listar(apenas_ativas=False)}
+    for r in rows:
+        r['ja'] = r['id'] in ja
+        r['reservada'] = bool(r['reservada'])
+    return rows
 
 
 @financeiro.route('/financeiro/empresas/buscar')
 @permission_required('financeiro.empresas')
 def empresas_buscar():
-    from models.fin_empresa import FinEmpresa
-    from utils.db_helper import execute_query as _q
     q = (request.args.get('q') or '').strip()
     if len(q) < 2:
         return jsonify([])
-    dig = ''.join(ch for ch in q if ch.isdigit())
-    ja = FinEmpresa.ids_validos() | {e['cliente_id'] for e in
-                                     FinEmpresa.listar(apenas_ativas=False)}
-    rows = _q(
-        """SELECT id, numero_cliente, nome_razao_social AS nome, cpf_cnpj AS doc
-             FROM clientes
-            WHERE nome_razao_social LIKE %s
-               OR REPLACE(REPLACE(REPLACE(cpf_cnpj, '.', ''), '-', ''), '/', '') LIKE %s
-               OR numero_cliente = %s
-            ORDER BY nome_razao_social LIMIT 10""",
-        (f'%{q}%', f'%{dig}%' if dig else q, q), fetch=True) or []
-    return jsonify([r for r in rows if r['id'] not in ja])
+    return jsonify(_buscar_cadastro_empresa(q))
+
+
+def _sugestoes_extrato():
+    """Extrato que chegou sem dono (conta desconhecida): o nome do arquivo costuma trazer a empresa
+    ("ma-pecas-e-equipamentos_01012026..."). Se as palavras do nome acham UM cadastro fora do financeiro, sugere."""
+    import re as _re
+    from utils.db_helper import execute_query as _q
+    pend = _q("""SELECT id, arquivo, banco_nome, conta, qtd_lancamentos, periodo FROM fin_extrato_pendencias
+                  WHERE status = 'aberta' AND empresa_id IS NULL AND motivo LIKE 'conta desconhecida%%'
+                  ORDER BY id DESC LIMIT 10""", fetch=True) or []
+    out = []
+    for p in pend:
+        base = _re.sub(r'\.[a-z0-9]+$', '', (p['arquivo'] or '').lower())
+        palavras = [w for w in _re.split(r'[\s\-_.]+', base) if len(w) >= 2 and not _re.search(r'\d', w)
+                    and w not in ('de', 'da', 'do', 'das', 'dos', 'e', 'a', 'o', 'ltda', 'me', 'eireli', 'sa', 'extrato', 'ofx')]
+        if not palavras:
+            continue
+        achou = [r for r in _buscar_cadastro_empresa(' '.join(palavras), limite=3) if not r['ja']]
+        if len(achou) == 1:
+            out.append({'pend': p, 'cli': achou[0]})
+    return out
 
 
 @financeiro.route('/financeiro/empresas/marcar', methods=['POST'])
