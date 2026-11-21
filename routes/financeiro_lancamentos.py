@@ -801,8 +801,13 @@ def _cobrar_avulso(l, usuario_id, conta_id=None):
     nfse_id = boleto_id = titulo_id = None
     if cfg:
         serie = cfg.get('serie_nacional') if (cfg.get('emissor') or 'nacional') == 'nacional' else cfg.get('serie_sp')
+        # 21/11/2026: com desconto, o texto da nota discrimina o serviço pelo bruto, o desconto e o total
+        import json as _json
+        linhas_nota = ([[(l['descricao'] or l['servico_nome']) + dona, str(Decimal(str(l['valor_total'])))]]
+                       + [[(d['descricao'] or 'Desconto').split(' — ')[0], str(-Decimal(str(d['valor_total'])))] for d in descs]) if desc_total > 0 else []
         form = MultiDict([('serie', str(serie or '')), ('competencia', competencia.isoformat()),
-                          ('tomador_cliente_id', str(paga)), ('descricao', (l['descricao'] or l['servico_nome']) + dona + ((' Desconto de R$ %s já abatido.' % desc_total) if desc_total > 0 else '')),
+                          ('tomador_cliente_id', str(paga)), ('descricao', (l['descricao'] or l['servico_nome']) + dona),
+                          ('linhas_nota', _json.dumps(linhas_nota, ensure_ascii=False) if linhas_nota else ''),
                           ('item_servico_id', str(l['servico_id'])), ('item_valor', str(itens[0]['valor']))])
         try:
             pedido = nfse_emissor.pedido_do_form(form, l['empresa_id'], cfg)

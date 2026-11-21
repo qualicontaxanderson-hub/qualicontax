@@ -115,6 +115,31 @@ class Pedido:
         return sum((self.ret_pis, self.ret_cofins, self.ret_inss, self.ret_irrf, self.ret_csll), Decimal('0'))
 
 
+def _brl(v):
+    v = Decimal(str(v)).quantize(Decimal('0.01'))
+    s = '{:,.2f}'.format(abs(v)).replace(',', 'X').replace('.', ',').replace('X', '.')
+    return ('-' if v < 0 else '') + 'R$ ' + s   # hífen simples: o XML da nota fica só com caracteres comuns
+
+
+def texto_itemizado(cabecalho, linhas, total, limite=1000):
+    """Texto da nota discriminado: cabeçalho, uma linha por item ("Serviço 1 · R$ 10,00"; desconto negativo
+    "Desconto · -R$ 100,00") e "Total · R$ 960,00". Passou de ``limite``, corta itens do fim e avisa quantos ficaram
+    de fora; cabeçalho e total ficam sempre."""
+    cab = (cabecalho or '').strip()
+    partes = ['%s · %s' % ((n or 'Serviço').strip()[:120], _brl(v)) for n, v in linhas]
+    rodape = 'Total · %s' % _brl(total)
+
+    def monta(ps, fora=0):
+        corpo = ps + (['… e mais %d ite%s' % (fora, 'm' if fora == 1 else 'ns')] if fora else [])
+        return '\n'.join([cab] + corpo + [rodape]) if cab else '\n'.join(corpo + [rodape])
+    txt = monta(partes)
+    n = len(partes)
+    while len(txt) > limite and n > 0:
+        n -= 1
+        txt = monta(partes[:n], len(partes) - n)
+    return txt[:limite]
+
+
 def pedido_do_form(f, empresa_id, cfg):
     """Monta o ``Pedido`` a partir do formulário (``request.form``), validando o essencial."""
     def g(k, padrao=''):
@@ -188,6 +213,22 @@ def pedido_do_form(f, empresa_id, cfg):
     descricao = g('descricao')
     if not descricao:
         raise PedidoInvalido('Informe a descrição do serviço.')
+    # 21/11/2026 (Anderson): "está configurado saindo as 5 linhas na nota?" — a NFS-e tem um valor e um texto só, então
+    # o texto discrimina: cada serviço com o valor, o desconto como linha própria e o total. ``linhas_nota`` (JSON
+    # [[nome, valor], ...], valor negativo = desconto) vem do lote e do lançamento, que conhecem o bruto; sem ele,
+    # a Nova cobrança com mais de um item discrimina os próprios itens.
+    linhas = []
+    lj = g('linhas_nota')
+    if lj:
+        import json as _json
+        try:
+            linhas = [(str(n), Decimal(str(v))) for n, v in _json.loads(lj)]
+        except (ValueError, TypeError):
+            linhas = []
+    elif len([i for i in itens if i['emite_nota']]) > 1:
+        linhas = [(i['nome'], Decimal(i['valor'])) for i in itens if i['emite_nota']]
+    if len(linhas) > 1:
+        descricao = texto_itemizado(descricao, linhas, valor)
     aliq = g('aliquota_iss')
     aliq = _dec(aliq, 'Alíquota do ISS', Decimal('0')) if aliq not in ('', None) else None
     tid = g('fin_titulo_id')

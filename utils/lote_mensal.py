@@ -230,10 +230,16 @@ def _cobrar(linha, lote_id, usuario_id, conta, cfg, empresa_id):
     try:
         if emite_nota:
             serie = cfg.get('serie_nacional') if (cfg.get('emissor') or 'nacional') == 'nacional' else cfg.get('serie_sp')
+            # 21/11/2026: o texto da nota discrimina cada linha (bruto) e o desconto como linha própria; o valor
+            # declarado continua o líquido dos itens já abatidos (itens).
+            from models.nfse_emissao import NfseServico
+            emite = {s['id'] for s in NfseServico.listar(empresa_id) if str(s.get('emite_nota', 1)) != '0'}
+            linhas_nota = [[i['nome'], str(_d(i['valor']))] for i in itens_lin
+                           if (i.get('servico_id') in emite) or (i.get('origem') == 'desconto')]
             form = MultiDict([('serie', str(serie or '')), ('competencia', competencia.isoformat()),
                               ('tomador_cliente_id', str(linha['cliente_id'])),
-                              ('descricao', NfseConfig.descricao_para(cfg, competencia)
-                               + (' Desconto mensal de R$ %s já abatido dos honorários.' % _brl(desconto) if desconto > 0 else ''))]
+                              ('descricao', NfseConfig.descricao_para(cfg, competencia)),
+                              ('linhas_nota', json.dumps(linhas_nota, ensure_ascii=False))]
                              + [('item_servico_id', str(i['servico_id'])) for i in itens]
                              + [('item_valor', i['valor']) for i in itens])
             pedido = nfse_emissor.pedido_do_form(form, empresa_id, cfg)
