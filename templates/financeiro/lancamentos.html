@@ -49,6 +49,20 @@
 .tx-painel[data-p="pag"] { --sec:#16a34a; --sec-e:#166534; --sec-f:#ecfdf3; --sec-b:#bbf7d0; }
 .tx-painel[data-p="atr"] { --sec:#dc2626; --sec-e:#991b1b; --sec-f:#fef1f1; --sec-b:#fecaca; }
 .tx-painel[data-p="com"] { --sec:#7c3aed; --sec-e:#5b21b6; --sec-f:#f5f3ff; --sec-b:#ddd6fe; }
+/* Pagos aguardando pedido (21/11/2026) */
+.lm-pend { display:inline-flex; align-items:center; gap:5px; margin-top:4px; font-size:11.5px; font-weight:800; color:#fff; background:linear-gradient(135deg,#f97316,#c2410c);
+           border:2px solid #fed7aa; border-radius:99px; padding:2px 10px 2px 7px; box-shadow:0 0 0 3px rgba(249,115,22,.35); white-space:nowrap; }
+
+.lm-sp .tx-c-top { gap:9px; }
+.lm-sp-av { width:24px; height:24px; flex:0 0 24px; border-radius:50%; display:inline-flex; align-items:center; justify-content:center; font-size:10.5px; font-weight:800; color:#fff; background:hsl(var(--h) 55% 42%); box-shadow:0 0 0 2px rgba(255,255,255,.7); }
+.lm-sp-l { list-style:none; margin:10px 0 0; padding:8px 10px; background:#fff8f1; border:1px solid #fde4cc; border-radius:11px; display:flex; flex-direction:column; gap:5px; }
+.lm-sp-l li { display:grid; grid-template-columns:minmax(0,1fr) auto; column-gap:10px; font-size:12px; color:#334155; }
+.lm-sp-l .n { font-weight:700; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; } .lm-sp-l .n em { font-style:normal; font-size:10.5px; font-weight:800; color:#9a3412; background:#ffedd5; border-radius:5px; padding:0 5px; margin-right:5px; }
+.lm-sp-l .s { grid-column:1; font-size:11px; color:#94a3b8; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.lm-sp-l b { grid-column:2; grid-row:1 / span 2; align-self:center; font-variant-numeric:tabular-nums; color:#c2410c; }
+.lm-sp-l li[hidden] { display:none; }
+.lm-sp-mais button { border:0; background:none; padding:0; font:inherit; font-size:12px; font-weight:800; color:#c2410c; cursor:pointer; }
+.lm-sp-pe { margin-top:9px; font-size:11.5px; color:#9a3412; } .lm-sp-pe i { color:#f97316; margin-right:4px; }
 .lm-sec { font-size:11.5px; font-weight:800; letter-spacing:.07em; text-transform:uppercase; color:#475569; margin:4px 2px 10px; display:flex; align-items:center; gap:10px; }
 .lm-sec::after { content:''; flex:1; height:1px; background:#e6eeea; } .lm-sec small { font-weight:700; letter-spacing:0; text-transform:none; color:#94a3b8; }
 .lm-tipo { display:inline-flex; align-items:center; gap:5px; font-size:10.5px; font-weight:800; letter-spacing:.03em; text-transform:uppercase; border-radius:7px; padding:2px 7px; }
@@ -387,7 +401,7 @@
     <button type="button" class="tx-aba tx-a-com{{ ' on' if aba == 'com' }}" data-p="com"><span class="tx-aba-ico"><i class="fas {{ 'fa-money-bill-transfer' if aprov else 'fa-hand-holding-dollar' }}"></i></span>
       <span class="tx-aba-txt"><span class="tx-aba-lbl">{{ 'Comissões a pagar' if aprov else 'Comissões a receber' }}</span>
       <span class="tx-aba-val">{{ (tot_a_pagar if aprov else tot_liberadas) | format_currency }}</span>
-      <span class="tx-aba-sub">{{ (a_pagar|length ~ ' pedido' ~ ('s' if a_pagar|length != 1 else '') ~ ' da equipe') if aprov else (liberadas|length ~ ' paga' ~ ('s' if liberadas|length != 1 else '') ~ ' · prontas para pedir') }}</span></span>
+      <span class="tx-aba-sub">{{ (a_pagar|length ~ ' pedido' ~ ('s' if a_pagar|length != 1 else '') ~ ('' if tot_sem_pedido else ' da equipe')) if aprov else (liberadas|length ~ ' paga' ~ ('s' if liberadas|length != 1 else '') ~ ' · prontas para pedir') }}</span>{% if aprov and tot_sem_pedido %}<span class="lm-pend" title="O cliente já pagou e a pessoa ainda não pediu: veja em Pagos aguardando pedido"><i class="fas fa-circle-exclamation"></i> {{ tot_sem_pedido | format_currency }} sem pedido</span>{% endif %}</span>
       <span class="tx-aba-n">{{ a_pagar|length if aprov else liberadas|length }}</span></button>
   </div>
 
@@ -455,6 +469,23 @@
       {% for nome, qt in pq|dictsort %}<button type="button" class="tx-f" data-v="{{ nome }}">{{ nome.split()[0] if nome else '—' }} <b>{{ qt }}</b></button>{% endfor %}</div>{% endif %}</div>{% endif %}
     {% if ped_abertos %}<div class="tx-grade">{% for f in ped_abertos %}{{ cartao_pedido(f) }}{% endfor %}</div>
     {% else %}<div class="tx-vazio"><i class="fas fa-mug-hot"></i>Nenhum pedido de comissão esperando pagamento.</div>{% endif %}
+    {# 21/11/2026 — Anderson: "quando pagar já pode aparecer aqui uma outra linha com Pagos aguardando Pedido" #}
+    {% if sem_pedido %}
+    <div class="lm-sec" style="margin-top:8px">Pagos aguardando pedido <small>{{ sem_pedido|length }} pessoa{{ 's' if sem_pedido|length != 1 }} · {{ tot_sem_pedido | format_currency }} · o cliente já pagou, falta a pessoa pedir</small></div>
+    <div class="tx-grade lm-sp-g">{% for p in sem_pedido %}{% set pn_ = (p.nome or '?').split() %}
+      <div class="tx-c tx-venc lm-sp" data-quem="{{ p.nome }}" data-busca="{{ p.nome }}">
+        <div class="tx-c-top"><span class="lm-sp-av" style="--h:{{ (p.id * 47) % 360 }}">{{ (pn_[0][:1] ~ (pn_[-1][:1] if pn_|length > 1 else ''))|upper }}</span><span class="tx-c-nome" title="{{ p.nome }}">{{ p.nome }}</span></div>
+        <div class="tx-c-meio"><div><div class="tx-c-val">{{ p.total | format_currency }}</div>
+          <div class="tx-c-desc">{{ p.itens|length }} comiss{{ 'ões' if p.itens|length != 1 else 'ão' }} paga{{ 's' if p.itens|length != 1 }} pelo cliente</div></div>
+          <span class="tx-c-st"><i class="fas fa-hourglass-half"></i> aguardando pedido</span></div>
+        <ul class="lm-sp-l">{% for l in p.itens | sort(attribute='comissao_valor', reverse=True) %}
+          <li{% if loop.index > 4 %} class="mais" hidden{% endif %}><span class="n" title="{{ l.nome_razao_social }}">{% if l.numero_cliente %}<em>{{ l.numero_cliente }}</em>{% endif %}{{ l.nome_razao_social }}</span>
+            <span class="s">{{ 'Mensalidade' if l.carteira else (l.servico_nome or '') }}</span><b>{{ l.comissao_valor | float | format_currency }}</b></li>{% endfor %}
+          {% if p.itens|length > 4 %}<li class="lm-sp-mais"><button type="button" onclick="this.closest('ul').querySelectorAll('.mais').forEach(function(x){x.hidden=false}); this.parentNode.remove()">+ {{ p.itens|length - 4 }} mais</button></li>{% endif %}
+        </ul>
+        <div class="lm-sp-pe"><i class="fas fa-circle-info"></i> Quando {{ pn_[0] }} pedir, vira um pedido em "Pedidos a pagar".</div>
+      </div>{% endfor %}</div>
+    {% endif %}
     {% if ped_fechados %}
     <div class="lm-sec" style="margin-top:8px">Pagos e cancelados <small>{{ ped_fechados|length }}</small></div>
     <div class="tx-grade">{% for f in ped_fechados %}{{ cartao_pedido(f) }}{% endfor %}</div>
@@ -492,12 +523,6 @@
         <div class="vl">{{ f.total | float | format_currency }}<br><span class="lm-st" style="{{ 'background:#dcfce7;color:#15803d' if f.status == 'PAGO' else ('background:#f1f5f9;color:#64748b' if f.status == 'CANCELADO' else 'background:#fef3c7;color:#92400e') }}">{{ {'PAGO': 'pago', 'PAGO_PARCIAL': 'pago em parte', 'CANCELADO': 'cancelado'}.get(f.status, 'aguardando pagamento') }}</span></div></div>
       {% else %}<div class="tx-vazio" style="padding:18px"><i class="fas fa-receipt"></i>Nenhum pedido ainda.</div>{% endfor %}
     {% endif %}
-  {% endif %}
-  {% if admin %}
-    <a class="lm-regras" href="{{ url_for('financeiro.servicos') }}" id="acordos">
-      <span class="ic"><i class="fas fa-briefcase"></i></span>
-      <span class="tx"><b>Serviços e comissões</b><small>Aba SERVIÇOS: o que cobramos (valor sugerido, comissão, nota fiscal) e quem recebe comissão (Gabriel 10%, Guilherme 25% da mensalidade…)</small></span>
-      <i class="fas fa-arrow-right"></i></a>
   {% endif %}
   </div>
 </div>

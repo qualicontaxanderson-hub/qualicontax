@@ -204,6 +204,34 @@ def _servico_sem_nota(servico_id):
     return not s.get('emite_nota', 1)
 
 
+def _carteira_cartoes(uid, nome, hoje):
+    """Cartões da CARTEIRA DE MENSALIDADE de uma pessoa (mês passado e este mês, pelo vencimento): cada mensalidade
+    da carteira (Guilherme 25%) vira um cartão em cobrança / pago / atrasado; paga, entra nas comissões a pedir."""
+    from models.fin_lancamento import FinCarteira
+    cart = []
+    ini = hoje.replace(day=1)
+    for ref in (date(ini.year - (ini.month == 1), (ini.month - 2) % 12 + 1, 1), ini):
+        for ln in FinCarteira.mes(uid, ref.year, ref.month):
+            t, a = ln['titulo'], ln['acordo']
+            if not t or t.get('lanc_id'):        # já virou lançamento de verdade: aparece por ele
+                continue
+            pago = t['status'] == 'liquidado'
+            com = ln['comissao'] if pago else (FinComissaoAcordo.calcular(a, t['valor']) if a['tipo'] == 'PCT' else Decimal(str(a['valor'])))
+            c = {'id': 'c%d_%d' % (a['id'], t['id']), 'carteira': True, 'numero_cliente': a['numero_cliente'],
+                 'nome_razao_social': a['nome_razao_social'], 'servico_nome': 'Honorário',
+                 'descricao': ('Honorário pago %s' % t['pago_em'].strftime('%d/%m')) if pago and t.get('pago_em') else ('Honorário vence %s' % t['vencimento'].strftime('%d/%m')),
+                 'valor_total': t['valor'], 'destino': 'MENSAL', 'competencia': t['vencimento'].replace(day=1), 'titulo_id': t['id'],
+                 'vencimento': t['vencimento'], 'titulo_vencimento': t['vencimento'], 'titulo_status': t['status'],
+                 'status': 'FATURADO', 'lancado_por': uid, 'lancado_por_nome': nome,
+                 'comissao_status': 'LIBERADA' if pago else 'AGUARDANDO', 'comissao_valor': com,
+                 'como': 'Mensalidade'}
+            c['fase'] = 'pag' if pago else ('atr' if t['vencimento'] < hoje else 'cob')
+            c['situacao_com'] = 'Pago · a pedir' if pago else ('Vencido' if c['fase'] == 'atr' else 'Aguardando pagamento')
+            c['adiantavel'] = not pago                  # 18/11/2026: mensalidade em aberto (a vencer ou atrasada) pode ser pedida adiantada
+            cart.append(c)
+    return cart
+
+
 @financeiro.route('/financeiro/lancamentos')
 @permission_required(PERM)
 def lancamentos():
@@ -235,29 +263,9 @@ def lancamentos():
     # CARTEIRA DE MENSALIDADE (17/11/2026 — Anderson: "Não pode colocar dentro dos lançamentos? E deixar junto com os
     # outros?"): a mensalidade de cada empresa da carteira da pessoa (Guilherme 25%) vira um cartão nos mesmos quadros
     # (em cobrança / pagos / atrasados) e, paga, entra nas comissões a pedir. Mês passado e este mês, pelo vencimento.
-    from models.fin_lancamento import FinCarteira
-    cart = []
-    ini = hoje.replace(day=1)
-    for ref in (date(ini.year - (ini.month == 1), (ini.month - 2) % 12 + 1, 1), ini):
-        for ln in FinCarteira.mes(_eu().id, ref.year, ref.month):
-            t, a = ln['titulo'], ln['acordo']
-            if not t or t.get('lanc_id'):        # já virou lançamento de verdade: aparece por ele
-                continue
-            pago = t['status'] == 'liquidado'
-            com = ln['comissao'] if pago else (FinComissaoAcordo.calcular(a, t['valor']) if a['tipo'] == 'PCT' else Decimal(str(a['valor'])))
-            c = {'id': 'c%d_%d' % (a['id'], t['id']), 'carteira': True, 'numero_cliente': a['numero_cliente'],
-                 'nome_razao_social': a['nome_razao_social'], 'servico_nome': 'Honorário',
-                 'descricao': ('Honorário pago %s' % t['pago_em'].strftime('%d/%m')) if pago and t.get('pago_em') else ('Honorário vence %s' % t['vencimento'].strftime('%d/%m')),
-                 'valor_total': t['valor'], 'destino': 'MENSAL', 'competencia': t['vencimento'].replace(day=1), 'titulo_id': t['id'],
-                 'vencimento': t['vencimento'], 'titulo_vencimento': t['vencimento'], 'titulo_status': t['status'],
-                 'status': 'FATURADO', 'lancado_por': _eu().id, 'lancado_por_nome': getattr(_eu(), 'nome', ''),
-                 'comissao_status': 'LIBERADA' if pago else 'AGUARDANDO', 'comissao_valor': com,
-                 'como': 'Mensalidade'}
-            c['fase'] = 'pag' if pago else ('atr' if t['vencimento'] < hoje else 'cob')
-            c['situacao_com'] = 'Pago · a pedir' if pago else ('Vencido' if c['fase'] == 'atr' else 'Aguardando pagamento')
-            c['adiantavel'] = not pago                  # 18/11/2026: mensalidade em aberto (a vencer ou atrasada) pode ser pedida adiantada
-            grupos[c['fase']].append(c)
-            cart.append(c)
+    cart = _carteira_cartoes(_eu().id, getattr(_eu(), 'nome', ''), hoje)
+    for c in cart:
+        grupos[c['fase']].append(c)
     soma = lambda ls: sum(float(x['valor_total'] or 0) for x in ls)
     meus_com = [l for l in todos if l.get('comissao_status') in ('LIBERADA', 'FECHADA', 'PAGA', 'AGUARDANDO')
                 and (aprov is False or l['lancado_por'] == _eu().id)] + cart
@@ -270,6 +278,21 @@ def lancamentos():
         if not l.get('carteira') and l['comissao_status'] == 'AGUARDANDO' and l['fase'] in ('cob', 'atr') and l.get('titulo_id') and l['lancado_por'] == _eu().id:
             l['adiantavel'] = True
     tem_adiantavel = any(l.get('adiantavel') for l in aguard)
+    # 21/11/2026 — Anderson: "quando pagar já pode aparecer aqui uma outra linha com Pagos aguardando Pedido": comissão
+    # que o cliente já pagou e a pessoa ainda não pediu (serviços lançados + mensalidade da carteira), por pessoa
+    sem_pedido = []
+    if aprov:
+        sem_pedido = [l for l in todos if l.get('comissao_status') == 'LIBERADA' and l['lancado_por'] != _eu().id]
+        donos = execute_query("""SELECT DISTINCT a.usuario_id, u.nome FROM fin_comissao_acordos a JOIN usuarios u ON u.id = a.usuario_id
+                                  WHERE a.base = 'HONORARIOS' AND a.ativo = 1 AND a.usuario_id <> %s""", (_eu().id,), fetch=True) or []
+        for d in donos:
+            sem_pedido += [c for c in _carteira_cartoes(d['usuario_id'], d['nome'], hoje) if c['comissao_status'] == 'LIBERADA']
+    por_pessoa = {}
+    for l in sem_pedido:
+        pp = por_pessoa.setdefault(l['lancado_por'], {'id': l['lancado_por'], 'nome': l.get('lancado_por_nome') or '', 'itens': [], 'total': 0.0})
+        pp['itens'].append(l)
+        pp['total'] += float(l.get('comissao_valor') or 0)
+    sem_pedido = sorted(por_pessoa.values(), key=lambda p: -p['total'])
     pedidos = FinComissaoFechamento.listar(usuario_id=None if aprov else _eu().id)
     a_pagar = [f for f in pedidos if f['status'] not in ('PAGO', 'CANCELADO')]
     # 19/11/2026: quem ainda não tem a comissão vinculada no DRE — o cartão pede o vínculo antes do "Registrar pago"
@@ -300,7 +323,7 @@ def lancamentos():
         'financeiro/lancamentos.html', aprov=aprov, admin=_admin(), hoje=hoje, grupos=grupos, fora=fora[:30],
         tot={k: soma(v) for k, v in grupos.items()}, liberadas=liberadas, meus_com=meus_com, aguard=aguard, tem_adiantavel=tem_adiantavel,
         tot_liberadas=sum(float(l['comissao_valor'] or 0) for l in liberadas),
-        pedidos=pedidos, a_pagar=a_pagar, sem_dre=sem_dre, cats_dre=cats_dre, tot_a_pagar=sum(float(f['total'] or 0) - float(f['valor_pago'] or 0) for f in a_pagar),
+        pedidos=pedidos, a_pagar=a_pagar, sem_pedido=sem_pedido, tot_sem_pedido=sum(p['total'] for p in sem_pedido), sem_dre=sem_dre, cats_dre=cats_dre, tot_a_pagar=sum(float(f['total'] or 0) - float(f['valor_pago'] or 0) for f in a_pagar),
         aba=request.args.get('aba') if request.args.get('aba') in FASES + ('com',) else ('apr' if (aprov or grupos['apr']) else 'cob'),
         caixa_json=json.dumps(caixa, ensure_ascii=False), STATUS=STATUS, COMISSAO=COMISSAO,
         acordos_todos=FinComissaoAcordo.listar(so_ativos=True) if _admin() else [],
