@@ -83,6 +83,7 @@ input.cod { letter-spacing:8px; font-size:22px; text-align:center; font-family:m
             {% else %}
             <div class="as-passo"><span class="as-n">1</span><div style="flex:1;"><b>Leia a proposta</b> <span class="so-pc">ao lado</span><span class="so-cel">acima (e o PDF completo)</span>.</div></div>
             <div class="as-passo"><span class="as-n {{ 'ok' if codigo_pedido }}" id="n2">2</span><div style="flex:1;"><b>Confirme quem você é</b>
+                <div class="as-lbl">Seu nome completo</div><input class="c" name="nome" form="f-ace" value="{{ o.solicitante_nome or '' }}" required autocomplete="name">
                 {% if desafio %}<div class="as-lbl">{{ 'Os 3 primeiros dígitos do seu CPF' if desafio == 'ini' else 'Os 2 últimos dígitos do seu CPF' }}</div>
                 <input class="c cod" id="cpf-parte" maxlength="{{ 3 if desafio == 'ini' else 2 }}" inputmode="numeric" placeholder="{{ '000' if desafio == 'ini' else '00' }}" autocomplete="off" style="max-width:160px; letter-spacing:12px;">
                 <div class="as-msg" style="margin-top:4px">Conferimos com o CPF dos sócios do cadastro. Nunca pedimos o CPF inteiro.</div>{% endif %}
@@ -94,7 +95,6 @@ input.cod { letter-spacing:8px; font-size:22px; text-align:center; font-family:m
             <form method="POST" action="{{ url_for('proposta.aceitar', token=o.token) }}" id="f-ace" class="{{ '' if codigo_pedido else 'esperando' }}">
             <div class="as-passo"><span class="as-n" id="n3">3</span><div style="flex:1;"><b>Digite o código e aceite</b>
                 <div class="as-lbl">Código recebido por e-mail</div><input class="c cod" name="codigo" id="codigo" maxlength="6" inputmode="numeric" autocomplete="one-time-code" placeholder="000000" required>
-                <div class="as-lbl">Seu nome completo</div><input class="c" name="nome" value="{{ o.solicitante_nome or '' }}" required>
                 <label class="as-ace"><input type="checkbox" name="aceito" value="1" required> Li a proposta e aceito os serviços, valores e condições descritos. Este aceite eletrônico tem validade jurídica (MP 2.200-2/2001 e Lei 14.063/2020).</label>
                 <button type="submit" class="btn btn-p"><i class="fas fa-pen-nib"></i> Aceitar a proposta</button>
             </div></div>
