@@ -1660,6 +1660,21 @@ def _contas_ctx():
         'logos': logos_banco(),
         'eh_admin': admin,
     }
+    # 21/11/2026: saldo do banco de cada conta (gravado a cada extrato) e a conferência com os lançamentos
+    from utils.conta_saldo import ultimos as _ult_saldo, conferir as _conferir_saldo
+    _us = _ult_saldo([c['id'] for c in contas])
+    _por_id = {c['id']: c for c in contas}
+    for c in dados['contas']:
+        u = _us.get(c['id'])
+        if not u:
+            continue
+        c['saldo'] = {'valor': float(u['valor']), 'data': _d(u['data']), 'origem': u['origem']}
+        try:
+            cf = _conferir_saldo(_por_id[c['id']], u)
+        except Exception:
+            cf = None
+        if cf:
+            c['saldo']['confere'] = {'ok': cf['ok'], 'dif': float(cf['diferenca']), 'de': _d(cf['de']), 'ate': _d(cf['ate'])}
     # Aba Cobrança (04/11/2026): as contas de cobrança (Efí) são cadastro, como a conta corrente
     from models.fin_cobranca import AMBIENTES, AVISA_POR, PROVEDORES, FinCobrancaConta
     from utils.acesso import pode_rota
@@ -1890,6 +1905,44 @@ def pendencia_resolver(pid):
         flash(f'Conta {conta} cadastrada. O arquivo não entrou agora '
               f'({r.get("motivo")}) — ele entra no próximo ciclo.', 'warning')
     return redirect(url_for('financeiro.contas'))
+
+
+@financeiro.route('/financeiro/pendencias/<int:pid>/fora', methods=['POST'])
+@permission_required('financeiro.extrato')
+def pendencia_fora(pid):
+    """"Não é do grupo" (21/11/2026 — Anderson: "ficou uma conta que não é do nosso GRUPO... por que ela aparece
+    aqui?"): o arquivo sai da _ENTRADA para _FORA_FINANCEIRO (nada é apagado) e, se o arquivo traz a conta, ela
+    fica lembrada: os próximos extratos dela não perguntam mais. O Contábil parte daqui quando ler extrato de cliente."""
+    from models.extrato_lancamento import FinExtratoPendencia
+    from utils.dropbox_sync import _service
+    from utils.extrato_ingest import marcar_fora, mover_para_fora
+    p = FinExtratoPendencia.get(pid)
+    volta = redirect(url_for('financeiro.empresas') + '#mePend')
+    if not p:
+        flash('Esse arquivo não está mais esperando.', 'warning')
+        return volta
+    if p.get('conta'):
+        try:
+            marcar_fora(p.get('banco_id'), p.get('banco_nome'), p['conta'], p['arquivo'], current_user.id)
+        except Exception:
+            logging.getLogger(__name__).exception('[extrato] não consegui lembrar a conta fora do grupo')
+            flash('Não consegui guardar a conta como fora do grupo agora. Tente de novo em instantes.', 'danger')
+            return volta
+    try:
+        movido = mover_para_fora(_service, p['caminho'])
+    except Exception:
+        logging.getLogger(__name__).exception('[extrato] falha ao mover %s', p['caminho'])
+        movido = False
+    FinExtratoPendencia.resolver(pid)
+    registrar('escrita.extrato_fora_do_grupo', 'financeiro', tabela='fin_extrato_pendencias', registro_id=pid,
+              depois={'arquivo': p['arquivo'], 'banco': p.get('banco_nome'), 'conta': p.get('conta')})
+    if p.get('conta'):
+        flash(f'Conta {p["conta"]} ({p.get("banco_nome") or "banco"}) marcada como fora do grupo: '
+              + ('o arquivo foi para a pasta _FORA_FINANCEIRO e ' if movido else '')
+              + 'os próximos extratos dela não aparecem mais aqui.', 'success')
+    else:
+        flash('Arquivo tirado da fila' + (': está na pasta _FORA_FINANCEIRO.' if movido else '.'), 'success')
+    return volta
 
 
 @financeiro.route('/financeiro/extrato/apagar-periodo', methods=['POST'])

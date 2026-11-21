@@ -124,7 +124,8 @@
 
       {% if dados %}
       <div class="me-bcos"><div class="me-bcos-h"><span class="me-rot">Bancos</span><small data-bc-n="{{ e.cliente_id }}"></small></div>
-        <div class="me-bco-l" data-emp="{{ e.cliente_id }}"></div></div>
+        <div class="me-bco-l" data-emp="{{ e.cliente_id }}"></div>
+        <div data-bc-saldo="{{ e.cliente_id }}"></div></div>
       {% endif %}
 
       {% set f = e.fiscal %}

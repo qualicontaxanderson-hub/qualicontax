@@ -344,6 +344,45 @@ def registrar_conta(empresa_id, banco_id, banco_nome, conta, agencia=None,
          agencia, conta, conta_normalizada(conta), apelido, usuario_id))
 
 
+# 21/11/2026 — "Não é do grupo": extrato de cliente que cai na _ENTRADA. A conta fica lembrada em
+# fin_extrato_contas_fora, o arquivo vai para _FORA_FINANCEIRO e os próximos não perguntam mais.
+PASTA_FORA = '_FORA_FINANCEIRO'
+
+
+def _banco_cod(banco_id):
+    return re.sub(r'\D', '', str(banco_id or '')).lstrip('0')
+
+
+def conta_fora(banco_id, conta):
+    """A conta foi marcada "Não é do grupo"? Sem a tabela (migração não aplicada) responde não."""
+    if not conta:
+        return False
+    from utils.db_helper import execute_query
+    try:
+        r = execute_query(
+            """SELECT id FROM fin_extrato_contas_fora
+                WHERE conta_norm = %s AND (%s = '' OR banco_id IS NULL OR TRIM(LEADING '0' FROM banco_id) = %s)
+                LIMIT 1""", (conta_normalizada(conta), _banco_cod(banco_id), _banco_cod(banco_id)),
+            fetch=True, fetch_one=True)
+    except Exception:
+        return False
+    return bool(r)
+
+
+def marcar_fora(banco_id, banco_nome, conta, arquivo=None, usuario_id=None):
+    from utils.db_helper import execute_query
+    execute_query(
+        """INSERT IGNORE INTO fin_extrato_contas_fora (banco_id, banco_nome, conta, conta_norm, arquivo, usuario_id)
+           VALUES (%s, %s, %s, %s, %s, %s)""",
+        (_banco_cod(banco_id) or None, banco_nome, conta, conta_normalizada(conta), arquivo, usuario_id), fetch=False)
+
+
+def mover_para_fora(svc, caminho):
+    """Tira o arquivo da _ENTRADA (não apaga): vai para _FORA_FINANCEIRO, com o mesmo nome."""
+    import os as _os
+    return svc.move_file(caminho, svc._build_path(PASTA_FORA, _os.path.basename(caminho)))
+
+
 def identificar_empresa(caminho_ou_nome, banco_id=None, conta=None,
                        banco_nome=None):
     """(cliente, motivo) — decidido pela CONTA, conferido pelo nome.
@@ -579,6 +618,12 @@ def processar_lancamentos(dados, empresa_id, arquivo, usuario_id=None, origem='o
         # classificar=False: extrato antigo entra só para conciliar — as regras
         # criariam títulos retroativos no DRE de meses já fechados.
         auto = ExtratoMemorizacao.aplicar_em_ids([r['id'] for r in ids]) if classificar else 0
+
+    # 21/11/2026: o saldo do banco que o arquivo traz (OFX: LEDGERBAL; PDF do Bradesco: coluna Saldo) fica
+    # guardado na conta — antes era lido e jogado fora (utils/conta_saldo.py)
+    if dados.get('saldo'):
+        from utils.conta_saldo import gravar_do_extrato
+        gravar_do_extrato(dados.get('banco_id'), dados.get('conta'), dados['saldo'], origem, arquivo)
 
     return {
         'banco': banco_curto(dados.get('banco_id'), dados['banco']),

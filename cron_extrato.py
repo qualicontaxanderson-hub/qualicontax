@@ -289,6 +289,17 @@ def rodar(dryrun=None, limite=None):
             linha['banco'] = banco
             linha['conta'] = previa.get('conta')
             linha['lancamentos'] = len(previa['lancamentos'])
+            if not cliente and previa.get('conta'):
+                # 21/11/2026: conta marcada "Não é do grupo" (extrato de cliente) sai da _ENTRADA sem perguntar
+                from utils.extrato_ingest import conta_fora, mover_para_fora
+                if conta_fora(previa.get('banco_id'), previa.get('conta')):
+                    if not seco:
+                        mover_para_fora(svc, origem)
+                    linha['resultado'] = 'FORA DO GRUPO: conta marcada como não sendo do grupo; arquivo em _FORA_FINANCEIRO'
+                    resumo['ignorados'] += 1
+                    resumo['detalhes'].append(linha)
+                    logger.info('[extrato] %s: conta fora do grupo, movido para _FORA_FINANCEIRO.', nome)
+                    continue
             if not cliente:
                 # Sem dono não se lança nada — o arquivo FICA na _ENTRADA e
                 # vira PENDÊNCIA. Com número no nome ela nasce amarrada àquela

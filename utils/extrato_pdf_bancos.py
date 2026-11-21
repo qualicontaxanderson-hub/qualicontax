@@ -244,6 +244,7 @@ def parse_bradesco(paginas, doc=None):
             break
 
     lancs = []
+    saldo_fim = None     # 21/11/2026: o último saldo da coluna Saldo é o saldo do banco no fim do extrato
     cortes = None
     data = None          # a data só é escrita quando muda — atravessa a página
     sobra = []           # descrição que ficou no pé da página, sem o valor dela
@@ -292,6 +293,9 @@ def parse_bradesco(paginas, doc=None):
             d = _iso(c.get('data'))
             if d:
                 data = d
+            s_ = _dec(c.get('saldo'))
+            if s_ is not None and data and not (base and data > base):
+                saldo_fim = {'valor': s_, 'data': data}
             if j not in descricao:
                 continue
             v = _dec(c.get('cred'))
@@ -308,7 +312,7 @@ def parse_bradesco(paginas, doc=None):
     if not lancs:
         raise PdfBancoInvalido('extrato do Bradesco sem lançamento legível.')
     return {'banco': 'Bradesco', 'banco_id': '237', 'conta': conta,
-            'saldo': None, 'lancamentos': lancs}
+            'saldo': saldo_fim, 'lancamentos': lancs}
 
 
 # ---------------------------------------------------------------------------

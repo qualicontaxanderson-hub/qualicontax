@@ -10,6 +10,12 @@
 .me-bcos-h { display:flex; align-items:baseline; gap:8px; }
 .me-bcos-h small { font-size:11.5px; color:#94a3b8; font-weight:600; }
 .me-bcos-h small b { color:#b45309; }
+.me-saldo { display:flex; align-items:center; gap:10px; background:linear-gradient(135deg,#f0fdf4,#fff 80%); border:1px solid #bbf7d0; border-radius:12px; padding:8px 12px; }
+.me-saldo > i { width:30px; height:30px; border-radius:9px; background:#16a34a; color:#fff; display:flex; align-items:center; justify-content:center; font-size:13px; flex-shrink:0; }
+.me-saldo span small { display:block; font-size:9.5px; font-weight:800; letter-spacing:.06em; text-transform:uppercase; color:#64748b; }
+.me-saldo span b { display:block; font-size:16px; color:#15803d; font-variant-numeric:tabular-nums; line-height:1.15; }
+.me-saldo em { margin-left:auto; font-style:normal; font-size:11.5px; color:#94a3b8; text-align:right; }
+.me-saldo.neg { background:linear-gradient(135deg,#fef2f2,#fff 80%); border-color:#fecaca; } .me-saldo.neg > i { background:#dc2626; } .me-saldo.neg span b { color:#b91c1c; }
 .me-bco-l { display:flex; flex-wrap:wrap; gap:8px; }
 .me-bco { position:relative; width:52px; height:52px; border-radius:14px; background:#fff; border:1.5px solid #e3ece7; display:flex; align-items:center; justify-content:center;
           cursor:pointer; padding:0; transition:transform .12s, border-color .12s, box-shadow .12s; box-shadow:0 2px 6px rgba(15,61,46,.05); }
@@ -67,13 +73,18 @@
 .pc-pe { padding:12px 16px 16px; }
 .pc-ok { width:100%; display:inline-flex; align-items:center; justify-content:center; gap:8px; border:0; border-radius:12px; padding:12px; font:inherit; font-size:14px; font-weight:800;
          color:#fff; background:linear-gradient(135deg,#16a34a,#166534); box-shadow:0 8px 18px rgba(22,163,74,.28); cursor:pointer; }
+.pc-fora { width:100%; margin-top:8px; display:inline-flex; align-items:center; justify-content:center; gap:8px; border:1.5px solid #fecaca; background:#fef2f2; padding:10px; font:inherit;
+           font-size:13px; font-weight:800; color:#b91c1c; cursor:pointer; border-radius:12px; transition:all .12s; }
+.pc-fora:hover { background:linear-gradient(135deg,#dc2626,#991b1b); border-color:transparent; color:#fff; box-shadow:0 8px 18px rgba(220,38,38,.25); }
+.pc-tirar { border:1px solid #e2e8f0; background:#fff; color:#64748b; border-radius:9px; padding:5px 10px; font:inherit; font-size:12px; font-weight:700; cursor:pointer; white-space:nowrap; }
+.pc-tirar:hover { color:#b91c1c; border-color:#fecaca; background:#fef2f2; }
 .pc-ok:disabled { background:#e2e8f0; color:#64748b; box-shadow:none; cursor:not-allowed; }
 .pc-ruins { background:#fff; border:1px solid #e3ece7; border-radius:14px; overflow:hidden; }
-.pc-ruim { display:grid; grid-template-columns:auto minmax(0,1fr) minmax(0,1.4fr) auto; gap:12px; align-items:center; padding:10px 16px; font-size:12.5px; color:#64748b; border-top:1px solid #f1f5f9; }
+.pc-ruim { display:grid; grid-template-columns:auto minmax(0,1fr) minmax(0,1.4fr) auto auto; gap:12px; align-items:center; padding:10px 16px; font-size:12.5px; color:#64748b; border-top:1px solid #f1f5f9; }
 .pc-ruim:first-child { border-top:0; }
 .pc-ruim i { color:#94a3b8; } .pc-ruim .a { font-family:ui-monospace, Consolas, monospace; color:#334155; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .pc-ruim .m { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; } .pc-ruim .d { font-variant-numeric:tabular-nums; }
-@media (max-width:640px) { .pc-grade { grid-template-columns:minmax(0,1fr); } .pc-ruim { grid-template-columns:auto minmax(0,1fr) auto; } .pc-ruim .m { display:none; } }
+@media (max-width:640px) { .pc-grade { grid-template-columns:minmax(0,1fr); } .pc-ruim { grid-template-columns:auto minmax(0,1fr) auto auto; } .pc-ruim .m { display:none; } }
 
 /* janela da conta */
 .bc-fundo { position:fixed; inset:0; z-index:1500; background:rgba(15,23,42,.5); backdrop-filter:blur(2px); display:none; align-items:flex-start; justify-content:center; padding:7vh 12px 12px; }
@@ -86,7 +97,13 @@
 .bc-x { width:34px; height:34px; border:0; border-radius:10px; background:rgba(255,255,255,.16); color:#fff; cursor:pointer; font-size:15px; flex-shrink:0; }
 .bc-x:hover { background:rgba(255,255,255,.28); }
 .bc-corpo { padding:16px 18px 18px; display:flex; flex-direction:column; gap:14px; }
-.bc-nums { display:grid; grid-template-columns:repeat(3, minmax(0,1fr)); gap:10px; }
+.bc-nums { display:grid; grid-template-columns:repeat(4, minmax(0,1fr)); gap:10px; }
+.bc-num small { display:block; font-size:11px; color:#94a3b8; margin-top:2px; }
+.bc-saldo { background:linear-gradient(135deg,#f0fdf4,#fff 75%); border-color:#bbf7d0 !important; } .bc-saldo b { color:#15803d !important; }
+.bc-saldo.neg { background:linear-gradient(135deg,#fef2f2,#fff 75%); border-color:#fecaca !important; } .bc-saldo.neg b { color:#b91c1c !important; }
+.bc-conf { display:flex; gap:10px; align-items:flex-start; border-radius:12px; padding:10px 12px; font-size:12.5px; line-height:1.45; }
+.bc-conf.ok { background:#f0fdf4; border:1px solid #bbf7d0; color:#14532d; } .bc-conf.ok i { color:#16a34a; margin-top:2px; }
+.bc-conf.mal { background:#fef2f2; border:1px solid #fecaca; color:#7f1d1d; } .bc-conf.mal i { color:#dc2626; margin-top:2px; }
 .bc-num { background:#fff; border:1px solid #e3ece7; border-radius:13px; padding:10px 12px; }
 .bc-num span { display:block; font-size:10.5px; font-weight:800; letter-spacing:.05em; text-transform:uppercase; color:#7d968a; }
 .bc-num b { display:block; font-size:17px; color:#0f172a; margin-top:2px; font-variant-numeric:tabular-nums; }
@@ -110,6 +127,7 @@
 .me-mais > summary .seta { color:#94a3b8; transition:transform .15s; } .me-mais[open] > summary .seta { transform:rotate(180deg); }
 .me-mais-b { padding:4px 18px 18px; border-top:1px solid #eef2f0; }
 @media (max-width:640px) {
+  .bc-nums { grid-template-columns:1fr 1fr !important; }
   .bc-fundo { padding:0; align-items:flex-end; } .bc-cx { border-radius:22px 22px 0 0; max-height:94vh; }
   .bc-nums { grid-template-columns:1fr 1fr; }
 }
@@ -121,6 +139,7 @@
 <script id="ctUrls" type="application/json">{{ {
     'resolver': url_for('financeiro.pendencia_resolver', pid=0),
     'abrir_pdf': url_for('financeiro.pendencia_abrir_pdf', pid=0),
+    'fora': url_for('financeiro.pendencia_fora', pid=0),
     'alternar': url_for('financeiro.conta_alternar', conta_id=0),
     'extrato': url_for('financeiro.extrato'),
 } | tojson }}</script>
@@ -153,6 +172,7 @@ const dmy = iso => iso ? new Date(iso.slice(0, 10) + 'T12:00').toLocaleDateStrin
 const COB_POR_CONTA = Object.fromEntries(D.cobertura.filter(c => c.conta_id).map(c => [c.conta_id, c]));
 const primeiroMes = meses => { const ks = Object.keys(meses || {}).map(Number).filter(m => meses[m]); return ks.length ? Math.min(...ks) : MES_ABERTO; };
 const nomeMes = m => MESES[m - 1] || '';
+const brl = v => Number(v || 0).toLocaleString('pt-BR', {style: 'currency', currency: 'BRL'});
 
 function estadoConta(c) {
   if (!c.ativo) return {k:'off', t:'Desativada', cls:'cinza'};
@@ -186,12 +206,16 @@ function quadrinhos() {
     const cs = D.contas.filter(c => c.empresa_id === emp).sort((a, b) => (b.ativo - a.ativo) || String(a.banco_nome).localeCompare(String(b.banco_nome)));
     const sc = D.cobertura.filter(c => !c.cadastrada && c.empresa_id === emp);
     let h = cs.map(c => { const st = estadoConta(c), nome = c.apelido && c.apelido !== c.banco_nome ? c.apelido : (c.banco_nome || c.banco_id);
-      return `<button type="button" class="me-bco ${c.ativo ? '' : 'off'}" data-conta="${c.id}" title="${esc(nome)} · cc ${esc(c.conta)} · ${esc(st.t)}">${marca(c.banco_id, c.banco_nome, 30)}${c.cob && c.cob.ativo ? '<span class="cob" title="boletos ligados"><i class="fas fa-barcode"></i></span>' : ''}<span class="dot ${DOT[st.k]}"></span></button>`; }).join('');
+      return `<button type="button" class="me-bco ${c.ativo ? '' : 'off'}" data-conta="${c.id}" title="${esc(nome)} · cc ${esc(c.conta)} · ${esc(st.t)}${c.saldo ? ' · saldo ' + brl(c.saldo.valor) + ' em ' + dmy(c.saldo.data) : ''}">${marca(c.banco_id, c.banco_nome, 30)}${c.cob && c.cob.ativo ? '<span class="cob" title="boletos ligados"><i class="fas fa-barcode"></i></span>' : ''}<span class="dot ${DOT[st.k]}"></span></button>`; }).join('');
     h += sc.map((s, i) => `<button type="button" class="me-bco semcad" data-semcad="${emp}:${i}" title="${esc(s.banco)} · cc ${esc(s.conta)} · chegou extrato e a conta não está cadastrada">${marca(null, s.banco, 30)}<span class="dot amb"></span></button>`).join('');
     h += `<button type="button" class="me-bco novo" data-nova="${emp}" title="Cadastrar outra conta desta empresa"><i class="fas fa-plus"></i></button>`;
     box.innerHTML = h;
     const n = cs.filter(c => c.ativo).length, atr = cs.filter(c => ['atraso', 'nunca'].includes(estadoConta(c).k)).length;
+    const comSaldo = cs.filter(c => c.ativo && c.saldo);
+    const tot = comSaldo.reduce((a, c) => a + c.saldo.valor, 0);
     const lab = document.querySelector(`[data-bc-n="${emp}"]`);
+    const sbox = document.querySelector(`[data-bc-saldo="${emp}"]`);
+    if (sbox) sbox.innerHTML = comSaldo.length ? `<div class="me-saldo ${tot < 0 ? 'neg' : ''}" title="Soma do último saldo de cada conta, pelo extrato de cada uma"><i class="fas fa-wallet"></i><span><small>Saldo nas contas</small><b>${brl(tot)}</b></span><em>${comSaldo.length < n ? comSaldo.length + ' de ' + n + ' contas com saldo' : 'pelo último extrato de cada conta'}</em></div>` : '';
     if (lab) lab.innerHTML = (n ? `${n} conta${n !== 1 ? 's' : ''}` : 'nenhuma conta') + (atr && ultimoMesFechado ? ` · <b>${atr} sem o extrato de ${nomeMes(ultimoMesFechado)}</b>` : '') + (sc.length ? ` · <b>${sc.length} sem cadastro</b>` : '');
   });
 }
@@ -209,10 +233,14 @@ function janelaConta(id) {
       <button type="button" class="bc-x" onclick="bcFechar()" title="Fechar (Esc)"><i class="fas fa-xmark"></i></button></header>
     <div class="bc-corpo">
       <div class="bc-nums">
+        <div class="bc-num bc-saldo ${c.saldo && c.saldo.valor < 0 ? 'neg' : ''}"><span>Saldo no banco</span><b>${c.saldo ? brl(c.saldo.valor) : '—'}</b><small>${c.saldo ? 'em ' + dmy(c.saldo.data) + ' · do extrato' : 'chega com o próximo extrato'}</small></div>
         <div class="bc-num"><span>Situação</span><b><span class="sit ${st.cls}">${esc(st.t)}</span></b></div>
         <div class="bc-num"><span>Último extrato</span><b>${cb.ultimo ? dmy(cb.ultimo) : '—'}</b></div>
         <div class="bc-num"><span>Lançamentos em ${ANO}</span><b>${(cb.total || 0).toLocaleString('pt-BR')}</b></div>
       </div>
+      ${c.saldo && c.saldo.confere ? (c.saldo.confere.ok
+        ? `<div class="bc-conf ok"><i class="fas fa-circle-check"></i><span><b>Saldo confere</b> de ${dmy(c.saldo.confere.de)} a ${dmy(c.saldo.confere.ate)}: o saldo anterior mais os lançamentos do sistema dá o saldo do banco.</span></div>`
+        : `<div class="bc-conf mal"><i class="fas fa-triangle-exclamation"></i><span><b>Saldo não confere: diferença de ${brl(c.saldo.confere.dif)}</b> entre ${dmy(c.saldo.confere.de)} e ${dmy(c.saldo.confere.ate)}. Falta extrato ou lançamento nesta conta (ou entrou um em dobro).</span></div>`) : ''}
       <div class="bc-bloco"><h4><i class="fas fa-calendar-days"></i> Extratos de ${ANO} <span class="sit cinza">${nMeses} mês(es) com extrato</span></h4>${tira(cb.meses)}
         <div class="leg" style="grid-column:1 / -1;margin:4px 0 0"><span><i style="background:var(--verde-claro)"></i>com extrato (nº de lançamentos)</span><span><i style="background:var(--verm-fundo)"></i>mês fechado sem extrato</span></div></div>
       ${cobHtml ? `<div class="bc-bloco"><h4><i class="fas fa-barcode"></i> Boletos e extrato pelo banco</h4>${cobHtml}</div>` : ''}
@@ -369,7 +397,7 @@ function cartaoPend(p, t) {
     return `<form class="pc" method="POST" action="${esc(url(U.abrir_pdf, p.id))}">${cab('amb', 'PDF com senha')}
       <div class="pc-b"><p class="pc-msg">Nenhum CPF/CNPJ cadastrado abriu o PDF. Informe o documento do titular e eu tento de novo.</p>
         <label class="pc-campo"><span>CPF/CNPJ do titular</span><input name="documento" inputmode="numeric" placeholder="só os números" required></label></div>
-      <footer class="pc-pe"><button class="pc-ok" type="submit"><i class="fas fa-unlock"></i> Tentar abrir</button></footer></form>`;
+      <footer class="pc-pe"><button class="pc-ok" type="submit"><i class="fas fa-unlock"></i> Tentar abrir</button><button class="pc-fora" type="submit" formaction="${esc(url(U.fora, p.id))}" formnovalidate onclick="return confirm('Este extrato não é das nossas empresas? O arquivo sai da fila (vai para a pasta _FORA_FINANCEIRO, nada é apagado)${p.conta ? ' e os próximos desta conta não perguntam mais' : ''}.')"><i class="fas fa-user-slash"></i> Não é do grupo</button></footer></form>`;
   const semConta = t.k === 'semconta';
   const n = p.qtd_lancamentos || 0;
   return `<form class="pc" method="POST" action="${esc(url(U.resolver, p.id))}" data-n="${n}">${cab(semConta ? 'amb' : '', semConta ? 'Falta a conta' : 'Conta nova')}
@@ -381,7 +409,7 @@ function cartaoPend(p, t) {
           <label class="pc-campo"><span>Agência</span><input name="agencia" placeholder="opcional"></label></div>`
       : `<input type="hidden" name="conta" value="${esc(p.conta || '')}"><input type="hidden" name="agencia" value="${esc(p.agencia || '')}">`}
     </div>
-    <footer class="pc-pe"><button class="pc-ok" type="submit"></button></footer></form>`;
+    <footer class="pc-pe"><button class="pc-ok" type="submit"></button><button class="pc-fora" type="submit" formaction="${esc(url(U.fora, p.id))}" formnovalidate onclick="return confirm('Este extrato não é das nossas empresas? O arquivo sai da fila (vai para a pasta _FORA_FINANCEIRO, nada é apagado)${p.conta ? ' e os próximos desta conta não perguntam mais' : ''}.')"><i class="fas fa-user-slash"></i> Não é do grupo</button></footer></form>`;
 }
 function pcBotao(f) {
   const r = f.querySelector('input[name="empresa_id"]:checked'), b = f.querySelector('.pc-ok'), n = +f.dataset.n || 0;
@@ -401,8 +429,8 @@ function pendencias() {
   box.innerHTML = `<div class="me-sec">Contas novas esperando empresa <span class="n">${vinc.length + falta.length}</span> <small>vinculada, a conta vai para dentro da empresa e o cartão some daqui</small></div>
     ${grupo('Só falta dizer de quem é', 'escolha a empresa e o extrato entra na hora', vinc)}
     ${grupo('Falta também o número da conta', 'o arquivo não trouxe a conta', falta)}
-    ${ruins.length ? `<div class="pc-grupo"><b>Arquivos que não consigo ler</b><span class="cinza">${ruins.length}</span><small>nada a responder: apague da pasta e somem daqui</small></div>
-      <div class="pc-ruins">${ruins.map(([p]) => `<div class="pc-ruim"><i class="fas fa-file-circle-xmark"></i><span class="a" title="${esc(p.arquivo)}">${esc(p.arquivo)}</span><span class="m">${esc((p.motivo || '').split('.')[0])}</span><span class="d">${quando(p.criado_em)}</span></div>`).join('')}</div>` : ''}`;
+    ${ruins.length ? `<div class="pc-grupo"><b>Arquivos que não consigo ler</b><span class="cinza">${ruins.length}</span><small>nada a responder: tire da fila ou apague da pasta</small></div>
+      <div class="pc-ruins">${ruins.map(([p]) => `<div class="pc-ruim"><i class="fas fa-file-circle-xmark"></i><span class="a" title="${esc(p.arquivo)}">${esc(p.arquivo)}</span><span class="m">${esc((p.motivo || '').split('.')[0])}</span><span class="d">${quando(p.criado_em)}</span><form method="POST" action="${esc(url(U.fora, p.id))}" style="margin:0"><button class="pc-tirar" type="submit" title="Tirar da fila: vai para a pasta _FORA_FINANCEIRO, nada é apagado"><i class="fas fa-box-archive"></i> Tirar da fila</button></form></div>`).join('')}</div>` : ''}`;
   box.querySelectorAll('form.pc').forEach(f => { pcBotao(f); f.addEventListener('change', () => pcBotao(f)); });
   const hs = document.getElementById('mePendHero');
   if (hs && vinc.length + falta.length) { hs.hidden = false; hs.querySelector('b').textContent = vinc.length + falta.length; }

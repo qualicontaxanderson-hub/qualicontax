@@ -490,6 +490,7 @@ MAPA = {
     'financeiro.notas_servico': 'financeiro.notas.configurar',
     'financeiro.notas_servico_json': 'financeiro.notas.incluir',
     'financeiro.pendencia_resolver': 'financeiro.extrato.alterar',
+    'financeiro.pendencia_fora': 'financeiro.extrato.alterar',      # 21/11/2026: "Não é do grupo"
     'financeiro.programacao_atualizar': 'financeiro.programacoes.alterar',
     'financeiro.programacao_nova': 'financeiro.programacoes.incluir',
     'financeiro.programacoes_gerar': 'financeiro.programacoes.gerar',
