@@ -25,12 +25,55 @@
 .me-bco.novo:hover { border-color:#16a34a; background:#f0fdf4; }
 .me-bco-vazio { font-size:12.5px; color:#94a3b8; align-self:center; }
 
-/* arquivos esperando empresa, embaixo dos cartões */
-.me-sec { display:flex; align-items:center; gap:10px; margin:26px 2px 12px; font-size:12px; font-weight:800; letter-spacing:.07em; text-transform:uppercase; color:#475569; }
+/* contas novas esperando empresa (21/11/2026: refeito, molde do Financeiro) */
+.me-sec { display:flex; align-items:center; gap:10px; margin:28px 2px 6px; font-size:12px; font-weight:800; letter-spacing:.07em; text-transform:uppercase; color:#475569; }
 .me-sec::after { content:''; flex:1; height:1px; background:#e3ece7; }
 .me-sec .n { font-size:11.5px; font-weight:800; letter-spacing:0; background:#fef3c7; color:#b45309; border-radius:99px; padding:2px 9px; text-transform:none; }
 .me-sec small { font-weight:600; letter-spacing:0; text-transform:none; color:#94a3b8; font-size:12.5px; }
-#ctb .pend { border-radius:16px; box-shadow:0 6px 16px rgba(15,23,42,.05); }
+.pc-grupo { display:flex; align-items:baseline; gap:8px; margin:16px 2px 10px; }
+.pc-grupo b { font-size:14px; color:#0f172a; }
+.pc-grupo span { font-size:11.5px; font-weight:800; color:#15803d; background:#dcfce7; border-radius:99px; padding:1px 8px; }
+.pc-grupo span.cinza { color:#64748b; background:#f1f5f9; }
+.pc-grupo small { font-size:12.5px; color:#94a3b8; }
+.pc-grade { display:grid; grid-template-columns:repeat(auto-fill, minmax(360px, 1fr)); gap:14px; }
+.pc { margin:0; display:flex; flex-direction:column; background:#fff; border:1px solid #e3ece7; border-radius:18px; overflow:hidden; box-shadow:0 10px 26px rgba(15,61,46,.07); }
+.pc-h { display:flex; align-items:center; gap:12px; padding:14px 16px; color:#fff; background:linear-gradient(135deg,#0f3d2e,#16a34a); }
+.pc-h.amb { background:linear-gradient(135deg,#c2410c,#f97316); }
+.pc-logo { width:44px; height:44px; border-radius:13px; background:#fff; display:flex; align-items:center; justify-content:center; flex-shrink:0; box-shadow:0 4px 12px rgba(0,0,0,.15); color:#94a3b8; }
+.pc-logo img { width:30px; height:30px; border-radius:8px; } .pc-logo i.cor { width:22px; height:22px; border-radius:7px; display:block; }
+.pc-t { flex:1; min-width:0; } .pc-t b { display:block; font-size:16px; } .pc-t small { display:block; font-size:12.5px; opacity:.9; font-family:ui-monospace, Consolas, monospace; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.pc-tag { flex-shrink:0; font-size:11px; font-weight:800; letter-spacing:.03em; text-transform:uppercase; background:rgba(255,255,255,.2); border:1px solid rgba(255,255,255,.35); border-radius:99px; padding:3px 10px; }
+.pc-info { display:flex; flex-direction:column; gap:3px; padding:10px 16px; background:#f8fbf9; border-bottom:1px solid #eef2f0; }
+.pc-arq { font-size:12px; color:#475569; font-family:ui-monospace, Consolas, monospace; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; } .pc-arq i { color:#94a3b8; margin-right:3px; }
+.pc-nums { font-size:12.5px; color:#64748b; } .pc-nums b { color:#0f172a; font-size:14px; }
+.pc-b { padding:14px 16px 4px; display:flex; flex-direction:column; gap:10px; flex:1; }
+.pc-rot { font-size:11px; font-weight:800; letter-spacing:.06em; text-transform:uppercase; color:#64748b; }
+.pc-emps { display:flex; flex-wrap:wrap; gap:7px; }
+.pc-emp { position:relative; display:inline-flex; align-items:center; gap:7px; margin:0; padding:6px 12px 6px 6px; border-radius:12px; border:1.5px solid #e2ebe6; background:#fbfdfc;
+          cursor:pointer; font-size:13px; font-weight:700; color:#334155; transition:all .12s; }
+.pc-emp:hover { border-color:#86efac; background:#f0fdf4; }
+.pc-emp input { position:absolute; opacity:0; pointer-events:none; }
+.pc-emp .n { min-width:30px; height:24px; padding:0 5px; border-radius:7px; background:#ecfdf3; color:#15803d; font-size:11.5px; font-weight:800; display:inline-flex; align-items:center; justify-content:center; }
+.pc-emp em { font-style:normal; font-size:9.5px; font-weight:800; letter-spacing:.04em; text-transform:uppercase; color:#b45309; background:#fef3c7; border-radius:99px; padding:1px 6px; }
+.pc-emp:has(input:checked) { background:linear-gradient(135deg,#16a34a,#166534); border-color:transparent; color:#fff; box-shadow:0 6px 14px rgba(22,163,74,.28); }
+.pc-emp:has(input:checked) .n { background:rgba(255,255,255,.22); color:#fff; }
+.pc-emp:has(input:checked) em { background:rgba(255,255,255,.22); color:#fff; }
+.pc-emp:focus-within { outline:3px solid rgba(22,163,74,.3); outline-offset:2px; }
+.pc-msg { margin:0; font-size:12.5px; color:#78350f; background:#fffbeb; border:1px solid #fde68a; border-radius:10px; padding:8px 10px; line-height:1.45; }
+.pc-2 { display:grid; grid-template-columns:minmax(0,1.4fr) minmax(0,1fr); gap:10px; }
+.pc-campo { display:block; margin:0; } .pc-campo span { display:block; font-size:11px; font-weight:800; letter-spacing:.05em; text-transform:uppercase; color:#64748b; margin-bottom:5px; }
+.pc-campo input { width:100%; height:42px; border:1.5px solid #e2ebe6; border-radius:11px; padding:0 12px; font:inherit; font-size:14px; background:#fbfdfc; box-sizing:border-box; }
+.pc-campo input:focus { outline:none; border-color:#16a34a; background:#fff; box-shadow:0 0 0 3px rgba(22,163,74,.15); }
+.pc-pe { padding:12px 16px 16px; }
+.pc-ok { width:100%; display:inline-flex; align-items:center; justify-content:center; gap:8px; border:0; border-radius:12px; padding:12px; font:inherit; font-size:14px; font-weight:800;
+         color:#fff; background:linear-gradient(135deg,#16a34a,#166534); box-shadow:0 8px 18px rgba(22,163,74,.28); cursor:pointer; }
+.pc-ok:disabled { background:#e2e8f0; color:#64748b; box-shadow:none; cursor:not-allowed; }
+.pc-ruins { background:#fff; border:1px solid #e3ece7; border-radius:14px; overflow:hidden; }
+.pc-ruim { display:grid; grid-template-columns:auto minmax(0,1fr) minmax(0,1.4fr) auto; gap:12px; align-items:center; padding:10px 16px; font-size:12.5px; color:#64748b; border-top:1px solid #f1f5f9; }
+.pc-ruim:first-child { border-top:0; }
+.pc-ruim i { color:#94a3b8; } .pc-ruim .a { font-family:ui-monospace, Consolas, monospace; color:#334155; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.pc-ruim .m { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; } .pc-ruim .d { font-variant-numeric:tabular-nums; }
+@media (max-width:640px) { .pc-grade { grid-template-columns:minmax(0,1fr); } .pc-ruim { grid-template-columns:auto minmax(0,1fr) auto; } .pc-ruim .m { display:none; } }
 
 /* janela da conta */
 .bc-fundo { position:fixed; inset:0; z-index:1500; background:rgba(15,23,42,.5); backdrop-filter:blur(2px); display:none; align-items:flex-start; justify-content:center; padding:7vh 12px 12px; }
@@ -301,57 +344,68 @@ function abrirLigar(id) {
   setTimeout(() => m.querySelector(cora ? (k ? '#lgCoraCertArq' : '#lgCid') : (k ? '#lgCarteira' : '#lgCid')).focus(), 30);
 }
 
-/* ---------- arquivos esperando empresa (embaixo dos cartões) ---------- */
-function msgCurta(p, t) {
-  if (t.k === 'empresa') return 'Conta nova. Diga uma vez de quem é: a conta vai para dentro da empresa e os próximos extratos dela entram sozinhos.';
-  if (t.k === 'semconta') return `Este ${esc(p.banco_nome)} não traz o número da conta. Informe a conta e a empresa, ou mande o OFX.`;
-  if (t.k === 'senha') return 'O PDF tem senha e nenhum CPF/CNPJ cadastrado abriu. Informe o documento do titular e eu tento de novo.';
-  return esc(p.motivo);
+/* ---------- contas novas esperando empresa (embaixo dos cartões) ----------
+   21/11/2026 — Anderson: "Layout feio e horrível e sem nexo... olha o filtro que amador". Agrupado pelo que falta;
+   empresa escolhida em botões (nada de lista suspensa), a sugerida já marcada; o botão diz o que vai acontecer.
+   Arquivo que não dá para ler vira uma linha no fim, não um cartão. */
+const nomeArq = a => { const s = String(a || ''); return s.length > 46 ? s.slice(0, 26) + '…' + s.slice(-16) : s; };
+const quando = iso => iso ? new Date(iso).toLocaleDateString('pt-BR', {day: '2-digit', month: '2-digit'}) : '';
+function botoesEmpresa(p) {
+  const sug = p.empresa_id || (D.sugestao_emp || {})[p.id];
+  return `<div class="pc-emps" role="radiogroup" aria-label="De qual empresa é">${D.emps.map(e => `
+    <label class="pc-emp"><input type="radio" name="empresa_id" value="${e.cliente_id}" data-ap="${esc(e.apelido)}" ${sug === e.cliente_id ? 'checked' : ''} required>
+      <span class="n">${esc(e.numero_cliente)}</span><span class="a">${esc(e.apelido)}</span>${sug === e.cliente_id ? '<em>sugerida</em>' : ''}</label>`).join('')}</div>`;
 }
 function cartaoPend(p, t) {
-  const orfa = !p.empresa_id;
-  const sug = (D.sugestao_emp || {})[p.id];
-  const opts = '<option value="">Escolha a empresa</option>' + D.emps.map(e =>
-    `<option value="${e.cliente_id}" ${(p.empresa_id || sug) === e.cliente_id ? 'selected' : ''}>${esc(e.numero_cliente)} · ${esc(e.apelido)}</option>`).join('');
-  const cab = `<div class="pend-top">
-      <span class="banco">${p.banco_id ? marca(p.banco_id, p.banco_nome, 22) : '<i style="background:var(--apagado)"></i>'}${esc(p.banco_nome || 'Banco não identificado')}</span>
-      <span class="sit ${t.cls}">${t.t}</span></div>
-    <div class="pend-arq">${esc(p.arquivo)}</div>
-    <div class="pend-meta">
-      ${p.conta ? `<span>conta <b>${esc(p.conta)}</b></span>` : ''}
-      ${p.qtd_lancamentos ? `<span><b>${p.qtd_lancamentos}</b> lançamento(s)</span>` : ''}
-      ${p.periodo ? `<span>${esc(p.periodo)}</span>` : ''}
-      ${orfa ? '<span class="sit amb" title="Chegou sem o número da empresa no nome e com conta desconhecida">sem identificação</span>'
-             : `<span>o nome diz empresa <b>${esc(p.numero_no_nome || '')}</b>${p.nome_razao_social ? ' (' + esc(p.nome_razao_social.trim()) + ')' : ''}</span>`}
-      ${p.criado_em ? `<span>chegou ${new Date(p.criado_em).toLocaleDateString('pt-BR')}</span>` : ''}
-    </div>
-    <div class="pend-msg">${msgCurta(p, t)}</div>`;
-  if (t.k === 'formato')
-    return `<div class="pend cinza">${cab}<div class="pend-pe"><i class="fas fa-file-pdf"></i>&nbsp; Nada a responder aqui. Apague o arquivo da pasta e o cartão some sozinho.</div></div>`;
+  const cab = (cor, tag) => `<header class="pc-h ${cor}">
+      <span class="pc-logo">${p.banco_id ? marca(p.banco_id, p.banco_nome, 30) : '<i class="fas fa-building-columns"></i>'}</span>
+      <div class="pc-t"><b>${esc(p.banco_nome || 'Banco não identificado')}</b><small>${p.conta ? 'conta ' + esc(p.conta) : 'o arquivo não traz a conta'}</small></div>
+      <span class="pc-tag">${tag}</span></header>
+    <div class="pc-info">
+      <span class="pc-arq" title="${esc(p.arquivo)}"><i class="fas fa-file-lines"></i> ${esc(nomeArq(p.arquivo))}</span>
+      <span class="pc-nums">${p.qtd_lancamentos ? `<b>${p.qtd_lancamentos}</b> lançamento${p.qtd_lancamentos !== 1 ? 's' : ''}` : ''}${p.periodo ? ` · ${esc(p.periodo)}` : ''}${p.criado_em ? ` · chegou ${quando(p.criado_em)}` : ''}</span>
+    </div>`;
   if (t.k === 'senha')
-    return `<div class="pend amb">${cab}
-      <form class="pend-form doc" method="POST" action="${esc(url(U.abrir_pdf, p.id))}">
-        <div><label for="ctd${p.id}">CPF/CNPJ do titular</label><input id="ctd${p.id}" name="documento" inputmode="numeric" placeholder="só os números" required></div>
-        <button class="ct-btn" type="submit"><i class="fas fa-unlock"></i> Tentar abrir</button>
-      </form></div>`;
-  return `<div class="pend ${t.k === 'semconta' ? 'amb' : ''}">${cab}
-    <form class="pend-form" method="POST" action="${esc(url(U.resolver, p.id))}">
-      <div class="larga"><label for="cte${p.id}">De qual empresa é *</label><select id="cte${p.id}" name="empresa_id" required>${opts}</select></div>
-      <div><label for="ctc${p.id}">Conta *</label><input id="ctc${p.id}" name="conta" value="${esc(p.conta || '')}" placeholder="número da conta" required></div>
-      <div><label for="cta${p.id}">Agência</label><input id="cta${p.id}" name="agencia" value="${esc(p.agencia || '')}" placeholder="opcional"></div>
-      <button class="ct-btn" type="submit"><i class="fas fa-check"></i> Vincular e ler</button>
-    </form></div>`;
+    return `<form class="pc" method="POST" action="${esc(url(U.abrir_pdf, p.id))}">${cab('amb', 'PDF com senha')}
+      <div class="pc-b"><p class="pc-msg">Nenhum CPF/CNPJ cadastrado abriu o PDF. Informe o documento do titular e eu tento de novo.</p>
+        <label class="pc-campo"><span>CPF/CNPJ do titular</span><input name="documento" inputmode="numeric" placeholder="só os números" required></label></div>
+      <footer class="pc-pe"><button class="pc-ok" type="submit"><i class="fas fa-unlock"></i> Tentar abrir</button></footer></form>`;
+  const semConta = t.k === 'semconta';
+  const n = p.qtd_lancamentos || 0;
+  return `<form class="pc" method="POST" action="${esc(url(U.resolver, p.id))}" data-n="${n}">${cab(semConta ? 'amb' : '', semConta ? 'Falta a conta' : 'Conta nova')}
+    <div class="pc-b">
+      <div class="pc-rot">De qual empresa é?</div>
+      ${botoesEmpresa(p)}
+      ${semConta ? `<p class="pc-msg">Este ${esc(p.banco_nome)} não traz o número da conta: digite como está no banco (ou mande o OFX, que já vem com ela).</p>
+        <div class="pc-2"><label class="pc-campo"><span>Conta *</span><input name="conta" placeholder="número da conta" required></label>
+          <label class="pc-campo"><span>Agência</span><input name="agencia" placeholder="opcional"></label></div>`
+      : `<input type="hidden" name="conta" value="${esc(p.conta || '')}"><input type="hidden" name="agencia" value="${esc(p.agencia || '')}">`}
+    </div>
+    <footer class="pc-pe"><button class="pc-ok" type="submit"></button></footer></form>`;
+}
+function pcBotao(f) {
+  const r = f.querySelector('input[name="empresa_id"]:checked'), b = f.querySelector('.pc-ok'), n = +f.dataset.n || 0;
+  if (!b || f.dataset.n === undefined) return;
+  b.disabled = !r;
+  b.innerHTML = r ? `<i class="fas fa-link"></i> Vincular à ${esc(r.dataset.ap)}${n ? ` e ler ${n} lançamento${n !== 1 ? 's' : ''}` : ' e ler'}` : 'Escolha a empresa acima';
 }
 function pendencias() {
   const box = document.getElementById('mePend'); if (!box) return;
-  const tp = D.pend.map(p => [p, tipoPend(p)]).sort((a, b) => (a[1].k === 'formato') - (b[1].k === 'formato'));
-  const orfas = D.pend.filter(p => !p.empresa_id).length;
+  const tp = D.pend.map(p => [p, tipoPend(p)]);
+  const vinc = tp.filter(([, t]) => t.k === 'empresa' || t.k === 'senha');
+  const falta = tp.filter(([, t]) => t.k === 'semconta');
+  const ruins = tp.filter(([, t]) => t.k === 'formato');
   if (!tp.length) { box.innerHTML = ''; return; }
-  box.innerHTML = `<div class="me-sec">Contas novas esperando empresa <span class="n">${tp.length}</span> <small>vinculada, a conta vai para dentro da empresa e o cartão some daqui</small></div>
-    ${D.eh_admin && orfas ? `<div class="admin-aviso"><b>Você é admin:</b> ${orfas} arquivo(s) <span class="sit amb">sem identificação</span> chegaram sem o número da empresa no nome e com conta desconhecida. Nada foi lançado: eles esperam na pasta.</div>` : ''}
-    <div class="pend-grid">${tp.map(([p, t]) => cartaoPend(p, t)).join('')}</div>`;
+  const grupo = (tit, sub, lista) => lista.length ? `<div class="pc-grupo"><b>${tit}</b><span>${lista.length}</span><small>${sub}</small></div>
+      <div class="pc-grade">${lista.map(([p, t]) => cartaoPend(p, t)).join('')}</div>` : '';
+  box.innerHTML = `<div class="me-sec">Contas novas esperando empresa <span class="n">${vinc.length + falta.length}</span> <small>vinculada, a conta vai para dentro da empresa e o cartão some daqui</small></div>
+    ${grupo('Só falta dizer de quem é', 'escolha a empresa e o extrato entra na hora', vinc)}
+    ${grupo('Falta também o número da conta', 'o arquivo não trouxe a conta', falta)}
+    ${ruins.length ? `<div class="pc-grupo"><b>Arquivos que não consigo ler</b><span class="cinza">${ruins.length}</span><small>nada a responder: apague da pasta e somem daqui</small></div>
+      <div class="pc-ruins">${ruins.map(([p]) => `<div class="pc-ruim"><i class="fas fa-file-circle-xmark"></i><span class="a" title="${esc(p.arquivo)}">${esc(p.arquivo)}</span><span class="m">${esc((p.motivo || '').split('.')[0])}</span><span class="d">${quando(p.criado_em)}</span></div>`).join('')}</div>` : ''}`;
+  box.querySelectorAll('form.pc').forEach(f => { pcBotao(f); f.addEventListener('change', () => pcBotao(f)); });
   const hs = document.getElementById('mePendHero');
-  if (hs) { hs.hidden = false; hs.querySelector('b').textContent = tp.length; }
+  if (hs && vinc.length + falta.length) { hs.hidden = false; hs.querySelector('b').textContent = vinc.length + falta.length; }
 }
 
 /* ---------- formatos que o sistema lê ---------- */
