@@ -154,8 +154,8 @@
 {# ── caixa Novo orçamento (molde da Nova cobrança) ── #}
 <div class="pk-fundo" id="ocNovoFundo" hidden>
   <form class="ns" id="ocForm" method="POST" action="{{ url_for('comercial.orcamento_novo') }}" autocomplete="off">
-    <input type="hidden" name="orcamento_id" id="ocId" value=""><input type="hidden" name="cliente_id" id="ocCli" value=""><input type="hidden" name="como" id="ocComo" value="BOLETO_NOTA">
-    <input type="hidden" name="parcelas" id="ocParc" value="1"><input type="hidden" name="comissao_tipo" id="ocCt" value="PADRAO"><input type="hidden" name="validade_dias" id="ocVal" value="15"><input type="hidden" name="acao" id="ocAcao" value="rascunho"><input type="hidden" name="interno" id="ocInterno" value="0">
+    <input type="hidden" name="orcamento_id" id="ocId" value=""><input type="hidden" name="cliente_id" id="ocCli" value="">{# ids dos campos escondidos NÃO podem ser iguais aos nomes das funções: no onclick, o nome resolve para o campo do form (ocComo virava o input) #}<input type="hidden" name="como" id="ocComoIn" value="BOLETO_NOTA">
+    <input type="hidden" name="parcelas" id="ocParc" value="1"><input type="hidden" name="comissao_tipo" id="ocCtIn" value="PADRAO"><input type="hidden" name="validade_dias" id="ocVal" value="15"><input type="hidden" name="acao" id="ocAcao" value="rascunho"><input type="hidden" name="interno" id="ocInterno" value="0">
     <header class="ns-cab"><span class="ns-logo"><img src="{{ url_for('static', filename='images/logo.png') }}" alt="Qualicontax"></span>
       <div class="ns-tit"><b id="ocTit">Novo orçamento</b><span>escolha a empresa, os serviços e os valores · depois vai para aprovação</span></div>
       <div class="ns-prev"><small>total do orçamento</small><b id="ocPrevTot">R$ 0,00</b><span id="ocPrevSub">nenhum serviço ainda</span></div>
@@ -348,7 +348,7 @@
   window.ocEmpAbrir = function () {
     if (!window.CaixaCliente) return;
     CaixaCliente.abrir({ clientes: CLI, atual: $('ocCli').value, titulo: 'Empresa do orçamento', sub: 'cliente cadastrado ou avulso · é para ela que o orçamento vai', z: 1300,
-      onUsar: function (c) { if (!c) return; $('ocCli').value = c.id; ocEmpPinta(c); ocSolChips(c.id); ocResumo(); var bm = document.querySelector('#ocOps .ns-op[data-v=MENSAL]'); bm.classList.toggle('sem', !c.mensal); if (!c.mensal && $('ocComo').value === 'MENSAL') ocComo(document.querySelector('#ocOps .ns-op[data-v=BOLETO_NOTA]')); } });
+      onUsar: function (c) { if (!c) return; $('ocCli').value = c.id; ocEmpPinta(c); ocSolChips(c.id); ocResumo(); var bm = document.querySelector('#ocOps .ns-op[data-v=MENSAL]'); bm.classList.toggle('sem', !c.mensal); if (!c.mensal && $('ocComoIn').value === 'MENSAL') ocComo(document.querySelector('#ocOps .ns-op[data-v=BOLETO_NOTA]')); } });
   };
 
   // itens
@@ -384,11 +384,11 @@
   };
   function ocMask(el) { el.addEventListener('input', function () { var d = el.value.replace(/\D/g, '').replace(/^0+/, '').slice(0, 11); el.value = d ? (parseInt(d, 10) / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : ''; ocResumo(); }); }
 
-  window.ocComo = function (b) { if (!b) return; $('ocComo').value = b.dataset.v; document.querySelectorAll('#ocOps .ns-op').forEach(function (x) { x.classList.toggle('on', x === b); }); ocResumo(); };
+  window.ocComo = function (b) { if (!b) return; $('ocComoIn').value = b.dataset.v; document.querySelectorAll('#ocOps .ns-op').forEach(function (x) { x.classList.toggle('on', x === b); }); ocResumo(); };
   window.ocParcela = function (b) { if (!b) return; $('ocParc').value = b.dataset.v; document.querySelectorAll('#ocParcs button').forEach(function (x) { x.classList.toggle('on', x === b); }); ocResumo(); };
   window.ocValidade = function (b) { if (!b) return; $('ocVal').value = b.dataset.v; document.querySelectorAll('#ocVals button').forEach(function (x) { x.classList.toggle('on', x === b); }); ocResumo(); };
   window.ocCt = function (b) {
-    if (!b) return; var v = b.dataset.v; $('ocCt').value = v; document.querySelectorAll('#ocSeg button').forEach(function (x) { x.classList.toggle('on', x === b); });
+    if (!b) return; var v = b.dataset.v; $('ocCtIn').value = v; document.querySelectorAll('#ocSeg button').forEach(function (x) { x.classList.toggle('on', x === b); });
     var box = $('ocCvBox'); box.hidden = !(v === 'PCT' || v === 'FIXO'); box.classList.toggle('pct', v !== 'FIXO'); box.classList.toggle('fixo', v === 'FIXO'); $('ocCvUn').textContent = v === 'FIXO' ? 'R$' : '%'; $('ocCv').placeholder = v === 'FIXO' ? '0,00' : '10';
     if (!box.hidden) $('ocCv').focus(); ocResumo();
   };
@@ -402,7 +402,7 @@
       n++; tot += q * v; if (s.nota) nota += q * v;
       h += '<div class="oc-res-it"><span>' + esc((r.querySelector('[name=item_descricao]').value || s.nome)) + (q > 1 ? ' × ' + q : '') + (s.nota ? '' : ' <small style="color:#b45309">só boleto</small>') + '</span><b>' + brl(q * v) + '</b></div>';
     });
-    var como = $('ocComo').value, parc = parseInt($('ocParc').value || '1', 10), ct = $('ocCt').value, cv = num($('ocCv').value);
+    var como = $('ocComoIn').value, parc = parseInt($('ocParc').value || '1', 10), ct = $('ocCtIn').value, cv = num($('ocCv').value);
     var rc = { PADRAO: 'meu padrão', PCT: (cv ? cv.toLocaleString('pt-BR') + '%' : '% a definir'), FIXO: (cv ? brl(cv) : 'valor a definir'), SEM: 'sem comissão' }[ct];
     $('ocRes').innerHTML = (cli ? '<div class="oc-res-it"><span><b>' + esc(cli.nome) + '</b></span><b style="font-weight:600; color:#64748b">' + (cli.av ? 'avulso' : 'nº ' + (cli.num || '—')) + '</b></div>' : '<div class="oc-res-it"><span style="color:#b45309">escolha a empresa</span><b></b></div>')
       + (h || '<div class="oc-res-it"><span style="color:#94a3b8">nenhum serviço com valor ainda</span><b></b></div>')
