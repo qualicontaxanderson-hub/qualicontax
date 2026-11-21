@@ -3,110 +3,242 @@
 {% block content %}
 {# 17/11/2026 — Anderson: "os usuarios todos eles tem que ter acesso ao seu cadastro... alterar". Cada um vê e altera os
    PRÓPRIOS dados pessoais, endereço, banco e Pix (a chave Pix é a que sai no pedido de comissão). Nome, login e acesso
-   continuam com o administrador. #}
-{% include 'clientes/_cartao_css.html' %}
-{% include 'configuracoes/_painel_css.html' %}
+   continuam com o administrador.
+   20/11/2026 — Anderson: "meu cadastro está feio queria algo bem elegante baseado no que estamos fazendo no Financeiro".
+   Molde de HONORÁRIOS/COBRANÇAS: topo verde, quadros coloridos de resumo encostados no topo, seções em cartões com a
+   faixa de cima na cor, contas como os cartões de banco (logo + selo "recebe os pagamentos"). #}
+{% set pn = (current_user.nome or '').split() %}
+{% set PIXN = dict(PIX_TIPOS) %}
+{% set rec = (contas | selectattr('recebe_pagamentos') | list | first) if contas else None %}
+{% if cad %}
+  {% set _pes = [('CPF', cad.cpf), ('nascimento', cad.data_nascimento), ('e-mail pessoal', cad.email_pessoal), ('celular pessoal', cad.celular_pessoal), ('celular da empresa', cad.celular_corporativo)] %}
+  {% set _falta = _pes | rejectattr(1) | map(attribute=0) | list %}
+  {% set _end = [cad.cep, cad.logradouro, cad.numero, cad.bairro, cad.cidade, cad.estado] %}
+  {% set _end_falta = _end | reject | list | length %}
+{% endif %}
 <style>
-.mc { }
-.mc-cab { display:flex; align-items:center; gap:16px; min-width:0; }
-.mc-ava { width:56px; height:56px; border-radius:16px; flex:none; display:flex; align-items:center; justify-content:center;
-          background:rgba(255,255,255,.16); border:1.5px solid rgba(255,255,255,.35); color:#fff; font-size:20px; font-weight:800; }
-.mc .ef-hero-sub span + span::before { content:"·"; margin:0 7px; opacity:.6; }
-.mc-bloco { margin-bottom:14px; } .mc-bloco .cli-f-row { display:block; } .mc-bloco .cli-seg-rot { display:block; margin-bottom:10px; }
-.mc-campos { display:grid; grid-template-columns:repeat(3, minmax(0,1fr)); gap:12px 14px; } .mc-campos > * { min-width:0; }
-.mc-campo { display:block; } .mc-campo.l2 { grid-column:span 2; }
-.mc-campo > span { display:block; font-size:11px; font-weight:800; letter-spacing:.5px; text-transform:uppercase; color:#64748b; margin-bottom:5px; }
-.mc-campo input, .mc-campo select { width:100%; border:1px solid #d7e3dc; border-radius:9px; padding:8px 11px; font:inherit; font-size:13.5px;
-  color:#0f172a; background:#fff; box-sizing:border-box; }
-.mc-campo input:focus, .mc-campo select:focus { outline:none; border-color:#16a34a; box-shadow:0 0 0 3px rgba(22,163,74,.15); }
-.mc-campo input[readonly] { background:#f8fafc; color:#475569; }
-.mc-txt { margin:8px 0 0; font-size:12.5px; color:#64748b; line-height:1.5; }
-.mc-pe { display:flex; justify-content:flex-end; gap:8px; }
-.mc-contas { display:grid; grid-template-columns:repeat(auto-fill, minmax(290px, 1fr)); gap:12px; margin-bottom:10px; }
-.mc-conta { border:1.5px solid #e2e8f0; border-radius:14px; padding:12px 14px; background:#fff; font-size:13px; color:#334155; }
-.mc-conta.on { border-color:#16a34a; background:#f0fdf4; } .mc-conta.edit { box-shadow:0 0 0 3px rgba(22,163,74,.18); }
-.mc-conta-t { display:flex; align-items:center; gap:8px; flex-wrap:wrap; font-size:14px; color:#0f172a; margin-bottom:4px; }
-.mc-selo { font-size:11px; font-weight:800; color:#15803d; background:#dcfce7; border-radius:99px; padding:2px 9px; }
-.mc-conta-d { line-height:1.5; word-break:break-all; } .mc-outro { margin-top:6px; font-size:12px; color:#92400e; background:#fffbeb; border:1px solid #fde68a; border-radius:8px; padding:5px 8px; }
-.mc-conta-ac { display:flex; gap:6px; flex-wrap:wrap; margin-top:10px; }
-.mc-bt { font:inherit; font-size:12.5px; font-weight:700; border-radius:9px; padding:6px 10px; border:1.5px solid #e2e8f0; background:#fff; color:#334155; cursor:pointer; text-decoration:none; display:inline-flex; gap:6px; align-items:center; }
-.mc-bt.ok { color:#15803d; border-color:#bbf7d0; background:#f0fdf4; } .mc-bt.no { color:#b91c1c; border-color:#fecaca; }
-.mc-link { margin-left:8px; color:#15803d; font-weight:800; text-decoration:none; }
-.mc-check { display:inline-flex; align-items:center; gap:8px; margin-top:12px; font-size:13.5px; font-weight:700; color:#0f172a; } .mc-check input { width:18px; height:18px; accent-color:#16a34a; }
-.ns-fundo { position:fixed; inset:0; background:rgba(15,23,42,.45); display:none; align-items:center; justify-content:center; z-index:60; padding:16px; } .ns-fundo.on { display:flex; }
-.ns { background:#fff; border-radius:18px; width:100%; box-shadow:0 24px 60px rgba(0,0,0,.25); overflow:hidden; }
-.ns-cab { display:flex; align-items:center; gap:10px; padding:14px 18px; border-bottom:1px solid #eef2f0; } .ns-tit b { display:block; font-size:16px; } .ns-tit span { font-size:12.5px; color:#64748b; }
-.ns-x { margin-left:auto; border:0; background:#f1f5f9; border-radius:9px; width:32px; height:32px; cursor:pointer; }
-.ns-f { padding:14px 18px; } .ns-aviso { display:flex; gap:8px; font-size:13px; color:#92400e; background:#fffbeb; border:1px solid #fde68a; border-radius:10px; padding:9px 11px; }
-.ns-pe { display:flex; gap:8px; align-items:center; padding:12px 18px; border-top:1px solid #eef2f0; } .ns-pe-info { flex:1; }
-.ns-bt { font:inherit; font-weight:800; border-radius:11px; padding:9px 14px; cursor:pointer; border:1.5px solid #e2e8f0; background:#fff; color:#334155; }
+.mc { --verde:#0f3d2e; --linha:#e6eeea; --mudo:#64748b; --tinta:#0f172a; }
+.mc-cab { display:flex; align-items:center; gap:18px; min-width:0; }
+.mc-ava { width:64px; height:64px; border-radius:20px; flex:none; display:flex; align-items:center; justify-content:center;
+          background:linear-gradient(135deg,rgba(255,255,255,.26),rgba(255,255,255,.08)); border:1.5px solid rgba(255,255,255,.4);
+          color:#fff; font-size:23px; font-weight:800; letter-spacing:.02em; box-shadow:0 10px 26px rgba(0,0,0,.18); }
+.mc .ef-hero-sub { display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; }
+.mc .ef-hero-sub span { display:inline-flex; align-items:center; gap:6px; font-size:12.5px; color:#eafff3; background:rgba(255,255,255,.13);
+                        border:1px solid rgba(255,255,255,.22); border-radius:99px; padding:3px 11px; }
+.mc .ef-hero-sub i { color:#bbf7d0; font-size:11px; }
+.mc-btn { display:inline-flex; align-items:center; gap:9px; padding:11px 20px; border-radius:14px; border:0; background:#fff; color:var(--verde);
+          font:inherit; font-weight:800; font-size:14.5px; box-shadow:0 10px 26px rgba(0,0,0,.18); cursor:pointer; }
+.mc-btn i { color:#16a34a; } .mc-btn:hover { transform:translateY(-1px); }
+
+/* quadros de resumo (molde .tx-aba do Financeiro) */
+.mc-abas { display:grid; grid-template-columns:repeat(4, minmax(0,1fr)); gap:12px; margin-top:-34px; position:relative; z-index:2; margin-bottom:22px; }
+.mc-aba { display:flex; align-items:center; gap:16px; min-width:0; overflow:hidden; text-decoration:none; color:#fff; border-radius:18px; padding:18px 22px 16px;
+          background:linear-gradient(135deg, var(--cor) 0%, var(--cor-e) 100%); box-shadow:0 10px 24px rgba(15,23,42,.14); transition:transform .18s, box-shadow .18s; }
+.mc-aba:hover { transform:translateY(-2px); box-shadow:0 16px 32px rgba(15,23,42,.22); }
+.mc-aba-ico { width:46px; height:46px; border-radius:14px; background:rgba(255,255,255,.2); display:flex; align-items:center; justify-content:center; font-size:18px; flex-shrink:0; }
+.mc-aba-txt { min-width:0; flex:1; }
+.mc-aba-lbl { display:block; font-size:12px; font-weight:700; letter-spacing:.6px; text-transform:uppercase; opacity:.92; }
+.mc-aba-val { display:block; font-size:19px; font-weight:800; letter-spacing:-.02em; line-height:1.2; margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.mc-aba-sub { display:block; font-size:12px; color:rgba(255,255,255,.85); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.mc-a-pes { --cor:#16a34a; --cor-e:#166534; } .mc-a-end { --cor:#2563eb; --cor-e:#1e40af; }
+.mc-a-rec { --cor:#f97316; --cor-e:#c2410c; } .mc-a-ctas { --cor:#7c3aed; --cor-e:#5b21b6; }
+
+/* seções em cartão com a faixa de cima na cor */
+.mc-duas { display:grid; grid-template-columns:minmax(0,1.15fr) minmax(0,1fr); gap:16px; margin-bottom:16px; }
+.mc-sec { background:#fff; border:1px solid var(--linha); border-radius:18px; box-shadow:0 10px 28px rgba(15,61,46,.06); overflow:hidden; margin-bottom:16px; scroll-margin-top:90px; }
+.mc-duas .mc-sec { margin-bottom:0; }
+.mc-sec-h { display:flex; align-items:center; gap:12px; padding:14px 18px; background:linear-gradient(135deg, var(--sec-f), #fff 75%); border-bottom:1px solid var(--sec-b); position:relative; }
+.mc-sec-h::before { content:''; position:absolute; left:0; top:0; right:0; height:3px; background:linear-gradient(90deg, var(--sec), var(--sec-e)); }
+.mc-sec-ic { width:38px; height:38px; border-radius:12px; flex-shrink:0; display:flex; align-items:center; justify-content:center; color:#fff; font-size:15px;
+             background:linear-gradient(135deg, var(--sec), var(--sec-e)); box-shadow:0 6px 14px color-mix(in srgb, var(--sec) 35%, transparent); }
+.mc-sec-t { min-width:0; flex:1; } .mc-sec-t b { display:block; font-size:15px; color:var(--tinta); }
+.mc-sec-t small { display:block; font-size:12.5px; color:var(--mudo); line-height:1.35; }
+.mc-chip { flex-shrink:0; display:inline-flex; align-items:center; gap:6px; font-size:12px; font-weight:800; border-radius:99px; padding:4px 11px; color:var(--sec-e); background:#fff; border:1px solid var(--sec-b); }
+.mc-chip.ok { color:#15803d; border-color:#bbf7d0; background:#f0fdf4; } .mc-chip.falta { color:#b45309; border-color:#fde68a; background:#fffbeb; }
+.mc-sec-b { padding:16px 18px 18px; }
+.mc-s-pes { --sec:#16a34a; --sec-e:#166534; --sec-f:#ecfdf3; --sec-b:#d1f2dd; }
+.mc-s-end { --sec:#2563eb; --sec-e:#1e40af; --sec-f:#eff4ff; --sec-b:#d6e4fd; }
+.mc-s-ctas { --sec:#7c3aed; --sec-e:#5b21b6; --sec-f:#f5f3ff; --sec-b:#e4dcfd; }
+.mc-s-form { --sec:#f97316; --sec-e:#c2410c; --sec-f:#fff4ec; --sec-b:#fde0c7; }
+
+.mc-campos { display:grid; grid-template-columns:repeat(2, minmax(0,1fr)); gap:12px 14px; } .mc-campos > * { min-width:0; }
+.mc-campos.c3 { grid-template-columns:repeat(3, minmax(0,1fr)); } .mc-campos.c4 { grid-template-columns:repeat(4, minmax(0,1fr)); }
+.mc-campo { display:block; } .mc-campo.l2 { grid-column:span 2; } .mc-campo.tudo { grid-column:1 / -1; }
+.mc-campo > span { display:flex; align-items:center; gap:6px; font-size:11px; font-weight:800; letter-spacing:.5px; text-transform:uppercase; color:#64748b; margin-bottom:5px; }
+.mc-campo > span i { color:#94a3b8; font-size:10px; }
+.mc-campo input, .mc-campo select { width:100%; height:42px; border:1.5px solid #e2ebe6; border-radius:11px; padding:0 12px; font:inherit; font-size:14px;
+  color:var(--tinta); background:#fbfdfc; box-sizing:border-box; transition:border-color .15s, box-shadow .15s, background .15s; }
+.mc-campo input:hover, .mc-campo select:hover { border-color:#c9dbd1; }
+.mc-campo input:focus, .mc-campo select:focus { outline:none; border-color:var(--sec, #16a34a); background:#fff; box-shadow:0 0 0 3px var(--sec-f, rgba(22,163,74,.15)); }
+.mc-campo input[readonly] { background:#f1f5f4; color:#475569; border-style:dashed; cursor:not-allowed; }
+.mc-campo input::placeholder { color:#a3b3ab; font-size:13px; }
+.mc-txt { display:flex; gap:8px; align-items:flex-start; margin:14px 0 0; font-size:12.5px; color:#64748b; line-height:1.5; }
+.mc-txt i { color:#94a3b8; margin-top:3px; }
+.mc-vazio { display:flex; gap:12px; align-items:center; padding:14px 16px; border-radius:14px; background:#f8fafc; border:1px dashed #cbd5e1; font-size:13px; color:#475569; line-height:1.5; }
+.mc-vazio i { font-size:20px; color:#94a3b8; }
+
+/* contas para receber (molde .hp-banco) */
+.mc-contas { display:grid; grid-template-columns:repeat(auto-fill, minmax(320px, 1fr)); gap:14px; }
+.mc-conta { position:relative; display:flex; flex-direction:column; gap:10px; border:1.5px solid #e6eeea; border-radius:16px; padding:16px; background:#fff; transition:border-color .15s, box-shadow .15s; }
+.mc-conta:hover { border-color:#c9dbd1; box-shadow:0 10px 24px rgba(15,61,46,.08); }
+.mc-conta.on { border-color:#16a34a; background:linear-gradient(135deg,#f0fdf4,#fff 70%); box-shadow:0 0 0 3px #dcfce7; }
+.mc-conta.edit { border-color:#f97316; box-shadow:0 0 0 3px #ffedd5; }
+.mc-selo { position:absolute; left:14px; top:-10px; display:inline-flex; align-items:center; gap:5px; font-size:10.5px; font-weight:800; letter-spacing:.05em;
+           text-transform:uppercase; color:#fff; background:#16a34a; border-radius:99px; padding:3px 10px; box-shadow:0 4px 10px rgba(22,163,74,.3); }
+.mc-selo.ed { left:auto; right:14px; background:#f97316; box-shadow:0 4px 10px rgba(249,115,22,.3); }
+.mc-conta-t { display:flex; align-items:center; gap:12px; min-width:0; }
+.mc-logo { width:42px; height:42px; border-radius:12px; flex-shrink:0; display:flex; align-items:center; justify-content:center; background:#f1f5f4; overflow:hidden; }
+.mc-logo img { border-radius:10px; } .mc-logo .bco-ponto { width:18px; height:18px; border-radius:6px; display:block; }
+.mc-conta-n { min-width:0; flex:1; line-height:1.25; }
+.mc-conta-n b { display:block; font-size:15px; color:var(--tinta); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.mc-conta-n small { display:block; font-size:12.5px; color:var(--mudo); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.mc-dl { display:grid; grid-template-columns:auto minmax(0,1fr); gap:4px 12px; font-size:12.5px; margin:0; padding:10px 12px; background:#f8fafc; border-radius:11px; }
+.mc-conta.on .mc-dl { background:rgba(255,255,255,.75); }
+.mc-dl dt { color:#94a3b8; font-weight:700; } .mc-dl dd { margin:0; color:#334155; font-weight:600; word-break:break-all; font-variant-numeric:tabular-nums; }
+.mc-dl dd.sem { color:#b91c1c; }
+.mc-outro { display:flex; gap:7px; font-size:12px; color:#92400e; background:#fffbeb; border:1px solid #fde68a; border-radius:10px; padding:7px 10px; line-height:1.4; }
+.mc-conta-ac { display:flex; gap:6px; flex-wrap:wrap; margin-top:auto; }
+.mc-bt { font:inherit; font-size:12.5px; font-weight:700; border-radius:10px; padding:7px 12px; border:1.5px solid #e2e8f0; background:#fff; color:#334155; cursor:pointer;
+         text-decoration:none; display:inline-flex; gap:6px; align-items:center; }
+.mc-bt:hover { border-color:#c9dbd1; }
+.mc-bt.ok { color:#fff; border-color:#16a34a; background:#16a34a; } .mc-bt.ok:hover { background:#15803d; }
+.mc-bt.no { color:#b91c1c; border-color:#fecaca; } .mc-bt.no:hover { background:#fef2f2; }
+.mc-nova { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:8px; min-height:170px; border:2px dashed #ddd6fe; border-radius:16px;
+           background:#faf8ff; color:#5b21b6; text-decoration:none; font-weight:800; font-size:14px; transition:all .15s; }
+.mc-nova i { width:40px; height:40px; border-radius:12px; background:linear-gradient(135deg,#7c3aed,#5b21b6); color:#fff; display:flex; align-items:center; justify-content:center; font-size:16px; }
+.mc-nova small { font-weight:600; font-size:12px; color:#7c6aa8; }
+.mc-nova:hover { border-color:#7c3aed; background:#f5f3ff; }
+.mc-bco-in { position:relative; display:flex; align-items:center; }
+.mc-bco-logo { position:absolute; left:8px; top:50%; transform:translateY(-50%); width:28px; height:28px; border-radius:8px; display:flex; align-items:center; justify-content:center; background:#f1f5f4; overflow:hidden; pointer-events:none; }
+.mc-bco-logo img { border-radius:7px; } .mc-bco-logo .bco-ponto { display:none; }
+.mc-bco-sem { color:#94a3b8; font-size:12px; } .mc-bco-logo.tem .mc-bco-sem { display:none; } .mc-bco-logo.tem { background:#fff; box-shadow:0 0 0 1px #e2ebe6; }
+.mc-campo .mc-bco-in input[name=banco_nome] { padding-left:46px; border-top-right-radius:0; border-bottom-right-radius:0; }
+.mc-campo .mc-bco-in input.mc-bco-cod { width:92px; flex:none; margin-left:-1.5px; border-top-left-radius:0; border-bottom-left-radius:0; text-align:center; font-variant-numeric:tabular-nums; color:#475569; background:#f6f9f7; }
+.mc-check { display:inline-flex; align-items:center; gap:10px; margin-top:16px; padding:10px 14px; border-radius:12px; background:#f0fdf4; border:1px solid #bbf7d0;
+            font-size:13.5px; font-weight:700; color:#14532d; cursor:pointer; } .mc-check input { width:18px; height:18px; accent-color:#16a34a; }
+
+/* barra de salvar que aparece quando algo muda (molde .hp-barra) */
+.mc-barra { position:fixed; bottom:18px; left:50%; width:min(820px, calc(100vw - 32px)); z-index:900; display:flex; align-items:center; gap:14px; flex-wrap:wrap;
+            background:linear-gradient(135deg,#0f3d2e,#166534); color:#fff; border-radius:16px; padding:12px 14px 12px 18px; box-shadow:0 16px 36px rgba(2,44,22,.3);
+            transform:translate(-50%, 12px); opacity:0; pointer-events:none; transition:all .2s; }
+.mc-barra.on { transform:translate(-50%, 0); opacity:1; pointer-events:auto; }
+.mc-barra span { flex:1; font-size:13.5px; } .mc-barra span i { color:#86efac; margin-right:6px; }
+.mc-barra .mc-btn { padding:10px 18px; }
+
+.ns-fundo { position:fixed; inset:0; background:rgba(15,23,42,.5); backdrop-filter:blur(2px); display:none; align-items:center; justify-content:center; z-index:1200; padding:16px; } .ns-fundo.on { display:flex; }
+.ns { background:#fff; border-radius:20px; width:100%; box-shadow:0 30px 80px rgba(2,44,22,.35); overflow:hidden; }
+.ns-cab { display:flex; align-items:center; gap:12px; padding:16px 18px; color:#fff; background:linear-gradient(135deg,#dc2626,#991b1b); }
+.ns-cab > i { width:36px; height:36px; border-radius:11px; background:rgba(255,255,255,.2); display:flex; align-items:center; justify-content:center; }
+.ns-tit b { display:block; font-size:16px; } .ns-tit span { font-size:12.5px; opacity:.9; }
+.ns-x { margin-left:auto; border:0; background:rgba(255,255,255,.18); color:#fff; border-radius:9px; width:32px; height:32px; cursor:pointer; }
+.ns-f { padding:16px 18px; } .ns-aviso { display:flex; gap:8px; font-size:13px; color:#92400e; background:#fffbeb; border:1px solid #fde68a; border-radius:12px; padding:10px 12px; line-height:1.45; }
+.ns-pe { display:flex; gap:8px; justify-content:flex-end; padding:0 18px 16px; }
+.ns-bt { font:inherit; font-weight:800; border-radius:11px; padding:9px 16px; cursor:pointer; border:1.5px solid #e2e8f0; background:#fff; color:#334155; }
 .ns-bt.red { border:0; background:linear-gradient(135deg,#dc2626,#991b1b); color:#fff; }
-@media (max-width:800px) { .mc-campos { grid-template-columns:minmax(0,1fr); } .mc-campo.l2 { grid-column:auto; }
-  .mc .ef-hero-sub span { display:block; } .mc .ef-hero-sub span + span::before { content:none; } }
+
+@media (max-width:1280px) { .mc-duas { grid-template-columns:minmax(0,1fr); } .mc-campos.c4 { grid-template-columns:repeat(2, minmax(0,1fr)); } }
+@media (max-width:900px) { .mc-abas { grid-template-columns:repeat(2, minmax(0,1fr)); } .mc-campos.c3 { grid-template-columns:repeat(2, minmax(0,1fr)); } }
+@media (max-width:640px) {
+  .mc-abas { grid-template-columns:minmax(0,1fr); gap:8px; } .mc-aba { padding:13px 16px; }
+  .mc-campos, .mc-campos.c3, .mc-campos.c4 { grid-template-columns:minmax(0,1fr); } .mc-campo.l2 { grid-column:auto; }
+  .mc-contas { grid-template-columns:minmax(0,1fr); }
+  .mc-cab { gap:12px; } .mc-ava { width:52px; height:52px; font-size:19px; border-radius:16px; }
+  .mc-sec-h { flex-wrap:wrap; } .mc-barra { bottom:76px; } .mc-barra .mc-btn { width:100%; justify-content:center; }
+}
 </style>
 
-<form method="POST" autocomplete="off" class="mc">
+<form method="POST" autocomplete="off" class="mc" id="mcForm">
 <div class="ef-hero">
   <div class="ef-hero-inner ef-hero-head">
     <div class="mc-cab">
-      {% set pn = (current_user.nome or '').split() %}
       <span class="mc-ava">{{ pn[0][:1] if pn else '?' }}{{ pn[-1][:1] if pn|length > 1 }}</span>
       <div style="min-width:0">
         <h1 class="ef-hero-title">Meu cadastro</h1>
-        <p class="ef-hero-sub"><span>{{ current_user.nome }}</span><span>login <b>{{ current_user.login }}</b></span><span>{{ current_user.email }}</span></p>
+        <p class="ef-hero-sub"><span><i class="fas fa-user"></i>{{ current_user.nome }}</span><span><i class="fas fa-key"></i>login <b>{{ current_user.login }}</b></span>{% if current_user.email %}<span><i class="fas fa-envelope"></i>{{ current_user.email }}</span>{% endif %}</p>
       </div>
     </div>
-    <div class="ef-hero-actions"><button type="submit" class="ef-btn ef-btn-primary"><i class="fas fa-check"></i> Salvar</button></div>
+    <div><button type="submit" class="mc-btn"><i class="fas fa-check"></i> Salvar</button></div>
   </div>
 </div>
 
 <div class="ef-body">
-  <div class="cli-filtros mc-bloco"><div class="cli-f-row">
-    <span class="cli-seg-rot"><i class="fas fa-id-card"></i> Dados pessoais</span>
-    {% if cad %}
-    <div class="mc-campos">
-      <label class="mc-campo l2"><span>Nome completo</span><input value="{{ cad.nome_completo or current_user.nome }}" readonly title="O nome muda com o administrador"></label>
-      <label class="mc-campo"><span>CPF</span><input name="cpf" value="{{ cad.cpf or '' }}" inputmode="numeric" maxlength="14"></label>
-      <label class="mc-campo"><span>Nascimento</span><input type="date" name="data_nascimento" value="{{ cad.data_nascimento.isoformat() if cad.data_nascimento else '' }}"></label>
-      <label class="mc-campo"><span>E-mail pessoal</span><input type="email" name="email_pessoal" value="{{ cad.email_pessoal or '' }}"></label>
-      <label class="mc-campo"><span>E-mail da empresa</span><input value="{{ current_user.email or cad.email_corporativo or '' }}" readonly title="O e-mail de entrada muda com o administrador"></label>
-      <label class="mc-campo"><span>Celular pessoal</span><input name="celular_pessoal" value="{{ cad.celular_pessoal or '' }}" inputmode="tel"></label>
-      <label class="mc-campo"><span>Celular da empresa</span><input name="celular_corporativo" value="{{ cad.celular_corporativo or '' }}" inputmode="tel"></label>
-    </div>
-    {% else %}
-    <p class="mc-txt"><i class="fas fa-circle-info"></i> Seu usuário não veio pelo link de cadastro, então não há dados pessoais guardados. Peça ao administrador o link de cadastro se precisar. Banco e Pix você preenche aqui embaixo.</p>
-    {% endif %}
-  </div></div>
+  <div class="mc-abas">
+    <a class="mc-aba mc-a-pes" href="#pessoais"><span class="mc-aba-ico"><i class="fas fa-id-card"></i></span>
+      <span class="mc-aba-txt"><span class="mc-aba-lbl">Dados pessoais</span>
+      {% if cad %}<span class="mc-aba-val">{{ 5 - _falta|length }} de 5 preenchidos</span><span class="mc-aba-sub">{{ 'falta: ' ~ _falta|join(', ') if _falta else 'tudo preenchido' }}</span>
+      {% else %}<span class="mc-aba-val">Sem ficha</span><span class="mc-aba-sub">peça o link de cadastro ao administrador</span>{% endif %}</span></a>
+    <a class="mc-aba mc-a-end" href="#endereco"><span class="mc-aba-ico"><i class="fas fa-location-dot"></i></span>
+      <span class="mc-aba-txt"><span class="mc-aba-lbl">Endereço</span>
+      {% if cad and cad.cidade %}<span class="mc-aba-val">{{ cad.cidade | title }}{% if cad.estado %}/{{ cad.estado }}{% endif %}</span><span class="mc-aba-sub">{{ 'completo' if not _end_falta else _end_falta ~ ' campo(s) em branco' }}</span>
+      {% else %}<span class="mc-aba-val">A preencher</span><span class="mc-aba-sub">{{ 'CEP, rua, número, cidade' if cad else 'sem ficha' }}</span>{% endif %}</span></a>
+    <a class="mc-aba mc-a-rec" href="#contas"><span class="mc-aba-ico"><i class="fas fa-hand-holding-dollar"></i></span>
+      <span class="mc-aba-txt"><span class="mc-aba-lbl">Recebe em</span>
+      {% if rec %}<span class="mc-aba-val">{{ rec.banco_nome or rec.apelido or 'Conta escolhida' }}</span><span class="mc-aba-sub">{{ ('Pix ' ~ (PIXN.get(rec.pix_tipo, rec.pix_tipo) or '') ~ ' · ' ~ rec.pix_chave) if rec.pix_chave else 'sem chave Pix' }}</span>
+      {% else %}<span class="mc-aba-val">Nenhuma conta</span><span class="mc-aba-sub">cadastre onde quer receber</span>{% endif %}</span></a>
+    <a class="mc-aba mc-a-ctas" href="#contas"><span class="mc-aba-ico"><i class="fas fa-building-columns"></i></span>
+      <span class="mc-aba-txt"><span class="mc-aba-lbl">Contas cadastradas</span><span class="mc-aba-val">{{ contas | length }} {{ 'conta' if contas|length == 1 else 'contas' }}</span>
+      <span class="mc-aba-sub">a marcada sai no pedido de comissão</span></span></a>
+  </div>
 
   {% if cad %}
-  <div class="cli-filtros mc-bloco"><div class="cli-f-row">
-    <span class="cli-seg-rot"><i class="fas fa-location-dot"></i> Endereço</span>
-    <div class="mc-campos">
-      <label class="mc-campo"><span>CEP</span><input name="cep" value="{{ cad.cep or '' }}" inputmode="numeric" maxlength="9"></label>
-      <label class="mc-campo l2"><span>Rua / avenida</span><input name="logradouro" value="{{ cad.logradouro or '' }}"></label>
-      <label class="mc-campo"><span>Número</span><input name="numero" value="{{ cad.numero or '' }}"></label>
-      <label class="mc-campo"><span>Complemento</span><input name="complemento" value="{{ cad.complemento or '' }}"></label>
-      <label class="mc-campo"><span>Bairro</span><input name="bairro" value="{{ cad.bairro or '' }}"></label>
-      <label class="mc-campo l2"><span>Cidade</span><input name="cidade" value="{{ cad.cidade or '' }}"></label>
-      <label class="mc-campo"><span>Estado (UF)</span><input name="estado" value="{{ cad.estado or '' }}" maxlength="2" style="text-transform:uppercase"></label>
-    </div>
-  </div></div>
+  <div class="mc-duas">
+    <section class="mc-sec mc-s-pes" id="pessoais">
+      <header class="mc-sec-h"><span class="mc-sec-ic"><i class="fas fa-id-card"></i></span>
+        <div class="mc-sec-t"><b>Dados pessoais</b><small>Nome e e-mail da empresa mudam com o administrador</small></div>
+        {% if _falta %}<span class="mc-chip falta"><i class="fas fa-circle-exclamation"></i> falta {{ _falta|length }}</span>{% else %}<span class="mc-chip ok"><i class="fas fa-check"></i> completo</span>{% endif %}</header>
+      <div class="mc-sec-b"><div class="mc-campos">
+        <label class="mc-campo tudo"><span>Nome completo <i class="fas fa-lock"></i></span><input value="{{ cad.nome_completo or current_user.nome }}" readonly title="O nome muda com o administrador"></label>
+        <label class="mc-campo"><span>CPF</span><input name="cpf" value="{{ cad.cpf or '' }}" inputmode="numeric" maxlength="14" placeholder="000.000.000-00"></label>
+        <label class="mc-campo"><span>Nascimento</span><input type="date" name="data_nascimento" value="{{ cad.data_nascimento.isoformat() if cad.data_nascimento else '' }}"></label>
+        <label class="mc-campo"><span>E-mail pessoal</span><input type="email" name="email_pessoal" value="{{ cad.email_pessoal or '' }}" placeholder="seu@email.com"></label>
+        <label class="mc-campo"><span>E-mail da empresa <i class="fas fa-lock"></i></span><input value="{{ current_user.email or cad.email_corporativo or '' }}" readonly title="O e-mail de entrada muda com o administrador"></label>
+        <label class="mc-campo"><span>Celular pessoal</span><input name="celular_pessoal" value="{{ cad.celular_pessoal or '' }}" inputmode="tel" placeholder="(11) 90000-0000"></label>
+        <label class="mc-campo"><span>Celular da empresa</span><input name="celular_corporativo" value="{{ cad.celular_corporativo or '' }}" inputmode="tel" placeholder="(11) 90000-0000"></label>
+      </div></div>
+    </section>
+
+    <section class="mc-sec mc-s-end" id="endereco">
+      <header class="mc-sec-h"><span class="mc-sec-ic"><i class="fas fa-location-dot"></i></span>
+        <div class="mc-sec-t"><b>Endereço</b><small>Onde você mora</small></div>
+        {% if _end_falta %}<span class="mc-chip falta"><i class="fas fa-circle-exclamation"></i> falta {{ _end_falta }}</span>{% else %}<span class="mc-chip ok"><i class="fas fa-check"></i> completo</span>{% endif %}</header>
+      <div class="mc-sec-b"><div class="mc-campos c3">
+        <label class="mc-campo"><span>CEP</span><input name="cep" value="{{ cad.cep or '' }}" inputmode="numeric" maxlength="9" placeholder="00000-000"></label>
+        <label class="mc-campo l2"><span>Rua / avenida</span><input name="logradouro" value="{{ cad.logradouro or '' }}"></label>
+        <label class="mc-campo"><span>Número</span><input name="numero" value="{{ cad.numero or '' }}"></label>
+        <label class="mc-campo l2"><span>Complemento</span><input name="complemento" value="{{ cad.complemento or '' }}" placeholder="apto, bloco…"></label>
+        <label class="mc-campo tudo"><span>Bairro</span><input name="bairro" value="{{ cad.bairro or '' }}"></label>
+        <label class="mc-campo l2"><span>Cidade</span><input name="cidade" value="{{ cad.cidade or '' }}"></label>
+        <label class="mc-campo"><span>Estado (UF)</span><input name="estado" value="{{ cad.estado or '' }}" maxlength="2" style="text-transform:uppercase" placeholder="SP"></label>
+      </div></div>
+    </section>
+  </div>
+  {% else %}
+  <section class="mc-sec mc-s-pes" id="pessoais">
+    <header class="mc-sec-h"><span class="mc-sec-ic"><i class="fas fa-id-card"></i></span><div class="mc-sec-t"><b>Dados pessoais</b><small>Nome e e-mail da empresa mudam com o administrador</small></div></header>
+    <div class="mc-sec-b"><div class="mc-vazio" id="endereco"><i class="fas fa-circle-info"></i><span>Seu usuário não veio pelo link de cadastro, então não há dados pessoais guardados. Peça ao administrador o link de cadastro se precisar. Banco e Pix você preenche aqui embaixo.</span></div></div>
+  </section>
   {% endif %}
 
   {# 18/11/2026 — Anderson: "insira um campo para cadastrar um outro pra receber... e no usuário ele escolhe qual ficará
      para emissão dos pagamentos, inclusive porque alguns gostam de receber na PJ" #}
-  <div class="cli-filtros mc-bloco"><div class="cli-f-row">
-    <span class="cli-seg-rot"><i class="fas fa-hand-holding-dollar"></i> Contas para receber</span>
-    {% if contas %}
-    <div class="mc-contas">
+  <section class="mc-sec mc-s-ctas" id="contas">
+    <header class="mc-sec-h"><span class="mc-sec-ic"><i class="fas fa-hand-holding-dollar"></i></span>
+      <div class="mc-sec-t"><b>Contas para receber</b><small>A sua, a de outra pessoa ou a da sua empresa (CNPJ). A marcada é a que sai no pedido de comissão, com o nome do titular no Pix.</small></div>
+      <span class="mc-chip">{{ contas | length }} {{ 'conta' if contas|length == 1 else 'contas' }}</span></header>
+    <div class="mc-sec-b"><div class="mc-contas" style="padding-top:6px">
       {% for c in contas %}
       <div class="mc-conta{{ ' on' if c.recebe_pagamentos }}{{ ' edit' if banco.id == c.id }}">
-        <div class="mc-conta-t"><b>{{ c.apelido or c.titular_nome or 'Conta ' ~ loop.index }}</b>
-          {% if c.recebe_pagamentos %}<span class="mc-selo"><i class="fas fa-check"></i> recebe os pagamentos</span>{% endif %}</div>
-        <div class="mc-conta-d">{% if c.titular_nome %}{{ c.titular_nome }}{% if c.titular_cpf %} · {{ c.titular_cpf }}{% endif %}<br>{% endif %}
-          {{ c.banco_nome or '' }}{% if c.agencia or c.conta %} · ag. {{ c.agencia or '—' }} · conta {{ c.conta or '—' }}{% endif %}<br>
-          {% if c.pix_chave %}Pix ({{ dict(PIX_TIPOS).get(c.pix_tipo, c.pix_tipo) }}): {{ c.pix_chave }}{% else %}<span style="color:#b91c1c">sem chave Pix</span>{% endif %}</div>
-        {% if c.pix_chave and outro(c, current_user.nome) %}<div class="mc-outro"><i class="fas fa-user-tag"></i> Em nome de outra pessoa ou empresa: o pagador vai ver "{{ c.titular_nome }}" no Pix.</div>{% endif %}
+        {% if c.recebe_pagamentos %}<span class="mc-selo"><i class="fas fa-check"></i> recebe os pagamentos</span>{% endif %}
+        {% if banco.id == c.id %}<span class="mc-selo ed"><i class="fas fa-pen"></i> editando</span>{% endif %}
+        <div class="mc-conta-t"><span class="mc-logo">{{ logo_banco(c.banco_codigo or c.banco_nome, tam=34, titulo=c.banco_nome or '') }}</span>
+          <div class="mc-conta-n"><b>{{ c.apelido or c.titular_nome or 'Conta ' ~ loop.index }}</b>
+            <small>{{ c.banco_nome or 'banco não informado' }}{% if c.banco_codigo %} · {{ c.banco_codigo }}{% endif %}</small></div></div>
+        <dl class="mc-dl">
+          {% if c.titular_nome %}<dt>Titular</dt><dd>{{ c.titular_nome }}{% if c.titular_cpf %} · {{ c.titular_cpf }}{% endif %}</dd>{% endif %}
+          {% if c.agencia or c.conta %}<dt>Conta</dt><dd>ag. {{ c.agencia or '—' }} · {{ c.conta or '—' }}</dd>{% endif %}
+          <dt>Pix</dt>{% if c.pix_chave %}<dd>{{ PIXN.get(c.pix_tipo, c.pix_tipo) }} · {{ c.pix_chave }}</dd>{% else %}<dd class="sem">sem chave Pix</dd>{% endif %}
+        </dl>
+        {% if c.pix_chave and outro(c, current_user.nome) %}<div class="mc-outro"><i class="fas fa-user-tag"></i><span>Em nome de outra pessoa ou empresa: o pagador vai ver "{{ c.titular_nome }}" no Pix.</span></div>{% endif %}
         <div class="mc-conta-ac">
           {% if not c.recebe_pagamentos %}<button type="submit" class="mc-bt ok" formaction="{{ url_for('meu_cadastro.conta_usar', cid=c.id) }}" formmethod="post" formnovalidate><i class="fas fa-check"></i> Usar esta para receber</button>{% endif %}
           <a class="mc-bt" href="{{ url_for('meu_cadastro.index', conta=c.id) }}#conta"><i class="fas fa-pen"></i> Editar</a>
@@ -114,41 +246,48 @@
         </div>
       </div>
       {% endfor %}
-    </div>
-    {% endif %}
-    <p class="mc-txt"><i class="fas fa-circle-info"></i> Pode cadastrar mais de uma: a sua, a de outra pessoa ou a da sua empresa (CNPJ). A marcada "recebe os pagamentos" é a que sai no pedido de comissão, com o nome do titular no Pix.
-      {% if contas %}<a href="{{ url_for('meu_cadastro.index', conta='nova') }}#conta" class="mc-link"><i class="fas fa-plus"></i> Adicionar outra conta</a>{% endif %}</p>
-  </div></div>
+      {% if contas %}<a class="mc-nova" href="{{ url_for('meu_cadastro.index', conta='nova') }}#conta"><i class="fas fa-plus"></i> Adicionar outra conta<small>sua, de outra pessoa ou da sua empresa</small></a>{% endif %}
+    </div></div>
+  </section>
 
-  <div class="cli-filtros mc-bloco" id="conta"><div class="cli-f-row">
-    <span class="cli-seg-rot"><i class="fas fa-building-columns"></i> {{ 'Nova conta para receber' if not banco.id else ('Editar: ' ~ (banco.apelido or banco.titular_nome or 'conta')) }}</span>
-    <input type="hidden" name="conta_id" value="{{ banco.id or '' }}">
-    <div class="mc-campos">
-      <label class="mc-campo"><span>Apelido da conta</span><input name="apelido" value="{{ banco.apelido or '' }}" maxlength="60" placeholder="ex.: Minha conta · Conta da Elizangela · Minha empresa"></label>
-      <label class="mc-campo l2"><span>Titular (nome)</span><input name="titular_nome" value="{{ banco.titular_nome or '' }}" placeholder="quem é o dono da conta: é este nome que vai no Pix"></label>
-      <label class="mc-campo"><span>CPF ou CNPJ do titular</span><input name="titular_cpf" value="{{ banco.titular_cpf or '' }}" maxlength="18" inputmode="numeric"></label>
-      <label class="mc-campo"><span>Tipo da chave Pix</span>
-        <select name="pix_tipo"><option value="">—</option>{% for k, v in PIX_TIPOS %}<option value="{{ k }}"{{ ' selected' if banco.pix_tipo == k }}>{{ v }}</option>{% endfor %}</select></label>
-      <label class="mc-campo l2"><span>Chave Pix</span><input name="pix_chave" value="{{ banco.pix_chave or '' }}" maxlength="140"></label>
-      <label class="mc-campo"><span>Banco (código)</span><input name="banco_codigo" value="{{ banco.banco_codigo or '' }}" maxlength="5" placeholder="ex.: 260"></label>
-      <label class="mc-campo"><span>Banco (nome)</span><input name="banco_nome" value="{{ banco.banco_nome or '' }}" placeholder="ex.: Nubank"></label>
-      <label class="mc-campo"><span>Tipo de conta</span>
-        <select name="conta_tipo"><option value="">—</option>{% for k, v in CONTA_TIPOS %}<option value="{{ k }}"{{ ' selected' if banco.conta_tipo == k }}>{{ v }}</option>{% endfor %}</select></label>
-      <label class="mc-campo"><span>Agência</span><input name="agencia" value="{{ banco.agencia or '' }}" maxlength="15"></label>
-      <label class="mc-campo"><span>Conta</span><input name="conta" value="{{ banco.conta or '' }}" maxlength="25"></label>
+  <section class="mc-sec mc-s-form" id="conta">
+    <header class="mc-sec-h"><span class="mc-sec-ic"><i class="fas {{ 'fa-pen' if banco.id else 'fa-plus' }}"></i></span>
+      <div class="mc-sec-t"><b>{{ 'Nova conta para receber' if not banco.id else ('Editar: ' ~ (banco.apelido or banco.titular_nome or 'conta')) }}</b>
+        <small>O titular é o nome que aparece para quem paga o Pix</small></div>
+      {% if banco.id %}<a class="mc-chip" href="{{ url_for('meu_cadastro.index', conta='nova') }}#conta" style="text-decoration:none"><i class="fas fa-plus"></i> nova conta</a>{% endif %}</header>
+    <div class="mc-sec-b">
+      <input type="hidden" name="conta_id" value="{{ banco.id or '' }}">
+      <div class="mc-campos c4">
+        <label class="mc-campo"><span>Apelido da conta</span><input name="apelido" value="{{ banco.apelido or '' }}" maxlength="60" placeholder="ex.: Minha conta"></label>
+        <label class="mc-campo l2"><span>Titular (nome)</span><input name="titular_nome" value="{{ banco.titular_nome or '' }}" placeholder="dono da conta: é este nome que vai no Pix"></label>
+        <label class="mc-campo"><span>CPF ou CNPJ do titular</span><input name="titular_cpf" value="{{ banco.titular_cpf or '' }}" maxlength="18" inputmode="numeric"></label>
+        <label class="mc-campo"><span>Tipo da chave Pix</span>
+          <select name="pix_tipo"><option value="">—</option>{% for k, v in PIX_TIPOS %}<option value="{{ k }}"{{ ' selected' if banco.pix_tipo == k }}>{{ v }}</option>{% endfor %}</select></label>
+        <label class="mc-campo l2"><span>Chave Pix</span><input name="pix_chave" value="{{ banco.pix_chave or '' }}" maxlength="140"></label>
+        <label class="mc-campo"><span>Tipo de conta</span>
+          <select name="conta_tipo"><option value="">—</option>{% for k, v in CONTA_TIPOS %}<option value="{{ k }}"{{ ' selected' if banco.conta_tipo == k }}>{{ v }}</option>{% endfor %}</select></label>
+        <label class="mc-campo mc-bco l2"><span>Banco</span>
+          <div class="mc-bco-in"><span class="mc-bco-logo" id="mcBcoLogo">{{ logo_banco(banco.banco_codigo or banco.banco_nome, tam=26) if (banco.banco_codigo or banco.banco_nome) else '' }}<i class="fas fa-building-columns mc-bco-sem"></i></span>
+            <input name="banco_nome" id="mcBcoNome" value="{{ banco.banco_nome or '' }}" list="mcBcoLista" placeholder="digite ou escolha: Nubank, C6, Itaú…" autocomplete="off">
+            <input name="banco_codigo" id="mcBcoCod" class="mc-bco-cod" value="{{ banco.banco_codigo or '' }}" maxlength="5" placeholder="código" title="Código do banco (ex.: 260)" inputmode="numeric"></div>
+          <datalist id="mcBcoLista">{% for c, n in BANCOS_LISTA %}<option value="{{ n }}" data-c="{{ c }}">{{ c }}</option>{% endfor %}</datalist></label>
+        <label class="mc-campo"><span>Agência</span><input name="agencia" value="{{ banco.agencia or '' }}" maxlength="15"></label>
+        <label class="mc-campo"><span>Conta</span><input name="conta" value="{{ banco.conta or '' }}" maxlength="25"></label>
+      </div>
+      {% if not banco.recebe_pagamentos %}<label class="mc-check"><input type="checkbox" name="recebe" value="1"{{ ' checked' if not contas }}> Usar esta conta para receber os pagamentos</label>{% endif %}
+      <p class="mc-txt"><i class="fas fa-shield-halved"></i><span>Estes números só você e o administrador veem; a Auditoria guarda só que mudou, nunca os números.</span></p>
     </div>
-    {% if not banco.recebe_pagamentos %}<label class="mc-check"><input type="checkbox" name="recebe" value="1"{{ ' checked' if not contas }}> Usar esta conta para receber os pagamentos</label>{% endif %}
-    <p class="mc-txt"><i class="fas fa-shield-halved"></i> Estes números só você e o administrador veem; a Auditoria guarda só que mudou, nunca os números.</p>
-  </div></div>
+  </section>
 
-  <div class="ns-fundo" id="mcFundo"><div class="ns peq" role="dialog" aria-modal="true" style="max-width:420px">
-    <header class="ns-cab"><div class="ns-tit"><b>Apagar a conta</b><span id="mcQuem"></span></div><button type="button" class="ns-x" onclick="mcFechar()"><i class="fas fa-xmark"></i></button></header>
-    <div class="ns-g"><div class="ns-f"><div class="ns-aviso"><i class="fas fa-triangle-exclamation"></i><span>Ela some da sua lista. A conta que recebe os pagamentos não pode ser apagada.</span></div></div></div>
-    <footer class="ns-pe"><div class="ns-pe-info"></div><button type="button" class="ns-bt" onclick="mcFechar()">Voltar</button>
+  <div class="mc-barra" id="mcBarra"><span><i class="fas fa-pen-to-square"></i>Você alterou o cadastro. Salve para não perder.</span>
+    <button type="submit" class="mc-btn"><i class="fas fa-check"></i> Salvar meu cadastro</button></div>
+
+  <div class="ns-fundo" id="mcFundo"><div class="ns" role="dialog" aria-modal="true" style="max-width:420px">
+    <header class="ns-cab"><i class="fas fa-trash"></i><div class="ns-tit"><b>Apagar a conta</b><span id="mcQuem"></span></div><button type="button" class="ns-x" onclick="mcFechar()"><i class="fas fa-xmark"></i></button></header>
+    <div class="ns-f"><div class="ns-aviso"><i class="fas fa-triangle-exclamation"></i><span>Ela some da sua lista. A conta que recebe os pagamentos não pode ser apagada.</span></div></div>
+    <footer class="ns-pe"><button type="button" class="ns-bt" onclick="mcFechar()">Voltar</button>
       <button type="submit" class="ns-bt red" id="mcOk" formmethod="post" formnovalidate><i class="fas fa-trash"></i> Apagar</button></footer>
   </div></div>
-
-  <div class="mc-pe"><button type="submit" class="ef-btn ef-btn-primary" style="background:#16a34a; color:#fff; border:0"><i class="fas fa-check"></i> Salvar meu cadastro</button></div>
 </div>
 </form>
 <script>
@@ -159,5 +298,35 @@ function mcExcluir(id, nome) {
   document.getElementById('mcFundo').classList.add('on');
 }
 function mcFechar() { document.getElementById('mcFundo').classList.remove('on'); }
+(function () {   /* logo do banco no campo: muda conforme o código ou o nome */
+  var LOGOS = {{ logos_banco() | tojson }}, LISTA = {{ BANCOS_LISTA | tojson }};
+  var POR_NOME = [[/bradesco/i,'237'],[/\bc6\b/i,'336'],[/\bcora\b/i,'403'],[/\bef[ií]\b|gerencianet/i,'364'],[/sicredi/i,'748'],[/nubank|nu pagamentos/i,'260'],
+    [/\bxp\b/i,'348'],[/mercado ?pago/i,'323'],[/ita[uú]/i,'341'],[/santander/i,'033'],[/caixa/i,'104'],[/banco do brasil|^bb\b/i,'001'],[/\binter\b/i,'077'],[/btg/i,'208'],[/safra/i,'422'],[/sicoob/i,'756']];
+  var nome = document.getElementById('mcBcoNome'), cod = document.getElementById('mcBcoCod'), box = document.getElementById('mcBcoLogo');
+  if (!nome) return;
+  function codigo() {
+    var c = (cod.value || '').replace(/\D/g, '') || ((nome.value.match(/^\s*(\d{1,4})\b/) || [])[1] || '');
+    if (c) return String(parseInt(c, 10));
+    for (var i = 0; i < POR_NOME.length; i++) if (POR_NOME[i][0].test(nome.value)) return String(parseInt(POR_NOME[i][1], 10));
+    return '';
+  }
+  function pinta() {
+    var u = LOGOS[codigo()];
+    box.querySelectorAll('img').forEach(function (i) { i.remove(); });
+    if (u) { var im = new Image(26, 26); im.src = u; im.alt = ''; box.insertBefore(im, box.firstChild); }
+    box.classList.toggle('tem', !!u);
+  }
+  nome.addEventListener('input', function () {
+    for (var i = 0; i < LISTA.length; i++) if (LISTA[i][1].toLowerCase() === nome.value.trim().toLowerCase()) { cod.value = LISTA[i][0]; break; }
+    pinta();
+  });
+  cod.addEventListener('input', pinta);
+  pinta();
+})();
+(function () {
+  var f = document.getElementById('mcForm'), b = document.getElementById('mcBarra');
+  function mudou() { b.classList.add('on'); }
+  f.addEventListener('input', mudou); f.addEventListener('change', mudou);
+})();
 </script>
 {% endblock %}
