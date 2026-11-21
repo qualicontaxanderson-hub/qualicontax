@@ -94,6 +94,76 @@ def _wa_link(fone, texto):
     return 'https://wa.me/%s?text=%s' % (d, quote(texto))
 
 
+# ───────────────────────── início do Comercial: números reais (21/11/2026) ─────────────────────────
+_HOME_CACHE, _HOME_TTL = {}, 60
+
+
+def _home_payload():
+    """Carrossel + contadores da home do Comercial, no formato de home_destaques.js. Só o que tem dado: sem número, sem card."""
+    apr = _aprovador()
+    quem = None if apr else current_user.id
+    orcs = Orcamento.listar(EMP, criado_por=quem)
+    hoje = date.today()
+    cards, counters = [], {}
+    andamento = [o for o in orcs if o['status'] in ('APROVACAO', 'APROVADO', 'ACEITO', 'COBRANCA')]
+    if andamento:
+        n_apr = sum(1 for o in andamento if o['status'] == 'APROVACAO')
+        cards.append({'icone': 'fa-file-signature', 'titulo': 'Orçamentos em andamento (R$)', 'valor': int(round(sum(float(o['total'] or 0) for o in andamento))),
+                      'apoio': '%d orçamento%s%s' % (len(andamento), 's' if len(andamento) != 1 else '', (' · %d para aprovar' % n_apr) if n_apr else ''),
+                      'trend': {'tipo': 'neutro', 'rotulo': 'aberto'}})
+    aceitos = [o for o in orcs if o.get('aceito_em') and o['aceito_em'].year == hoje.year and o['aceito_em'].month == hoje.month]
+    if aceitos:
+        cards.append({'icone': 'fa-circle-check', 'titulo': 'Aceitos pelo cliente no mês (R$)', 'valor': int(round(sum(float(o['total'] or 0) for o in aceitos))),
+                      'apoio': '%d aceite%s em %s' % (len(aceitos), 's' if len(aceitos) != 1 else '', hoje.strftime('%m/%Y')), 'trend': {'tipo': 'neutro', 'rotulo': 'mês'}})
+    por = {}
+    for o in orcs:
+        por[o['status']] = por.get(o['status'], 0) + 1
+    itens = [{'rotulo': STATUS[k][0], 'valor': por[k]} for k in ('APROVACAO', 'APROVADO', 'ACEITO', 'COBRANCA', 'CONCLUIDO', 'RASCUNHO') if por.get(k)]
+    if itens:
+        cards.append({'tipo': 'lista', 'icone': 'fa-list-check', 'titulo': 'Orçamentos por situação', 'itens': itens, 'trend': {'tipo': 'neutro', 'rotulo': 'hoje'}})
+    counters['orcamentos'] = len(andamento) if orcs else ''
+    try:
+        from models.prest_contrato import PrestContrato
+        ctr = execute_query('SELECT status, COUNT(*) n FROM prest_contratos GROUP BY status', fetch=True) or []
+        rot = {'RASCUNHO': 'Rascunhos', 'APROVACAO': 'Para aprovar', 'APROVADO': 'Aprovados', 'ENVIADO': 'Aguardando assinatura', 'ASSINADO': 'Assinados', 'CANCELADO': 'Cancelados'}
+        cm = {r['status']: int(r['n']) for r in ctr}
+        li = [{'rotulo': rot.get(k, k), 'valor': cm[k]} for k in ('APROVACAO', 'ENVIADO', 'ASSINADO', 'APROVADO', 'RASCUNHO') if cm.get(k)]
+        if li:
+            cards.append({'tipo': 'lista', 'icone': 'fa-file-contract', 'titulo': 'Contratos de prestação', 'itens': li, 'trend': {'tipo': 'neutro', 'rotulo': 'hoje'}})
+        counters['contratos'] = (cm.get('APROVACAO', 0) + cm.get('ENVIADO', 0)) or ''
+        if apr:
+            prontas = PrestContrato.prontas()
+            counters['prontas'] = len(prontas) or ''
+            if prontas:
+                cards.append({'icone': 'fa-clipboard-check', 'titulo': 'Prontas para contrato', 'valor': len(prontas), 'apoio': 'cadastro completo, ainda sem contrato de prestação', 'trend': {'tipo': 'neutro', 'rotulo': 'hoje'}})
+    except Exception:
+        logger.exception('[comercial] home: contratos')
+    try:
+        cl = execute_query("""SELECT SUM(COALESCE(avulso, 0) = 0) AS emp, SUM(COALESCE(avulso, 0) = 1) AS av FROM clientes
+                                WHERE COALESCE(situacao, 'ATIVO') <> 'INATIVO'""", fetch=True, fetch_one=True) or {}
+        emp, av = int(cl.get('emp') or 0), int(cl.get('av') or 0)
+        if emp or av:
+            cards.append({'icone': 'fa-building', 'titulo': 'Clientes ativos', 'valor': emp, 'valor_sufixo': (' + %d avulsos' % av) if av else '', 'apoio': 'empresas no cadastro · avulsos à parte', 'trend': {'tipo': 'neutro', 'rotulo': 'hoje'}})
+        counters['clientes'] = emp or ''
+    except Exception:
+        logger.exception('[comercial] home: clientes')
+    import time as _t
+    return {'cards': cards, 'counters': counters, 'gerado_em_ms': int(_t.time() * 1000)}   # home_destaques.js só mostra o carrossel se for fresco (< 5 min)
+
+
+@comercial.route('/comercial/api/home')
+@permission_required('modulos.comercial')
+def api_home():
+    import time as _t
+    uid = getattr(current_user, 'id', None); agora = _t.time()
+    hit = _HOME_CACHE.get(uid)
+    if hit and agora - hit[0] < _HOME_TTL:
+        return jsonify(hit[1])
+    payload = _home_payload()
+    _HOME_CACHE[uid] = (agora, payload)
+    return jsonify(payload)
+
+
 # ───────────────────────── a tela ─────────────────────────
 @comercial.route('/comercial/orcamentos')
 @permission_required(VER)

@@ -286,6 +286,7 @@
     document.body.appendChild(f); f.submit();
   };
   {% if abrir %}ocAbrir({{ abrir }});{% endif %}
+  {% if request.args.get('novo') and pode_incluir %}setTimeout(function () { ocNovoAbrir(); }, 150);{% endif %}   {# dentro de function: ocNovoAbrir só existe mais abaixo #}
 
   // ── pergunta na caixa nossa (sem janela do navegador), com motivo opcional ──
   window.ocPergunta = function (o) {

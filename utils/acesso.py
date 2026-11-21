@@ -281,6 +281,7 @@ MAPA = {
     'financeiro.servico_novo':             'financeiro.lancamentos.aprovar',  # serviço novo pela aba SERVIÇOS; a rota só deixa o admin
     # Comercial › Orçamentos (21/11/2026)
     'comercial.orcamentos':                'comercial.orcamentos',
+    'comercial.api_home':                  'modulos.comercial',             # números do início do Comercial
     'comercial.orcamento_janela':          'comercial.orcamentos',
     'comercial.orcamento_dados':           'comercial.orcamentos',
     'comercial.orcamento_pdf':             'comercial.orcamentos',
