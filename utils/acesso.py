@@ -61,6 +61,7 @@ BLUEPRINTS_PUBLICOS = {
     'cobranca_webhook',  # aviso de pagamento da Efí (segredo aleatório na URL; os dados vêm de consulta nossa)
     'cobranca_publica',  # links do e-mail de cobrança ao cliente (código aleatório do boleto na URL)
     'assinatura',        # assinatura eletrônica do contrato de prestação (token do signatário na URL + código por e-mail)
+    'proposta',          # aceite do orçamento pelo cliente (token na URL + código por e-mail; 21/11/2026)
 }
 ENDPOINTS_PUBLICOS = {'static', 'health'}
 

@@ -13,6 +13,8 @@
           {% if o.cliente_email %}<span><i class="fas fa-envelope"></i> {{ o.cliente_email }}</span>{% endif %}
           {% if o.cliente_fone %}<span><i class="fas fa-mobile-screen"></i> {{ o.cliente_fone }}</span>{% endif %}
           <a href="{{ url_for('clientes.detalhes', id=o.cliente_id) }}" target="_blank"><i class="fas fa-arrow-up-right-from-square"></i> cadastro</a>
+          {% if o.solicitante_nome %}<span class="tj-chip" title="quem pediu o serviço, do lado do cliente"><i class="fas fa-user-tag"></i> pedido por {{ o.solicitante_nome }}{% if o.solicitante_fone %} · {{ o.solicitante_fone }}{% endif %}</span>{% endif %}
+          {% if o.interno %}<span class="tj-chip"><i class="fas fa-lock"></i> controle interno</span>{% endif %}
         </div>
       </div>
     </div>
@@ -25,7 +27,7 @@
     <div><i class="fas fa-stamp"></i><div><dt>Aprovação</dt><dd>{% if o.aprovado_em %}{{ o.aprovado_por_nome or 'aprovado' }}{% elif o.status == 'APROVACAO' %}aguardando{% elif o.status == 'REPROVADO' %}reprovado{% else %}—{% endif %}</dd><small>{% if o.aprovado_em %}{{ o.aprovado_em.strftime('%d/%m/%Y %H:%M') }}{% elif o.status == 'RASCUNHO' %}ainda não pedida{% else %}&nbsp;{% endif %}</small></div></div>
     <div><i class="fas fa-route"></i><div><dt>Como cobrar</dt><dd>{{ COMO.get(o.como, 'a definir') }}</dd><small>{% if o.parcelas and o.parcelas > 1 %}{{ o.parcelas }} parcelas{% else %}à vista{% endif %}</small></div></div>
     <div><i class="fas fa-hand-holding-dollar"></i><div><dt>Comissão pedida</dt><dd>{% if o.comissao_tipo == 'PCT' %}{{ '%g' % (o.comissao_valor | float) }}%{% elif o.comissao_tipo == 'FIXO' %}{{ o.comissao_valor | float | format_currency }}{% elif o.comissao_tipo == 'SEM' %}sem comissão{% else %}padrão da pessoa{% endif %}</dd><small>quem aprova a cobrança confirma</small></div></div>
-    <div><i class="fas fa-envelope-open-text"></i><div><dt>Cliente</dt><dd>{% if o.enviado_em %}recebeu por e-mail{% else %}ainda não recebeu{% endif %}</dd><small>{% if o.enviado_em %}{{ o.enviado_em.strftime('%d/%m/%Y %H:%M') }}{% elif o.status == 'APROVADO' %}mande o PDF ao lado{% else %}&nbsp;{% endif %}</small></div></div>
+    <div><i class="fas {{ 'fa-file-signature' if o.aceito_em else 'fa-envelope-open-text' }}"></i><div><dt>Cliente</dt><dd>{% if o.interno %}controle interno{% elif o.aceito_em %}aceitou pelo link{% elif o.enviado_em %}recebeu, aguardando aceite{% else %}ainda não recebeu{% endif %}</dd><small>{% if o.aceito_em %}{{ o.aceito_nome }} · {{ o.aceito_em.strftime('%d/%m/%Y %H:%M') }}{% elif o.enviado_em %}{{ o.enviado_em.strftime('%d/%m/%Y %H:%M') }} · {{ o.enviado_para }}{% elif o.interno %}não vai ao cliente{% elif o.status == 'APROVADO' %}mande o PDF ao lado{% else %}&nbsp;{% endif %}</small></div></div>
   </div>
 
   <div class="tj-corpo">
@@ -34,12 +36,13 @@
         <h4><i class="fas fa-timeline"></i> Linha do tempo</h4>
         <ol class="tj-tl">
           {% set cores = {'criado': ('', 'fa-pen-ruler'), 'editado': ('', 'fa-pen'), 'aprovacao': ('tj-laranja', 'fa-stamp'), 'aprovado': ('tj-verde', 'fa-circle-check'), 'reprovado': ('tj-verm', 'fa-rotate-left'),
-                         'enviado': ('tj-azul', 'fa-envelope'), 'cobranca': ('tj-azul', 'fa-barcode'), 'concluido': ('tj-verde', 'fa-flag-checkered'), 'cancelado': ('tj-verm', 'fa-ban'), 'nota': ('tj-azul', 'fa-comment')} %}
+                         'enviado': ('tj-azul', 'fa-envelope'), 'aceito': ('tj-verde', 'fa-file-signature'), 'cobranca': ('tj-azul', 'fa-barcode'), 'concluido': ('tj-verde', 'fa-flag-checkered'), 'cancelado': ('tj-verm', 'fa-ban'), 'nota': ('tj-azul', 'fa-comment')} %}
           {% for e in eventos %}{% set c = cores.get(e.tipo, ('', 'fa-circle')) %}
           <li class="{{ c[0] }}"><i class="fas {{ c[1] }}"></i><div><b>{{ e.texto }}</b>{% if e.usuario_nome and e.tipo == 'nota' %}<small>{{ e.usuario_nome }}</small>{% endif %}</div><time>{{ e.quando.strftime('%d/%m/%y %H:%M') }}</time></li>
           {% endfor %}
           {% if o.status == 'APROVACAO' %}<li class="tj-laranja fut"><i class="fas fa-hourglass-half"></i><div><b>Aguardando a aprovação do escritório</b></div><time></time></li>
-          {% elif o.status == 'APROVADO' %}<li class="tj-verde fut"><i class="fas fa-arrow-right"></i><div><b>Próximo: {% if not o.enviado_em %}mandar ao cliente e {% endif %}fazer o serviço, depois "Serviço feito: cobrar"</b></div><time></time></li>
+          {% elif o.status == 'APROVADO' and not o.interno and o.enviado_em %}<li class="tj-laranja fut"><i class="fas fa-hourglass-half"></i><div><b>Aguardando o aceite do cliente pelo link</b><small>o código vai para {{ o.enviado_para }}</small></div><time></time></li>
+          {% elif o.status in ('APROVADO', 'ACEITO') %}<li class="tj-verde fut"><i class="fas fa-arrow-right"></i><div><b>Próximo: {% if not o.enviado_em and not o.interno %}mandar ao cliente aceitar e {% endif %}fazer o serviço, depois "Serviço feito: cobrar"</b></div><time></time></li>
           {% elif o.status == 'COBRANCA' %}<li class="tj-azul fut"><i class="fas fa-hourglass-half"></i><div><b>Aguardando a aprovação da cobrança em Financeiro › Lançamentos</b></div><time></time></li>{% endif %}
         </ol>
         {% if o.motivo and o.status in ('REPROVADO', 'CANCELADO') %}<div class="tj-aviso"><i class="fas fa-quote-left"></i> {{ o.motivo }}</div>{% endif %}
@@ -93,15 +96,17 @@
           {% else %}
           <div class="tj-aviso"><i class="fas fa-hourglass-half"></i> Esperando o escritório aprovar. Você recebe um e-mail quando sair.</div>
           {% endif %}
-        {% elif o.status == 'APROVADO' %}
-          <div class="tj-acao-bl" data-foco="enviar">
+        {% elif o.status in ('APROVADO', 'ACEITO') %}
+          {% if o.aceito_em %}<div class="tj-aviso" style="background:#f0fdf4; border:1px solid #bbf7d0; color:#166534; margin:0 0 10px"><i class="fas fa-file-signature"></i> <b>Aceito por {{ o.aceito_nome }}</b>{% if o.aceito_cpf %} (CPF {{ o.aceito_cpf }}){% endif %} em {{ o.aceito_em.strftime('%d/%m/%Y às %H:%M') }}, pelo link, com código enviado a {{ o.aceito_email }}. O registro está na última página do PDF.</div>
+          {% elif o.enviado_em and link %}<div class="tj-aviso" style="margin:0 0 10px"><i class="fas fa-link"></i> Enviado em {{ o.enviado_em.strftime('%d/%m %H:%M') }} para {{ o.enviado_para }}. Link da proposta: <code data-copiar data-copiar-rotulo="Link da proposta" title="Clique para copiar" style="cursor:pointer; background:#fff; border:1px solid #e2e8f0; border-radius:6px; padding:2px 6px; font-size:11px">{{ link }}</code></div>{% endif %}
+          {% if not o.interno and not o.aceito_em %}<div class="tj-acao-bl" data-foco="enviar">
             <div class="tj-acao-t"><i class="fas fa-envelope"></i> Mandar ao cliente <small>PDF por e-mail</small></div>
             <form method="POST" action="{{ url_for('comercial.orcamento_enviar', oid=o.id) }}" class="tj-env">
               {% for d in dest %}<label class="tj-dest"><input type="checkbox" name="para" value="{{ d.email }}"{{ ' checked' if loop.first }}><span><b>{{ d.nome or d.email }}</b><small>{{ d.email }}{% if d.fonte %} · {{ d.fonte }}{% endif %}</small></span></label>{% endfor %}
               <input class="ns-in" name="outro" type="email" placeholder="outro e-mail (opcional)">
-              <button type="submit" class="tj-acao prim" style="margin-top:6px"><i class="fas fa-paper-plane"></i><span><b>{{ 'Mandar de novo' if o.enviado_em else 'Mandar o orçamento' }}</b><small>o PDF vai anexado</small></span></button>
+              <button type="submit" class="tj-acao prim" style="margin-top:6px"><i class="fas fa-paper-plane"></i><span><b>{{ 'Mandar de novo' if o.enviado_em else 'Mandar o orçamento' }}</b><small>o PDF vai anexado, com o link para aceitar</small></span></button>
             </form>
-          </div>
+          </div>{% endif %}
           <div class="tj-acao-bl" data-foco="cobrar">
             <div class="tj-acao-t"><i class="fas fa-barcode"></i> Serviço feito: cobrar <small>cria o lançamento no Financeiro</small></div>
             <form method="POST" action="{{ url_for('comercial.orcamento_cobrar', oid=o.id) }}" class="tj-cobrar" id="ocCobrarForm">
@@ -110,6 +115,7 @@
                 <button type="button" data-v="BOLETO_NOTA"{{ ' disabled title="nenhum item entra na nota"' if not n_nota }}>Boleto + nota</button><button type="button" data-v="BOLETO">Só boleto</button><button type="button" data-v="MENSAL">Na mensalidade</button></div>
               <div id="ocCbVencBox"><small class="tj-mini">vence em</small>
                 <div class="oc-chips" id="ocCbDatas">{% for iso, rot, dm, on in datas_venc %}<button type="button" data-v="{{ iso }}"{{ ' class=on' if on }}>{{ rot }} <small>{{ dm }}</small></button>{% endfor %}</div></div>
+              {% if not o.interno and not o.aceito_em %}<small class="tj-mini" style="color:#b45309; text-transform:none; letter-spacing:0">O cliente ainda não aceitou pelo link. Dá para cobrar mesmo assim, se o aceite veio por outro caminho.</small>{% endif %}
               <button type="submit" class="tj-acao prim" style="margin-top:8px"><i class="fas fa-barcode"></i><span><b>Mandar para a cobrança</b><small>vai para Financeiro › Lançamentos aprovar</small></span></button>
             </form>
           </div>
@@ -120,7 +126,7 @@
         {% elif o.status == 'CANCELADO' %}
           <div class="tj-aviso"><i class="fas fa-ban"></i> Cancelado{% if o.cancelado_em %} em {{ o.cancelado_em.strftime('%d/%m/%Y') }}{% endif %}.</div>
         {% endif %}
-        {% if o.status in ('RASCUNHO', 'REPROVADO', 'APROVACAO', 'APROVADO') and (dono or aprovador) %}
+        {% if o.status in ('RASCUNHO', 'REPROVADO', 'APROVACAO', 'APROVADO', 'ACEITO') and (dono or aprovador) %}
         <button type="button" class="tj-acao" style="margin-top:10px" onclick="ocPergunta({ titulo: 'Cancelar o orçamento {{ o.numero }}?', texto: 'Ele sai do caminho e fica guardado como cancelado. Dá para montar outro depois.', motivo: 'motivo (opcional)', cor: 'pk-rubro', icone: 'fa-ban', ok: 'Cancelar o orçamento', okIcone: 'fa-ban', voltar: 'Deixar como está', onOk: function (m) { ocPost('{{ url_for('comercial.orcamento_cancelar', oid=o.id) }}', { motivo: m }); } })"><i class="fas fa-ban"></i><span><b>Cancelar orçamento</b><small>não apaga: fica no histórico</small></span></button>
         {% endif %}
       </section>

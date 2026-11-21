@@ -55,7 +55,8 @@
 .oc-it .ns-in.qtd { text-align:center; height:46px; font-weight:800; } .oc-it .ns-money { height:46px; }
 .oc-it .rm { width:34px; height:46px; border:1px solid #e2e8f0; border-radius:10px; background:#fff; color:#b91c1c; cursor:pointer; } .oc-it .rm:disabled { opacity:.3; cursor:default; }
 .oc-add { align-self:flex-start; border:1px dashed #9fc9b3; background:#f6faf7; color:#15803d; font:inherit; font-weight:800; font-size:12.5px; border-radius:10px; padding:8px 12px; cursor:pointer; }
-.oc-chips { display:flex; flex-wrap:wrap; gap:6px; } .oc-chips button { border:1px solid #e2e8f0; background:#fff; color:#475569; border-radius:99px; padding:7px 12px; font:inherit; font-size:12.5px; font-weight:700; cursor:pointer; }
+.oc-chips { display:flex; flex-wrap:wrap; gap:6px; } .oc-sol { display:grid; grid-template-columns:1.4fr 1.2fr .8fr; gap:8px; } .oc-chips button.sol { border-style:dashed; }
+@media (max-width:900px) { .oc-sol { grid-template-columns:1fr; } } .oc-chips button { border:1px solid #e2e8f0; background:#fff; color:#475569; border-radius:99px; padding:7px 12px; font:inherit; font-size:12.5px; font-weight:700; cursor:pointer; }
 .oc-chips button.on { background:#16a34a; border-color:#16a34a; color:#fff; }
 .oc-area { width:100%; box-sizing:border-box; min-height:74px; border:1px solid #d7e3dc; border-radius:10px; padding:9px 12px; font:inherit; font-size:13.5px; resize:vertical; text-transform:uppercase; } .oc-area::placeholder { text-transform:none; }
 .oc-area:focus { outline:0; border-color:#22c55e; box-shadow:0 0 0 3px rgba(34,197,94,.14); }
@@ -114,7 +115,7 @@
 
   <div class="oc-grade" id="ocGrade">
   {% for o in lista %}
-    <div class="tx-c oc-c {{ o.cls }}" data-st="{{ o.status }}" data-quem="{{ o.criado_por }}" data-venc="{{ 1 if o.vencido else 0 }}" data-b="{{ o.numero }} {{ o.cliente_nome }} {{ o.titulo or '' }} {% for i in o.itens %}{{ i.descricao }} {% endfor %}" onclick="ocAbrir({{ o.id }})">
+    <div class="tx-c oc-c {{ o.cls }}" data-st="{{ 'APROVADO' if o.status == 'ACEITO' else o.status }}" data-quem="{{ o.criado_por }}" data-venc="{{ 1 if o.vencido else 0 }}" data-b="{{ o.numero }} {{ o.cliente_nome }} {{ o.titulo or '' }} {% for i in o.itens %}{{ i.descricao }} {% endfor %}" onclick="ocAbrir({{ o.id }})">
       <div class="tx-c-top"><span class="tx-c-num">{{ o.numero }}</span><span class="tx-c-nome" title="{{ o.cliente_nome }}">{{ o.cliente_nome }}</span></div>
       <div class="tx-c-meio">
         <div><div class="tx-c-val">{{ o.total | float | format_currency }}</div>
@@ -127,6 +128,8 @@
       </div>
       <div class="hp-linha">
         {% if o.cliente_avulso %}<span class="oc-chip">avulso</span>{% endif %}
+        {% if o.interno %}<span class="oc-chip"><i class="fas fa-lock"></i> controle interno</span>{% elif o.aceito_em %}<span class="oc-chip" style="background:#dcfce7; color:#166534"><i class="fas fa-file-signature"></i> aceito {{ o.aceito_em.strftime('%d/%m') }}</span>{% elif o.enviado_em %}<span class="oc-chip" style="background:#eff6ff; color:#1d4ed8"><i class="fas fa-envelope"></i> enviado {{ o.enviado_em.strftime('%d/%m') }}</span>{% endif %}
+        {% if o.solicitante_nome %}<span class="oc-chip" title="quem pediu, do lado do cliente"><i class="fas fa-user-tag"></i> {{ o.solicitante_nome.split(' ')[0] }}</span>{% endif %}
         {% if o.como %}<span class="oc-chip"><i class="fas {{ 'fa-file-invoice-dollar' if o.como == 'BOLETO_NOTA' else ('fa-barcode' if o.como == 'BOLETO' else 'fa-calendar-plus') }}"></i> {{ COMO[o.como] }}{% if o.parcelas and o.parcelas > 1 %} · {{ o.parcelas }}x{% endif %}</span>{% endif %}
         <span class="oc-chip quem"><i class="fas fa-user"></i> {{ (o.criado_por_nome or '').split(' ')[0] }} · {{ o.criado_em.strftime('%d/%m') }}</span>
         {% if o.vencido %}<span class="oc-chip venc"><i class="fas fa-hourglass-end"></i> validade vencida</span>{% endif %}
@@ -135,7 +138,7 @@
         <button type="button" onclick="event.stopPropagation(); ocAbrir({{ o.id }})"><i class="fas fa-folder-open"></i> Abrir</button>
         {% if o.status in ('RASCUNHO', 'REPROVADO') %}<button type="button" class="prim" onclick="event.stopPropagation(); ocPost('{{ url_for('comercial.orcamento_pedir', oid=o.id) }}')"><i class="fas fa-paper-plane"></i> {{ 'Aprovar e seguir' if aprovador else 'Pedir aprovação' }}</button>
         {% elif o.status == 'APROVACAO' and aprovador %}<button type="button" class="prim" onclick="event.stopPropagation(); ocPost('{{ url_for('comercial.orcamento_aprovar', oid=o.id) }}')"><i class="fas fa-check"></i> Aprovar</button>
-        {% elif o.status == 'APROVADO' %}<button type="button" class="prim" onclick="event.stopPropagation(); ocAbrir({{ o.id }}, 'cobrar')"><i class="fas fa-barcode"></i> Serviço feito: cobrar</button>
+        {% elif o.status in ('APROVADO', 'ACEITO') %}<button type="button" class="prim" onclick="event.stopPropagation(); ocAbrir({{ o.id }}, {{ "'enviar'" if (o.status == 'APROVADO' and not o.interno and not o.enviado_em) else "'cobrar'" }})"><i class="fas {{ 'fa-envelope' if (o.status == 'APROVADO' and not o.interno and not o.enviado_em) else 'fa-barcode' }}"></i> {{ 'Mandar ao cliente' if (o.status == 'APROVADO' and not o.interno and not o.enviado_em) else 'Serviço feito: cobrar' }}</button>
         {% elif o.status == 'COBRANCA' and o.lancamento_id %}<a href="{{ url_for('financeiro.lancamentos', aba='apr') }}#l{{ o.lancamento_id }}" onclick="event.stopPropagation()"><i class="fas fa-arrow-right"></i> Ver no Financeiro</a>{% endif %}
       </div>
     </div>
@@ -152,7 +155,7 @@
 <div class="pk-fundo" id="ocNovoFundo" hidden>
   <form class="ns" id="ocForm" method="POST" action="{{ url_for('comercial.orcamento_novo') }}" autocomplete="off">
     <input type="hidden" name="orcamento_id" id="ocId" value=""><input type="hidden" name="cliente_id" id="ocCli" value=""><input type="hidden" name="como" id="ocComo" value="BOLETO_NOTA">
-    <input type="hidden" name="parcelas" id="ocParc" value="1"><input type="hidden" name="comissao_tipo" id="ocCt" value="PADRAO"><input type="hidden" name="validade_dias" id="ocVal" value="15"><input type="hidden" name="acao" id="ocAcao" value="rascunho">
+    <input type="hidden" name="parcelas" id="ocParc" value="1"><input type="hidden" name="comissao_tipo" id="ocCt" value="PADRAO"><input type="hidden" name="validade_dias" id="ocVal" value="15"><input type="hidden" name="acao" id="ocAcao" value="rascunho"><input type="hidden" name="interno" id="ocInterno" value="0">
     <header class="ns-cab"><span class="ns-logo"><img src="{{ url_for('static', filename='images/logo.png') }}" alt="Qualicontax"></span>
       <div class="ns-tit"><b id="ocTit">Novo orçamento</b><span>escolha a empresa, os serviços e os valores · depois vai para aprovação</span></div>
       <div class="ns-prev"><small>total do orçamento</small><b id="ocPrevTot">R$ 0,00</b><span id="ocPrevSub">nenhum serviço ainda</span></div>
@@ -161,6 +164,15 @@
       <div class="ns-f">
         <section class="ns-b"><div class="ns-h"><i class="fas fa-building"></i> Empresa <em>cliente cadastrado ou avulso</em></div>
           <button type="button" class="oc-emp-bt" id="ocEmpBt" onclick="ocEmpAbrir()"><span class="sg"><i class="fas fa-building"></i></span><span class="tx"><b>Escolher a empresa</b><small>busque por nome, número ou CNPJ/CPF · avulsos também aparecem</small></span><i class="fas fa-chevron-right"></i></button></section>
+        <section class="ns-b"><div class="ns-h"><i class="fas fa-paper-plane"></i> Para quem é <em>o cliente aceita pelo link, ou fica só no nosso controle</em></div>
+          <div class="ns-ops svn-ops2" id="ocIntOps" style="grid-template-columns:repeat(2, minmax(0,1fr))">
+            <button type="button" class="ns-op on" data-v="0" onclick="ocIntSet(this)"><i class="fas fa-file-signature"></i><b>Para o cliente aceitar</b><small>vai por e-mail com o PDF; o cliente aceita pelo link com código, e fica registrado quem e quando</small></button>
+            <button type="button" class="ns-op" data-v="1" onclick="ocIntSet(this)"><i class="fas fa-lock"></i><b>Só controle interno</b><small>não vai a ninguém assinar: registra o serviço, aprova e segue para execução e cobrança</small></button></div></section>
+        <section class="ns-b" id="ocSolSec"><div class="ns-h"><i class="fas fa-user"></i> Quem pediu o serviço <em>do lado do cliente · vai no PDF e recebe o código de aceite</em></div>
+          <div class="oc-chips" id="ocSolChips" style="margin-bottom:8px"></div>
+          <div class="oc-sol"><input class="ns-in" name="solicitante_nome" id="ocSolNome" maxlength="120" placeholder="Nome de quem pediu" oninput="ocResumo()" style="text-transform:none">
+            <input class="ns-in" name="solicitante_email" id="ocSolEmail" type="email" maxlength="160" placeholder="e-mail" style="text-transform:none">
+            <input class="ns-in" name="solicitante_fone" id="ocSolFone" maxlength="40" placeholder="celular" inputmode="tel"></div></section>
         <section class="ns-b"><div class="ns-h"><i class="fas fa-list-check"></i> Serviços <em>do catálogo; o valor sugerido vem preenchido</em></div>
           <div class="oc-itens" id="ocItens"></div>
           <button type="button" class="oc-add" onclick="ocItemAdd()" style="margin-top:8px"><i class="fas fa-plus"></i> Mais um serviço</button></section>
@@ -293,7 +305,9 @@
     $('ocForm').reset(); $('ocId').value = ''; $('ocCli').value = ''; $('ocTit').textContent = 'Novo orçamento';
     ocEmpPinta(null); $('ocItens').innerHTML = ''; ocItemAdd();
     ocComo(document.querySelector('#ocOps .ns-op[data-v=BOLETO_NOTA]')); ocParcela(document.querySelector('#ocParcs [data-v="1"]')); ocCt(document.querySelector('#ocSeg [data-v=PADRAO]')); ocValidade(document.querySelector('#ocVals [data-v="15"]'));
+    ocIntSet(document.querySelector('#ocIntOps .ns-op[data-v="0"]')); $('ocSolChips').innerHTML = '';
     if (dados) {
+      ocIntSet(document.querySelector('#ocIntOps .ns-op[data-v="' + (dados.interno ? 1 : 0) + '"]')); $('ocSolNome').value = dados.solicitante_nome || ''; $('ocSolEmail').value = dados.solicitante_email || ''; $('ocSolFone').value = dados.solicitante_fone || ''; ocSolChips(dados.cliente_id);
       $('ocId').value = dados.id; $('ocTit').textContent = 'Alterar orçamento'; $('ocCli').value = dados.cliente_id; ocEmpPinta(CLI.find(function (c) { return String(c.id) === String(dados.cliente_id); }));
       $('ocItens').innerHTML = ''; (dados.itens || []).forEach(function (i) { ocItemAdd(i); });
       if (dados.como) ocComo(document.querySelector('#ocOps .ns-op[data-v=' + dados.como + ']'));
@@ -305,6 +319,16 @@
     ocResumo(); setTimeout(function () { if (!$('ocCli').value) ocEmpAbrir(); }, 120);
   };
   window.ocNovoFechar = function () { $('ocNovoFundo').hidden = true; document.body.style.overflow = trava || ''; };
+  window.ocIntSet = function (b) { if (!b) return; $('ocInterno').value = b.dataset.v; document.querySelectorAll('#ocIntOps .ns-op').forEach(function (x) { x.classList.toggle('on', x === b); }); $('ocSolSec').hidden = b.dataset.v === '1'; ocResumo(); };
+  function ocSolChips(cid) {
+    var box = $('ocSolChips'); box.innerHTML = '';
+    if (!cid) return;
+    fetch('/comercial/orcamentos/contatos/' + cid, { credentials: 'same-origin' }).then(function (r) { return r.json(); }).then(function (cs) {
+      box.innerHTML = cs.map(function (c, i) { return '<button type="button" class="sol" data-i="' + i + '"><i class="fas fa-user" style="font-size:10px"></i> ' + esc(c.nome) + (c.cargo ? ' <small>· ' + esc(c.cargo) + '</small>' : '') + '</button>'; }).join('') + (cs.length ? '' : '<small style="color:#64748b">esta empresa não tem contatos cadastrados: digite abaixo</small>');
+      box.querySelectorAll('button').forEach(function (b) { b.addEventListener('click', function () { var c = cs[parseInt(b.dataset.i, 10)]; $('ocSolNome').value = c.nome; $('ocSolEmail').value = c.email || ''; $('ocSolFone').value = c.fone || ''; box.querySelectorAll('button').forEach(function (x) { x.classList.toggle('on', x === b); }); ocResumo(); }); });
+      if (cs.length === 1 && !$('ocSolNome').value) box.querySelector('button').click();
+    }).catch(function () {});
+  }
   $('ocNovoFundo').addEventListener('mousedown', function (e) { if (e.target === this) ocNovoFechar(); });
   document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && !$('ocNovoFundo').hidden && !document.querySelector('.pk-fundo.pk-sobre')) ocNovoFechar(); });
   window.ocEditar = function (id) { fetch('/comercial/orcamentos/' + id + '/dados', { credentials: 'same-origin' }).then(function (r) { return r.json(); }).then(function (d) { ocFechar(); ocNovoAbrir(d); }); };
@@ -318,7 +342,7 @@
   window.ocEmpAbrir = function () {
     if (!window.CaixaCliente) return;
     CaixaCliente.abrir({ clientes: CLI, atual: $('ocCli').value, titulo: 'Empresa do orçamento', sub: 'cliente cadastrado ou avulso · é para ela que o orçamento vai', z: 1300,
-      onUsar: function (c) { if (!c) return; $('ocCli').value = c.id; ocEmpPinta(c); ocResumo(); var bm = document.querySelector('#ocOps .ns-op[data-v=MENSAL]'); bm.classList.toggle('sem', !c.mensal); if (!c.mensal && $('ocComo').value === 'MENSAL') ocComo(document.querySelector('#ocOps .ns-op[data-v=BOLETO_NOTA]')); } });
+      onUsar: function (c) { if (!c) return; $('ocCli').value = c.id; ocEmpPinta(c); ocSolChips(c.id); ocResumo(); var bm = document.querySelector('#ocOps .ns-op[data-v=MENSAL]'); bm.classList.toggle('sem', !c.mensal); if (!c.mensal && $('ocComo').value === 'MENSAL') ocComo(document.querySelector('#ocOps .ns-op[data-v=BOLETO_NOTA]')); } });
   };
 
   // itens
@@ -381,6 +405,7 @@
       + '<div class="oc-res-it" style="border:0"><span>comissão pedida</span><b style="color:#6d28d9">' + esc(rc) + '</b></div>';
     $('ocPrevTot').textContent = brl(tot); $('ocPrevSub').textContent = n ? (n + ' serviço' + (n > 1 ? 's' : '') + ' · ' + { BOLETO_NOTA: 'boleto + nota', BOLETO: 'só boleto', MENSAL: 'na mensalidade' }[como] + (parc > 1 ? ' · ' + parc + 'x' : '')) : 'nenhum serviço ainda';
     if (!cli) falta = 'Escolha a empresa.'; else if (!n && !falta) falta = 'Ponha ao menos um serviço com valor.'; else if ((ct === 'PCT' || ct === 'FIXO') && !cv) falta = falta || 'Diga quanto é a comissão pedida.';
+    if (!falta && $('ocInterno').value !== '1' && !$('ocSolNome').value.trim()) falta = 'Diga quem pediu o serviço (ou marque "Só controle interno").';
     if (!falta && como === 'MENSAL' && cli && !cli.mensal) falta = 'Esta empresa não tem honorários mensais: cobre com boleto.';
     var msg = $('ocMsg'); msg.textContent = falta || ('Pronto: ' + n + ' serviço' + (n > 1 ? 's' : '') + ', ' + brl(tot) + '.'); msg.classList.toggle('ok', !falta);
     $('ocSalvar').disabled = !cli; $('ocEnviar').disabled = !!falta;

@@ -6,6 +6,7 @@ controle". O orçamento nasce aqui (cliente cadastrado ou avulso), vai para apro
 pessoa manda ao cliente; feito o serviço, ela manda para a cobrança e o lançamento nasce em Financeiro › Lançamentos
 com a linha do tempo inteira. Tabelas: com_orcamentos, com_orcamento_itens, com_orcamento_eventos.
 """
+import hashlib
 import secrets
 from datetime import date, datetime, timedelta
 from decimal import Decimal, InvalidOperation
@@ -17,6 +18,7 @@ STATUS = {
     'RASCUNHO':  ('Rascunho',          'tx-perd', 'fa-pen-ruler'),
     'APROVACAO': ('Para aprovar',      'tx-venc', 'fa-stamp'),
     'APROVADO':  ('Aprovado',          'tx-ok',   'fa-circle-check'),
+    'ACEITO':    ('Aceito pelo cliente', 'tx-ok', 'fa-file-signature'),
     'COBRANCA':  ('Em cobrança',       'tx-hoje', 'fa-barcode'),
     'CONCLUIDO': ('Concluído',         'tx-fut',  'fa-flag-checkered'),
     'REPROVADO': ('Reprovado',         'tx-ina',  'fa-rotate-left'),
@@ -24,6 +26,16 @@ STATUS = {
 }
 COMO = {'BOLETO_NOTA': 'boleto + nota fiscal', 'BOLETO': 'só boleto', 'MENSAL': 'na mensalidade'}
 COMISSAO = {'PADRAO': 'padrão da pessoa', 'PCT': '%', 'FIXO': 'valor fixo', 'SEM': 'sem comissão'}
+_ALFA = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'      # sem 0/O e 1/I, para ler no telefone sem confundir
+
+
+def novo_numero():
+    """ORC-7K3M9Q: 6 letras/números, único (Anderson: "não quero sequencial subindo")."""
+    for _ in range(20):
+        n = 'ORC-' + ''.join(secrets.choice(_ALFA) for _ in range(6))
+        if not execute_query('SELECT id FROM com_orcamentos WHERE numero = %s', (n,), fetch=True):
+            return n
+    raise RuntimeError('não consegui um número livre')
 
 
 def _d(v):
@@ -43,7 +55,7 @@ def _d(v):
 class Orcamento:
     SELECT = """SELECT o.*, c.nome_razao_social AS cliente_nome, c.numero_cliente AS cliente_num, c.cpf_cnpj AS cliente_doc,
                        COALESCE(c.avulso, 0) AS cliente_avulso, c.email AS cliente_email, c.telefone AS cliente_fone,
-                       u.nome AS criado_por_nome, a.nome AS aprovado_por_nome
+                       u.nome AS criado_por_nome, u.email AS criado_por_email, u.telefone AS criado_por_fone, a.nome AS aprovado_por_nome
                   FROM com_orcamentos o
                   JOIN clientes c ON c.id = o.cliente_id
                   LEFT JOIN usuarios u ON u.id = o.criado_por
@@ -134,8 +146,15 @@ class Orcamento:
             raise ValueError('Informe o %% ou o valor da comissão pedida.')
         dias = f.get('validade_dias', type=int)
         validade = date.today() + timedelta(days=dias) if dias else None
+        sol = ' '.join((f.get('solicitante_nome') or '').split())[:120] or None
+        sol_email = (f.get('solicitante_email') or '').strip().lower()[:160] or None
+        sol_fone = ' '.join((f.get('solicitante_fone') or '').split())[:40] or None
+        interno = 1 if f.get('interno') == '1' else 0
+        if not interno and not sol:
+            raise ValueError('Diga quem pediu o serviço do lado do cliente (o solicitante). Se for só controle interno, marque essa opção.')
         return {'cliente_id': cid, 'titulo': ' '.join((f.get('titulo') or '').split())[:160] or None, 'como': como, 'parcelas': parcelas,
                 'comissao_tipo': ct, 'comissao_valor': cv, 'validade': validade,
+                'solicitante_nome': sol, 'solicitante_email': sol_email, 'solicitante_fone': sol_fone, 'interno': interno,
                 'observacao': (f.get('observacao') or '').strip()[:4000].upper() or None,
                 'nota_interna': (f.get('nota_interna') or '').strip()[:2000] or None}
 
@@ -144,12 +163,12 @@ class Orcamento:
         d = Orcamento._dados_do_form(f)
         itens = Orcamento._itens_do_form(f)
         total = sum((i['valor_total'] for i in itens), Decimal('0'))
-        oid = execute_query("""INSERT INTO com_orcamentos (empresa_id, cliente_id, titulo, status, validade, como, parcelas, comissao_tipo,
-                                   comissao_valor, total, observacao, nota_interna, token, criado_por)
-                               VALUES (%s, %s, %s, 'RASCUNHO', %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
-                            (empresa_id, d['cliente_id'], d['titulo'], d['validade'], d['como'], d['parcelas'], d['comissao_tipo'],
-                             d['comissao_valor'], total, d['observacao'], d['nota_interna'], secrets.token_urlsafe(24)[:40], usuario.id), fetch=False)
-        execute_query('UPDATE com_orcamentos SET numero = %s WHERE id = %s', ('ORC-%06d' % oid, oid), fetch=False)
+        oid = execute_query("""INSERT INTO com_orcamentos (empresa_id, numero, cliente_id, titulo, status, validade, como, parcelas, comissao_tipo,
+                                   comissao_valor, total, observacao, nota_interna, token, criado_por, solicitante_nome, solicitante_email, solicitante_fone, interno)
+                               VALUES (%s, %s, %s, %s, 'RASCUNHO', %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
+                            (empresa_id, novo_numero(), d['cliente_id'], d['titulo'], d['validade'], d['como'], d['parcelas'], d['comissao_tipo'],
+                             d['comissao_valor'], total, d['observacao'], d['nota_interna'], secrets.token_urlsafe(24)[:40], usuario.id,
+                             d['solicitante_nome'], d['solicitante_email'], d['solicitante_fone'], d['interno']), fetch=False)
         Orcamento._gravar_itens(oid, itens)
         Orcamento.evento(oid, 'criado', 'Orçamento montado: %d serviço%s, total R$ %s' % (len(itens), 's' if len(itens) != 1 else '', _brl(total)), usuario)
         return oid
@@ -163,9 +182,10 @@ class Orcamento:
         itens = Orcamento._itens_do_form(f)
         total = sum((i['valor_total'] for i in itens), Decimal('0'))
         execute_query("""UPDATE com_orcamentos SET cliente_id = %s, titulo = %s, validade = %s, como = %s, parcelas = %s, comissao_tipo = %s,
-                             comissao_valor = %s, total = %s, observacao = %s, nota_interna = %s, status = 'RASCUNHO', motivo = NULL WHERE id = %s""",
+                             comissao_valor = %s, total = %s, observacao = %s, nota_interna = %s, status = 'RASCUNHO', motivo = NULL,
+                             solicitante_nome = %s, solicitante_email = %s, solicitante_fone = %s, interno = %s WHERE id = %s""",
                       (d['cliente_id'], d['titulo'], d['validade'], d['como'], d['parcelas'], d['comissao_tipo'], d['comissao_valor'], total,
-                       d['observacao'], d['nota_interna'], oid), fetch=False)
+                       d['observacao'], d['nota_interna'], d['solicitante_nome'], d['solicitante_email'], d['solicitante_fone'], d['interno'], oid), fetch=False)
         execute_query('DELETE FROM com_orcamento_itens WHERE orcamento_id = %s', (oid,), fetch=False)
         Orcamento._gravar_itens(oid, itens)
         Orcamento.evento(oid, 'editado', 'Orçamento alterado: %d serviço%s, total R$ %s' % (len(itens), 's' if len(itens) != 1 else '', _brl(total)), usuario)
@@ -200,6 +220,32 @@ class Orcamento:
     @staticmethod
     def vencido(o):
         return bool(o.get('validade') and o['status'] in ('APROVADO',) and o['validade'] < date.today())
+
+    # ---------------- aceite do cliente pelo link (igual à assinatura do contrato) ----------------
+    @staticmethod
+    def gerar_codigo(oid, para):
+        codigo = '%06d' % secrets.randbelow(1000000)
+        execute_query('UPDATE com_orcamentos SET codigo_hash = %s, codigo_enviado_em = NOW(), codigo_para = %s, codigo_tentativas = 0 WHERE id = %s',
+                      (hashlib.sha256(codigo.encode()).hexdigest(), (para or '')[:160], oid), fetch=False)
+        return codigo
+
+    @staticmethod
+    def conferir_codigo(o, codigo):
+        """True se o código bate; 5 erradas ou 30 minutos invalidam."""
+        if not o.get('codigo_hash') or (o.get('codigo_tentativas') or 0) >= 5:
+            return False
+        if not o.get('codigo_enviado_em') or (datetime.now() - o['codigo_enviado_em']).total_seconds() > 30 * 60:
+            return False
+        ok = hashlib.sha256((codigo or '').strip().encode()).hexdigest() == o['codigo_hash']
+        if not ok:
+            execute_query('UPDATE com_orcamentos SET codigo_tentativas = codigo_tentativas + 1 WHERE id = %s', (o['id'],), fetch=False)
+        return ok
+
+    @staticmethod
+    def registrar_aceite(oid, nome, cpf, email, ip, agente, pdf_hash):
+        execute_query("""UPDATE com_orcamentos SET status = 'ACEITO', aceito_em = NOW(), aceito_nome = %s, aceito_cpf = %s, aceito_email = %s, aceito_ip = %s,
+                             aceito_agente = %s, aceito_hash = %s, codigo_hash = NULL WHERE id = %s AND aceito_em IS NULL""",
+                      ((nome or '')[:160], (cpf or '')[:14], (email or '')[:160], (ip or '')[:64], (agente or '')[:255], pdf_hash, oid), fetch=False)
 
 
 def _brl(v):

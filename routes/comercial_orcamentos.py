@@ -10,6 +10,7 @@ Caminho: RASCUNHO → (pedir aprovação) APROVACAO → (admin) APROVADO → (en
 (serviço feito: mandar para a cobrança) COBRANCA = lançamento LANCADO em Financeiro › Lançamentos → (admin aprova lá)
 CONCLUIDO. REPROVADO volta para a pessoa corrigir; CANCELADO encerra.
 """
+import hashlib
 import json
 import logging
 from datetime import date, datetime
@@ -79,7 +80,8 @@ def orcamentos():
         o['vencido'] = Orcamento.vencido(o)
     cont = {k: [0, 0.0] for k in STATUS}
     for o in lista:
-        cont[o['status']][0] += 1; cont[o['status']][1] += float(o['total'] or 0)
+        k = 'APROVADO' if o['status'] == 'ACEITO' else o['status']        # aceito pelo cliente conta como aprovado na aba
+        cont[k][0] += 1; cont[k][1] += float(o['total'] or 0)
     pessoas = {}
     for o in lista:
         pessoas.setdefault(o['criado_por'], o['criado_por_nome'] or ('#%s' % o['criado_por']))
@@ -111,7 +113,8 @@ def orcamento_janela(oid):
     from datetime import timedelta
     hoje = date.today()
     datas_venc = [((hoje + timedelta(days=d)).isoformat(), 'em %d dias' % d, (hoje + timedelta(days=d)).strftime('%d/%m'), d == 7) for d in (3, 7, 10, 15, 30)]
-    return render_template('comercial/_orcamento_janela.html', o=o, itens=itens, eventos=eventos, lanc=lanc, dest=dest, hoje=hoje, datas_venc=datas_venc,
+    link = url_for('proposta.ver', token=o['token'], _external=True) if not o.get('interno') else None
+    return render_template('comercial/_orcamento_janela.html', o=o, itens=itens, eventos=eventos, lanc=lanc, dest=dest, hoje=hoje, datas_venc=datas_venc, link=link,
                            aprovador=_aprovador(), dono=o['criado_por'] == current_user.id, STATUS=STATUS, COMO=COMO, COMISSAO=COMISSAO,
                            vencido=Orcamento.vencido(o), n_nota=sum(1 for i in itens if i['emite_nota']),
                            total_nota=sum((Decimal(str(i['valor_total'])) for i in itens if i['emite_nota']), Decimal('0')))
@@ -127,7 +130,17 @@ def orcamento_dados(oid):
     return jsonify({'id': o['id'], 'cliente_id': o['cliente_id'], 'titulo': o['titulo'] or '', 'como': o['como'] or '', 'parcelas': o['parcelas'] or 1,
                     'comissao_tipo': o['comissao_tipo'] or 'PADRAO', 'comissao_valor': float(o['comissao_valor'] or 0),
                     'validade': o['validade'].isoformat() if o['validade'] else '', 'observacao': o['observacao'] or '', 'nota_interna': o['nota_interna'] or '',
+                    'solicitante_nome': o.get('solicitante_nome') or '', 'solicitante_email': o.get('solicitante_email') or '', 'solicitante_fone': o.get('solicitante_fone') or '', 'interno': int(o.get('interno') or 0),
                     'itens': [{'servico_id': i['servico_id'], 'descricao': i['descricao'], 'qtd': float(i['quantidade']), 'valor': float(i['valor_unitario'])} for i in Orcamento.itens(oid)]})
+
+
+@comercial.route('/comercial/orcamentos/contatos/<int:cid>')
+@permission_required(VER)
+def orcamento_contatos(cid):
+    """Contatos do cliente, para escolher o solicitante na caixa (quem pediu o serviço do lado do cliente)."""
+    rows = execute_query("""SELECT nome, cargo, email, COALESCE(NULLIF(celular, ''), telefone) AS fone, principal FROM contatos_clientes
+                               WHERE cliente_id = %s AND COALESCE(ativo, 1) = 1 ORDER BY principal DESC, nome""", (cid,), fetch=True) or []
+    return jsonify([{'nome': r['nome'], 'cargo': r['cargo'] or '', 'email': r['email'] or '', 'fone': r['fone'] or '', 'principal': bool(r['principal'])} for r in rows])
 
 
 # ───────────────────────── montar e alterar ─────────────────────────
@@ -164,7 +177,7 @@ def _pedir(oid):
         # quem aprova e monta ao mesmo tempo: já nasce aprovado (como em Lançamentos, o administrador não pede para si)
         Orcamento.mudar(oid, 'APROVADO', current_user, 'aprovado', 'Aprovado por %s ao montar (quem aprova não precisa pedir)' % current_user.nome,
                         aprovado_por=current_user.id, aprovado_em=datetime.now(), motivo=None)
-        flash('Orçamento %s aprovado. Agora é mandar ao cliente.' % o['numero'], 'success')
+        flash(('Orçamento %s aprovado. É controle interno: agora é fazer o serviço e, feito, mandar para a cobrança.' if o.get('interno') else 'Orçamento %s aprovado. Agora é mandar ao cliente aceitar.') % o['numero'], 'success')
     else:
         Orcamento.mudar(oid, 'APROVACAO', current_user, 'aprovacao', 'Mandado para aprovação por %s' % current_user.nome, motivo=None)
         _avisar_aprovadores(o)
@@ -253,8 +266,11 @@ def orcamento_enviar(oid):
     o = Orcamento.get(oid)
     if not o or not _dono_ou_aprovador(o):
         abort(404)
-    if o['status'] not in ('APROVADO',):
+    if o['status'] not in ('APROVADO', 'ACEITO'):
         flash('Só orçamento aprovado vai para o cliente.', 'info')
+        return _volta(oid)
+    if o.get('interno'):
+        flash('Este orçamento é de controle interno: não vai ao cliente. Altere-o se quiser mandar para aceite.', 'info')
         return _volta(oid)
     paras = [e.strip() for e in request.form.getlist('para') if e and '@' in e]
     extra = (request.form.get('outro') or '').strip()
@@ -265,11 +281,15 @@ def orcamento_enviar(oid):
         return _volta(oid)
     from utils.email_envio import enviar
     from utils.orcamento_pdf import gerar_pdf
-    pdf = gerar_pdf(o, Orcamento.itens(oid))
+    if not o.get('enviado_em'):                                   # a data do documento congela no 1º envio (impressão digital estável)
+        execute_query('UPDATE com_orcamentos SET enviado_em = NOW() WHERE id = %s', (oid,), fetch=False); o = Orcamento.get(oid)
+    link = url_for('proposta.ver', token=o['token'], _external=True)
+    pdf = gerar_pdf(o, Orcamento.itens(oid), link=link, data_doc=o['enviado_em'].date())
     assunto = 'Orçamento %s — Qualicontax' % o['numero']
-    texto = ('Olá!\n\nSegue em anexo o orçamento %s (%s), no valor de R$ %s%s.\n\nQualquer dúvida, é só responder este e-mail.\n\nQualicontax Assessoria Contábil'
-             % (o['numero'], o['titulo'] or 'serviços', _brl(o['total']), (', válido até %s' % o['validade'].strftime('%d/%m/%Y')) if o['validade'] else ''))
-    html = texto.replace('\n', '<br>')
+    texto = ('Olá%s!\n\nSegue em anexo o orçamento %s (%s), no valor de R$ %s%s.\n\nPara aceitar a proposta, abra o link abaixo: você recebe um código por e-mail, confirma seu nome e o aceite fica registrado.\n%s\n\nQualquer dúvida, é só responder este e-mail.\n\n%s\nQualicontax Assessoria Contábil'
+             % ((', ' + o['solicitante_nome'].split(' ')[0].title()) if o.get('solicitante_nome') else '', o['numero'], o['titulo'] or 'serviços', _brl(o['total']),
+                (', válido até %s' % o['validade'].strftime('%d/%m/%Y')) if o['validade'] else '', link, o.get('criado_por_nome') or ''))
+    html = texto.replace('\n', '<br>').replace(link, '<a href="%s" style="background:#15803d;color:#fff;padding:10px 18px;border-radius:8px;text-decoration:none;display:inline-block;margin:6px 0">Ver e aceitar a proposta</a><br><small>%s</small>' % (link, link))
     ok, erro = False, ''
     try:
         ok, erro = enviar(paras, assunto, html, texto, anexos=[('Orcamento-%s.pdf' % o['numero'], pdf, 'application/pdf')], servico='orcamento', usuario_id=current_user.id)
@@ -278,7 +298,9 @@ def orcamento_enviar(oid):
     if not ok:
         flash('O e-mail não saiu (%s). Baixe o PDF e mande por fora, ou tente de novo.' % (erro or 'falha no envio'), 'danger')
         return _volta(oid)
-    execute_query('UPDATE com_orcamentos SET enviado_em = COALESCE(enviado_em, NOW()) WHERE id = %s', (oid,), fetch=False)
+    ja = [e.strip().lower() for e in (o.get('enviado_para') or '').split(',') if e.strip()]
+    todos = ja + [p.lower() for p in paras if p.lower() not in ja]
+    execute_query('UPDATE com_orcamentos SET enviado_para = %s, pdf_sha256 = %s WHERE id = %s', (','.join(todos)[:600], hashlib.sha256(pdf).hexdigest(), oid), fetch=False)
     Orcamento.evento(oid, 'enviado', 'Mandado ao cliente por e-mail (%s) por %s' % (', '.join(paras), current_user.nome), current_user)
     registrar('escrita.enviou_orcamento', 'comercial', tabela='com_orcamentos', registro_id=oid, depois={'para': paras})
     flash('Orçamento %s mandado para %s.' % (o['numero'], ', '.join(paras)), 'success')
@@ -293,7 +315,9 @@ def orcamento_pdf(oid):
         abort(404)
     from io import BytesIO
     from utils.orcamento_pdf import gerar_pdf
-    return send_file(BytesIO(gerar_pdf(o, Orcamento.itens(oid))), mimetype='application/pdf', as_attachment=request.args.get('baixar') == '1',
+    link = url_for('proposta.ver', token=o['token'], _external=True) if not o.get('interno') else None
+    pdf = gerar_pdf(o, Orcamento.itens(oid), link=link, data_doc=(o['enviado_em'] or o['criado_em']).date() if (o.get('enviado_em') or o.get('aceito_em')) else None)
+    return send_file(BytesIO(pdf), mimetype='application/pdf', as_attachment=request.args.get('baixar') == '1',
                      download_name='Orcamento-%s.pdf' % o['numero'])
 
 
@@ -307,7 +331,7 @@ def orcamento_cobrar(oid):
     f = request.form
     if not o or not _dono_ou_aprovador(o):
         abort(404)
-    if o['status'] != 'APROVADO':
+    if o['status'] not in ('APROVADO', 'ACEITO'):
         flash('Só orçamento aprovado vai para a cobrança.', 'info')
         return _volta(oid)
     itens = Orcamento.itens(oid)
