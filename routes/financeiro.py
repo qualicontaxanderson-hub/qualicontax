@@ -1661,7 +1661,7 @@ def _contas_ctx():
         'eh_admin': admin,
     }
     # 21/11/2026: saldo do banco de cada conta (gravado a cada extrato) e a conferência com os lançamentos
-    from utils.conta_saldo import ultimos as _ult_saldo, conferir as _conferir_saldo
+    from utils.conta_saldo import ultimos as _ult_saldo, conferir as _conferir_saldo, depois as _depois_saldo
     _us = _ult_saldo([c['id'] for c in contas])
     _por_id = {c['id']: c for c in contas}
     for c in dados['contas']:
@@ -1669,6 +1669,14 @@ def _contas_ctx():
         if not u:
             continue
         c['saldo'] = {'valor': float(u['valor']), 'data': _d(u['data']), 'origem': u['origem']}
+        # saldo de HOJE: o do banco + o que entrou depois (API do Bradesco/Efí/Cora, extratos sem saldo)
+        try:
+            dp = _depois_saldo(_por_id[c['id']], u)
+        except Exception:
+            dp = None
+        c['saldo']['hoje'] = float(u['valor'] + (dp['valor'] if dp else 0))
+        c['saldo']['n_depois'] = dp['n'] if dp else 0
+        c['saldo']['ate'] = _d(dp['ate']) if dp and dp['ate'] else _d(u['data'])
         try:
             cf = _conferir_saldo(_por_id[c['id']], u)
         except Exception:

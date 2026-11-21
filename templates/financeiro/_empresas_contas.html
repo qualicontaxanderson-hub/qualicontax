@@ -206,16 +206,17 @@ function quadrinhos() {
     const cs = D.contas.filter(c => c.empresa_id === emp).sort((a, b) => (b.ativo - a.ativo) || String(a.banco_nome).localeCompare(String(b.banco_nome)));
     const sc = D.cobertura.filter(c => !c.cadastrada && c.empresa_id === emp);
     let h = cs.map(c => { const st = estadoConta(c), nome = c.apelido && c.apelido !== c.banco_nome ? c.apelido : (c.banco_nome || c.banco_id);
-      return `<button type="button" class="me-bco ${c.ativo ? '' : 'off'}" data-conta="${c.id}" title="${esc(nome)} · cc ${esc(c.conta)} · ${esc(st.t)}${c.saldo ? ' · saldo ' + brl(c.saldo.valor) + ' em ' + dmy(c.saldo.data) : ''}">${marca(c.banco_id, c.banco_nome, 30)}${c.cob && c.cob.ativo ? '<span class="cob" title="boletos ligados"><i class="fas fa-barcode"></i></span>' : ''}<span class="dot ${DOT[st.k]}"></span></button>`; }).join('');
+      return `<button type="button" class="me-bco ${c.ativo ? '' : 'off'}" data-conta="${c.id}" title="${esc(nome)} · cc ${esc(c.conta)} · ${esc(st.t)}${c.saldo ? ' · saldo ' + brl(c.saldo.hoje) + ' até ' + dmy(c.saldo.ate) : ''}">${marca(c.banco_id, c.banco_nome, 30)}${c.cob && c.cob.ativo ? '<span class="cob" title="boletos ligados"><i class="fas fa-barcode"></i></span>' : ''}<span class="dot ${DOT[st.k]}"></span></button>`; }).join('');
     h += sc.map((s, i) => `<button type="button" class="me-bco semcad" data-semcad="${emp}:${i}" title="${esc(s.banco)} · cc ${esc(s.conta)} · chegou extrato e a conta não está cadastrada">${marca(null, s.banco, 30)}<span class="dot amb"></span></button>`).join('');
     h += `<button type="button" class="me-bco novo" data-nova="${emp}" title="Cadastrar outra conta desta empresa"><i class="fas fa-plus"></i></button>`;
     box.innerHTML = h;
     const n = cs.filter(c => c.ativo).length, atr = cs.filter(c => ['atraso', 'nunca'].includes(estadoConta(c).k)).length;
     const comSaldo = cs.filter(c => c.ativo && c.saldo);
-    const tot = comSaldo.reduce((a, c) => a + c.saldo.valor, 0);
+    const tot = comSaldo.reduce((a, c) => a + c.saldo.hoje, 0);
+    const ateMax = comSaldo.reduce((a, c) => (c.saldo.ate > a ? c.saldo.ate : a), '');
     const lab = document.querySelector(`[data-bc-n="${emp}"]`);
     const sbox = document.querySelector(`[data-bc-saldo="${emp}"]`);
-    if (sbox) sbox.innerHTML = comSaldo.length ? `<div class="me-saldo ${tot < 0 ? 'neg' : ''}" title="Soma do último saldo de cada conta, pelo extrato de cada uma"><i class="fas fa-wallet"></i><span><small>Saldo nas contas</small><b>${brl(tot)}</b></span><em>${comSaldo.length < n ? comSaldo.length + ' de ' + n + ' contas com saldo' : 'pelo último extrato de cada conta'}</em></div>` : '';
+    if (sbox) sbox.innerHTML = comSaldo.length ? `<div class="me-saldo ${tot < 0 ? 'neg' : ''}" title="Soma do saldo de hoje de cada conta: o último saldo que o banco informou mais os lançamentos que entraram depois"><i class="fas fa-wallet"></i><span><small>Saldo nas contas</small><b>${brl(tot)}</b></span><em>${comSaldo.length < n ? comSaldo.length + ' de ' + n + ' contas com saldo' : 'até ' + dmy(ateMax)}</em></div>` : '';
     if (lab) lab.innerHTML = (n ? `${n} conta${n !== 1 ? 's' : ''}` : 'nenhuma conta') + (atr && ultimoMesFechado ? ` · <b>${atr} sem o extrato de ${nomeMes(ultimoMesFechado)}</b>` : '') + (sc.length ? ` · <b>${sc.length} sem cadastro</b>` : '');
   });
 }
@@ -233,7 +234,7 @@ function janelaConta(id) {
       <button type="button" class="bc-x" onclick="bcFechar()" title="Fechar (Esc)"><i class="fas fa-xmark"></i></button></header>
     <div class="bc-corpo">
       <div class="bc-nums">
-        <div class="bc-num bc-saldo ${c.saldo && c.saldo.valor < 0 ? 'neg' : ''}"><span>Saldo no banco</span><b>${c.saldo ? brl(c.saldo.valor) : '—'}</b><small>${c.saldo ? 'em ' + dmy(c.saldo.data) + ' · do extrato' : 'chega com o próximo extrato'}</small></div>
+        <div class="bc-num bc-saldo ${c.saldo && c.saldo.hoje < 0 ? 'neg' : ''}" title="${c.saldo ? 'O banco informou ' + brl(c.saldo.valor) + ' em ' + dmy(c.saldo.data) + (c.saldo.n_depois ? '; depois entraram ' + c.saldo.n_depois + ' lançamento(s) no sistema' : '') : ''}"><span>Saldo hoje</span><b>${c.saldo ? brl(c.saldo.hoje) : '—'}</b><small>${c.saldo ? 'até ' + dmy(c.saldo.ate) + (c.saldo.n_depois ? ' · banco ' + brl(c.saldo.valor) + ' em ' + dmy(c.saldo.data) + ' + ' + c.saldo.n_depois + ' lanç.' : ' · do extrato') : 'chega com o próximo extrato'}</small></div>
         <div class="bc-num"><span>Situação</span><b><span class="sit ${st.cls}">${esc(st.t)}</span></b></div>
         <div class="bc-num"><span>Último extrato</span><b>${cb.ultimo ? dmy(cb.ultimo) : '—'}</b></div>
         <div class="bc-num"><span>Lançamentos em ${ANO}</span><b>${(cb.total || 0).toLocaleString('pt-BR')}</b></div>

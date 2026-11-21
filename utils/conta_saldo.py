@@ -103,3 +103,21 @@ def conferir(conta, ult):
     lancado = sum((Decimal(str(r['v'] or 0)) for r in rows if conta_normalizada(r['conta']) == alvo), Decimal('0'))
     dif = (n['valor'] - a['valor']) - lancado
     return {'ok': abs(dif) <= Decimal('0.01'), 'diferenca': dif, 'de': a['data'], 'ate': n['data'], 'lancado': lancado}
+
+
+def depois(conta, ult):
+    """O que entrou no sistema DEPOIS do último saldo do banco (21/11/2026). Anderson: "esses saldos estão errados" —
+    a tela mostrava o saldo do último ARQUIVO (Bradesco −12.000,00 em 30/10) e a API do Bradesco, da Efí e da Cora
+    já tinha trazido 54, 60 e 7 lançamentos depois. Saldo de hoje = saldo do banco + estes lançamentos.
+    Devolve {'valor', 'n', 'ate'} ou None."""
+    if not ult:
+        return None
+    from utils.db_helper import execute_query
+    from utils.extrato_ingest import conta_normalizada
+    rows = execute_query(
+        """SELECT conta, data, valor FROM extrato_lancamentos WHERE empresa_id = %s AND data > %s""",
+        (conta['empresa_id'], ult['data']), fetch=True) or []
+    alvo = conta_normalizada(conta['conta'])
+    rows = [r for r in rows if conta_normalizada(r['conta']) == alvo]
+    return {'valor': sum((Decimal(str(r['valor'] or 0)) for r in rows), Decimal('0')), 'n': len(rows),
+            'ate': max((r['data'] for r in rows), default=None)}

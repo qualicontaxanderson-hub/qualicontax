@@ -67,38 +67,75 @@ def _valor(s, sinal):
     return -v if (sinal or '').strip() == '-' else v
 
 
-def ler(j):
+def ler(j, hoje=None):
     """Resposta da API -> lista de lançamentos no formato do parser de OFX (sem as linhas de saldo).
 
     Além do período, entra o grupo "Lancamentos Dia" dos últimos lançamentos: é onde o Pix recebido
     aparece NA HORA (15/11/2026, domingo: o Pix de R$ 100 do Anderson veio só ali, com a data do
     próximo dia útil, 16/11, e o período ainda não o tinha). Vem com a mesma data, documento e
-    descrição que o período trará depois, então não duplica. A tarifa agendada ("Ultimos
-    Lancamentos", data futura) continua de fora até o banco lançar."""
+    descrição que o período trará depois, então não duplica.
+
+    21/11/2026 (Anderson: "não bate"):
+    - REPETIDOS DE VERDADE ENTRAM: o banco cobrou 6 tarifas de 9,80 iguais (mesmo dia, documento e texto)
+      em 16/11 e o descarte de "mesma linha no período e no do dia" guardava só 1 — faltavam 49,00. Agora
+      conta quantas vezes cada linha vem no período e o grupo "do dia" só acrescenta o que passar disso.
+    - "Ultimos Lancamentos" de dia JÁ PASSADO entram: em 19/11 a tarifa de 8,80 e a aplicação automática
+      no Invest Fácil (9.131,22) só vinham ali (o período ia até 18/11). Data de hoje ou futura continua
+      de fora (tarifa agendada).
+    - Cada item leva '_saldo': o saldo do banco depois daquele lançamento (valorSaldoAposLancamento)."""
+    from collections import Counter
+    hoje = hoje or date.today()
     por = (j or {}).get('extratoPorPeriodo') or {}
     ult = ((j or {}).get('extratoUltimosLancamentos') or {}).get('listaLancamentos') or {}
-    dia = [l for g, ls in ult.items() if 'dia' in str(g).lower() for l in (ls or [])]
-    out, vistos = [], set()
-    for l in list(por.get('lstLancamentoMensal') or []) + dia:
-        desc1 = re.sub(r'\s+', ' ', str(l.get('descritivoLancamentoCompleto') or l.get('descritivoLancamentoAbreviado') or '')).strip()
-        if not desc1 or 'SALDO' in desc1.upper():
-            continue
-        desc2 = re.sub(r'\s+', ' ', str(l.get('segundaLinhalLancamento') or '')).strip()
-        d = str(l.get('dataLancamento') or '')
-        try:
-            data = date(int(d[6:10]), int(d[3:5]), int(d[0:2]))
-        except ValueError:
-            continue
-        valor = _valor(l.get('valorLancamento'), l.get('sinalLancamento'))
-        if not valor:
-            continue
-        doc = _num(l.get('numeroDocumento')).lstrip('0') or None
-        chave = (data, valor, doc, desc1, desc2)
-        if chave in vistos:                       # o mesmo lançamento no período e no "do dia"
-            continue
-        vistos.add(chave)
-        out.append({'data': data, 'valor': valor, 'tipo': 'CREDIT' if valor > 0 else 'DEBIT',
-                    'descricao': f'{desc1} {desc2}'.strip()[:500], 'documento': doc, 'fitid': None})
+    grupos = [('periodo', list(por.get('lstLancamentoMensal') or []))]
+    for g, ls in ult.items():
+        gl = str(g).lower()
+        if 'dia' in gl:
+            grupos.append(('dia', list(ls or [])))
+        elif 'ultimos' in gl or 'últimos' in gl:
+            grupos.append(('ultimos', list(ls or [])))
+    out, ja = [], Counter()
+    for grupo, linhas in grupos:
+        neste = Counter()
+        for l in linhas:
+            desc1 = re.sub(r'\s+', ' ', str(l.get('descritivoLancamentoCompleto') or l.get('descritivoLancamentoAbreviado') or '')).strip()
+            if not desc1 or 'SALDO' in desc1.upper():
+                continue
+            desc2 = re.sub(r'\s+', ' ', str(l.get('segundaLinhalLancamento') or '')).strip()
+            d = str(l.get('dataLancamento') or '')
+            try:
+                data = date(int(d[6:10]), int(d[3:5]), int(d[0:2]))
+            except ValueError:
+                continue
+            if grupo == 'ultimos' and data >= hoje:
+                continue                          # agendado / dia ainda aberto
+            valor = _valor(l.get('valorLancamento'), l.get('sinalLancamento'))
+            if not valor:
+                continue
+            doc = _num(l.get('numeroDocumento')).lstrip('0') or None
+            chave = (data, valor, doc, desc1, desc2)
+            neste[chave] += 1
+            if grupo != 'periodo' and neste[chave] <= ja[chave]:
+                continue                          # a mesma linha que o período já trouxe
+            try:
+                saldo = (_valor(l.get('valorSaldoAposLancamento'), l.get('sinalSaldo'))
+                         if l.get('valorSaldoAposLancamento') not in (None, '') else None)
+            except Exception:
+                saldo = None
+            out.append({'data': data, 'valor': valor, 'tipo': 'CREDIT' if valor > 0 else 'DEBIT',
+                        'descricao': f'{desc1} {desc2}'.strip()[:500], 'documento': doc, 'fitid': None,
+                        '_saldo': saldo})
+        for k, n in neste.items():
+            ja[k] = max(ja[k], n)
+    return out
+
+
+def saldos_do_dia(lancs):
+    """{data: saldo do banco no fim do dia} = o saldo depois do último lançamento de cada dia."""
+    out = {}
+    for l in lancs:
+        if l.get('_saldo') is not None:
+            out[l['data']] = l['_saldo']
     return out
 
 
@@ -338,6 +375,13 @@ def rodar(seco=True, de=None, ate=None, fin_conta_id=None):
         else:
             r = processar_lancamentos(dados, emp, f'API Bradesco {de:%d/%m}-{ate:%d/%m}', usuario_id=None, origem=ORIGEM)
             res['novos'] = r['novos']
+            # 21/11/2026: o saldo do banco no fim de cada dia (vem em cada linha da API) — o "Saldo hoje" da conta
+            try:
+                from utils.conta_saldo import gravar as _gravar_saldo
+                for d_, v_ in saldos_do_dia(lancs).items():
+                    _gravar_saldo(cc['fin_conta_id'], d_, v_, 'api', 'API Bradesco')
+            except Exception:
+                logger.exception('[bradesco-extrato] saldo não gravado (segue)')
             # todo PIX RECEBIDO da conta na janela que ainda não tem título (venha da API ou do OFX)
             from utils.extrato_ingest import mesma_conta
             alvo = [l for l in _q("""SELECT * FROM extrato_lancamentos
