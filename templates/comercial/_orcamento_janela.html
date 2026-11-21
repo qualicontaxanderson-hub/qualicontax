@@ -27,7 +27,7 @@
     <div><i class="fas fa-stamp"></i><div><dt>Aprovação</dt><dd>{% if o.aprovado_em %}{{ o.aprovado_por_nome or 'aprovado' }}{% elif o.status == 'APROVACAO' %}aguardando{% elif o.status == 'REPROVADO' %}reprovado{% else %}—{% endif %}</dd><small>{% if o.aprovado_em %}{{ o.aprovado_em.strftime('%d/%m/%Y %H:%M') }}{% elif o.status == 'RASCUNHO' %}ainda não pedida{% else %}&nbsp;{% endif %}</small></div></div>
     <div><i class="fas fa-route"></i><div><dt>Como cobrar</dt><dd>{{ COMO.get(o.como, 'a definir') }}</dd><small>{% if o.parcelas and o.parcelas > 1 %}{{ o.parcelas }} parcelas{% else %}à vista{% endif %}</small></div></div>
     <div><i class="fas fa-hand-holding-dollar"></i><div><dt>Comissão pedida</dt><dd>{% if o.comissao_tipo == 'PCT' %}{{ '%g' % (o.comissao_valor | float) }}%{% elif o.comissao_tipo == 'FIXO' %}{{ o.comissao_valor | float | format_currency }}{% elif o.comissao_tipo == 'SEM' %}sem comissão{% else %}padrão da pessoa{% endif %}</dd><small>quem aprova a cobrança confirma</small></div></div>
-    <div><i class="fas {{ 'fa-file-signature' if o.aceito_em else 'fa-envelope-open-text' }}"></i><div><dt>Cliente</dt><dd>{% if o.interno %}controle interno{% elif o.aceito_em %}aceitou pelo link{% elif o.enviado_em %}recebeu, aguardando aceite{% else %}ainda não recebeu{% endif %}</dd><small>{% if o.aceito_em %}{{ o.aceito_nome }} · {{ o.aceito_em.strftime('%d/%m/%Y %H:%M') }}{% elif o.enviado_em %}{{ o.enviado_em.strftime('%d/%m/%Y %H:%M') }} · {{ o.enviado_para }}{% elif o.interno %}não vai ao cliente{% elif o.status == 'APROVADO' %}mande o PDF ao lado{% else %}&nbsp;{% endif %}</small></div></div>
+    <div><i class="fas {{ 'fa-file-signature' if o.aceito_em else 'fa-envelope-open-text' }}"></i><div><dt>Cliente</dt><dd>{% if o.interno %}controle interno{% elif o.aceito_em %}aceitou pelo link{% elif o.enviado_em %}recebeu, aguardando aceite{% else %}ainda não recebeu{% endif %}</dd><small>{% if o.aceito_em %}{{ o.aceito_nome }} · {{ o.aceito_em.strftime('%d/%m/%Y %H:%M') }}{% elif o.enviado_em %}{{ o.enviado_em.strftime('%d/%m/%Y %H:%M') }} · {{ o.enviado_para or 'pelo WhatsApp' }}{% elif o.interno %}não vai ao cliente{% elif o.status == 'APROVADO' %}mande o PDF ao lado{% else %}&nbsp;{% endif %}</small></div></div>
   </div>
 
   <div class="tj-corpo">
@@ -104,8 +104,13 @@
             <form method="POST" action="{{ url_for('comercial.orcamento_enviar', oid=o.id) }}" class="tj-env">
               {% for d in dest %}<label class="tj-dest"><input type="checkbox" name="para" value="{{ d.email }}"{{ ' checked' if loop.first }}><span><b>{{ d.nome or d.email }}</b><small>{{ d.email }}{% if d.fonte %} · {{ d.fonte }}{% endif %}</small></span></label>{% endfor %}
               <input class="ns-in" name="outro" type="email" placeholder="outro e-mail (opcional)">
-              <button type="submit" class="tj-acao prim" style="margin-top:6px"><i class="fas fa-paper-plane"></i><span><b>{{ 'Mandar de novo' if o.enviado_em else 'Mandar o orçamento' }}</b><small>o PDF vai anexado, com o link para aceitar</small></span></button>
+              <button type="submit" class="tj-acao prim" style="margin-top:6px"><i class="fas fa-paper-plane"></i><span><b>{{ 'Mandar de novo' if o.enviado_em else 'Mandar o orçamento por e-mail' }}</b><small>o PDF vai anexado, com o link para aceitar</small></span></button>
             </form>
+            {% if texto_wa %}<div class="tj-mini" style="margin-top:10px">ou pelo WhatsApp</div>
+            <div style="display:flex; gap:6px; flex-wrap:wrap">
+              <button type="button" class="tj-acao" style="margin:0; flex:1" data-texto="{{ texto_wa }}" onclick="ocWhats({{ o.id }}, this)" title="Copia o texto pronto para colar no WhatsApp; o link do aceite já abre"><i class="fab fa-whatsapp" style="color:#16a34a; background:#dcfce7"></i><span><b>Copiar texto</b><small>cola na conversa</small></span></button>
+              {% if wa_link %}<a class="tj-acao" style="margin:0; flex:1; text-decoration:none" href="{{ wa_link }}" target="_blank" onclick="ocWhats({{ o.id }})"><i class="fab fa-whatsapp" style="color:#fff; background:#16a34a"></i><span><b>Abrir WhatsApp</b><small>{{ o.solicitante_fone }}</small></span></a>{% endif %}
+            </div>{% endif %}
           </div>{% endif %}
           <div class="tj-acao-bl" data-foco="cobrar">
             <div class="tj-acao-t"><i class="fas fa-barcode"></i> Serviço feito: cobrar <small>cria o lançamento no Financeiro</small></div>

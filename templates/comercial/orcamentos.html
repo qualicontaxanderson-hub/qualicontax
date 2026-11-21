@@ -273,6 +273,11 @@
     var on = datas.querySelector('button.on'); if (on) venc.value = on.dataset.v;
     c.querySelector('#ocCobrarForm').addEventListener('submit', function (e) { if (como.value !== 'MENSAL' && !venc.value) e.preventDefault(); });
   }
+  // texto do WhatsApp copiado / WhatsApp aberto: avisa o servidor (conta como mandado ao cliente) e recarrega a janela
+  window.ocWhats = function (id, bt) {
+    if (bt && bt.dataset.texto && window.qcxCopiar) qcxCopiar.copiar(bt.dataset.texto);
+    fetch('/comercial/orcamentos/' + id + '/whatsapp', { method: 'POST', credentials: 'same-origin' }).then(function (r) { return r.json(); }).then(function (d) { if (d && d.ok && d.novo) setTimeout(function () { ocAbrir(id); }, 1500); }).catch(function () {});
+  };
   window.ocFechar = function () { $('ocGav').hidden = true; document.body.style.overflow = ''; try { var u = new URL(location.href); u.searchParams.delete('abrir'); history.replaceState(null, '', u); } catch (e) {} };
   document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && !$('ocGav').hidden && !document.querySelector('.pk-fundo.pk-sobre, .pk-fundo .pk-peq')) ocFechar(); });
   window.ocPost = function (url, dados) {

@@ -80,7 +80,8 @@ input.cod { letter-spacing:8px; font-size:22px; text-align:center; font-family:m
             <div class="as-passo"><span class="as-n">1</span><div style="flex:1;"><b>Leia a proposta</b> ao lado.</div></div>
             <div class="as-passo"><span class="as-n {{ 'ok' if codigo_pedido }}" id="n2">2</span><div style="flex:1;"><b>Receba o código</b> por e-mail.
                 {% if emails|length > 1 %}<div class="as-lbl">Mandar o código para</div>{% for e, m in emails %}<label class="as-mail"><input type="radio" name="em" value="{{ e }}"{{ ' checked' if loop.first }}> {{ m }}</label>{% endfor %}
-                {% else %}<div class="as-msg" style="margin-top:4px">O código vai para <b>{{ emails[0][1] if emails else 'o e-mail cadastrado' }}</b>.</div>{% endif %}
+                {% elif emails %}<div class="as-msg" style="margin-top:4px">O código vai para <b>{{ emails[0][1] }}</b>.</div>
+                {% else %}<div class="as-lbl">Seu e-mail</div><input class="c" type="email" id="em-livre" placeholder="para receber o código" autocomplete="email">{% endif %}
                 <div style="margin-top:8px;"><button type="button" class="btn btn-o" id="bt-cod" onclick="pedirCodigo()"><i class="fas fa-envelope"></i> {{ 'Enviar outro código' if codigo_pedido else 'Enviar código por e-mail' }}</button>
                 <div class="as-msg" id="cod-msg" style="margin-top:6px;">{% if codigo_pedido %}Um código já foi enviado. Não chegou? Olhe o spam ou peça outro.{% endif %}</div></div></div></div>
             <form method="POST" action="{{ url_for('proposta.aceitar', token=o.token) }}">
@@ -106,8 +107,8 @@ input.cod { letter-spacing:8px; font-size:22px; text-align:center; font-family:m
 <script>
 function pedirCodigo() {
     var b = document.getElementById('bt-cod'), m = document.getElementById('cod-msg'); b.disabled = true; m.textContent = 'Enviando…';
-    var r = document.querySelector('input[name=em]:checked');
-    fetch(location.pathname.replace(/\/$/, '') + '/codigo', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: r ? r.value : '' }) }).then(function (x) { return x.json(); }).then(function (d) {
+    var r = document.querySelector('input[name=em]:checked'), l = document.getElementById('em-livre');
+    fetch(location.pathname.replace(/\/$/, '') + '/codigo', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: r ? r.value : (l ? l.value.trim() : '') }) }).then(function (x) { return x.json(); }).then(function (d) {
         b.disabled = false;
         if (d.ok) { m.textContent = 'Código enviado para ' + d.email + '. Vale 30 minutos.'; document.getElementById('n2').classList.add('ok'); document.getElementById('codigo').focus(); }
         else m.textContent = d.erro || 'Não deu certo. Tente de novo.';

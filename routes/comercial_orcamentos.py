@@ -67,6 +67,33 @@ def _comissao_padrao():
     return {'tipo': a['tipo'], 'valor': float(a['valor'])}
 
 
+def _texto_whatsapp(o, itens, link):
+    """O texto pronto para colar no WhatsApp, no molde da cobrança (Anderson: "quero poder mandar assim para o cliente")."""
+    quem = (' ' + o['solicitante_nome'].split(' ')[0].title()) if o.get('solicitante_nome') else ''
+    linhas = ['Olá%s! Aqui é da *Qualicontax*. 😊' % (',' + quem if quem else ''), '',
+              'Segue o orçamento *%s* para a *%s*%s.' % (o['numero'], o['cliente_nome'], (' — %s' % o['titulo']) if o.get('titulo') else ''), '']
+    for i in itens:
+        linhas.append('📌 %s – R$ %s%s' % (i['descricao'], _brl(i['valor_total']), '' if i['emite_nota'] else ' (taxa repassada)'))
+    linhas.append('💰 *Total: R$ %s*%s' % (_brl(o['total']), (' · em %dx' % o['parcelas']) if o.get('parcelas') and o['parcelas'] > 1 else ''))
+    if o.get('como'):
+        linhas.append('💳 Pagamento: %s' % COMO[o['como']])
+    if o.get('validade'):
+        linhas.append('📅 Válido até %s' % o['validade'].strftime('%d/%m/%Y'))
+    linhas += ['', '👉 Para ver a proposta completa e aceitar, é só tocar no link. Lá você confirma com um código que chega no seu e-mail.', link, '',
+               'Qualquer dúvida é só responder por aqui. Obrigado pela parceria! 🙏']
+    return '\n'.join(linhas)
+
+
+def _wa_link(fone, texto):
+    from urllib.parse import quote
+    d = ''.join(ch for ch in str(fone or '') if ch.isdigit())
+    if len(d) in (10, 11):
+        d = '55' + d
+    if len(d) not in (12, 13):
+        return None
+    return 'https://wa.me/%s?text=%s' % (d, quote(texto))
+
+
 # ───────────────────────── a tela ─────────────────────────
 @comercial.route('/comercial/orcamentos')
 @permission_required(VER)
@@ -114,7 +141,9 @@ def orcamento_janela(oid):
     hoje = date.today()
     datas_venc = [((hoje + timedelta(days=d)).isoformat(), 'em %d dias' % d, (hoje + timedelta(days=d)).strftime('%d/%m'), d == 7) for d in (3, 7, 10, 15, 30)]
     link = url_for('proposta.ver', token=o['token'], _external=True) if not o.get('interno') else None
+    texto_wa = _texto_whatsapp(o, itens, link) if link else None
     return render_template('comercial/_orcamento_janela.html', o=o, itens=itens, eventos=eventos, lanc=lanc, dest=dest, hoje=hoje, datas_venc=datas_venc, link=link,
+                           texto_wa=texto_wa, wa_link=_wa_link(o.get('solicitante_fone'), texto_wa) if texto_wa else None,
                            aprovador=_aprovador(), dono=o['criado_por'] == current_user.id, STATUS=STATUS, COMO=COMO, COMISSAO=COMISSAO,
                            vencido=Orcamento.vencido(o), n_nota=sum(1 for i in itens if i['emite_nota']),
                            total_nota=sum((Decimal(str(i['valor_total'])) for i in itens if i['emite_nota']), Decimal('0')))
@@ -305,6 +334,26 @@ def orcamento_enviar(oid):
     registrar('escrita.enviou_orcamento', 'comercial', tabela='com_orcamentos', registro_id=oid, depois={'para': paras})
     flash('Orçamento %s mandado para %s.' % (o['numero'], ', '.join(paras)), 'success')
     return _volta(oid)
+
+
+@comercial.route('/comercial/orcamentos/<int:oid>/whatsapp', methods=['POST'])
+@permission_required(INCLUIR)
+def orcamento_whatsapp(oid):
+    """O texto do WhatsApp foi copiado (ou o WhatsApp aberto): o orçamento conta como mandado ao cliente, o link passa a abrir."""
+    o = Orcamento.get(oid)
+    if not o or not _dono_ou_aprovador(o):
+        abort(404)
+    if o.get('interno') or o['status'] not in ('APROVADO', 'ACEITO'):
+        return jsonify({'ok': False, 'erro': 'Só orçamento aprovado, e não interno, vai ao cliente.'}), 400
+    novo = not o.get('enviado_em')
+    if novo:
+        execute_query('UPDATE com_orcamentos SET enviado_em = NOW() WHERE id = %s', (oid,), fetch=False); o = Orcamento.get(oid)
+        from utils.orcamento_pdf import gerar_pdf
+        pdf = gerar_pdf(o, Orcamento.itens(oid), link=url_for('proposta.ver', token=o['token'], _external=True), data_doc=o['enviado_em'].date())
+        execute_query('UPDATE com_orcamentos SET pdf_sha256 = %s WHERE id = %s', (hashlib.sha256(pdf).hexdigest(), oid), fetch=False)
+    Orcamento.evento(oid, 'enviado', 'Texto do WhatsApp copiado por %s%s' % (current_user.nome, ' (mandado por fora: o link do aceite já abre)' if novo else ''), current_user)
+    registrar('escrita.enviou_orcamento', 'comercial', tabela='com_orcamentos', registro_id=oid, depois={'por': 'whatsapp'})
+    return jsonify({'ok': True, 'novo': novo})
 
 
 @comercial.route('/comercial/orcamentos/<int:oid>/pdf')

@@ -80,7 +80,11 @@ def codigo(token):
     dados = request.get_json(silent=True) or {}
     para = (dados.get('email') or request.form.get('email') or '').strip().lower()
     permitidos = _emails_permitidos(o)
-    if para not in permitidos:
+    if not permitidos:
+        # mandado pelo WhatsApp sem e-mail cadastrado: quem tem o link informa o próprio e-mail (fica registrado no aceite)
+        if '@' not in para or '.' not in para.split('@')[-1]:
+            return jsonify({'ok': False, 'erro': 'Digite o seu e-mail para receber o código.'}), 400
+    elif para not in permitidos:
         para = permitidos[0] if len(permitidos) == 1 else ''
     if not para:
         return jsonify({'ok': False, 'erro': 'Escolha para qual e-mail mandar o código.'}), 400
