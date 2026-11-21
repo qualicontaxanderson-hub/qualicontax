@@ -8,14 +8,16 @@
     </div>
 </div>
 
+{% include 'comercial/_nav_comercial.html' %}
 <div class="module-tiles">
 
-    <a href="#" class="module-tile">
+    <a href="{{ url_for('comercial.orcamentos') }}" class="module-tile">
         <div class="module-tile-icon" style="background: linear-gradient(135deg, #22c55e, #16a34a);">
             <i class="fas fa-file-signature"></i>
         </div>
-        <h3 class="module-tile-title">Propostas</h3>
-        <p class="module-tile-desc">Elaboração e acompanhamento de propostas comerciais</p>
+        <h3 class="module-tile-title">Orçamentos</h3>
+        <p class="module-tile-desc">Propostas para clientes e avulsos: montadas aqui, aprovadas e cobradas no Financeiro</p>
+        <span class="module-tile-link">&rarr; Acessar</span>
     </a>
 
     <a href="#" class="module-tile">

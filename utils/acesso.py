@@ -278,6 +278,19 @@ MAPA = {
     'financeiro.comissao_regras':          'financeiro.lancamentos.aprovar',  # endereço antigo: redireciona para SERVIÇOS
     'financeiro.servicos':                 'financeiro.lancamentos.aprovar',  # aba SERVIÇOS (20/11/2026): a rota só deixa o admin
     'financeiro.servico_novo':             'financeiro.lancamentos.aprovar',  # serviço novo pela aba SERVIÇOS; a rota só deixa o admin
+    # Comercial › Orçamentos (21/11/2026)
+    'comercial.orcamentos':                'comercial.orcamentos',
+    'comercial.orcamento_janela':          'comercial.orcamentos',
+    'comercial.orcamento_dados':           'comercial.orcamentos',
+    'comercial.orcamento_pdf':             'comercial.orcamentos',
+    'comercial.orcamento_nota':            'comercial.orcamentos',
+    'comercial.orcamento_novo':            'comercial.orcamentos.incluir',
+    'comercial.orcamento_pedir':           'comercial.orcamentos.incluir',
+    'comercial.orcamento_enviar':          'comercial.orcamentos.incluir',
+    'comercial.orcamento_cobrar':          'comercial.orcamentos.incluir',
+    'comercial.orcamento_cancelar':        'comercial.orcamentos.incluir',   # a rota confere: dono ou quem aprova
+    'comercial.orcamento_aprovar':         'comercial.orcamentos.aprovar',
+    'comercial.orcamento_reprovar':        'comercial.orcamentos.aprovar',
     'financeiro.comissao_regra_pessoa':    'financeiro.lancamentos.aprovar',
     'financeiro.acordo_novo':              'financeiro.lancamentos',
     'financeiro.acordo_encerrar':          'financeiro.lancamentos',

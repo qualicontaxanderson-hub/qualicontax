@@ -1,0 +1,22 @@
+{# Barra de abas do COMERCIAL (21/11/2026) — mesmo molde do Financeiro (_nav_financeiro.html): sticky, pílulas,
+   estilos de static/css/identidade.css, setas nas pontas (main.js). Anderson: "essa parte ficará ligada com o
+   Comercial: quase 100% dos serviços serão feitos aqui e migrados para o Financeiro". #}
+{% set _abas = [
+    ('modulos.comercial',     '/comercial/',            'INÍCIO'),
+    ('comercial.orcamentos',  '/comercial/orcamentos',  'ORÇAMENTOS'),
+    ('financeiro.contratos',  '/financeiro/contratos',  'CONTRATOS'),
+    ('clientes.index',        '/clientes',              'CLIENTES'),
+] %}
+{% set _ativa = namespace(pref='') %}
+{% for _ep, _pref, _label in _abas %}
+    {% if request.path.startswith(_pref) and _pref|length > _ativa.pref|length %}{% set _ativa.pref = _pref %}{% endif %}
+{% endfor %}
+<nav class="nav-fiscal" aria-label="Navegação do Comercial">
+    <div class="nav-fiscal-track">
+        {% for _ep, _pref, _label in _abas %}
+        {% if pode_rota(_ep) %}
+        <a class="nff-tab {% if _pref == _ativa.pref %}active{% endif %}" href="{{ url_for(_ep) }}" {% if _pref == _ativa.pref %}aria-current="page"{% endif %}>{{ _label }}</a>
+        {% endif %}
+        {% endfor %}
+    </div>
+</nav>

@@ -213,6 +213,11 @@ DEPARTAMENTOS_PERMISSOES = [
         {'id': 'leg', 'nome': 'Legalização', 'ver': ('modulos.legalizacao', 'abrir')},
         {'id': 'ana', 'nome': 'Análise', 'ver': ('modulos.analise', 'abrir')},
         {'id': 'com', 'nome': 'Comercial', 'ver': ('modulos.comercial', 'abrir')},
+        # 21/11/2026 — Anderson: o orçamento nasce no Comercial, o escritório aprova, vira lançamento no Financeiro
+        {'id': 'orc', 'nome': 'Orçamentos (Comercial)',
+         'ver': ('comercial.orcamentos', 'ver os orçamentos (os seus; quem aprova vê todos)'),
+         'inc': ('comercial.orcamentos.incluir', 'montar, alterar, mandar ao cliente e para a cobrança'),
+         'outros': [('comercial.orcamentos.aprovar', 'aprovar e reprovar orçamentos', True)]},
     ]},
     {'grupo': 'Configurações', 'sigla': 'CF', 'cor': 'cfg', 'telas': [
         # Usuários e Perfis são só do administrador (MAPA/decorador): a caixa

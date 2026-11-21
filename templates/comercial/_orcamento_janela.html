@@ -1,0 +1,147 @@
+{# Janela do orçamento (21/11/2026) — molde da janela da cobrança (tj-*): cabeçalho colorido pelo status, KPIs, três colunas:
+   linha do tempo | serviços, condições e PDF | o que fazer. Carregada por fetch dentro da gaveta de comercial/orcamentos.html. #}
+{% set doc = (o.cliente_doc or '') | replace('.', '') | replace('/', '') | replace('-', '') %}
+<div class="tj {{ o.cls }}">
+  <header class="tj-cab">
+    <div class="tj-cab-cli">
+      <span class="tj-avatar">{{ (o.cliente_nome or '?')[:2] | upper }}</span>
+      <div class="tj-quem">
+        <div class="tj-quem-l1"><span class="tj-num">{{ o.numero }}</span><b title="{{ o.cliente_nome }}">{{ o.cliente_nome }}</b></div>
+        <div class="tj-quem-l2">
+          {% if doc %}<code data-copiar data-copiar-rotulo="CPF/CNPJ" title="Clique para copiar">{{ doc | format_cnpj if doc|length == 14 else (doc | format_cpf if doc|length == 11 else doc) }}</code>{% endif %}
+          {% if o.cliente_avulso %}<span class="tj-chip">avulso</span>{% elif o.cliente_num %}<span class="tj-chip">cliente nº {{ o.cliente_num }}</span>{% endif %}
+          {% if o.cliente_email %}<span><i class="fas fa-envelope"></i> {{ o.cliente_email }}</span>{% endif %}
+          {% if o.cliente_fone %}<span><i class="fas fa-mobile-screen"></i> {{ o.cliente_fone }}</span>{% endif %}
+          <a href="{{ url_for('clientes.detalhes', id=o.cliente_id) }}" target="_blank"><i class="fas fa-arrow-up-right-from-square"></i> cadastro</a>
+        </div>
+      </div>
+    </div>
+    <div class="tj-cab-val"><span class="tj-tag"><i class="fas {{ o.ico }}"></i> {{ o.rot }}</span><b>{{ o.total | float | format_currency }}</b>
+      <small>{{ itens|length }} serviço{{ 's' if itens|length != 1 }}{% if n_nota and n_nota != itens|length %} · nota {{ total_nota | float | format_currency }}{% endif %}{% if o.validade %} · válido até {{ o.validade.strftime('%d/%m/%Y') }}{% endif %}</small></div>
+  </header>
+
+  <div class="tj-kpis">
+    <div><i class="fas fa-user-pen"></i><div><dt>Montado por</dt><dd>{{ o.criado_por_nome or '—' }}</dd><small>{{ o.criado_em.strftime('%d/%m/%Y %H:%M') }}</small></div></div>
+    <div><i class="fas fa-stamp"></i><div><dt>Aprovação</dt><dd>{% if o.aprovado_em %}{{ o.aprovado_por_nome or 'aprovado' }}{% elif o.status == 'APROVACAO' %}aguardando{% elif o.status == 'REPROVADO' %}reprovado{% else %}—{% endif %}</dd><small>{% if o.aprovado_em %}{{ o.aprovado_em.strftime('%d/%m/%Y %H:%M') }}{% elif o.status == 'RASCUNHO' %}ainda não pedida{% else %}&nbsp;{% endif %}</small></div></div>
+    <div><i class="fas fa-route"></i><div><dt>Como cobrar</dt><dd>{{ COMO.get(o.como, 'a definir') }}</dd><small>{% if o.parcelas and o.parcelas > 1 %}{{ o.parcelas }} parcelas{% else %}à vista{% endif %}</small></div></div>
+    <div><i class="fas fa-hand-holding-dollar"></i><div><dt>Comissão pedida</dt><dd>{% if o.comissao_tipo == 'PCT' %}{{ '%g' % (o.comissao_valor | float) }}%{% elif o.comissao_tipo == 'FIXO' %}{{ o.comissao_valor | float | format_currency }}{% elif o.comissao_tipo == 'SEM' %}sem comissão{% else %}padrão da pessoa{% endif %}</dd><small>quem aprova a cobrança confirma</small></div></div>
+    <div><i class="fas fa-envelope-open-text"></i><div><dt>Cliente</dt><dd>{% if o.enviado_em %}recebeu por e-mail{% else %}ainda não recebeu{% endif %}</dd><small>{% if o.enviado_em %}{{ o.enviado_em.strftime('%d/%m/%Y %H:%M') }}{% elif o.status == 'APROVADO' %}mande o PDF ao lado{% else %}&nbsp;{% endif %}</small></div></div>
+  </div>
+
+  <div class="tj-corpo">
+    <div class="tj-col1">
+      <section class="tj-sec tj-sec-tl">
+        <h4><i class="fas fa-timeline"></i> Linha do tempo</h4>
+        <ol class="tj-tl">
+          {% set cores = {'criado': ('', 'fa-pen-ruler'), 'editado': ('', 'fa-pen'), 'aprovacao': ('tj-laranja', 'fa-stamp'), 'aprovado': ('tj-verde', 'fa-circle-check'), 'reprovado': ('tj-verm', 'fa-rotate-left'),
+                         'enviado': ('tj-azul', 'fa-envelope'), 'cobranca': ('tj-azul', 'fa-barcode'), 'concluido': ('tj-verde', 'fa-flag-checkered'), 'cancelado': ('tj-verm', 'fa-ban'), 'nota': ('tj-azul', 'fa-comment')} %}
+          {% for e in eventos %}{% set c = cores.get(e.tipo, ('', 'fa-circle')) %}
+          <li class="{{ c[0] }}"><i class="fas {{ c[1] }}"></i><div><b>{{ e.texto }}</b>{% if e.usuario_nome and e.tipo == 'nota' %}<small>{{ e.usuario_nome }}</small>{% endif %}</div><time>{{ e.quando.strftime('%d/%m/%y %H:%M') }}</time></li>
+          {% endfor %}
+          {% if o.status == 'APROVACAO' %}<li class="tj-laranja fut"><i class="fas fa-hourglass-half"></i><div><b>Aguardando a aprovação do escritório</b></div><time></time></li>
+          {% elif o.status == 'APROVADO' %}<li class="tj-verde fut"><i class="fas fa-arrow-right"></i><div><b>Próximo: {% if not o.enviado_em %}mandar ao cliente e {% endif %}fazer o serviço, depois "Serviço feito: cobrar"</b></div><time></time></li>
+          {% elif o.status == 'COBRANCA' %}<li class="tj-azul fut"><i class="fas fa-hourglass-half"></i><div><b>Aguardando a aprovação da cobrança em Financeiro › Lançamentos</b></div><time></time></li>{% endif %}
+        </ol>
+        {% if o.motivo and o.status in ('REPROVADO', 'CANCELADO') %}<div class="tj-aviso"><i class="fas fa-quote-left"></i> {{ o.motivo }}</div>{% endif %}
+        <form method="POST" action="{{ url_for('comercial.orcamento_nota', oid=o.id) }}" style="display:flex; gap:6px; margin-top:10px">
+          <input class="ns-in" name="texto" maxlength="400" placeholder="anotar algo na linha do tempo (só a equipe vê)" required style="flex:1">
+          <button type="submit" class="ns-bt sec" style="height:40px"><i class="fas fa-comment"></i> Anotar</button></form>
+      </section>
+    </div>
+
+    <div class="tj-col2">
+      <section class="tj-sec">
+        <h4><i class="fas fa-list-check"></i> Serviços <small>· {{ o.total | float | format_currency }}</small></h4>
+        <div class="tj-itens">
+          {% for i in itens %}
+          <div class="tj-it"><span>{{ i.descricao }}{% if i.quantidade and i.quantidade != 1 %} <small>× {{ '%g' % (i.quantidade | float) }}</small>{% endif %}{% if not i.emite_nota %} <small style="color:#b45309">· só no boleto (taxa)</small>{% endif %}</span><b>{{ i.valor_total | float | format_currency }}</b></div>
+          {% endfor %}
+          <div class="tj-it tj-it-tot"><span>Total</span><b>{{ o.total | float | format_currency }}</b></div>
+          {% if n_nota and n_nota != itens|length %}<div class="tj-it"><span style="color:#64748b">nota fiscal</span><b style="color:#64748b">{{ total_nota | float | format_currency }}</b></div><div class="tj-it"><span style="color:#64748b">boleto</span><b style="color:#64748b">{{ o.total | float | format_currency }}</b></div>{% endif %}
+        </div>
+        {% if o.titulo %}<p style="margin:10px 0 0; font-size:13px"><b>Assunto:</b> {{ o.titulo }}</p>{% endif %}
+        {% if o.observacao %}<div class="tj-aviso" style="margin-top:8px; white-space:pre-line"><i class="fas fa-align-left"></i> {{ o.observacao }}</div>{% endif %}
+        {% if o.nota_interna %}<p style="margin:8px 0 0; font-size:12.5px; color:#64748b"><i class="fas fa-lock"></i> Anotação interna: {{ o.nota_interna }}</p>{% endif %}
+        <div class="tj-bts" style="margin-top:12px">
+          <a href="{{ url_for('comercial.orcamento_pdf', oid=o.id) }}" target="_blank"><i class="fas fa-eye"></i> Ver PDF</a>
+          <a href="{{ url_for('comercial.orcamento_pdf', oid=o.id, baixar=1) }}"><i class="fas fa-download"></i> Baixar PDF</a>
+          {% if o.status in ('RASCUNHO', 'REPROVADO') and (dono or aprovador) %}<button type="button" onclick="ocEditar({{ o.id }})"><i class="fas fa-pen"></i> Alterar</button>{% endif %}
+        </div>
+      </section>
+      {% if lanc %}
+      <section class="tj-sec">
+        <h4><i class="fas fa-barcode"></i> Cobrança no Financeiro</h4>
+        <div class="tj-it"><span>Lançamento nº {{ lanc.id }} · {{ {'LANCADO': 'aguardando aprovação', 'APROVADO': 'aprovado', 'FATURADO': 'cobrado', 'REPROVADO': 'reprovado', 'CANCELADO': 'cancelado'}.get(lanc.status, lanc.status) }}</span><b>{{ lanc.valor_total | float | format_currency }}</b></div>
+        <div class="tj-bts" style="margin-top:10px"><a href="{{ url_for('financeiro.lancamentos', aba='apr' if lanc.status == 'LANCADO' else 'com') }}#l{{ lanc.id }}"><i class="fas fa-arrow-right"></i> Abrir em Lançamentos</a>
+          {% if lanc.titulo_id %}<a href="{{ url_for('financeiro.titulo_cobranca', titulo_id=lanc.titulo_id) }}" target="_blank"><i class="fas fa-file-invoice-dollar"></i> Ver a cobrança</a>{% endif %}</div>
+      </section>
+      {% endif %}
+    </div>
+
+    <div class="tj-col3">
+      <section class="tj-sec tj-sec-acoes">
+        <h4><i class="fas fa-bolt"></i> O que fazer</h4>
+        {% if o.status in ('RASCUNHO', 'REPROVADO') %}
+          {% if dono or aprovador %}
+          <button type="button" class="tj-acao prim" onclick="ocPost('{{ url_for('comercial.orcamento_pedir', oid=o.id) }}')"><i class="fas fa-paper-plane"></i><span><b>{{ 'Aprovar e seguir' if aprovador else 'Mandar para aprovação' }}</b><small>{{ 'quem aprova não precisa pedir' if aprovador else 'o escritório confere e você recebe aviso' }}</small></span></button>
+          <button type="button" class="tj-acao" onclick="ocEditar({{ o.id }})"><i class="fas fa-pen"></i><span><b>Alterar</b><small>empresa, serviços, valores e condições</small></span></button>
+          {% endif %}
+        {% elif o.status == 'APROVACAO' %}
+          {% if aprovador %}
+          <button type="button" class="tj-acao prim" onclick="ocPost('{{ url_for('comercial.orcamento_aprovar', oid=o.id) }}')"><i class="fas fa-check"></i><span><b>Aprovar</b><small>libera para mandar ao cliente e fazer o serviço</small></span></button>
+          <button type="button" class="tj-acao rubro" onclick="ocPergunta({ titulo: 'Reprovar o orçamento {{ o.numero }}?', texto: 'Volta para {{ (o.criado_por_nome or 'quem montou') | e }} corrigir. Diga o que está errado.', motivo: 'motivo (obrigatório)', exigeMotivo: true, cor: 'pk-rubro', icone: 'fa-rotate-left', ok: 'Reprovar', okIcone: 'fa-rotate-left', onOk: function (m) { ocPost('{{ url_for('comercial.orcamento_reprovar', oid=o.id) }}', { motivo: m }); } })"><i class="fas fa-rotate-left"></i><span><b>Reprovar</b><small>volta para correção, com o motivo</small></span></button>
+          {% else %}
+          <div class="tj-aviso"><i class="fas fa-hourglass-half"></i> Esperando o escritório aprovar. Você recebe um e-mail quando sair.</div>
+          {% endif %}
+        {% elif o.status == 'APROVADO' %}
+          <div class="tj-acao-bl" data-foco="enviar">
+            <div class="tj-acao-t"><i class="fas fa-envelope"></i> Mandar ao cliente <small>PDF por e-mail</small></div>
+            <form method="POST" action="{{ url_for('comercial.orcamento_enviar', oid=o.id) }}" class="tj-env">
+              {% for d in dest %}<label class="tj-dest"><input type="checkbox" name="para" value="{{ d.email }}"{{ ' checked' if loop.first }}><span><b>{{ d.nome or d.email }}</b><small>{{ d.email }}{% if d.fonte %} · {{ d.fonte }}{% endif %}</small></span></label>{% endfor %}
+              <input class="ns-in" name="outro" type="email" placeholder="outro e-mail (opcional)">
+              <button type="submit" class="tj-acao prim" style="margin-top:6px"><i class="fas fa-paper-plane"></i><span><b>{{ 'Mandar de novo' if o.enviado_em else 'Mandar o orçamento' }}</b><small>o PDF vai anexado</small></span></button>
+            </form>
+          </div>
+          <div class="tj-acao-bl" data-foco="cobrar">
+            <div class="tj-acao-t"><i class="fas fa-barcode"></i> Serviço feito: cobrar <small>cria o lançamento no Financeiro</small></div>
+            <form method="POST" action="{{ url_for('comercial.orcamento_cobrar', oid=o.id) }}" class="tj-cobrar" id="ocCobrarForm">
+              <input type="hidden" name="como" id="ocCbComo" value="{{ o.como or ('BOLETO_NOTA' if n_nota else 'BOLETO') }}"><input type="hidden" name="vencimento" id="ocCbVenc" value="">
+              <div class="ns-seg" id="ocCbSeg">
+                <button type="button" data-v="BOLETO_NOTA"{{ ' disabled title="nenhum item entra na nota"' if not n_nota }}>Boleto + nota</button><button type="button" data-v="BOLETO">Só boleto</button><button type="button" data-v="MENSAL">Na mensalidade</button></div>
+              <div id="ocCbVencBox"><small class="tj-mini">vence em</small>
+                <div class="oc-chips" id="ocCbDatas">{% for iso, rot, dm, on in datas_venc %}<button type="button" data-v="{{ iso }}"{{ ' class=on' if on }}>{{ rot }} <small>{{ dm }}</small></button>{% endfor %}</div></div>
+              <button type="submit" class="tj-acao prim" style="margin-top:8px"><i class="fas fa-barcode"></i><span><b>Mandar para a cobrança</b><small>vai para Financeiro › Lançamentos aprovar</small></span></button>
+            </form>
+          </div>
+        {% elif o.status == 'COBRANCA' %}
+          <div class="tj-aviso"><i class="fas fa-hourglass-half"></i> A cobrança está em Financeiro › Lançamentos esperando aprovação. Quando aprovarem, a nota e o boleto saem e este orçamento fica concluído.</div>
+        {% elif o.status == 'CONCLUIDO' %}
+          <div class="tj-aviso" style="background:#f5f3ff; border-color:#ddd6fe; color:#5b21b6"><i class="fas fa-flag-checkered"></i> Concluído: a cobrança foi aprovada no Financeiro. A comissão libera quando o cliente pagar.</div>
+        {% elif o.status == 'CANCELADO' %}
+          <div class="tj-aviso"><i class="fas fa-ban"></i> Cancelado{% if o.cancelado_em %} em {{ o.cancelado_em.strftime('%d/%m/%Y') }}{% endif %}.</div>
+        {% endif %}
+        {% if o.status in ('RASCUNHO', 'REPROVADO', 'APROVACAO', 'APROVADO') and (dono or aprovador) %}
+        <button type="button" class="tj-acao" style="margin-top:10px" onclick="ocPergunta({ titulo: 'Cancelar o orçamento {{ o.numero }}?', texto: 'Ele sai do caminho e fica guardado como cancelado. Dá para montar outro depois.', motivo: 'motivo (opcional)', cor: 'pk-rubro', icone: 'fa-ban', ok: 'Cancelar o orçamento', okIcone: 'fa-ban', voltar: 'Deixar como está', onOk: function (m) { ocPost('{{ url_for('comercial.orcamento_cancelar', oid=o.id) }}', { motivo: m }); } })"><i class="fas fa-ban"></i><span><b>Cancelar orçamento</b><small>não apaga: fica no histórico</small></span></button>
+        {% endif %}
+      </section>
+    </div>
+  </div>
+</div>
+<style>
+.tj-itens { display:flex; flex-direction:column; gap:4px; } .tj-it { display:flex; justify-content:space-between; gap:10px; font-size:13px; padding:6px 0; border-bottom:1px solid #f1f5f4; }
+.tj-it span { min-width:0; } .tj-it b { white-space:nowrap; font-variant-numeric:tabular-nums; } .tj-it-tot { border:0; padding-top:8px; } .tj-it-tot b { font-size:17px; color:var(--cor-e); }
+.tj-bts { display:flex; gap:6px; flex-wrap:wrap; } .tj-bts a, .tj-bts button { height:34px; border-radius:9px; font:inherit; font-size:12.5px; font-weight:800; border:1px solid #e2e8f0; background:#fff; color:#475569; display:inline-flex; align-items:center; gap:6px; padding:0 12px; cursor:pointer; text-decoration:none; }
+.tj-acao { display:flex; align-items:center; gap:12px; width:100%; text-align:left; border:1px solid #e2e8f0; background:#fff; border-radius:14px; padding:10px 12px; font:inherit; cursor:pointer; margin-bottom:8px; color:#0f172a; }
+.tj-acao > i { width:36px; height:36px; border-radius:11px; background:#f1f5f4; color:#475569; display:inline-flex; align-items:center; justify-content:center; font-size:14px; flex-shrink:0; }
+.tj-acao span { display:flex; flex-direction:column; line-height:1.2; min-width:0; } .tj-acao b { font-size:13.5px; } .tj-acao small { color:#64748b; font-size:11.5px; }
+.tj-acao.prim { background:linear-gradient(135deg, var(--cor), var(--cor-e)); border-color:var(--cor-e); color:#fff; } .tj-acao.prim > i { background:rgba(255,255,255,.2); color:#fff; } .tj-acao.prim small { color:rgba(255,255,255,.85); }
+.tj-acao.rubro > i { background:#fef2f2; color:#b91c1c; } .tj-acao:hover { border-color:#9fc9b3; }
+.tj-acao-bl { border:1px solid var(--cor-b); background:var(--cor-f); border-radius:14px; padding:10px 12px; margin-bottom:10px; }
+.tj-acao-t { font-size:11.5px; font-weight:800; letter-spacing:.06em; text-transform:uppercase; color:var(--cor-e); display:flex; align-items:center; gap:7px; margin-bottom:8px; } .tj-acao-t small { text-transform:none; letter-spacing:0; font-weight:600; color:#64748b; margin-left:auto; }
+.tj-env { display:flex; flex-direction:column; gap:6px; } .tj-dest { display:flex; gap:8px; align-items:flex-start; background:#fff; border:1px solid #e2e8f0; border-radius:10px; padding:7px 9px; cursor:pointer; font-size:12.5px; }
+.tj-dest input { margin-top:3px; } .tj-dest span { display:flex; flex-direction:column; min-width:0; } .tj-dest small { color:#64748b; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.tj-env .ns-in { height:38px; } .tj-mini { display:block; font-size:11px; font-weight:800; color:#64748b; text-transform:uppercase; letter-spacing:.05em; margin:8px 0 5px; }
+.tj-cobrar .ns-seg button:disabled { opacity:.35; cursor:not-allowed; } .tj-cobrar .oc-chips button small { display:block; font-weight:600; font-size:10.5px; opacity:.8; }
+.tj-aviso { font-size:12.5px; line-height:1.45; }
+</style>
+{# o JS desta janela mora em comercial/orcamentos.html (ocJanelaLigar): script que entra por innerHTML não roda #}

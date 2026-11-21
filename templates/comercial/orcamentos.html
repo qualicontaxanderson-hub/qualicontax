@@ -1,0 +1,391 @@
+{% extends "base.html" %}
+{% block title %}Orçamentos - Comercial - Qualicontax{% endblock %}
+
+{% block extra_css %}
+{# 21/11/2026 — Anderson: "quase 100% dos serviços serão feitos aqui no Comercial e migrados para o Financeiro, para
+   controle... o oficial teria que ter sido feito um Orçamento no Comercial, aprovado por nós... feito o serviço, o Gabriel
+   entra no orçamento que ele fez e manda para a Cobrança: já vem para Financeiro / Lançamentos com o histórico completo".
+   Molde: abas KPI e cartões do Financeiro (_lanc_tx_css), janela da cobrança (tj-*), caixa Nova cobrança (ns-*). #}
+{% include 'financeiro/_lanc_tx_css.html' %}
+{% include 'financeiro/_tj_css.html' %}
+{% include 'financeiro/_ns_css.html' %}
+<style>{% include 'clientes/_pk_css.html' %}
+.oc-btn-novo { display:inline-flex; align-items:center; gap:12px; padding:8px 20px 8px 8px; border-radius:16px; border:0; background:#fff; color:#0f3d2e; font:inherit; cursor:pointer;
+  box-shadow:0 12px 28px rgba(0,0,0,.22); transition:transform .15s ease, box-shadow .15s ease; text-align:left; }
+.oc-btn-novo:hover { transform:translateY(-1px); box-shadow:0 16px 32px rgba(0,0,0,.26); }
+.oc-btn-novo .mais { width:40px; height:40px; border-radius:12px; background:linear-gradient(135deg,#22c55e,#15803d); color:#fff; display:inline-flex; align-items:center; justify-content:center; font-size:16px; flex-shrink:0; }
+.oc-btn-novo .tx { display:flex; flex-direction:column; line-height:1.15; } .oc-btn-novo .tx b { font-size:15px; font-weight:800; } .oc-btn-novo .tx small { font-size:11.5px; color:#64748b; font-weight:600; }
+.tx-a-perd { --cor:#475569; --cor-e:#1e293b; --fundo:#f5f7fa; } .tx-a-fut { --cor:#7c3aed; --cor-e:#5b21b6; --fundo:#f5f3ff; } .tx-a-tod { --cor:#0f3d2e; --cor-e:#0b2b20; --fundo:#eef6f1; }
+.tx-abas.oc-abas { grid-template-columns:repeat(6, minmax(0,1fr)); }
+.oc-faixa { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:14px; } .oc-faixa .tx-busca { margin-left:auto; }
+.oc-grade { display:grid; grid-template-columns:repeat(auto-fill, minmax(330px, 1fr)); gap:12px; margin-bottom:22px; }
+.oc-c { padding-bottom:12px; cursor:pointer; }
+.oc-c .tx-c-top { margin:-12px -14px 0 -16px; padding:9px 14px 9px 16px; background:linear-gradient(135deg, var(--cor) 0%, var(--cor-e) 100%); border-radius:13px 13px 0 0; }
+.oc-c .tx-c-nome { color:#fff; white-space:normal; line-height:1.25; font-size:13px; } .oc-c .tx-c-num { background:#fff; color:var(--cor-e); }
+.oc-c .tx-c-meio { margin-top:10px; align-items:flex-start; }
+.oc-c .tx-c-val { color:var(--cor-e); font-size:19px; } .oc-c .tx-c-desc { font-size:11.5px; color:#64748b; font-weight:600; }
+.oc-c .tx-c-st { background:var(--cor-f); border:1px solid var(--cor-b); color:var(--cor-e); border-radius:99px; padding:3px 9px; font-size:11px; font-weight:800; white-space:nowrap; display:inline-flex; align-items:center; gap:5px; }
+.oc-c .tx-c-st i { font-size:10px; }
+.oc-c .hp-itens { margin-top:9px; display:flex; flex-direction:column; gap:3px; }
+.oc-c .hp-it { display:flex; justify-content:space-between; gap:10px; font-size:12px; color:#475569; } .oc-c .hp-it span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0; }
+.oc-c .hp-it b { font-weight:700; color:#334155; font-variant-numeric:tabular-nums; white-space:nowrap; } .oc-c .hp-it.sb span::after { content:' · só boleto'; color:#b45309; font-size:10.5px; }
+.oc-c .hp-linha { display:flex; align-items:center; gap:6px; flex-wrap:wrap; margin-top:10px; padding-top:10px; border-top:1px dashed #e2e8f0; }
+.oc-chip { display:inline-flex; align-items:center; gap:5px; font-size:11px; font-weight:700; color:#64748b; background:#f1f5f4; border-radius:99px; padding:3px 9px; white-space:nowrap; }
+.oc-chip.quem { background:#f5f3ff; color:#6d28d9; } .oc-chip.venc { background:#fef2f2; color:#b91c1c; }
+.oc-c .hp-ac { display:flex; gap:6px; margin-top:10px; }
+.oc-c .hp-ac button, .oc-c .hp-ac a { flex:1; height:32px; border-radius:9px; font:inherit; font-size:12px; font-weight:800; border:1px solid #e2e8f0; background:#fff; color:#475569; display:inline-flex; align-items:center; justify-content:center; gap:6px; cursor:pointer; text-decoration:none; }
+.oc-c .hp-ac .prim { background:var(--cor); border-color:var(--cor); color:#fff; }
+.oc-vazio { background:#fff; border:1px dashed #cbd5e1; border-radius:18px; padding:40px 20px; text-align:center; color:#475569; }
+.oc-vazio .ic { width:62px; height:62px; border-radius:18px; background:#ecfdf3; color:#16a34a; display:inline-flex; align-items:center; justify-content:center; font-size:24px; margin-bottom:12px; }
+.oc-vazio b { display:block; font-size:16px; color:#0f172a; margin-bottom:4px; }
+/* gaveta da janela */
+.tx-gav-pane .tj { height:100%; }
+/* caixa Novo orçamento (ns-*, já carregado) — só o que é dela */
+#ocNovoFundo[hidden] { display:none; } #ocNovoFundo { z-index:1200; } #ocNovoFundo [hidden] { display:none !important; }
+.oc-emp-bt { display:flex; align-items:center; gap:10px; width:100%; min-height:50px; padding:5px 10px 5px 6px; text-align:left; cursor:pointer; border:1px dashed #9fc9b3; border-radius:12px; background:#f6faf7; font:inherit; color:inherit; }
+.oc-emp-bt.cheio { border-style:solid; background:#fff; } .oc-emp-bt:hover { border-color:#16a34a; }
+.oc-emp-bt .sg { width:36px; height:36px; border-radius:10px; background:#dcfce7; color:#15803d; font-weight:900; font-size:12px; display:inline-flex; align-items:center; justify-content:center; flex:0 0 auto; }
+.oc-emp-bt .tx { flex:1; min-width:0; display:flex; flex-direction:column; line-height:1.2; } .oc-emp-bt .tx b { font-size:14px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; } .oc-emp-bt .tx small { color:#64748b; font-size:11.5px; }
+.oc-emp-bt > i { color:#94a3b8; }
+.oc-itens { display:flex; flex-direction:column; gap:8px; }
+.oc-it { display:grid; grid-template-columns:minmax(0,1fr) 72px 150px 34px; gap:8px; align-items:center; }
+.oc-it .oc-sv-bt { display:flex; align-items:center; gap:9px; min-height:46px; padding:4px 10px 4px 6px; text-align:left; cursor:pointer; border:1px dashed #c4b5fd; border-radius:11px; background:#faf8ff; font:inherit; color:inherit; min-width:0; }
+.oc-it .oc-sv-bt.cheio { border-style:solid; background:#fff; } .oc-it .oc-sv-bt .sg { width:30px; height:30px; border-radius:9px; background:#ede9fe; color:#6d28d9; display:inline-flex; align-items:center; justify-content:center; font-size:12px; flex:0 0 auto; }
+.oc-it .oc-sv-bt .tx { flex:1; min-width:0; display:flex; flex-direction:column; line-height:1.2; } .oc-it .oc-sv-bt .tx b { font-size:13px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; } .oc-it .oc-sv-bt .tx small { color:#64748b; font-size:11px; }
+.oc-it .ns-in.qtd { text-align:center; height:46px; font-weight:800; } .oc-it .ns-money { height:46px; }
+.oc-it .rm { width:34px; height:46px; border:1px solid #e2e8f0; border-radius:10px; background:#fff; color:#b91c1c; cursor:pointer; } .oc-it .rm:disabled { opacity:.3; cursor:default; }
+.oc-add { align-self:flex-start; border:1px dashed #9fc9b3; background:#f6faf7; color:#15803d; font:inherit; font-weight:800; font-size:12.5px; border-radius:10px; padding:8px 12px; cursor:pointer; }
+.oc-chips { display:flex; flex-wrap:wrap; gap:6px; } .oc-chips button { border:1px solid #e2e8f0; background:#fff; color:#475569; border-radius:99px; padding:7px 12px; font:inherit; font-size:12.5px; font-weight:700; cursor:pointer; }
+.oc-chips button.on { background:#16a34a; border-color:#16a34a; color:#fff; }
+.oc-area { width:100%; box-sizing:border-box; min-height:74px; border:1px solid #d7e3dc; border-radius:10px; padding:9px 12px; font:inherit; font-size:13.5px; resize:vertical; text-transform:uppercase; } .oc-area::placeholder { text-transform:none; }
+.oc-area:focus { outline:0; border-color:#22c55e; box-shadow:0 0 0 3px rgba(34,197,94,.14); }
+.oc-res-it { display:flex; justify-content:space-between; gap:10px; font-size:13px; padding:5px 0; border-bottom:1px solid #f1f5f4; } .oc-res-it span { color:#475569; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; } .oc-res-it b { white-space:nowrap; }
+.oc-res-tot { display:flex; justify-content:space-between; align-items:baseline; padding-top:10px; } .oc-res-tot b { font-size:22px; color:#15803d; }
+.oc-passos { display:flex; flex-direction:column; gap:8px; } .oc-passo { display:flex; gap:10px; align-items:flex-start; font-size:12.5px; color:#475569; line-height:1.35; }
+.oc-passo i { width:24px; height:24px; border-radius:8px; background:#ecfdf3; color:#16a34a; display:inline-flex; align-items:center; justify-content:center; font-size:11px; flex-shrink:0; } .oc-passo b { color:#0f172a; }
+.ns-pe-info.ok { color:#15803d; font-weight:700; }
+.ns-bt.sec { background:#f1f5f4; color:#0f3d2e; border-color:#e2e8f0; }
+/* pergunta (caixa nossa) */
+.pk.pk-peq { width:min(560px, 96vw); top:18vh; } .pk.pk-peq .pk-quem span { white-space:normal; line-height:1.4; }
+.pk.pk-rubro { --cor:#dc2626; --cor-e:#991b1b; --cor-f:#fef2f2; --cor-b:#fecaca; } .pk.pk-roxo { --cor:#7c3aed; --cor-e:#5b21b6; --cor-f:#f5f3ff; --cor-b:#ddd6fe; } .pk.pk-ambar { --cor:#d97706; --cor-e:#92400e; --cor-f:#fffbeb; --cor-b:#fde68a; }
+.pk-peq .pk-pe .pk-ok.rubro { background:linear-gradient(135deg,#dc2626,#991b1b); }
+.pk-peq .pk-motivo { width:100%; box-sizing:border-box; border:1px solid #d7e3dc; border-radius:10px; padding:9px 12px; font:inherit; font-size:13.5px; min-height:70px; resize:vertical; margin:12px 18px 0; width:calc(100% - 36px); }
+@media (max-width:900px) { .tx-abas.oc-abas { grid-template-columns:1fr 1fr; } .oc-grade { grid-template-columns:minmax(0,1fr); } .oc-faixa .tx-busca { margin-left:0; width:100%; }
+  .oc-it { grid-template-columns:minmax(0,1fr) 34px; } .oc-it .ns-in.qtd, .oc-it .ns-money { grid-column:1 / 2; } .oc-btn-novo { width:100%; } }
+</style>
+{% endblock %}
+
+{% block content %}
+{% include 'comercial/_nav_comercial.html' %}
+<div class="tx">
+<div class="ef-hero"><div class="ef-hero-inner ef-hero-head">
+  <div><h1 class="ef-hero-title">Orçamentos</h1><p class="ef-hero-sub">Propostas para clientes e avulsos: montadas aqui, aprovadas pelo escritório, mandadas ao cliente e, feito o serviço, cobradas no Financeiro</p></div>
+  {% if pode_incluir %}<div class="ef-hero-actions"><button type="button" class="oc-btn-novo" onclick="ocNovoAbrir()"><span class="mais"><i class="fas fa-plus"></i></span><span class="tx"><b>Novo orçamento</b><small>cliente ou avulso, serviços e valores</small></span></button></div>{% endif %}
+</div></div>
+
+<div class="ef-body">
+  {% set abas = [('RASCUNHO', 'tx-a-perd', 'fa-pen-ruler', 'Rascunhos', 'ainda não pedidos'), ('APROVACAO', 'tx-a-atr', 'fa-stamp', 'Para aprovar', 'esperando o escritório'),
+                 ('APROVADO', 'tx-a-rec', 'fa-circle-check', 'Aprovados', 'mandar ao cliente · fazer o serviço'), ('COBRANCA', 'tx-a-abe', 'fa-barcode', 'Em cobrança', 'aguardando aprovação no Financeiro'),
+                 ('CONCLUIDO', 'tx-a-fut', 'fa-flag-checkered', 'Concluídos', 'cobrados'), ('', 'tx-a-tod', 'fa-layer-group', 'Todos', 'inclui reprovados e cancelados')] %}
+  <div class="tx-abas oc-abas">
+    {% for st, cls, ico, rot, sub in abas %}
+    <button type="button" class="tx-aba {{ cls }}{{ ' on' if aba == st }}" data-p="{{ st }}"><span class="tx-aba-ico"><i class="fas {{ ico }}"></i></span>
+      <span class="tx-aba-txt"><span class="tx-aba-lbl">{{ rot }}</span><span class="tx-aba-val">{{ cont[st][0] if st else lista|length }}</span>
+      <span class="tx-aba-sub">{% if st and cont[st][1] %}{{ cont[st][1] | format_currency }} · {% endif %}{{ sub }}</span></span></button>
+    {% endfor %}
+  </div>
+
+  <div class="oc-faixa">
+    <div class="tx-filtros" id="ocFil">
+      <button type="button" class="tx-f on" data-v="">Todos <b>{{ lista|length }}</b></button>
+      {% if cont['REPROVADO'][0] %}<button type="button" class="tx-f" data-v="REPROVADO"><i class="fas fa-rotate-left" style="font-size:10px"></i> Reprovados <b>{{ cont['REPROVADO'][0] }}</b></button>{% endif %}
+      {% if cont['CANCELADO'][0] %}<button type="button" class="tx-f" data-v="CANCELADO"><i class="fas fa-ban" style="font-size:10px"></i> Cancelados <b>{{ cont['CANCELADO'][0] }}</b></button>{% endif %}
+      {% set nv = lista | selectattr('vencido') | list | length %}{% if nv %}<button type="button" class="tx-f" data-v="vencido"><i class="fas fa-hourglass-end" style="font-size:10px"></i> Validade vencida <b>{{ nv }}</b></button>{% endif %}
+      {% if aprovador and pessoas|length > 1 %}{% for uid, nome in pessoas.items() | sort(attribute='1') %}<button type="button" class="tx-f" data-q="{{ uid }}"><i class="fas fa-user" style="font-size:10px"></i> {{ nome.split(' ')[0] }}</button>{% endfor %}{% endif %}
+    </div>
+    <div class="tx-busca"><i class="fas fa-magnifying-glass"></i><input type="search" id="ocBusca" placeholder="Buscar empresa, número ou serviço"></div>
+  </div>
+
+  {% if not lista %}
+  <div class="oc-vazio"><span class="ic"><i class="fas fa-file-signature"></i></span><b>Nenhum orçamento ainda</b>
+    O primeiro orçamento nasce aqui: escolha a empresa (cliente cadastrado ou avulso), os serviços do catálogo e os valores. Depois ele vai para aprovação, para o cliente e, feito o serviço, para a cobrança.
+    {% if pode_incluir %}<div style="margin-top:14px"><button type="button" class="oc-btn-novo" onclick="ocNovoAbrir()"><span class="mais"><i class="fas fa-plus"></i></span><span class="tx"><b>Novo orçamento</b><small>leva um minuto</small></span></button></div>{% endif %}</div>
+  {% endif %}
+
+  <div class="oc-grade" id="ocGrade">
+  {% for o in lista %}
+    <div class="tx-c oc-c {{ o.cls }}" data-st="{{ o.status }}" data-quem="{{ o.criado_por }}" data-venc="{{ 1 if o.vencido else 0 }}" data-b="{{ o.numero }} {{ o.cliente_nome }} {{ o.titulo or '' }} {% for i in o.itens %}{{ i.descricao }} {% endfor %}" onclick="ocAbrir({{ o.id }})">
+      <div class="tx-c-top"><span class="tx-c-num">{{ o.numero }}</span><span class="tx-c-nome" title="{{ o.cliente_nome }}">{{ o.cliente_nome }}</span></div>
+      <div class="tx-c-meio">
+        <div><div class="tx-c-val">{{ o.total | float | format_currency }}</div>
+          <div class="tx-c-desc">{{ o.itens|length }} serviço{{ 's' if o.itens|length != 1 }}{% if o.titulo %} · {{ o.titulo }}{% endif %}{% if o.validade %} · válido até {{ o.validade.strftime('%d/%m') }}{% endif %}</div></div>
+        <span class="tx-c-st"><i class="fas {{ o.ico }}"></i> {{ o.rot }}</span>
+      </div>
+      <div class="hp-itens">
+        {% for i in o.itens[:3] %}<div class="hp-it{{ '' if i.emite_nota else ' sb' }}"><span>{{ i.descricao }}</span><b>{{ i.valor_total | float | format_currency }}</b></div>{% endfor %}
+        {% if o.itens|length > 3 %}<div class="hp-it"><span>+ {{ o.itens|length - 3 }} serviço{{ 's' if o.itens|length - 3 != 1 }}</span><b></b></div>{% endif %}
+      </div>
+      <div class="hp-linha">
+        {% if o.cliente_avulso %}<span class="oc-chip">avulso</span>{% endif %}
+        {% if o.como %}<span class="oc-chip"><i class="fas {{ 'fa-file-invoice-dollar' if o.como == 'BOLETO_NOTA' else ('fa-barcode' if o.como == 'BOLETO' else 'fa-calendar-plus') }}"></i> {{ COMO[o.como] }}{% if o.parcelas and o.parcelas > 1 %} · {{ o.parcelas }}x{% endif %}</span>{% endif %}
+        <span class="oc-chip quem"><i class="fas fa-user"></i> {{ (o.criado_por_nome or '').split(' ')[0] }} · {{ o.criado_em.strftime('%d/%m') }}</span>
+        {% if o.vencido %}<span class="oc-chip venc"><i class="fas fa-hourglass-end"></i> validade vencida</span>{% endif %}
+      </div>
+      <div class="hp-ac">
+        <button type="button" onclick="event.stopPropagation(); ocAbrir({{ o.id }})"><i class="fas fa-folder-open"></i> Abrir</button>
+        {% if o.status in ('RASCUNHO', 'REPROVADO') %}<button type="button" class="prim" onclick="event.stopPropagation(); ocPost('{{ url_for('comercial.orcamento_pedir', oid=o.id) }}')"><i class="fas fa-paper-plane"></i> {{ 'Aprovar e seguir' if aprovador else 'Pedir aprovação' }}</button>
+        {% elif o.status == 'APROVACAO' and aprovador %}<button type="button" class="prim" onclick="event.stopPropagation(); ocPost('{{ url_for('comercial.orcamento_aprovar', oid=o.id) }}')"><i class="fas fa-check"></i> Aprovar</button>
+        {% elif o.status == 'APROVADO' %}<button type="button" class="prim" onclick="event.stopPropagation(); ocAbrir({{ o.id }}, 'cobrar')"><i class="fas fa-barcode"></i> Serviço feito: cobrar</button>
+        {% elif o.status == 'COBRANCA' and o.lancamento_id %}<a href="{{ url_for('financeiro.lancamentos', aba='apr') }}#l{{ o.lancamento_id }}" onclick="event.stopPropagation()"><i class="fas fa-arrow-right"></i> Ver no Financeiro</a>{% endif %}
+      </div>
+    </div>
+  {% endfor %}
+  </div>
+</div>
+</div>
+
+{# ── gaveta: a janela do orçamento (molde da janela da cobrança) ── #}
+<div class="tx-gav" id="ocGav" hidden><div class="tx-gav-fundo" onclick="ocFechar()"></div>
+  <div class="tx-gav-pane"><button type="button" class="tx-gav-x" onclick="ocFechar()" title="Fechar (Esc)"><i class="fas fa-xmark"></i></button><div class="tx-gav-corpo" id="ocGavCorpo"></div></div></div>
+
+{# ── caixa Novo orçamento (molde da Nova cobrança) ── #}
+<div class="pk-fundo" id="ocNovoFundo" hidden>
+  <form class="ns" id="ocForm" method="POST" action="{{ url_for('comercial.orcamento_novo') }}" autocomplete="off">
+    <input type="hidden" name="orcamento_id" id="ocId" value=""><input type="hidden" name="cliente_id" id="ocCli" value=""><input type="hidden" name="como" id="ocComo" value="BOLETO_NOTA">
+    <input type="hidden" name="parcelas" id="ocParc" value="1"><input type="hidden" name="comissao_tipo" id="ocCt" value="PADRAO"><input type="hidden" name="validade_dias" id="ocVal" value="15"><input type="hidden" name="acao" id="ocAcao" value="rascunho">
+    <header class="ns-cab"><span class="ns-logo"><img src="{{ url_for('static', filename='images/logo.png') }}" alt="Qualicontax"></span>
+      <div class="ns-tit"><b id="ocTit">Novo orçamento</b><span>escolha a empresa, os serviços e os valores · depois vai para aprovação</span></div>
+      <div class="ns-prev"><small>total do orçamento</small><b id="ocPrevTot">R$ 0,00</b><span id="ocPrevSub">nenhum serviço ainda</span></div>
+      <button type="button" class="ns-x" onclick="ocNovoFechar()" title="Fechar (Esc)"><i class="fas fa-xmark"></i></button></header>
+    <div class="ns-g">
+      <div class="ns-f">
+        <section class="ns-b"><div class="ns-h"><i class="fas fa-building"></i> Empresa <em>cliente cadastrado ou avulso</em></div>
+          <button type="button" class="oc-emp-bt" id="ocEmpBt" onclick="ocEmpAbrir()"><span class="sg"><i class="fas fa-building"></i></span><span class="tx"><b>Escolher a empresa</b><small>busque por nome, número ou CNPJ/CPF · avulsos também aparecem</small></span><i class="fas fa-chevron-right"></i></button></section>
+        <section class="ns-b"><div class="ns-h"><i class="fas fa-list-check"></i> Serviços <em>do catálogo; o valor sugerido vem preenchido</em></div>
+          <div class="oc-itens" id="ocItens"></div>
+          <button type="button" class="oc-add" onclick="ocItemAdd()" style="margin-top:8px"><i class="fas fa-plus"></i> Mais um serviço</button></section>
+        <section class="ns-b"><div class="ns-h"><i class="fas fa-route"></i> Como pretende cobrar <em>quem aprova pode mudar na hora de cobrar</em></div>
+          <div class="ns-ops" id="ocOps">
+            <button type="button" class="ns-op on" data-v="BOLETO_NOTA" onclick="ocComo(this)"><i class="fas fa-file-invoice-dollar"></i><b>Boleto + nota fiscal</b><small>o que entra na nota vai na nota; taxas só no boleto</small></button>
+            <button type="button" class="ns-op" data-v="BOLETO" onclick="ocComo(this)"><i class="fas fa-barcode"></i><b>Só boleto</b><small>sem nota fiscal</small></button>
+            <button type="button" class="ns-op" data-v="MENSAL" onclick="ocComo(this)"><i class="fas fa-calendar-plus"></i><b>Na mensalidade</b><small>entra no boleto do mês, junto com os honorários</small></button></div>
+          <div class="ns-parc" style="margin-top:10px"><small>Parcelas</small><div class="oc-chips" id="ocParcs">{% for n in (1, 2, 3, 4, 5, 6, 10, 12) %}<button type="button" data-v="{{ n }}"{{ ' class=on' if n == 1 }} onclick="ocParcela(this)">{{ n }}x</button>{% endfor %}</div></div></section>
+        <section class="ns-b"><div class="ns-h"><i class="fas fa-hand-holding-dollar"></i> Comissão pedida <em>{% if comissao_padrao %}seu padrão: {{ ('%g%%' % comissao_padrao.valor) if comissao_padrao.tipo == 'PCT' else (comissao_padrao.valor | format_currency) }}{% else %}você não tem comissão padrão cadastrada{% endif %}</em></div>
+          <div class="ns-seg" id="ocSeg"><button type="button" data-v="PADRAO" class="on" onclick="ocCt(this)">Meu padrão</button><button type="button" data-v="PCT" onclick="ocCt(this)">Outro %</button><button type="button" data-v="FIXO" onclick="ocCt(this)">Valor fixo</button><button type="button" data-v="SEM" onclick="ocCt(this)">Sem comissão</button></div>
+          <div class="ns-money pct" id="ocCvBox" hidden style="width:170px; margin-top:8px"><span id="ocCvUn">%</span><input class="ns-in" name="comissao_valor" id="ocCv" inputmode="decimal" placeholder="10" oninput="ocResumo()"></div></section>
+        <section class="ns-b"><div class="ns-h"><i class="fas fa-hourglass-half"></i> Validade da proposta</div>
+          <div class="oc-chips" id="ocVals">{% for d, r in ((7, '7 dias'), (15, '15 dias'), (30, '30 dias'), (60, '60 dias'), (0, 'sem prazo')) %}<button type="button" data-v="{{ d }}"{{ ' class=on' if d == 15 }} onclick="ocValidade(this)">{{ r }}</button>{% endfor %}</div></section>
+        <section class="ns-b"><div class="ns-h"><i class="fas fa-align-left"></i> Assunto e condições <em>vão no PDF para o cliente</em></div>
+          <input class="ns-in" name="titulo" id="ocTitulo" maxlength="160" placeholder="Assunto (ex.: Abertura da filial de Goiânia)" style="margin-bottom:8px; text-transform:none" oninput="ocResumo()">
+          <textarea class="oc-area" name="observacao" id="ocObs" placeholder="Condições, prazos, o que está incluído... uma por linha"></textarea></section>
+        <section class="ns-b"><div class="ns-h"><i class="fas fa-lock"></i> Anotação interna <em>só a equipe vê</em></div>
+          <input class="ns-in" name="nota_interna" id="ocNotaInt" maxlength="2000" placeholder="ex.: cliente indicado pelo Posto Boa Vista; combinar prazo com a Legalização"></section>
+      </div>
+      <aside class="ns-r">
+        <div class="ns-h"><i class="fas fa-receipt"></i> Resumo</div>
+        <div class="ns-b" id="ocRes"></div>
+        <div class="ns-h" style="margin-top:4px"><i class="fas fa-route"></i> O que acontece depois</div>
+        <div class="oc-passos">
+          <div class="oc-passo"><i class="fas fa-stamp"></i><span><b>Aprovação.</b> {% if aprovador %}Você aprova; quem monta e aprova não precisa pedir.{% else %}O escritório confere e aprova (você recebe aviso).{% endif %}</span></div>
+          <div class="oc-passo"><i class="fas fa-envelope"></i><span><b>Cliente.</b> Você manda o PDF por e-mail de dentro do orçamento.</span></div>
+          <div class="oc-passo"><i class="fas fa-barcode"></i><span><b>Cobrança.</b> Feito o serviço, "Serviço feito: cobrar" cria o lançamento no Financeiro com todo o histórico.</span></div>
+          <div class="oc-passo"><i class="fas fa-hand-holding-dollar"></i><span><b>Comissão.</b> Nasce com a cobrança e libera quando o cliente pagar.</span></div>
+        </div>
+      </aside>
+    </div>
+    <footer class="ns-pe"><div class="ns-pe-info" id="ocMsg"></div><button type="button" class="ns-bt" onclick="ocNovoFechar()">Cancelar</button>
+      <button type="submit" class="ns-bt sec" id="ocSalvar" onclick="document.getElementById('ocAcao').value='rascunho'"><i class="fas fa-floppy-disk"></i> Salvar rascunho</button>
+      <button type="submit" class="ns-bt prim" id="ocEnviar" onclick="document.getElementById('ocAcao').value='aprovacao'"><i class="fas fa-paper-plane"></i> {{ 'Aprovar e seguir' if aprovador else 'Mandar para aprovação' }}</button></footer>
+  </form>
+</div>
+<script id="ocCliJ" type="application/json">{{ clientes_json | safe }}</script>
+<script id="ocSrvJ" type="application/json">{{ servicos_json | safe }}</script>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/caixa_cliente.js') }}"></script>
+<script src="{{ url_for('static', filename='js/caixa_servico.js') }}"></script>
+<script>
+(function () {
+  var CLI = JSON.parse(document.getElementById('ocCliJ').textContent), SRV = JSON.parse(document.getElementById('ocSrvJ').textContent);
+  var SRVI = {}; SRV.forEach(function (s) { SRVI[String(s.id)] = s; });
+  var $ = function (id) { return document.getElementById(id); };
+  function esc(s) { var d = document.createElement('div'); d.textContent = s == null ? '' : String(s); return d.innerHTML; }
+  function semAc(s) { return String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase(); }
+  function brl(v) { return 'R$ ' + Number(v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+  function num(s) { s = String(s || '').replace(/\./g, '').replace(',', '.'); var n = parseFloat(s); return isNaN(n) ? 0 : n; }
+  function sigla(nome) { var p = String(nome || '').replace(/[^\p{L}\p{N} ]/gu, ' ').trim().split(/\s+/); return (((p[0] || '')[0] || '') + ((p[1] || '')[0] || '')).toUpperCase(); }
+
+  // ── abas, filtros e busca ──
+  var st = {{ aba | tojson }}, fil = '', quem = '', q = '';
+  function aplicar() {
+    var n = 0;
+    document.querySelectorAll('#ocGrade .oc-c').forEach(function (c) {
+      var ok = (!st || c.dataset.st === st) && (!q || semAc(c.dataset.b).indexOf(q) >= 0) && (!quem || c.dataset.quem === quem);
+      if (ok && fil) ok = fil === 'vencido' ? c.dataset.venc === '1' : c.dataset.st === fil;
+      c.style.display = ok ? '' : 'none'; if (ok) n++;
+    });
+  }
+  document.querySelectorAll('.oc-abas .tx-aba').forEach(function (b) {
+    b.addEventListener('click', function () {
+      st = b.dataset.p; document.querySelectorAll('.oc-abas .tx-aba').forEach(function (x) { x.classList.toggle('on', x === b); });
+      try { var u = new URL(location.href); if (st) u.searchParams.set('aba', st); else u.searchParams.delete('aba'); history.replaceState(null, '', u); } catch (e) {}
+      aplicar();
+    });
+  });
+  $('ocFil').addEventListener('click', function (e) {
+    var b = e.target.closest('.tx-f'); if (!b) return;
+    if (b.dataset.q !== undefined) { quem = b.classList.contains('on') ? '' : b.dataset.q; this.querySelectorAll('.tx-f[data-q]').forEach(function (x) { x.classList.toggle('on', x === b && !!quem); }); }
+    else { fil = b.dataset.v; this.querySelectorAll('.tx-f[data-v]').forEach(function (x) { x.classList.toggle('on', x === b); }); }
+    aplicar();
+  });
+  $('ocBusca').addEventListener('input', function () { q = semAc(this.value); aplicar(); });
+  if (st) aplicar();
+
+  // ── gaveta: janela do orçamento ──
+  window.ocAbrir = function (id, foco) {
+    var g = $('ocGav'), c = $('ocGavCorpo'); c.innerHTML = '<div style="padding:40px; text-align:center; color:#64748b"><i class="fas fa-circle-notch fa-spin"></i> abrindo…</div>'; g.hidden = false; document.body.style.overflow = 'hidden';
+    fetch('/comercial/orcamentos/' + id + '/janela', { credentials: 'same-origin' }).then(function (r) { return r.text(); }).then(function (h) {
+      c.innerHTML = h; ocJanelaLigar(c); if (foco) { var el = c.querySelector('[data-foco="' + foco + '"]'); if (el) el.scrollIntoView({ block: 'center' }); }
+      try { var u = new URL(location.href); u.searchParams.set('abrir', id); history.replaceState(null, '', u); } catch (e) {}
+    }).catch(function () { c.innerHTML = '<div style="padding:40px; text-align:center; color:#b91c1c">Não consegui abrir o orçamento.</div>'; });
+  };
+  // liga o bloco "Serviço feito: cobrar" da janela (como cobrar + vencimento em botões); o parcial entra por innerHTML e script não roda
+  function ocJanelaLigar(c) {
+    var seg = c.querySelector('#ocCbSeg'); if (!seg) return;
+    var como = c.querySelector('#ocCbComo'), venc = c.querySelector('#ocCbVenc'), box = c.querySelector('#ocCbVencBox'), datas = c.querySelector('#ocCbDatas');
+    function setComo(v) { como.value = v; seg.querySelectorAll('button').forEach(function (b) { b.classList.toggle('on', b.dataset.v === v); }); box.style.display = v === 'MENSAL' ? 'none' : ''; }
+    seg.addEventListener('click', function (e) { var b = e.target.closest('button'); if (b && !b.disabled) setComo(b.dataset.v); });
+    setComo(como.value === 'BOLETO_NOTA' && seg.querySelector('[data-v=BOLETO_NOTA]').disabled ? 'BOLETO' : como.value);
+    datas.addEventListener('click', function (e) { var b = e.target.closest('button'); if (!b) return; venc.value = b.dataset.v; datas.querySelectorAll('button').forEach(function (x) { x.classList.toggle('on', x === b); }); });
+    var on = datas.querySelector('button.on'); if (on) venc.value = on.dataset.v;
+    c.querySelector('#ocCobrarForm').addEventListener('submit', function (e) { if (como.value !== 'MENSAL' && !venc.value) e.preventDefault(); });
+  }
+  window.ocFechar = function () { $('ocGav').hidden = true; document.body.style.overflow = ''; try { var u = new URL(location.href); u.searchParams.delete('abrir'); history.replaceState(null, '', u); } catch (e) {} };
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && !$('ocGav').hidden && !document.querySelector('.pk-fundo.pk-sobre, .pk-fundo .pk-peq')) ocFechar(); });
+  window.ocPost = function (url, dados) {
+    var f = document.createElement('form'); f.method = 'POST'; f.action = url; f.style.display = 'none';
+    Object.keys(dados || {}).forEach(function (k) { var i = document.createElement('input'); i.name = k; i.value = dados[k]; f.appendChild(i); });
+    document.body.appendChild(f); f.submit();
+  };
+  {% if abrir %}ocAbrir({{ abrir }});{% endif %}
+
+  // ── pergunta na caixa nossa (sem janela do navegador), com motivo opcional ──
+  window.ocPergunta = function (o) {
+    var f = document.createElement('div'); f.className = 'pk-fundo'; f.style.zIndex = 1400;
+    f.innerHTML = '<div class="pk pk-peq ' + (o.cor || 'pk-roxo') + '" role="alertdialog" aria-modal="true"><header class="pk-cab"><span class="pk-av"><i class="fas ' + (o.icone || 'fa-question') + '"></i></span>'
+      + '<div class="pk-quem"><b>' + esc(o.titulo) + '</b><span>' + esc(o.texto || '') + '</span></div><button type="button" class="pk-x" title="Fechar (Esc)"><i class="fas fa-xmark"></i></button></header>'
+      + (o.motivo ? '<textarea class="pk-motivo" placeholder="' + esc(o.motivo) + '" maxlength="400"></textarea>' : '')
+      + '<footer class="pk-pe"><div class="pk-pe-info">' + esc(o.info || '') + '</div><button type="button" class="pk-canc">' + esc(o.voltar || 'Voltar') + '</button><button type="button" class="pk-ok' + (o.cor === 'pk-rubro' ? ' rubro' : '') + '"><i class="fas ' + (o.okIcone || 'fa-check') + '"></i> ' + esc(o.ok || 'Confirmar') + '</button></footer></div>';
+    document.body.appendChild(f);
+    function fechar(sim) { document.removeEventListener('keydown', tecla, true); var m = (f.querySelector('.pk-motivo') || {}).value || ''; f.remove(); if (sim) { if (o.exigeMotivo && !m.trim()) { ocPergunta(Object.assign({}, o, { info: 'Escreva o motivo para continuar.' })); return; } if (o.onOk) o.onOk(m.trim()); } else if (o.onNao) o.onNao(); }
+    function tecla(e) { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); fechar(false); } }
+    document.addEventListener('keydown', tecla, true);
+    f.querySelector('.pk-x').addEventListener('click', function () { fechar(false); }); f.querySelector('.pk-canc').addEventListener('click', function () { fechar(false); });
+    f.querySelector('.pk-ok').addEventListener('click', function () { fechar(true); }); f.addEventListener('mousedown', function (e) { if (e.target === f) fechar(false); });
+    var ta = f.querySelector('.pk-motivo'); if (ta) ta.focus(); else f.querySelector('.pk-ok').focus();
+  };
+
+  // ── caixa Novo orçamento ──
+  var trava;
+  window.ocNovoAbrir = function (dados) {
+    var fd = $('ocNovoFundo'); fd.hidden = false; trava = document.body.style.overflow; document.body.style.overflow = 'hidden';
+    $('ocForm').reset(); $('ocId').value = ''; $('ocCli').value = ''; $('ocTit').textContent = 'Novo orçamento';
+    ocEmpPinta(null); $('ocItens').innerHTML = ''; ocItemAdd();
+    ocComo(document.querySelector('#ocOps .ns-op[data-v=BOLETO_NOTA]')); ocParcela(document.querySelector('#ocParcs [data-v="1"]')); ocCt(document.querySelector('#ocSeg [data-v=PADRAO]')); ocValidade(document.querySelector('#ocVals [data-v="15"]'));
+    if (dados) {
+      $('ocId').value = dados.id; $('ocTit').textContent = 'Alterar orçamento'; $('ocCli').value = dados.cliente_id; ocEmpPinta(CLI.find(function (c) { return String(c.id) === String(dados.cliente_id); }));
+      $('ocItens').innerHTML = ''; (dados.itens || []).forEach(function (i) { ocItemAdd(i); });
+      if (dados.como) ocComo(document.querySelector('#ocOps .ns-op[data-v=' + dados.como + ']'));
+      ocParcela(document.querySelector('#ocParcs [data-v="' + (dados.parcelas || 1) + '"]') || document.querySelector('#ocParcs [data-v="1"]'));
+      ocCt(document.querySelector('#ocSeg [data-v=' + (dados.comissao_tipo || 'PADRAO') + ']')); if (dados.comissao_valor) $('ocCv').value = String(dados.comissao_valor).replace('.', ',');
+      $('ocTitulo').value = dados.titulo || ''; $('ocObs').value = dados.observacao || ''; $('ocNotaInt').value = dados.nota_interna || '';
+      if (dados.validade) { var dias = Math.round((new Date(dados.validade + 'T00:00:00') - new Date(new Date().toDateString())) / 86400000); $('ocVal').value = dias > 0 ? dias : 0; document.querySelectorAll('#ocVals button').forEach(function (b) { b.classList.toggle('on', String(b.dataset.v) === String(dias)); }); }
+    }
+    ocResumo(); setTimeout(function () { if (!$('ocCli').value) ocEmpAbrir(); }, 120);
+  };
+  window.ocNovoFechar = function () { $('ocNovoFundo').hidden = true; document.body.style.overflow = trava || ''; };
+  $('ocNovoFundo').addEventListener('mousedown', function (e) { if (e.target === this) ocNovoFechar(); });
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && !$('ocNovoFundo').hidden && !document.querySelector('.pk-fundo.pk-sobre')) ocNovoFechar(); });
+  window.ocEditar = function (id) { fetch('/comercial/orcamentos/' + id + '/dados', { credentials: 'same-origin' }).then(function (r) { return r.json(); }).then(function (d) { ocFechar(); ocNovoAbrir(d); }); };
+
+  function ocEmpPinta(c) {
+    var bt = $('ocEmpBt');
+    if (!c) { bt.classList.remove('cheio'); bt.querySelector('.sg').innerHTML = '<i class="fas fa-building"></i>'; bt.querySelector('b').textContent = 'Escolher a empresa'; bt.querySelector('small').textContent = 'busque por nome, número ou CNPJ/CPF · avulsos também aparecem'; return; }
+    bt.classList.add('cheio'); bt.querySelector('.sg').textContent = sigla(c.nome); bt.querySelector('b').textContent = c.nome;
+    bt.querySelector('small').textContent = (c.av ? 'avulso' : ('cliente nº ' + (c.num || '—'))) + (c.doc ? ' · ' + c.doc : '') + (c.mensal ? ' · mensalidade ' + brl(c.mensal) : ' · sem honorários mensais');
+  }
+  window.ocEmpAbrir = function () {
+    if (!window.CaixaCliente) return;
+    CaixaCliente.abrir({ clientes: CLI, atual: $('ocCli').value, titulo: 'Empresa do orçamento', sub: 'cliente cadastrado ou avulso · é para ela que o orçamento vai', z: 1300,
+      onUsar: function (c) { if (!c) return; $('ocCli').value = c.id; ocEmpPinta(c); ocResumo(); var bm = document.querySelector('#ocOps .ns-op[data-v=MENSAL]'); bm.classList.toggle('sem', !c.mensal); if (!c.mensal && $('ocComo').value === 'MENSAL') ocComo(document.querySelector('#ocOps .ns-op[data-v=BOLETO_NOTA]')); } });
+  };
+
+  // itens
+  window.ocItemAdd = function (i) {
+    i = i || {};
+    var r = document.createElement('div'); r.className = 'oc-it';
+    r.innerHTML = '<input type="hidden" name="item_servico_id" value="' + esc(i.servico_id || '') + '"><input type="hidden" name="item_descricao" value="' + esc(i.descricao || '') + '">'
+      + '<button type="button" class="oc-sv-bt" onclick="ocSvAbrir(this)"><span class="sg"><i class="fas fa-plus"></i></span><span class="tx"><b>Escolher o serviço</b><small>do catálogo</small></span></button>'
+      + '<input class="ns-in qtd" name="item_qtd" inputmode="numeric" value="' + esc(i.qtd || 1) + '" title="quantidade" oninput="ocResumo()">'
+      + '<div class="ns-money fixo"><span>R$</span><input class="ns-in rg-din" name="item_valor" inputmode="numeric" placeholder="0,00" value="' + (i.valor ? esc(Number(i.valor).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })) : '') + '"></div>'
+      + '<button type="button" class="rm" title="Tirar este serviço" onclick="ocItemRm(this)"><i class="fas fa-xmark"></i></button>';
+    $('ocItens').appendChild(r); ocMask(r.querySelector('.rg-din'));
+    if (i.servico_id) ocSvPinta(r, SRVI[String(i.servico_id)], i.descricao);
+    ocRmEstado(); ocResumo();
+  };
+  window.ocItemRm = function (bt) { bt.closest('.oc-it').remove(); ocRmEstado(); ocResumo(); };
+  function ocRmEstado() { var rs = document.querySelectorAll('#ocItens .oc-it'); rs.forEach(function (r) { r.querySelector('.rm').disabled = rs.length === 1; }); }
+  function ocSvPinta(r, s, desc) {
+    var bt = r.querySelector('.oc-sv-bt'); if (!s) return;
+    bt.classList.add('cheio'); bt.querySelector('.sg').innerHTML = '<i class="fas ' + (s.nota ? 'fa-file-invoice' : 'fa-lock') + '"></i>'; bt.querySelector('b').textContent = desc || s.nome;
+    bt.querySelector('small').textContent = (s.nota ? 'entra na nota' : 'só no boleto (taxa)') + (s.ct === 'SEM' ? ' · nunca paga comissão' : (s.ct === 'PCT' ? ' · comissão ' + s.cv + '%' : '')) + (s.valor_padrao ? ' · sugerido ' + brl(s.valor_padrao) : '');
+  }
+  window.ocSvAbrir = function (bt) {
+    var r = bt.closest('.oc-it'); if (!window.CaixaServico) return;
+    CaixaServico.abrir({ servicos: SRV.map(function (s) { return { id: s.id, nome: s.nome, valor_padrao: s.valor_padrao }; }), atual: { servico_id: r.querySelector('[name=item_servico_id]').value, complemento: '' }, z: 1300, titulo: 'Serviço do orçamento', empresa: 'escolha na lista; o valor sugerido vem preenchido',
+      onUsar: function (sel) {
+        if (!sel || !sel.servico_id) return;
+        var s = SRVI[String(sel.servico_id)]; r.querySelector('[name=item_servico_id]').value = sel.servico_id;
+        var desc = s.nome + (sel.complemento ? ' — ' + sel.complemento : ''); r.querySelector('[name=item_descricao]').value = desc; ocSvPinta(r, s, desc);
+        var v = r.querySelector('[name=item_valor]'); if (!num(v.value) && s.valor_padrao) v.value = Number(s.valor_padrao).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        ocResumo(); if (!num(v.value)) v.focus();
+      } });
+  };
+  function ocMask(el) { el.addEventListener('input', function () { var d = el.value.replace(/\D/g, '').replace(/^0+/, '').slice(0, 11); el.value = d ? (parseInt(d, 10) / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : ''; ocResumo(); }); }
+
+  window.ocComo = function (b) { if (!b) return; $('ocComo').value = b.dataset.v; document.querySelectorAll('#ocOps .ns-op').forEach(function (x) { x.classList.toggle('on', x === b); }); ocResumo(); };
+  window.ocParcela = function (b) { if (!b) return; $('ocParc').value = b.dataset.v; document.querySelectorAll('#ocParcs button').forEach(function (x) { x.classList.toggle('on', x === b); }); ocResumo(); };
+  window.ocValidade = function (b) { if (!b) return; $('ocVal').value = b.dataset.v; document.querySelectorAll('#ocVals button').forEach(function (x) { x.classList.toggle('on', x === b); }); ocResumo(); };
+  window.ocCt = function (b) {
+    if (!b) return; var v = b.dataset.v; $('ocCt').value = v; document.querySelectorAll('#ocSeg button').forEach(function (x) { x.classList.toggle('on', x === b); });
+    var box = $('ocCvBox'); box.hidden = !(v === 'PCT' || v === 'FIXO'); box.classList.toggle('pct', v !== 'FIXO'); box.classList.toggle('fixo', v === 'FIXO'); $('ocCvUn').textContent = v === 'FIXO' ? 'R$' : '%'; $('ocCv').placeholder = v === 'FIXO' ? '0,00' : '10';
+    if (!box.hidden) $('ocCv').focus(); ocResumo();
+  };
+  window.ocResumo = function () {
+    var cli = CLI.find(function (c) { return String(c.id) === $('ocCli').value; }), tot = 0, n = 0, h = '', nota = 0, falta = '';
+    document.querySelectorAll('#ocItens .oc-it').forEach(function (r, k) {
+      var sid = r.querySelector('[name=item_servico_id]').value, s = SRVI[sid], q = num(r.querySelector('[name=item_qtd]').value) || 1, v = num(r.querySelector('[name=item_valor]').value);
+      if (!sid && !v) return;
+      if (!s) { falta = falta || ('Serviço ' + (k + 1) + ': escolha na lista.'); return; }
+      if (!v) { falta = falta || ('"' + s.nome + '": informe o valor.'); return; }
+      n++; tot += q * v; if (s.nota) nota += q * v;
+      h += '<div class="oc-res-it"><span>' + esc((r.querySelector('[name=item_descricao]').value || s.nome)) + (q > 1 ? ' × ' + q : '') + (s.nota ? '' : ' <small style="color:#b45309">só boleto</small>') + '</span><b>' + brl(q * v) + '</b></div>';
+    });
+    var como = $('ocComo').value, parc = parseInt($('ocParc').value || '1', 10), ct = $('ocCt').value, cv = num($('ocCv').value);
+    var rc = { PADRAO: 'meu padrão', PCT: (cv ? cv.toLocaleString('pt-BR') + '%' : '% a definir'), FIXO: (cv ? brl(cv) : 'valor a definir'), SEM: 'sem comissão' }[ct];
+    $('ocRes').innerHTML = (cli ? '<div class="oc-res-it"><span><b>' + esc(cli.nome) + '</b></span><b style="font-weight:600; color:#64748b">' + (cli.av ? 'avulso' : 'nº ' + (cli.num || '—')) + '</b></div>' : '<div class="oc-res-it"><span style="color:#b45309">escolha a empresa</span><b></b></div>')
+      + (h || '<div class="oc-res-it"><span style="color:#94a3b8">nenhum serviço com valor ainda</span><b></b></div>')
+      + '<div class="oc-res-tot"><span>Total' + (parc > 1 ? ' <small style="color:#64748b">em ' + parc + 'x de ' + brl(tot / parc) + '</small>' : '') + '</span><b>' + brl(tot) + '</b></div>'
+      + (como === 'BOLETO_NOTA' && nota !== tot && n ? '<div class="oc-res-it" style="border:0"><span>nota fiscal</span><b>' + brl(nota) + '</b></div><div class="oc-res-it" style="border:0"><span>boleto</span><b>' + brl(tot) + '</b></div>' : '')
+      + '<div class="oc-res-it" style="border:0"><span>comissão pedida</span><b style="color:#6d28d9">' + esc(rc) + '</b></div>';
+    $('ocPrevTot').textContent = brl(tot); $('ocPrevSub').textContent = n ? (n + ' serviço' + (n > 1 ? 's' : '') + ' · ' + { BOLETO_NOTA: 'boleto + nota', BOLETO: 'só boleto', MENSAL: 'na mensalidade' }[como] + (parc > 1 ? ' · ' + parc + 'x' : '')) : 'nenhum serviço ainda';
+    if (!cli) falta = 'Escolha a empresa.'; else if (!n && !falta) falta = 'Ponha ao menos um serviço com valor.'; else if ((ct === 'PCT' || ct === 'FIXO') && !cv) falta = falta || 'Diga quanto é a comissão pedida.';
+    if (!falta && como === 'MENSAL' && cli && !cli.mensal) falta = 'Esta empresa não tem honorários mensais: cobre com boleto.';
+    var msg = $('ocMsg'); msg.textContent = falta || ('Pronto: ' + n + ' serviço' + (n > 1 ? 's' : '') + ', ' + brl(tot) + '.'); msg.classList.toggle('ok', !falta);
+    $('ocSalvar').disabled = !cli; $('ocEnviar').disabled = !!falta;
+  };
+  $('ocForm').addEventListener('submit', function (e) { ocResumo(); if (!$('ocCli').value || ($('ocAcao').value === 'aprovacao' && $('ocEnviar').disabled)) e.preventDefault(); });
+})();
+</script>
+{% endblock %}

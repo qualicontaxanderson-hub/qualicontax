@@ -1,0 +1,383 @@
+# -*- coding: utf-8 -*-
+"""Comercial › Orçamentos (21/11/2026).
+
+Anderson (20/11/2026): "o oficial teria que ter sido feito um Orçamento no Comercial, aprovado por nós, para que seja
+feito e enviado o Orçamento. Aprovado e feito o serviço, chegou a hora de cobrar: o Gabriel entra no orçamento que ele
+fez e manda para a Cobrança; já vem para Financeiro / Lançamentos com o histórico completo, e eu novamente aprovo
+para cobrar". O atalho antigo (lançar direto em Lançamentos) continua valendo.
+
+Caminho: RASCUNHO → (pedir aprovação) APROVACAO → (admin) APROVADO → (enviar ao cliente, PDF por e-mail) →
+(serviço feito: mandar para a cobrança) COBRANCA = lançamento LANCADO em Financeiro › Lançamentos → (admin aprova lá)
+CONCLUIDO. REPROVADO volta para a pessoa corrigir; CANCELADO encerra.
+"""
+import json
+import logging
+from datetime import date, datetime
+from decimal import Decimal
+
+from flask import Blueprint, abort, flash, jsonify, redirect, render_template, request, send_file, url_for
+from flask_login import current_user
+
+from models.fin_lancamento import FinComissaoAcordo, FinLancamento
+from models.orcamento import COMISSAO, COMO, STATUS, Orcamento
+from utils.atividade import registrar
+from utils.auth_helper import permission_required
+from utils.db_helper import execute_query
+
+logger = logging.getLogger(__name__)
+comercial = Blueprint('comercial', __name__)
+
+EMP = 2
+VER = 'comercial.orcamentos'
+INCLUIR = 'comercial.orcamentos.incluir'
+APROVAR = 'comercial.orcamentos.aprovar'
+
+
+def _aprovador():
+    return current_user.is_admin() or current_user.has_permission(APROVAR)
+
+
+def _dono_ou_aprovador(o):
+    return _aprovador() or o['criado_por'] == current_user.id
+
+
+def _volta(oid=None):
+    return redirect(url_for('comercial.orcamentos', abrir=oid) if oid else url_for('comercial.orcamentos'))
+
+
+def _servicos():
+    return execute_query("""SELECT id, nome, valor_padrao, emite_nota, comissao_tipo, comissao_valor
+                              FROM nfse_servicos WHERE empresa_id = %s AND ativo = 1 ORDER BY nome""", (EMP,), fetch=True) or []
+
+
+def _clientes():
+    """Cadastrados e avulsos (Anderson: "a) cliente cadastrado ou b) avulso"), com a mensalidade para a caixa."""
+    linhas = execute_query("""SELECT c.id, c.numero_cliente AS num, c.nome_razao_social AS nome, c.cpf_cnpj AS doc, COALESCE(c.avulso, 0) AS av,
+                                     (SELECT SUM(k.valor) FROM fin_contratos k WHERE k.cliente_id = c.id AND k.ativo = 1) AS mensal
+                                FROM clientes c WHERE COALESCE(c.situacao, 'ATIVO') <> 'INATIVO' ORDER BY c.nome_razao_social""", fetch=True) or []
+    return [{'id': c['id'], 'num': str(c['num'] or ''), 'nome': c['nome'], 'doc': c['doc'] or '', 'av': bool(c['av']), 'mensal': float(c['mensal'] or 0)} for c in linhas]
+
+
+def _comissao_padrao():
+    """O % padrão de quem está logado (acordo geral de serviço), para a caixa mostrar."""
+    a = next((x for x in FinComissaoAcordo.listar(usuario_id=current_user.id, so_ativos=True) if x['base'] == 'SERVICO' and not x['servico_id']), None)
+    if not a:
+        return None
+    return {'tipo': a['tipo'], 'valor': float(a['valor'])}
+
+
+# ───────────────────────── a tela ─────────────────────────
+@comercial.route('/comercial/orcamentos')
+@permission_required(VER)
+def orcamentos():
+    apr = _aprovador()
+    quem = None if apr else current_user.id            # quem não aprova vê só os seus
+    lista = Orcamento.listar(EMP, criado_por=quem)
+    hoje = date.today()
+    for o in lista:
+        o['rot'], o['cls'], o['ico'] = STATUS.get(o['status'], (o['status'], 'tx-perd', 'fa-circle'))
+        o['vencido'] = Orcamento.vencido(o)
+    cont = {k: [0, 0.0] for k in STATUS}
+    for o in lista:
+        cont[o['status']][0] += 1; cont[o['status']][1] += float(o['total'] or 0)
+    pessoas = {}
+    for o in lista:
+        pessoas.setdefault(o['criado_por'], o['criado_por_nome'] or ('#%s' % o['criado_por']))
+    abrir = request.args.get('abrir', type=int)
+    return render_template('comercial/orcamentos.html', lista=lista, cont=cont, STATUS=STATUS, COMO=COMO, COMISSAO=COMISSAO, hoje=hoje,
+                           aprovador=apr, pode_incluir=current_user.is_admin() or current_user.has_permission(INCLUIR),
+                           pessoas=pessoas, abrir=abrir, aba=request.args.get('aba') or '',
+                           clientes_json=json.dumps(_clientes(), ensure_ascii=False),
+                           servicos_json=json.dumps([{'id': s['id'], 'nome': s['nome'], 'valor_padrao': float(s['valor_padrao'] or 0), 'nota': bool(s['emite_nota']),
+                                                      'ct': s['comissao_tipo'] or '', 'cv': float(s['comissao_valor'] or 0)} for s in _servicos()], ensure_ascii=False),
+                           comissao_padrao=_comissao_padrao())
+
+
+@comercial.route('/comercial/orcamentos/<int:oid>/janela')
+@permission_required(VER)
+def orcamento_janela(oid):
+    o = Orcamento.get(oid)
+    if not o or not _dono_ou_aprovador(o):
+        abort(404)
+    o['rot'], o['cls'], o['ico'] = STATUS.get(o['status'], (o['status'], 'tx-perd', 'fa-circle'))
+    itens = Orcamento.itens(oid)
+    eventos = Orcamento.eventos(oid)
+    lanc = FinLancamento.get(o['lancamento_id']) if o.get('lancamento_id') else None
+    from utils.cobranca_email import destinatarios_cobranca
+    try:
+        dest = destinatarios_cobranca(o['cliente_id'], o.get('cliente_email'))
+    except Exception:
+        dest = []
+    from datetime import timedelta
+    hoje = date.today()
+    datas_venc = [((hoje + timedelta(days=d)).isoformat(), 'em %d dias' % d, (hoje + timedelta(days=d)).strftime('%d/%m'), d == 7) for d in (3, 7, 10, 15, 30)]
+    return render_template('comercial/_orcamento_janela.html', o=o, itens=itens, eventos=eventos, lanc=lanc, dest=dest, hoje=hoje, datas_venc=datas_venc,
+                           aprovador=_aprovador(), dono=o['criado_por'] == current_user.id, STATUS=STATUS, COMO=COMO, COMISSAO=COMISSAO,
+                           vencido=Orcamento.vencido(o), n_nota=sum(1 for i in itens if i['emite_nota']),
+                           total_nota=sum((Decimal(str(i['valor_total'])) for i in itens if i['emite_nota']), Decimal('0')))
+
+
+@comercial.route('/comercial/orcamentos/<int:oid>/dados')
+@permission_required(VER)
+def orcamento_dados(oid):
+    """O orçamento em JSON para a caixa de edição (rascunho/reprovado)."""
+    o = Orcamento.get(oid)
+    if not o or not _dono_ou_aprovador(o):
+        abort(404)
+    return jsonify({'id': o['id'], 'cliente_id': o['cliente_id'], 'titulo': o['titulo'] or '', 'como': o['como'] or '', 'parcelas': o['parcelas'] or 1,
+                    'comissao_tipo': o['comissao_tipo'] or 'PADRAO', 'comissao_valor': float(o['comissao_valor'] or 0),
+                    'validade': o['validade'].isoformat() if o['validade'] else '', 'observacao': o['observacao'] or '', 'nota_interna': o['nota_interna'] or '',
+                    'itens': [{'servico_id': i['servico_id'], 'descricao': i['descricao'], 'qtd': float(i['quantidade']), 'valor': float(i['valor_unitario'])} for i in Orcamento.itens(oid)]})
+
+
+# ───────────────────────── montar e alterar ─────────────────────────
+@comercial.route('/comercial/orcamentos/novo', methods=['POST'])
+@permission_required(INCLUIR)
+def orcamento_novo():
+    f = request.form
+    oid = f.get('orcamento_id', type=int)
+    try:
+        if oid:
+            o = Orcamento.get(oid)
+            if not o or not _dono_ou_aprovador(o):
+                abort(404)
+            Orcamento.atualizar(oid, f, current_user)
+            registrar('escrita.alterou_orcamento', 'comercial', tabela='com_orcamentos', registro_id=oid, depois={'total': str(Orcamento.get(oid)['total'])})
+        else:
+            oid = Orcamento.criar(f, current_user, EMP)
+            registrar('escrita.criou_orcamento', 'comercial', tabela='com_orcamentos', registro_id=oid, depois={'cliente_id': f.get('cliente_id'), 'total': str(Orcamento.get(oid)['total'])})
+    except ValueError as e:
+        flash(str(e), 'danger')
+        return _volta(oid)
+    if f.get('acao') == 'aprovacao':
+        return _pedir(oid)
+    flash('Orçamento %s salvo como rascunho.' % Orcamento.get(oid)['numero'], 'success')
+    return _volta(oid)
+
+
+def _pedir(oid):
+    o = Orcamento.get(oid)
+    if o['status'] not in ('RASCUNHO', 'REPROVADO'):
+        flash('Este orçamento já foi mandado para aprovação.', 'info')
+        return _volta(oid)
+    if _aprovador():
+        # quem aprova e monta ao mesmo tempo: já nasce aprovado (como em Lançamentos, o administrador não pede para si)
+        Orcamento.mudar(oid, 'APROVADO', current_user, 'aprovado', 'Aprovado por %s ao montar (quem aprova não precisa pedir)' % current_user.nome,
+                        aprovado_por=current_user.id, aprovado_em=datetime.now(), motivo=None)
+        flash('Orçamento %s aprovado. Agora é mandar ao cliente.' % o['numero'], 'success')
+    else:
+        Orcamento.mudar(oid, 'APROVACAO', current_user, 'aprovacao', 'Mandado para aprovação por %s' % current_user.nome, motivo=None)
+        _avisar_aprovadores(o)
+        flash('Orçamento %s mandado para aprovação. Você recebe aviso quando for aprovado.' % o['numero'], 'success')
+    registrar('escrita.pediu_aprovacao_orcamento', 'comercial', tabela='com_orcamentos', registro_id=oid)
+    return _volta(oid)
+
+
+@comercial.route('/comercial/orcamentos/<int:oid>/pedir-aprovacao', methods=['POST'])
+@permission_required(INCLUIR)
+def orcamento_pedir(oid):
+    o = Orcamento.get(oid)
+    if not o or not _dono_ou_aprovador(o):
+        abort(404)
+    return _pedir(oid)
+
+
+@comercial.route('/comercial/orcamentos/<int:oid>/aprovar', methods=['POST'])
+@permission_required(APROVAR)
+def orcamento_aprovar(oid):
+    o = Orcamento.get(oid)
+    if not o or o['status'] != 'APROVACAO':
+        flash('Este orçamento não está aguardando aprovação.', 'info')
+        return _volta(oid)
+    Orcamento.mudar(oid, 'APROVADO', current_user, 'aprovado', 'Aprovado por %s' % current_user.nome, aprovado_por=current_user.id, aprovado_em=datetime.now(), motivo=None)
+    registrar('escrita.aprovou_orcamento', 'comercial', tabela='com_orcamentos', registro_id=oid, depois={'total': str(o['total'])})
+    _avisar_dono(o, 'Orçamento %s aprovado' % o['numero'], 'O orçamento %s (%s, R$ %s) foi aprovado por %s. Agora é mandar ao cliente e, feito o serviço, mandar para a cobrança.'
+                 % (o['numero'], o['cliente_nome'], _brl(o['total']), current_user.nome))
+    flash('Orçamento %s aprovado.' % o['numero'], 'success')
+    return _volta(oid)
+
+
+@comercial.route('/comercial/orcamentos/<int:oid>/reprovar', methods=['POST'])
+@permission_required(APROVAR)
+def orcamento_reprovar(oid):
+    o = Orcamento.get(oid)
+    motivo = ' '.join((request.form.get('motivo') or '').split())[:400]
+    if not o or o['status'] != 'APROVACAO':
+        flash('Este orçamento não está aguardando aprovação.', 'info')
+        return _volta(oid)
+    if not motivo:
+        flash('Diga o motivo: quem montou precisa saber o que corrigir.', 'danger')
+        return _volta(oid)
+    Orcamento.mudar(oid, 'REPROVADO', current_user, 'reprovado', 'Reprovado por %s: %s' % (current_user.nome, motivo), motivo=motivo)
+    registrar('escrita.reprovou_orcamento', 'comercial', tabela='com_orcamentos', registro_id=oid, depois={'motivo': motivo})
+    _avisar_dono(o, 'Orçamento %s voltou para correção' % o['numero'], 'O orçamento %s (%s) foi reprovado por %s. Motivo: %s. Corrija e mande de novo para aprovação.'
+                 % (o['numero'], o['cliente_nome'], current_user.nome, motivo))
+    flash('Orçamento %s devolvido para correção.' % o['numero'], 'success')
+    return _volta(oid)
+
+
+@comercial.route('/comercial/orcamentos/<int:oid>/cancelar', methods=['POST'])
+@permission_required(INCLUIR)
+def orcamento_cancelar(oid):
+    o = Orcamento.get(oid)
+    motivo = ' '.join((request.form.get('motivo') or '').split())[:400]
+    if not o or not _dono_ou_aprovador(o):
+        abort(404)
+    if o['status'] in ('COBRANCA', 'CONCLUIDO', 'CANCELADO'):
+        flash('Orçamento já em cobrança, concluído ou cancelado não se cancela aqui.', 'info')
+        return _volta(oid)
+    Orcamento.mudar(oid, 'CANCELADO', current_user, 'cancelado', 'Cancelado por %s%s' % (current_user.nome, (': ' + motivo) if motivo else ''), motivo=motivo or None, cancelado_em=datetime.now())
+    registrar('escrita.cancelou_orcamento', 'comercial', tabela='com_orcamentos', registro_id=oid, depois={'motivo': motivo})
+    flash('Orçamento %s cancelado.' % o['numero'], 'success')
+    return _volta(oid)
+
+
+@comercial.route('/comercial/orcamentos/<int:oid>/nota', methods=['POST'])
+@permission_required(VER)
+def orcamento_nota(oid):
+    """Anotação interna na linha do tempo (a equipe conversa dentro do orçamento)."""
+    o = Orcamento.get(oid)
+    texto = ' '.join((request.form.get('texto') or '').split())[:400]
+    if not o or not _dono_ou_aprovador(o):
+        abort(404)
+    if texto:
+        Orcamento.evento(oid, 'nota', texto, current_user)
+    return _volta(oid)
+
+
+# ───────────────────────── enviar ao cliente ─────────────────────────
+@comercial.route('/comercial/orcamentos/<int:oid>/enviar', methods=['POST'])
+@permission_required(INCLUIR)
+def orcamento_enviar(oid):
+    """Manda o PDF do orçamento por e-mail aos contatos escolhidos e marca "enviado ao cliente"."""
+    o = Orcamento.get(oid)
+    if not o or not _dono_ou_aprovador(o):
+        abort(404)
+    if o['status'] not in ('APROVADO',):
+        flash('Só orçamento aprovado vai para o cliente.', 'info')
+        return _volta(oid)
+    paras = [e.strip() for e in request.form.getlist('para') if e and '@' in e]
+    extra = (request.form.get('outro') or '').strip()
+    if extra and '@' in extra:
+        paras.append(extra)
+    if not paras:
+        flash('Escolha ao menos um e-mail para mandar o orçamento.', 'danger')
+        return _volta(oid)
+    from utils.email_envio import enviar
+    from utils.orcamento_pdf import gerar_pdf
+    pdf = gerar_pdf(o, Orcamento.itens(oid))
+    assunto = 'Orçamento %s — Qualicontax' % o['numero']
+    texto = ('Olá!\n\nSegue em anexo o orçamento %s (%s), no valor de R$ %s%s.\n\nQualquer dúvida, é só responder este e-mail.\n\nQualicontax Assessoria Contábil'
+             % (o['numero'], o['titulo'] or 'serviços', _brl(o['total']), (', válido até %s' % o['validade'].strftime('%d/%m/%Y')) if o['validade'] else ''))
+    html = texto.replace('\n', '<br>')
+    ok, erro = False, ''
+    try:
+        ok, erro = enviar(paras, assunto, html, texto, anexos=[('Orcamento-%s.pdf' % o['numero'], pdf, 'application/pdf')], servico='orcamento', usuario_id=current_user.id)
+    except Exception as exc:
+        logger.exception('[orcamento] e-mail do orçamento %s', oid); erro = str(exc)
+    if not ok:
+        flash('O e-mail não saiu (%s). Baixe o PDF e mande por fora, ou tente de novo.' % (erro or 'falha no envio'), 'danger')
+        return _volta(oid)
+    execute_query('UPDATE com_orcamentos SET enviado_em = COALESCE(enviado_em, NOW()) WHERE id = %s', (oid,), fetch=False)
+    Orcamento.evento(oid, 'enviado', 'Mandado ao cliente por e-mail (%s) por %s' % (', '.join(paras), current_user.nome), current_user)
+    registrar('escrita.enviou_orcamento', 'comercial', tabela='com_orcamentos', registro_id=oid, depois={'para': paras})
+    flash('Orçamento %s mandado para %s.' % (o['numero'], ', '.join(paras)), 'success')
+    return _volta(oid)
+
+
+@comercial.route('/comercial/orcamentos/<int:oid>/pdf')
+@permission_required(VER)
+def orcamento_pdf(oid):
+    o = Orcamento.get(oid)
+    if not o or not _dono_ou_aprovador(o):
+        abort(404)
+    from io import BytesIO
+    from utils.orcamento_pdf import gerar_pdf
+    return send_file(BytesIO(gerar_pdf(o, Orcamento.itens(oid))), mimetype='application/pdf', as_attachment=request.args.get('baixar') == '1',
+                     download_name='Orcamento-%s.pdf' % o['numero'])
+
+
+# ───────────────────────── serviço feito: mandar para a cobrança ─────────────────────────
+@comercial.route('/comercial/orcamentos/<int:oid>/cobrar', methods=['POST'])
+@permission_required(INCLUIR)
+def orcamento_cobrar(oid):
+    """Cria o lançamento em Financeiro › Lançamentos (status LANCADO) ligado ao orçamento: o administrador aprova lá e a
+    cobrança sai. Um lançamento só, com todos os itens: a nota leva os que entram na nota, o boleto leva todos."""
+    o = Orcamento.get(oid)
+    f = request.form
+    if not o or not _dono_ou_aprovador(o):
+        abort(404)
+    if o['status'] != 'APROVADO':
+        flash('Só orçamento aprovado vai para a cobrança.', 'info')
+        return _volta(oid)
+    itens = Orcamento.itens(oid)
+    como = f.get('como') if f.get('como') in COMO else (o['como'] or 'BOLETO_NOTA')
+    tem_nota = any(i['emite_nota'] for i in itens)
+    if como == 'BOLETO_NOTA' and not tem_nota:
+        como = 'BOLETO'
+    destino = 'MENSAL' if como == 'MENSAL' else 'AVULSO'
+    venc = None
+    if destino == 'AVULSO':
+        try:
+            venc = date.fromisoformat(f.get('vencimento') or '')
+        except ValueError:
+            flash('Escolha o vencimento do boleto.', 'danger')
+            return _volta(oid)
+    if destino == 'MENSAL':
+        from routes.financeiro_lancamentos import _contrato_ativo
+        if not _contrato_ativo(o['cliente_id']):
+            flash('Esta empresa não tem honorários mensais: não há mensalidade para incluir. Cobre com boleto.', 'danger')
+            return _volta(oid)
+    principal = next((i for i in itens if i['emite_nota']), itens[0])
+    total = sum((Decimal(str(i['valor_total'])) for i in itens), Decimal('0'))
+    descricao = ' + '.join(i['descricao'] for i in itens)[:200]
+    ct = o['comissao_tipo'] if o['comissao_tipo'] in ('PADRAO', 'PCT', 'FIXO', 'SEM') else 'PADRAO'
+    try:
+        lid = FinLancamento.criar(EMP, o['cliente_id'], principal['servico_id'], descricao, 1, total, destino, o['criado_por'],
+                                  vencimento=venc, observacao=('Orçamento %s' % o['numero']) + ((' · ' + (o['nota_interna'] or ''))[:300] if o['nota_interna'] else ''),
+                                  com_nota=None if destino == 'MENSAL' else (como == 'BOLETO_NOTA'),
+                                  comissao_tipo=ct, comissao_valor=o['comissao_valor'] if ct in ('PCT', 'FIXO') else None)
+    except ValueError as e:
+        flash(str(e), 'danger')
+        return _volta(oid)
+    execute_query('UPDATE fin_lancamentos SET orcamento_id = %s WHERE id = %s', (oid, lid), fetch=False)
+    Orcamento.mudar(oid, 'COBRANCA', current_user, 'cobranca', 'Serviço feito: mandado para a cobrança por %s (%s%s). Aguardando aprovação em Financeiro › Lançamentos.'
+                    % (current_user.nome, COMO[como], (' · vence %s' % venc.strftime('%d/%m/%Y')) if venc else ''),
+                    feito_em=datetime.now(), lancamento_id=lid, como=como)
+    registrar('escrita.orcamento_para_cobranca', 'comercial', tabela='com_orcamentos', registro_id=oid, depois={'lancamento_id': lid, 'como': como, 'total': str(total)})
+    flash('Orçamento %s mandado para a cobrança: lançamento nº %s aguardando aprovação em Financeiro › Lançamentos.' % (o['numero'], lid), 'success')
+    return _volta(oid)
+
+
+# ───────────────────────── avisos por e-mail ─────────────────────────
+def _emails_de(usuario_ids):
+    if not usuario_ids:
+        return []
+    ids = ','.join(str(int(u)) for u in usuario_ids)
+    return [r['email'] for r in execute_query("SELECT email FROM usuarios WHERE id IN (%s) AND email LIKE '%%@%%' AND situacao = 'ATIVO'" % ids, fetch=True) or []]
+
+
+def _avisar(paras, assunto, texto):
+    if not paras:
+        return
+    try:
+        from utils.email_envio import enviar
+        enviar(paras, assunto, texto.replace('\n', '<br>'), texto, servico='orcamento', usuario_id=current_user.id)
+    except Exception:
+        logger.exception('[orcamento] aviso por e-mail')
+
+
+def _avisar_dono(o, assunto, texto):
+    _avisar(_emails_de([o['criado_por']]), assunto, texto)
+
+
+def _avisar_aprovadores(o):
+    rows = execute_query("""SELECT DISTINCT u.email FROM usuarios u WHERE u.email LIKE '%%@%%' AND u.situacao = 'ATIVO'
+                              AND (u.tipo_usuario = 'ADMIN' OR u.id IN (SELECT usuario_id FROM usuario_permissoes_extra WHERE permissao_codigo = %s))""",
+                         (APROVAR,), fetch=True) or []
+    _avisar([r['email'] for r in rows], 'Orçamento %s para aprovar' % o['numero'],
+            '%s mandou o orçamento %s (%s, R$ %s) para aprovação.\n\nAbra Comercial › Orçamentos › Para aprovar.' % (current_user.nome, o['numero'], o['cliente_nome'], _brl(o['total'])))
+
+
+def _brl(v):
+    return '{:,.2f}'.format(Decimal(str(v or 0))).replace(',', 'X').replace('.', ',').replace('X', '.')

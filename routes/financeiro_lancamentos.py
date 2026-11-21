@@ -761,6 +761,38 @@ def _conta_escolhida(form):
     return next((c['id'] for c in _contas_cobranca() if c['id'] == cid), None) if cid else None
 
 
+def _itens_do_lancamento(l, dona=''):
+    """Os itens que a cobrança leva. Lançamento comum = 1 item (o serviço). Lançamento vindo de um ORÇAMENTO (21/11/2026,
+    Comercial › Orçamentos) leva todos os itens do orçamento: a nota soma só os que entram nela; o boleto, todos
+    (honorários 1.000 + taxa 200 = boleto 1.200, nota 1.000). "Só boleto" na aprovação tira todos da nota."""
+    if l.get('orcamento_id'):
+        its = execute_query('SELECT servico_id, descricao, valor_total, emite_nota FROM com_orcamento_itens WHERE orcamento_id = %s ORDER BY ordem, id',
+                            (l['orcamento_id'],), fetch=True) or []
+        if its:
+            nota_ok = bool(l['com_nota']) if l.get('com_nota') is not None else True
+            return [{'servico_id': i['servico_id'], 'nome': i['descricao'] + dona, 'valor': Decimal(str(i['valor_total'])),
+                     'emite_nota': bool(i['emite_nota']) and nota_ok, 'origem': 'honorarios'} for i in its]
+    return [{'servico_id': l['servico_id'], 'nome': (l['descricao'] or l['servico_nome']) + dona, 'valor': Decimal(str(l['valor_total'])),
+             'emite_nota': _sai_na_nota(l), 'origem': 'honorarios'}]
+
+
+def _orcamento_apos(l, o_que, motivo=None, ok=None):
+    """O orçamento que gerou o lançamento acompanha a aprovação/reprovação da cobrança (21/11/2026)."""
+    if not l.get('orcamento_id'):
+        return
+    try:
+        from models.orcamento import Orcamento
+        if o_que == 'aprovado':
+            Orcamento.mudar(l['orcamento_id'], 'CONCLUIDO', current_user, 'concluido',
+                            'Cobrança aprovada por %s em Financeiro › Lançamentos%s' % (current_user.nome, '' if ok is None else (' · nota e boleto emitidos' if ok else ' · a cobrança não saiu, veja em Lançamentos')))
+        elif o_que == 'reprovado':
+            Orcamento.mudar(l['orcamento_id'], 'APROVADO', current_user, 'reprovado',
+                            'Cobrança reprovada por %s em Lançamentos%s. O orçamento volta para "aprovado": corrija e mande de novo.' % (current_user.nome, (': ' + motivo) if motivo else ''),
+                            lancamento_id=None, feito_em=None)
+    except Exception:
+        logger.exception('[lancamento] orçamento %s', l.get('orcamento_id'))
+
+
 def _cobrar_avulso(l, usuario_id, conta_id=None):
     """Nota (se o serviço emite) + boleto Efí + e-mail aos contatos do Financeiro. Devolve (ok, mensagens)."""
     from models.fin_cobranca import FinBoleto, FinCobrancaConta
@@ -783,9 +815,8 @@ def _cobrar_avulso(l, usuario_id, conta_id=None):
         vencimento = date.today()
     competencia = l['competencia']
     _venc, mensagem = sugestao_boleto(conta, competencia)
-    itens = [{'servico_id': l['servico_id'], 'nome': (l['descricao'] or l['servico_nome']) + dona, 'valor': Decimal(str(l['valor_total'])),
-              'emite_nota': _sai_na_nota(l), 'origem': 'honorarios'}]
-    total = Decimal(str(l['valor_total']))
+    itens = _itens_do_lancamento(l, dona)
+    total = sum((i['valor'] for i in itens), Decimal('0'))
     # 19/11/2026: desconto pedido junto (aprovado): a linha do serviço sai pelo líquido dizendo de onde veio; a página do
     # cliente e o e-mail mostram as duas linhas
     descs = FinLancamento.descontos_de(l['id'], status=('APROVADO',))
@@ -797,7 +828,7 @@ def _cobrar_avulso(l, usuario_id, conta_id=None):
         total = total - desc_total
         if total <= 0 or not itens:
             return False, ['O desconto cobre o serviço inteiro: não há o que cobrar.']
-    cfg = NfseConfig.get(l['empresa_id']) if itens[0]['emite_nota'] else None
+    cfg = NfseConfig.get(l['empresa_id']) if any(i['emite_nota'] for i in itens) else None
     nfse_id = boleto_id = titulo_id = None
     if cfg:
         serie = cfg.get('serie_nacional') if (cfg.get('emissor') or 'nacional') == 'nacional' else cfg.get('serie_sp')
@@ -808,7 +839,7 @@ def _cobrar_avulso(l, usuario_id, conta_id=None):
         form = MultiDict([('serie', str(serie or '')), ('competencia', competencia.isoformat()),
                           ('tomador_cliente_id', str(paga)), ('descricao', (l['descricao'] or l['servico_nome']) + dona),
                           ('linhas_nota', _json.dumps(linhas_nota, ensure_ascii=False) if linhas_nota else ''),
-                          ('item_servico_id', str(l['servico_id'])), ('item_valor', str(itens[0]['valor']))])
+                          ] + [('item_servico_id', str(i['servico_id'])) for i in itens] + [('item_valor', str(i['valor'])) for i in itens])
         try:
             pedido = nfse_emissor.pedido_do_form(form, l['empresa_id'], cfg)
             pedido.origem = 'lancamento'
@@ -1024,6 +1055,7 @@ def lancamento_aprovar(lid):
               depois={'empresa': l['nome_razao_social'], 'servico': l['servico_nome'], 'valor': str(l['valor_total']),
                       'destino': l['destino'], 'comissao': str(com), 'lancado_por': l['lancado_por_nome'],
                       'parcelas': len(parcelas)})
+    _orcamento_apos(l, 'aprovado', ok=ok if l['destino'] == 'AVULSO' else None)
     if l['destino'] == 'AVULSO':
         for m in msgs:
             flash(m, 'success' if ok else 'warning')
@@ -1076,6 +1108,7 @@ def lancamento_reprovar(lid):
     l = FinLancamento.get(lid)
     try:
         FinLancamento.reprovar(lid, current_user.id, request.form.get('motivo'))
+        _orcamento_apos(l, 'reprovado', motivo=request.form.get('motivo'))
         registrar('escrita.reprovou_lancamento', 'financeiro', tabela='fin_lancamentos', registro_id=lid,
                   depois={'empresa': l['nome_razao_social'], 'servico': l['servico_nome'], 'motivo': request.form.get('motivo')})
         flash('Lançamento reprovado.', 'info')
