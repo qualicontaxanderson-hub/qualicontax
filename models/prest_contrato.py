@@ -356,7 +356,9 @@ class PrestContrato:
         """True se o código bate; conta tentativas (5 erradas invalidam o código)."""
         if not assinante.get('codigo_hash') or assinante.get('codigo_tentativas', 0) >= 5:
             return False
-        if not assinante.get('codigo_enviado_em') or (datetime.now() - assinante['codigo_enviado_em']).total_seconds() > 30 * 60:
+        # 21/11/2026: medido pelo banco — o app roda em UTC e o banco em Brasília; datetime.now() dava 3 h a mais e o código nascia vencido
+        r = execute_query('SELECT TIMESTAMPDIFF(SECOND, codigo_enviado_em, NOW()) AS s FROM prest_assinantes WHERE id = %s', (assinante['id'],), fetch=True, fetch_one=True) or {}
+        if r.get('s') is None or r['s'] > 30 * 60:
             return False
         ok = hashlib.sha256((codigo or '').strip().encode()).hexdigest() == assinante['codigo_hash']
         if not ok:

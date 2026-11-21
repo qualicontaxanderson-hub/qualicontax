@@ -230,11 +230,36 @@ class Orcamento:
         return codigo
 
     @staticmethod
+    def segundos_do_codigo(oid):
+        """Há quantos segundos o código foi enviado, medido PELO BANCO (o app roda em UTC e o banco em Brasília: comparar
+        datetime.now() com a coluna dava 3 h a mais e todo código nascia "vencido"). None = nunca enviado."""
+        r = execute_query('SELECT TIMESTAMPDIFF(SECOND, codigo_enviado_em, NOW()) AS s FROM com_orcamentos WHERE id = %s', (oid,), fetch=True, fetch_one=True) or {}
+        return r.get('s')
+
+    @staticmethod
+    def cpfs_conhecidos(cliente_id):
+        """CPFs que podem confirmar o aceite: os sócios ativos do cadastro (CPF do sócio ou do cadastro PF ligado) e, se o cliente
+        for pessoa física, o próprio CPF. Só dígitos."""
+        out = []
+        for r in execute_query("""SELECT s.cpf, c.cpf_cnpj AS pf FROM socios_clientes s LEFT JOIN clientes c ON c.id = s.pf_cliente_id
+                                    WHERE s.cliente_id = %s AND COALESCE(s.ativo, 1) = 1""", (cliente_id,), fetch=True) or []:
+            for v in (r.get('pf'), r.get('cpf')):
+                d = ''.join(ch for ch in str(v or '') if ch.isdigit())
+                if len(d) == 11 and d not in out:
+                    out.append(d)
+        c = execute_query('SELECT cpf_cnpj FROM clientes WHERE id = %s', (cliente_id,), fetch=True, fetch_one=True) or {}
+        d = ''.join(ch for ch in str(c.get('cpf_cnpj') or '') if ch.isdigit())
+        if len(d) == 11 and d not in out:
+            out.append(d)
+        return out
+
+    @staticmethod
     def conferir_codigo(o, codigo):
-        """True se o código bate; 5 erradas ou 30 minutos invalidam."""
+        """True se o código bate; 5 erradas ou 30 minutos (pelo relógio do banco) invalidam."""
         if not o.get('codigo_hash') or (o.get('codigo_tentativas') or 0) >= 5:
             return False
-        if not o.get('codigo_enviado_em') or (datetime.now() - o['codigo_enviado_em']).total_seconds() > 30 * 60:
+        s = Orcamento.segundos_do_codigo(o['id'])
+        if s is None or s > 30 * 60:
             return False
         ok = hashlib.sha256((codigo or '').strip().encode()).hexdigest() == o['codigo_hash']
         if not ok:

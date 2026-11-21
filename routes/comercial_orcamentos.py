@@ -383,12 +383,10 @@ def orcamento_enviar(oid):
     if not o.get('enviado_em'):                                   # a data do documento congela no 1º envio (impressão digital estável)
         execute_query('UPDATE com_orcamentos SET enviado_em = NOW() WHERE id = %s', (oid,), fetch=False); o = Orcamento.get(oid)
     link = url_for('proposta.ver', token=o['token'], _external=True)
-    pdf = gerar_pdf(o, Orcamento.itens(oid), link=link, data_doc=o['enviado_em'].date())
-    assunto = 'Orçamento %s — Qualicontax' % o['numero']
-    texto = ('Olá%s!\n\nSegue em anexo o orçamento %s (%s), no valor de R$ %s%s.\n\nPara aceitar a proposta, abra o link abaixo: você recebe um código por e-mail, confirma seu nome e o aceite fica registrado.\n%s\n\nQualquer dúvida, é só responder este e-mail.\n\n%s\nQualicontax Assessoria Contábil'
-             % ((', ' + o['solicitante_nome'].split(' ')[0].title()) if o.get('solicitante_nome') else '', o['numero'], o['titulo'] or 'serviços', _brl(o['total']),
-                (', válido até %s' % o['validade'].strftime('%d/%m/%Y')) if o['validade'] else '', link, o.get('criado_por_nome') or ''))
-    html = texto.replace('\n', '<br>').replace(link, '<a href="%s" style="background:#15803d;color:#fff;padding:10px 18px;border-radius:8px;text-decoration:none;display:inline-block;margin:6px 0">Ver e aceitar a proposta</a><br><small>%s</small>' % (link, link))
+    itens = Orcamento.itens(oid)
+    pdf = gerar_pdf(o, itens, link=link, data_doc=o['enviado_em'].date())
+    from utils import orcamento_email
+    assunto, html, texto = orcamento_email.proposta(o, itens, link)
     ok, erro = False, ''
     try:
         ok, erro = enviar(paras, assunto, html, texto, anexos=[('Orcamento-%s.pdf' % o['numero'], pdf, 'application/pdf')], servico='orcamento', usuario_id=current_user.id)

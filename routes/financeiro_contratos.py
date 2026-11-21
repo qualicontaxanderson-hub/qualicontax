@@ -545,7 +545,8 @@ def assinar_codigo(token):
     a, c, erro = _assinante(token)
     if not a or erro or a['assinado_em']:
         return jsonify({'ok': False, 'erro': erro or 'já assinado'}), 400
-    if a.get('codigo_enviado_em') and (datetime.now() - a['codigo_enviado_em']).total_seconds() < 60:
+    _s = (execute_query('SELECT TIMESTAMPDIFF(SECOND, codigo_enviado_em, NOW()) AS s FROM prest_assinantes WHERE id = %s', (a['id'],), fetch=True, fetch_one=True) or {}).get('s')
+    if _s is not None and _s < 60:      # relógio do banco (app em UTC)
         return jsonify({'ok': False, 'erro': 'Código enviado há menos de um minuto. Confira a caixa de entrada e o spam.'}), 429
     codigo = PrestContrato.gerar_codigo(a['id'])
     html = ('<p>Seu código para assinar <b>%s</b>:</p><p style="font-size:28px;letter-spacing:6px;font-weight:800;">%s</p>'

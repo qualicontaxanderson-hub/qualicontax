@@ -10,7 +10,9 @@ import hashlib
 import logging
 from datetime import datetime
 
-from flask import Blueprint, Response, abort, flash, jsonify, redirect, render_template, request, url_for
+import secrets
+
+from flask import Blueprint, Response, abort, flash, jsonify, redirect, render_template, request, session, url_for
 
 from models.orcamento import COMO, Orcamento
 from utils.atividade import registrar
@@ -41,6 +43,27 @@ def _emails_permitidos(o):
     return lista
 
 
+def _desafio(o):
+    """Que parte do CPF pedir: 'ini' (3 primeiros) ou 'fim' (2 últimos), sorteada por visita e guardada na sessão. None = sem CPF
+    conhecido no cadastro (não dá para conferir: fica só o e-mail)."""
+    if not Orcamento.cpfs_conhecidos(o['cliente_id']):
+        return None
+    k = 'pd_%s' % o['id']
+    if session.get(k) not in ('ini', 'fim'):
+        session[k] = secrets.choice(('ini', 'fim'))
+    return session[k]
+
+
+def _confere_cpf(o, parte):
+    """A parte digitada bate com algum CPF do cadastro? Devolve o CPF inteiro (só dígitos) ou None."""
+    parte = ''.join(ch for ch in str(parte or '') if ch.isdigit())
+    tipo = _desafio(o)
+    for cpf in Orcamento.cpfs_conhecidos(o['cliente_id']):
+        if (tipo == 'ini' and len(parte) == 3 and cpf.startswith(parte)) or (tipo == 'fim' and len(parte) == 2 and cpf.endswith(parte)):
+            return cpf
+    return None
+
+
 def _mascara(e):
     u, _, d = (e or '').partition('@')
     return (u[:2] + '***@' + d) if d else '***'
@@ -58,8 +81,9 @@ def ver(token):
     if not o:
         return render_template('proposta.html', erro=erro), 404
     vencido = bool(o.get('validade') and o['status'] == 'APROVADO' and o['validade'] < datetime.now().date())
+    cod_ok = bool(o.get('codigo_enviado_em')) and not o.get('aceito_em') and session.get('pc_%s' % o['id'])
     return render_template('proposta.html', o=o, erro=erro, itens=Orcamento.itens(o['id']), COMO=COMO, vencido=vencido,
-                           emails=[(e, _mascara(e)) for e in _emails_permitidos(o)], codigo_pedido=bool(o.get('codigo_enviado_em')) and not o.get('aceito_em'))
+                           emails=[(e, _mascara(e)) for e in _emails_permitidos(o)], codigo_pedido=cod_ok, desafio=_desafio(o) if not erro else None)
 
 
 @proposta.route('/p/<token>/pdf')
@@ -78,6 +102,12 @@ def codigo(token):
     if o.get('validade') and o['status'] == 'APROVADO' and o['validade'] < datetime.now().date():
         return jsonify({'ok': False, 'erro': 'A validade desta proposta venceu em %s. Fale com a Qualicontax para renovar.' % o['validade'].strftime('%d/%m/%Y')}), 400
     dados = request.get_json(silent=True) or {}
+    tipo = _desafio(o)
+    if tipo:
+        cpf = _confere_cpf(o, dados.get('cpf_parte') or request.form.get('cpf_parte'))
+        if not cpf:
+            return jsonify({'ok': False, 'erro': 'Os dígitos não conferem com o CPF dos sócios do cadastro. Confira e tente de novo, ou fale com a Qualicontax.'}), 400
+        session['pc_%s' % o['id']] = cpf
     para = (dados.get('email') or request.form.get('email') or '').strip().lower()
     permitidos = _emails_permitidos(o)
     if not permitidos:
@@ -88,13 +118,14 @@ def codigo(token):
         para = permitidos[0] if len(permitidos) == 1 else ''
     if not para:
         return jsonify({'ok': False, 'erro': 'Escolha para qual e-mail mandar o código.'}), 400
-    if o.get('codigo_enviado_em') and (datetime.now() - o['codigo_enviado_em']).total_seconds() < 60:
+    seg = Orcamento.segundos_do_codigo(o['id'])
+    if seg is not None and seg < 60:
         return jsonify({'ok': False, 'erro': 'Código enviado há menos de um minuto. Confira a caixa de entrada e o spam.'}), 429
     cod = Orcamento.gerar_codigo(o['id'], para)
+    from utils import orcamento_email
     from utils.email_envio import enviar
-    html = ('<p>Seu código para aceitar o orçamento <b>%s</b> da Qualicontax:</p><p style="font-size:28px;letter-spacing:6px;font-weight:800;">%s</p>'
-            '<p>Vale por 30 minutos. Se não foi você, ignore este e-mail.</p>' % (o['numero'], cod))
-    ok, err = enviar([para], 'Código para aceitar o orçamento %s' % o['numero'], html, 'Seu código para aceitar o orçamento %s: %s (vale 30 minutos).' % (o['numero'], cod), servico='orcamento')
+    assunto, html, texto = orcamento_email.codigo(o, cod)
+    ok, err = enviar([para], assunto, html, texto, servico='orcamento')
     if not ok:
         return jsonify({'ok': False, 'erro': 'Não consegui enviar o e-mail: %s' % err}), 500
     return jsonify({'ok': True, 'email': _mascara(para)})
@@ -112,7 +143,13 @@ def aceitar(token):
         flash('A validade desta proposta venceu. Fale com a Qualicontax para renovar.', 'danger')
         return redirect(url_for('proposta.ver', token=token))
     f = request.form
-    nome, cpf, cod = (f.get('nome') or '').strip(), (f.get('cpf') or '').strip(), (f.get('codigo') or '').strip()
+    nome, cod = (f.get('nome') or '').strip(), (f.get('codigo') or '').strip()
+    cpf = session.get('pc_%s' % o['id']) or ''                 # o CPF conferido no passo 2 (o cliente não digita o CPF inteiro)
+    if cpf:
+        cpf = '%s.%s.%s-%s' % (cpf[:3], cpf[3:6], cpf[6:9], cpf[9:])
+    if _desafio(o) and not cpf:
+        flash('Confirme primeiro os dígitos do CPF e peça o código.', 'danger')
+        return redirect(url_for('proposta.ver', token=token))
     if not f.get('aceito') or not nome or len(nome.split()) < 2:
         flash('Digite seu nome completo e marque "li e aceito".', 'danger')
         return redirect(url_for('proposta.ver', token=token))
@@ -128,6 +165,7 @@ def aceitar(token):
                   depois={'nome': nome, 'cpf': cpf, 'email': o.get('codigo_para'), 'ip': ip, 'sha256': pdf_hash})
     except Exception:
         logger.exception('[proposta] log do aceite')
+    session.pop('pc_%s' % o['id'], None); session.pop('pd_%s' % o['id'], None)
     _confirmar(Orcamento.get(o['id']))
     flash('Proposta aceita. Obrigado! Uma cópia com o registro do aceite foi enviada ao seu e-mail.', 'success')
     return redirect(url_for('proposta.ver', token=token))
@@ -136,17 +174,16 @@ def aceitar(token):
 def _confirmar(o):
     """PDF final (com a página de registro) para o cliente e para quem montou o orçamento."""
     try:
+        from utils import orcamento_email
         from utils.email_envio import enviar
-        pdf = _pdf(o)
+        pdf = _pdf(o); itens = Orcamento.itens(o['id'])
         para = [e for e in {o.get('aceito_email'), o.get('solicitante_email')} if e]
         quem = execute_query('SELECT email FROM usuarios WHERE id = %s', (o['criado_por'],), fetch=True, fetch_one=True) or {}
         copia = [quem['email']] if quem.get('email') else []
-        texto = ('O orçamento %s (%s, R$ %s) foi aceito por %s em %s. Segue em anexo a via com o registro do aceite.\n\nQualicontax Assessoria Contábil'
-                 % (o['numero'], o['cliente_nome'], '{:,.2f}'.format(o['total']).replace(',', 'X').replace('.', ',').replace('X', '.'), o.get('aceito_nome'), o['aceito_em'].strftime('%d/%m/%Y %H:%M')))
         anexo = [('Orcamento-%s-aceito.pdf' % o['numero'], pdf, 'application/pdf')]
         if para:
-            enviar(para, 'Orçamento %s aceito — Qualicontax' % o['numero'], texto.replace('\n', '<br>'), texto, anexos=anexo, servico='orcamento')
+            a, h, t = orcamento_email.aceite(o, itens); enviar(para, a, h, t, anexos=anexo, servico='orcamento')
         if copia:
-            enviar(copia, '%s aceitou o orçamento %s' % (o.get('aceito_nome'), o['numero']), texto.replace('\n', '<br>') + '<br><br>Agora é fazer o serviço e, feito, mandar para a cobrança em Comercial › Orçamentos.', texto, anexos=anexo, servico='orcamento')
+            a, h, t = orcamento_email.aceite(o, itens, para_equipe=True); enviar(copia, a, h, t, anexos=anexo, servico='orcamento')
     except Exception:
         logger.exception('[proposta] confirmação do aceite %s', o['id'])
