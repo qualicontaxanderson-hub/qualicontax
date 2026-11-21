@@ -34,13 +34,56 @@
 .ef-body .mc-prog .mc-acao .mc-bt { width:auto; padding:9px 14px; font-size:13px; }
 .ef-body .mc-prog .mc-lib { text-align:left; }
 .ef-body .mc-prog .mc-st { margin:0 0 0 auto; padding:0; border:0; white-space:nowrap; }
-.ef-body .nf-sec { border:0; border-radius:22px; padding:22px; margin:16px 0 0; box-shadow:0 1px 2px rgba(15,23,42,.04), 0 10px 30px rgba(15,61,46,.06); }
-.ef-body .nf-sec > h3 { display:flex; align-items:center; gap:11px; margin:0 0 14px; font-size:15.5px; font-weight:700; letter-spacing:-.2px; color:#0f172a; text-transform:none; }
-.ef-body .nf-sec > h3 > i { width:36px; height:36px; border-radius:11px; display:inline-flex; align-items:center; justify-content:center; font-size:15px; flex:0 0 36px; }
-.ef-body .nf-sec > h3 small { display:block; font-weight:500; font-size:12.5px; color:#64748b; margin-top:2px; }
-.ef-body .nf-sec > h3 > span.cf-t { display:flex; flex-direction:column; }
-.ef-body #servicos > h3 > i { background:#ede9fe; color:#6d28d9; }
-.ef-body #series > h3 > i { background:#dbeafe; color:#1d4ed8; }
+.ef-body .mc-bento { align-items:start; }
+/* Serviços e Séries em cartões (21/11/2026: "dá uma caprichada") */
+.cf-sec { background:#fff; border-radius:22px; padding:22px; margin:16px 0 0; box-shadow:0 1px 2px rgba(15,23,42,.04), 0 10px 30px rgba(15,61,46,.06); }
+.cf-sec-h { display:flex; align-items:center; gap:11px; margin-bottom:16px; flex-wrap:wrap; }
+.cf-sec-h > i { width:36px; height:36px; border-radius:11px; display:inline-flex; align-items:center; justify-content:center; font-size:15px; flex:0 0 36px; }
+.cf-sec-h h3 { margin:0; font-size:15.5px; font-weight:700; letter-spacing:-.2px; color:#0f172a; }
+.cf-sec-h small { display:block; font-weight:500; font-size:12.5px; color:#64748b; margin-top:2px; }
+.cf-sec-h .cf-n { font-size:12px; font-weight:700; color:#64748b; background:#f1f5f9; border-radius:99px; padding:3px 9px; margin-left:4px; }
+.cf-busca { margin-left:auto; display:flex; align-items:center; gap:8px; border:1px solid #e3ece7; border-radius:11px; padding:0 12px; height:38px; background:#fff; width:260px; max-width:100%; }
+.cf-busca i { color:#a3b3ab; font-size:13px; } .cf-busca input { border:0; outline:0; font:inherit; font-size:13px; width:100%; background:transparent; }
+.cf-busca:focus-within { border-color:#16a34a; box-shadow:0 0 0 3px rgba(22,163,74,.12); }
+.cf-sv[hidden] { display:none; }
+.cf-novo { margin-left:0; display:inline-flex; align-items:center; gap:7px; font:inherit; font-size:13px; font-weight:800; color:#fff; background:#16a34a; border:0; border-radius:11px; padding:9px 14px; cursor:pointer; }
+.cf-novo:hover { background:#15803d; }
+.cf-svs { display:grid; grid-template-columns:repeat(auto-fill, minmax(330px, 1fr)); gap:12px; }
+.cf-sv { border:1px solid #e3ece7; border-radius:14px; padding:14px 16px 12px; display:flex; flex-direction:column; gap:8px; min-width:0; background:#fff; transition:border-color .15s, box-shadow .15s; }
+.cf-sv:hover { border-color:#bfe3cc; box-shadow:0 8px 22px rgba(16,120,70,.08); }
+.cf-sv.off { opacity:.55; background:#fafafa; }
+.cf-sv-top { display:flex; align-items:flex-start; gap:8px; }
+.cf-sv-top b { flex:1; min-width:0; font-size:14.5px; font-weight:800; color:#0f172a; line-height:1.25; }
+.cf-sv-top .nf-pill { flex-shrink:0; }
+.cf-sv-desc { font-size:13px; color:#475569; line-height:1.45; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+.cf-sv-desc code { font-size:12px; background:#f1f5f9; border-radius:5px; padding:0 4px; color:#0f3d2e; }
+.cf-sv-meta { display:flex; flex-wrap:wrap; gap:4px 14px; font-size:12.5px; color:#64748b; margin-top:2px; }
+.cf-sv-meta b { color:#15803d; font-size:14px; font-weight:800; font-variant-numeric:tabular-nums; }
+.cf-sv-meta i { margin-right:4px; font-size:11px; }
+.cf-sv-pe { display:flex; gap:6px; padding-top:10px; border-top:1px solid #eef2f0; margin-top:auto; }
+.cf-sv-pe form { margin:0; display:inline; }
+.cf-bt { display:inline-flex; align-items:center; gap:6px; font:inherit; font-size:12.5px; font-weight:700; color:#0f3d2e; background:#fff; border:1px solid #d9e7df; border-radius:9px; padding:6px 11px; cursor:pointer; }
+.cf-bt:hover { border-color:#86efac; background:#f0fdf4; }
+.cf-bt i { font-size:11.5px; }
+.cf-vazio { color:#94a3b8; font-size:13.5px; padding:18px 0 6px; }
+/* o formulário: um painel que só abre quando pedido */
+.cf-painel { margin-top:16px; background:#f7fbf8; border:1px solid #e3ece7; border-radius:16px; padding:18px 20px 16px; }
+.cf-painel[hidden] { display:none; }
+.cf-painel h4 { margin:0 0 12px; font-size:14px; font-weight:800; color:#0f3d2e; display:flex; align-items:center; gap:8px; }
+.cf-painel h4 i { color:#16a34a; }
+.cf-painel .form-group { margin-bottom:12px; } .cf-painel label { font-size:12px; font-weight:700; color:#475569; }
+.cf-painel .nf-acoes { display:flex; gap:8px; justify-content:flex-end; margin-top:4px; }
+/* séries */
+.cf-series { display:flex; flex-direction:column; gap:8px; }
+.cf-serie { display:flex; align-items:center; gap:14px; flex-wrap:wrap; border:1px solid #e3ece7; border-radius:14px; padding:12px 16px; background:#fff; }
+.cf-serie.off { opacity:.55; background:#fafafa; }
+.cf-serie-n { display:flex; align-items:center; gap:8px; min-width:150px; }
+.cf-serie-n b { font-size:18px; font-weight:800; color:#0f172a; }
+.cf-serie-i { flex:1; min-width:220px; font-size:13px; color:#334155; }
+.cf-serie-i small { display:block; color:#64748b; font-size:12.5px; margin-top:1px; }
+.cf-serie-i em { font-style:normal; font-weight:800; color:#0f3d2e; }
+.cf-serie form { margin:0; margin-left:auto; }
+@media (max-width:600px) { .cf-svs { grid-template-columns:1fr; } .cf-busca { margin-left:0; width:100%; } }
 .cf-hero { padding-bottom:98px; }
 @media (max-width:760px) { .cf-hero { padding-bottom:70px; } .ef-body .mc-bento > .mc-b.mc-prog { margin-top:-40px; } .ef-body .mc-prog .mc-st { margin-left:0; white-space:normal; } }
 </style>
@@ -78,44 +121,45 @@
 <div class="ef-body">
 {% include 'nfse/_matriz_cartoes.html' %}
 
-<div class="nf-sec" id="servicos">
-    <h3><i class="fas fa-concierge-bell"></i><span class="cf-t">Serviços <small>a lista que a nota escolhe: o nome vai na lista, a descrição vira o texto da nota</small></span></h3>
-    {% if servicos %}
-    <div class="fin-rolar">
-        <table class="fin-tab nf-tab-servicos" style="min-width:0;">
-            <thead><tr><th>Serviço</th><th>Descrição na nota</th><th>Códigos</th><th>Valor padrão</th><th></th></tr></thead>
-            <tbody>
-                {% for s in servicos %}
-                <tr style="{{ 'opacity:.55;' if not s.ativo }}" data-s='{{ {"id": s.id, "nome": s.nome, "descricao": s.descricao, "cod_trib_nac": s.cod_trib_nac or "", "cod_trib_mun": s.cod_trib_mun or "", "cod_nbs": s.cod_nbs or "", "cod_servico_sp": s.cod_servico_sp or "", "valor_padrao": ("%.2f" % s.valor_padrao) if s.valor_padrao else "", "ordem": s.ordem, "emite_nota": 0 if s.emite_nota == 0 else 1} | tojson }}'>
-                    <td class="fin-td-titulo"><strong>{{ s.nome }}</strong>
-                        {% if s.emite_nota == 0 %}<span class="nf-pill nf-pill-boleto">SÓ BOLETO</span>{% else %}<span class="nf-pill nf-pill-autorizada">NOTA</span>{% endif %}
-                        {% if not s.ativo %} <span class="nf-pill nf-pill-rascunho">DESLIGADO</span>{% endif %}</td>
-                    <td class="fin-td-meta">{{ s.descricao }}</td>
-                    <td class="fin-td-extra fin-fraco">{{ s.cod_trib_nac or '—' }}{{ ' · ' ~ s.cod_trib_mun if s.cod_trib_mun }}{{ ' · NBS ' ~ s.cod_nbs if s.cod_nbs }}{{ ' · SP ' ~ s.cod_servico_sp if s.cod_servico_sp }}{% if not (s.cod_trib_nac or s.cod_nbs or s.cod_servico_sp) %} <small>(padrão da empresa)</small>{% endif %}</td>
-                    <td class="fin-td-valor fin-num">{{ (s.valor_padrao | float | format_currency) if s.valor_padrao else '—' }}</td>
-                    <td class="fin-td-acao" style="white-space:nowrap;">
-                        <button type="button" class="fin-btn-tag nf-serv-editar"><i class="fas fa-pen"></i> Editar</button>
-                        <form method="POST" action="{{ url_for('financeiro.notas_servico') }}" style="display:inline;">
-                            <input type="hidden" name="emp" value="{{ emp_id }}">
-                            <input type="hidden" name="acao" value="alternar">
-                            <input type="hidden" name="servico_id" value="{{ s.id }}">
-                            <button class="fin-btn-tag"><i class="fas fa-{{ 'toggle-on' if s.ativo else 'toggle-off' }}" style="color:{{ '#16a34a' if s.ativo else '#9ca3af' }};"></i> {{ 'Desligar' if s.ativo else 'Religar' }}</button>
-                        </form>
-                    </td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-    </div>
-    {% else %}
-    <p class="fin-fraco">Nenhum serviço cadastrado. Cadastre o primeiro abaixo — a nota passa a escolher na lista.</p>
-    {% endif %}
+<div class="cf-sec" id="servicos">
+  <div class="cf-sec-h"><i class="fas fa-concierge-bell" style="background:#ede9fe; color:#6d28d9"></i>
+    <div><h3>Serviços <span class="cf-n">{{ servicos|length }}</span></h3><small>a lista que a nota escolhe: o nome vai na lista, a descrição vira o texto da nota</small></div>
+    <label class="cf-busca"><i class="fas fa-magnifying-glass"></i><input type="search" id="nfServBusca" placeholder="Procurar serviço" autocomplete="off"></label>
+    <button type="button" class="cf-novo" id="nfServNovo"><i class="fas fa-plus"></i> Novo serviço</button>
+  </div>
+  {% if servicos %}
+  <div class="cf-svs">
+    {% for s in servicos %}
+    <article class="cf-sv{{ ' off' if not s.ativo }}" data-s='{{ {"id": s.id, "nome": s.nome, "descricao": s.descricao, "cod_trib_nac": s.cod_trib_nac or "", "cod_trib_mun": s.cod_trib_mun or "", "cod_nbs": s.cod_nbs or "", "cod_servico_sp": s.cod_servico_sp or "", "valor_padrao": ("%.2f" % s.valor_padrao) if s.valor_padrao else "", "ordem": s.ordem, "emite_nota": 0 if s.emite_nota == 0 else 1} | tojson }}'>
+      <div class="cf-sv-top"><b>{{ s.nome }}</b>
+        {% if s.emite_nota == 0 %}<span class="nf-pill nf-pill-boleto">SÓ BOLETO</span>{% else %}<span class="nf-pill nf-pill-autorizada">NOTA</span>{% endif %}
+        {% if not s.ativo %}<span class="nf-pill nf-pill-rascunho">DESLIGADO</span>{% endif %}</div>
+      <div class="cf-sv-desc" title="{{ s.descricao }}">{{ s.descricao }}</div>
+      <div class="cf-sv-meta">
+        {% if s.valor_padrao %}<span><i class="fas fa-tag"></i><b>{{ s.valor_padrao | float | format_currency }}</b></span>{% else %}<span><i class="fas fa-keyboard"></i>valor digitado na nota</span>{% endif %}
+        {% if s.cod_trib_nac or s.cod_nbs or s.cod_servico_sp or s.cod_trib_mun %}<span title="Códigos próprios deste serviço"><i class="fas fa-hashtag"></i>{{ s.cod_trib_nac or '' }}{{ ' · ' ~ s.cod_trib_mun if s.cod_trib_mun }}{{ ' · NBS ' ~ s.cod_nbs if s.cod_nbs }}{{ ' · SP ' ~ s.cod_servico_sp if s.cod_servico_sp }}</span>
+        {% endif %}
+      </div>
+      <div class="cf-sv-pe">
+        <button type="button" class="cf-bt nf-serv-editar"><i class="fas fa-pen"></i> Editar</button>
+        <form method="POST" action="{{ url_for('financeiro.notas_servico') }}">
+          <input type="hidden" name="emp" value="{{ emp_id }}"><input type="hidden" name="acao" value="alternar"><input type="hidden" name="servico_id" value="{{ s.id }}">
+          <button class="cf-bt" title="{{ 'Desligar: some da lista da nota, o histórico fica' if s.ativo else 'Religar' }}"><i class="fas fa-{{ 'toggle-on' if s.ativo else 'toggle-off' }}" style="color:{{ '#16a34a' if s.ativo else '#9ca3af' }}"></i> {{ 'Desligar' if s.ativo else 'Religar' }}</button>
+        </form>
+      </div>
+    </article>
+    {% endfor %}
+  </div>
+  {% else %}
+  <p class="cf-vazio">Nenhum serviço cadastrado. Cadastre o primeiro: a nota passa a escolher na lista.</p>
+  {% endif %}
 
-    <form method="POST" action="{{ url_for('financeiro.notas_servico') }}" id="nfServForm" style="margin-top:14px; border-top:1px dashed #e2e8f0; padding-top:12px;">
+  <div class="cf-painel" id="nfServPainel" {{ '' if not servicos else 'hidden' }}>
+    <form method="POST" action="{{ url_for('financeiro.notas_servico') }}" id="nfServForm">
         <input type="hidden" name="emp" value="{{ emp_id }}">
         <input type="hidden" name="acao" value="salvar">
         <input type="hidden" name="servico_id" id="sv_id" value="">
-        <h4 class="nf-sub" id="nfServTitulo">Novo serviço</h4>
+        <h4 id="nfServTitulo"><i class="fas fa-plus"></i> Novo serviço</h4>
         <div class="form-row">
             <div class="form-group">
                 <label>Nome na lista *</label>
@@ -161,49 +205,45 @@
                 <input type="number" name="ordem" id="sv_ordem" class="form-control" value="0">
             </div>
         </div>
-        <span class="nf-ajuda">Códigos vazios usam o padrão da empresa (acima). Preencha só quando o serviço for diferente.</span>
-        <div class="nf-acoes" style="justify-content:flex-end;">
-            <button type="button" class="btn btn-outline" id="nfServLimpar" hidden><i class="fas fa-times"></i> Cancelar edição</button>
-            <button type="submit" class="btn btn-outline" id="nfServSalvar"><i class="fas fa-plus"></i> Salvar serviço</button>
+        <span class="nf-ajuda">Códigos vazios usam o padrão da empresa (cartão Serviço, acima). Preencha só quando o serviço for diferente.</span>
+        <div class="nf-acoes">
+            <button type="button" class="btn btn-outline" id="nfServLimpar"><i class="fas fa-times"></i> Cancelar</button>
+            <button type="submit" class="btn btn-primary" id="nfServSalvar"><i class="fas fa-plus"></i> Salvar serviço</button>
         </div>
     </form>
+  </div>
 </div>
 
-<div class="nf-sec" id="series">
-    <h3><i class="fas fa-list-ol"></i><span class="cf-t">Séries <small>todas as numerações, inclusive as de teste e a da prefeitura de SP</small></span></h3>
-    {% if series %}
-    <div class="fin-rolar">
-        <table class="fin-tab" style="min-width:0;">
-            <thead><tr><th>Série</th><th>Ambiente</th><th>Último número</th><th>Observação</th><th>Situação</th><th></th></tr></thead>
-            <tbody>
-                {% for s in series %}
-                <tr style="{{ 'opacity:.55;' if not s.ativo }}">
-                    <td class="fin-td-titulo"><strong>{{ s.serie }}</strong>
-                        {% if cfg and s.serie == cfg.serie_sp %}<span class="nf-pill nf-pill-sp">PREFEITURA SP</span>{% else %}<span class="nf-pill nf-pill-nacional">NACIONAL</span>{% endif %}</td>
-                    <td class="fin-td-meta">{% if s.ambiente == 2 %}<span class="nf-pill nf-pill-teste">TESTE</span>{% else %}Produção{% endif %}</td>
-                    <td class="fin-td-valor fin-num">{{ s.ultimo_numero }}</td>
-                    <td class="fin-td-extra fin-fraco">{{ s.observacao or '' }}</td>
-                    <td class="fin-td-oculta">{{ 'Ativa' if s.ativo else 'Desligada' }}</td>
-                    <td class="fin-td-acao">
-                        <form method="POST" action="{{ url_for('financeiro.notas_serie') }}" style="display:inline;">
-                            <input type="hidden" name="emp" value="{{ emp_id }}">
-                            <input type="hidden" name="acao" value="alternar">
-                            <input type="hidden" name="serie_id" value="{{ s.id }}">
-                            <button class="fin-btn-tag"><i class="fas fa-{{ 'toggle-on' if s.ativo else 'toggle-off' }}" style="color:{{ '#16a34a' if s.ativo else '#9ca3af' }};"></i> {{ 'Desligar' if s.ativo else 'Religar' }}</button>
-                        </form>
-                    </td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
+<div class="cf-sec" id="series">
+  <div class="cf-sec-h"><i class="fas fa-list-ol" style="background:#dbeafe; color:#1d4ed8"></i>
+    <div><h3>Séries <span class="cf-n">{{ series|length }}</span></h3><small>todas as numerações, inclusive as de teste e a da prefeitura de SP</small></div>
+    <button type="button" class="cf-novo" id="nfSerieNovo"><i class="fas fa-plus"></i> Abrir série</button>
+  </div>
+  {% if series %}
+  <div class="cf-series">
+    {% for s in series %}
+    <div class="cf-serie{{ ' off' if not s.ativo }}">
+      <div class="cf-serie-n"><b>Série {{ s.serie }}</b>
+        {% if cfg and s.serie == cfg.serie_sp %}<span class="nf-pill nf-pill-sp">PREFEITURA SP</span>{% else %}<span class="nf-pill nf-pill-nacional">NACIONAL</span>{% endif %}
+        {% if s.ambiente == 2 %}<span class="nf-pill nf-pill-teste">TESTE</span>{% endif %}</div>
+      <div class="cf-serie-i">última nº <em>{{ s.ultimo_numero }}</em> · a próxima sai com <em>{{ s.ultimo_numero + 1 }}</em>{{ ' · produção' if s.ambiente != 2 else ' · não vale, só para provar a emissão' }}
+        {% if s.observacao %}<small>{{ s.observacao }}</small>{% endif %}</div>
+      <form method="POST" action="{{ url_for('financeiro.notas_serie') }}">
+        <input type="hidden" name="emp" value="{{ emp_id }}"><input type="hidden" name="acao" value="alternar"><input type="hidden" name="serie_id" value="{{ s.id }}">
+        <button class="cf-bt"><i class="fas fa-{{ 'toggle-on' if s.ativo else 'toggle-off' }}" style="color:{{ '#16a34a' if s.ativo else '#9ca3af' }}"></i> {{ 'Desligar' if s.ativo else 'Religar' }}</button>
+      </form>
     </div>
-    {% else %}
-    <p class="fin-fraco">Nenhuma série aberta. Sem série não há numeração — abra a primeira abaixo.</p>
-    {% endif %}
+    {% endfor %}
+  </div>
+  {% else %}
+  <p class="cf-vazio">Nenhuma série aberta. Sem série não há numeração: abra a primeira.</p>
+  {% endif %}
 
-    <form method="POST" action="{{ url_for('financeiro.notas_serie') }}" style="margin-top:14px; border-top:1px dashed #e2e8f0; padding-top:12px;">
+  <div class="cf-painel" id="nfSeriePainel" {{ '' if not series else 'hidden' }}>
+    <form method="POST" action="{{ url_for('financeiro.notas_serie') }}">
         <input type="hidden" name="emp" value="{{ emp_id }}">
         <input type="hidden" name="acao" value="abrir">
+        <h4><i class="fas fa-plus"></i> Abrir série</h4>
         <div class="form-row">
             <div class="form-group">
                 <label>Nova série</label>
@@ -226,10 +266,12 @@
                 <input type="text" name="observacao" class="form-control" maxlength="255">
             </div>
         </div>
-        <div class="nf-acoes" style="justify-content:flex-end;">
-            <button type="submit" class="btn btn-outline"><i class="fas fa-plus"></i> Abrir série</button>
+        <div class="nf-acoes">
+            <button type="button" class="btn btn-outline" id="nfSerieFechar"><i class="fas fa-times"></i> Cancelar</button>
+            <button type="submit" class="btn btn-primary"><i class="fas fa-plus"></i> Abrir série</button>
         </div>
     </form>
+  </div>
 </div>
 </div>
 {% endblock %}
@@ -240,24 +282,37 @@
 (function () {
     function $(id) { return document.getElementById(id); }
     var form = $('nfServForm'); if (!form) return;
+    var painel = $('nfServPainel');
     function limpar() {
         $('sv_id').value = ''; form.reset(); $('sv_valor').value = '';
-        $('nfServTitulo').textContent = 'Novo serviço'; $('nfServLimpar').hidden = true;
+        $('nfServTitulo').innerHTML = '<i class="fas fa-plus"></i> Novo serviço';
         $('nfServSalvar').innerHTML = '<i class="fas fa-plus"></i> Salvar serviço';
     }
+    function abrir() { painel.hidden = false; painel.scrollIntoView({ behavior: 'smooth', block: 'start' }); $('sv_nome').focus(); }
+    $('nfServNovo').addEventListener('click', function () { limpar(); abrir(); });
     document.querySelectorAll('.nf-serv-editar').forEach(function (b) {
         b.addEventListener('click', function () {
-            var s = JSON.parse(b.closest('tr').dataset.s);
+            var s = JSON.parse(b.closest('[data-s]').dataset.s);
             $('sv_id').value = s.id; $('sv_nome').value = s.nome; $('sv_descricao').value = s.descricao;
             $('sv_ctn').value = s.cod_trib_nac; $('sv_ctm').value = s.cod_trib_mun; $('sv_nbs').value = s.cod_nbs; $('sv_csp').value = s.cod_servico_sp;
             $('sv_ordem').value = s.ordem; $(s.emite_nota === 0 ? 'sv_emite0' : 'sv_emite1').checked = true;
             $('sv_valor').value = s.valor_padrao ? Dinheiro.fmt(Math.round(parseFloat(s.valor_padrao) * 100)) : '';
-            $('nfServTitulo').textContent = 'Editando: ' + s.nome; $('nfServLimpar').hidden = false;
+            $('nfServTitulo').innerHTML = '<i class="fas fa-pen"></i> Editando: ' + s.nome;
             $('nfServSalvar').innerHTML = '<i class="fas fa-save"></i> Salvar alteração';
-            form.scrollIntoView({ behavior: 'smooth', block: 'start' }); $('sv_nome').focus();
+            abrir();
         });
     });
-    $('nfServLimpar').addEventListener('click', limpar);
+    $('nfServLimpar').addEventListener('click', function () { limpar(); painel.hidden = true; });
+    var busca = $('nfServBusca');
+    if (busca) busca.addEventListener('input', function () {
+        var t = busca.value.trim().toLowerCase();
+        document.querySelectorAll('.cf-sv').forEach(function (c) { c.hidden = !!t && c.textContent.toLowerCase().indexOf(t) < 0; });
+    });
+    var sp = $('nfSeriePainel');
+    if (sp) {
+        $('nfSerieNovo').addEventListener('click', function () { sp.hidden = false; sp.scrollIntoView({ behavior: 'smooth', block: 'start' }); sp.querySelector('input[name=serie]').focus(); });
+        $('nfSerieFechar').addEventListener('click', function () { sp.hidden = true; });
+    }
 })();
 </script>
 {% endblock %}
