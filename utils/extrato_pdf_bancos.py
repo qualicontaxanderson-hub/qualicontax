@@ -226,7 +226,9 @@ def parse_bradesco(paginas, doc=None):
     if doc is None:
         raise PdfBancoInvalido('extrato do Bradesco precisa das coordenadas da página.')
     conta = None
-    m = re.search(r'Ag:?\s*(\d{4,5})\s*\|\s*(?:CC|C/C|Conta):?\s*(\d{4,}-?\d?)',
+    # 21/11/2026: o extrato do "Bradesco Celular" (PF) escreve "Agência: 2505 | Conta: 21921-5", não "Ag:" — sem
+    # isto a conta não era lida e o arquivo ficava em "Falta a conta" mesmo com a conta cadastrada
+    m = re.search(r'Ag(?:[eê\ufffd]ncia)?:?\s*(\d{4,5})\s*\|\s*(?:CC|C/C|Conta):?\s*(\d{4,}-?\d?)',
                   ' '.join(' '.join(t for _x, t in l['w']) for l in _linhas_com_x(doc[0])))
     if m:
         conta = f"{int(m.group(1))}/{m.group(2).lstrip('0')}"
