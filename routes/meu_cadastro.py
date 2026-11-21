@@ -30,10 +30,6 @@ PESSOAIS = ('cpf', 'data_nascimento', 'email_pessoal', 'celular_pessoal', 'celul
 BANCARIOS = cr.CAMPOS          # 18/11/2026: várias contas para receber (utils/contas_recebimento.py)
 PIX_TIPOS = cr.PIX_TIPOS
 CONTA_TIPOS = cr.CONTA_TIPOS
-# 20/11/2026: lista para escolher o banco no campo (com a logo); escolhendo o nome, o código se preenche
-BANCOS_LISTA = [('001', 'Banco do Brasil'), ('033', 'Santander'), ('077', 'Inter'), ('104', 'Caixa Econômica Federal'), ('208', 'BTG Pactual'),
-                ('237', 'Bradesco'), ('260', 'Nubank'), ('323', 'Mercado Pago'), ('336', 'C6 Bank'), ('341', 'Itaú'), ('348', 'XP'),
-                ('364', 'Efí'), ('403', 'Cora'), ('422', 'Safra'), ('748', 'Sicredi'), ('756', 'Sicoob')]
 _LIM = {'cpf': 14, 'email_pessoal': 255, 'celular_pessoal': 20, 'celular_corporativo': 20, 'cep': 9, 'logradouro': 255,
         'numero': 20, 'complemento': 100, 'bairro': 100, 'cidade': 100, 'estado': 2}
 _LIM.update(cr.LIM)
@@ -124,7 +120,7 @@ def index():
         else:
             flash('Nada mudou.', 'info')
         return redirect(url_for('meu_cadastro.index'))
-    return render_template('meu_cadastro.html', cad=cad, banco=banco, contas=contas, PIX_TIPOS=PIX_TIPOS, CONTA_TIPOS=CONTA_TIPOS, BANCOS_LISTA=BANCOS_LISTA,
+    return render_template('meu_cadastro.html', cad=cad, banco=banco, contas=contas, PIX_TIPOS=PIX_TIPOS, CONTA_TIPOS=CONTA_TIPOS,
                            rotulo=cr.rotulo, outro=cr.titular_e_outro)
 
 

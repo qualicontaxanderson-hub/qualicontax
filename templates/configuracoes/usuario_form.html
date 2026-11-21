@@ -2,333 +2,370 @@
 {% block title %}{{ 'Editar' if usuario else 'Novo' }} Usuário – Configurações{% endblock %}
 {% block content %}
 {#
-  Usuário no padrão de Clientes / Perfis (10/11/2026): cabeça verde, blocos
-  .cli-filtros, perfis em ladrilhos e, à direita, "O que esta pessoa acessa",
-  somado ao vivo a partir dos perfis marcados (perfis_info + telas_resumo vêm
-  de _render_usuario_form). Os nomes dos campos do formulário são os mesmos
-  de antes: a rota de gravação não mudou.
+  Usuário (10/11/2026): perfis em ladrilhos e, à direita, "O que esta pessoa acessa", somado ao vivo a partir dos perfis
+  marcados (perfis_info + telas_resumo vêm de _render_usuario_form). Os nomes dos campos são os de antes: a rota de
+  gravação não mudou.
+  21/11/2026 — Anderson: "vamos deixar essa pagina tão bonita quanto o do Meu Cadastro". Mesmo visual (_cad_css.html):
+  quadros coloridos de resumo, seções em cartões com faixa na cor, contas com a logo do banco, barra de salvar.
 #}
 {% include 'clientes/_cartao_css.html' %}
-{% include 'configuracoes/_painel_css.html' %}
+{% include '_cad_css.html' %}
+{% import '_banco_campo.html' as bc %}
 <style>
-.us-cab { display:flex; align-items:center; gap:16px; min-width:0; }
-.us-ava { width:56px; height:56px; border-radius:16px; flex:none; display:flex; align-items:center; justify-content:center;
-          background:rgba(255,255,255,.16); border:1.5px solid rgba(255,255,255,.35); color:#fff; font-size:20px; font-weight:800; }
-.us-cab .ef-hero-sub span + span::before { content:"·"; margin:0 7px; opacity:.6; }
-
-.us-cols { display:grid; grid-template-columns:minmax(0,1fr) 340px; gap:16px; align-items:start; }
+.us-cols { display:grid; grid-template-columns:minmax(0,1fr) 350px; gap:16px; align-items:start; }
 .us-cols > div { min-width:0; }
 .us-lado { position:sticky; top:16px; }
-.us-bloco { margin-bottom:14px; }
-.us-bloco .cli-f-row { display:block; }
-.us-bloco .cli-seg-rot { display:block; margin-bottom:10px; }
-.us-campos { display:grid; grid-template-columns:repeat(2, minmax(0,1fr)); gap:12px 14px; }
-.us-campo { display:block; min-width:0; }
-.us-campo > span { display:block; font-size:11px; font-weight:800; letter-spacing:.5px; text-transform:uppercase; color:#64748b; margin-bottom:5px; }
-.us-campo > span em { font-style:normal; color:#dc2626; }
-.us-campo input, .us-campo select { width:100%; border:1px solid #d7e3dc; border-radius:9px; padding:8px 11px; font:inherit;
-                                    font-size:13.5px; color:#0f172a; background:#fff; box-sizing:border-box; }
-.us-campo input:focus, .us-campo select:focus { outline:none; border-color:#16a34a; box-shadow:0 0 0 3px rgba(22,163,74,.15); }
-.us-campo input::placeholder { color:#94a3b8; font-weight:400; }
-.us-campo small { display:block; margin-top:4px; font-size:11.5px; color:#64748b; }
-.us-campo small a { color:#15803d; font-weight:700; }
-.us-dl { display:grid; grid-template-columns:repeat(2, minmax(0,1fr)); gap:10px 14px; margin:0; }
-.us-dl > div { min-width:0; } .us-dl dt { font-size:11px; font-weight:800; letter-spacing:.5px; text-transform:uppercase; color:#64748b; }
-.us-dl dd { margin:2px 0 0; font-size:13.5px; color:#0f172a; font-weight:600; overflow-wrap:anywhere; } .us-dl .us-dl-l { grid-column:1/-1; }
-@media (max-width:700px) { .us-dl { grid-template-columns:minmax(0,1fr); } }
-.us-senha { position:relative; }
-.us-senha input { padding-right:40px; }
-.us-senha button { position:absolute; right:4px; top:50%; transform:translateY(-50%); border:0; background:transparent; color:#64748b;
-                   width:32px; height:30px; border-radius:7px; cursor:pointer; }
+.mc-abas.n2 { grid-template-columns:repeat(2, minmax(0,1fr)); }
+.us-hbt { display:inline-flex; align-items:center; gap:8px; padding:10px 14px; border-radius:14px; background:rgba(255,255,255,.14); color:#fff; border:1px solid rgba(255,255,255,.35);
+          font:inherit; font-weight:800; font-size:13.5px; text-decoration:none; } .us-hbt i { color:#bbf7d0; } .us-hbt:hover { background:rgba(255,255,255,.22); color:#fff; }
+.us-acoes { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+.mc .ef-hero-sub span.ok { background:#dcfce7; color:#14532d; border-color:#bbf7d0; } .mc .ef-hero-sub span.ok i { color:#16a34a; }
+.mc .ef-hero-sub span.ina { background:#e2e8f0; color:#334155; border-color:#cbd5e1; } .mc .ef-hero-sub span.ina i { color:#64748b; }
+.mc-campo > span em { font-style:normal; color:#dc2626; }
+.mc-campo small { display:block; margin-top:5px; font-size:11.5px; color:#64748b; } .mc-campo small a { color:#15803d; font-weight:700; }
+.mc-s-ent { --sec:#2563eb; --sec-e:#1e40af; --sec-f:#eff4ff; --sec-b:#d6e4fd; }
+.mc-s-pf  { --sec:#4f46e5; --sec-e:#3730a3; --sec-f:#eef2ff; --sec-b:#dcdffd; }
+.mc-s-cad { --sec:#0891b2; --sec-e:#155e75; --sec-f:#ecfeff; --sec-b:#cdeff6; }
+.mc-s-dre { --sec:#db2777; --sec-e:#9d174d; --sec-f:#fdf2f8; --sec-b:#fbd5e8; }
+.mc-s-res { --sec:#64748b; --sec-e:#334155; --sec-f:#f1f5f9; --sec-b:#e2e8f0; }
+.us-senha { position:relative; display:block; } .us-senha input { padding-right:42px; }
+.us-senha button { position:absolute; right:5px; top:50%; transform:translateY(-50%); border:0; background:transparent; color:#64748b; width:32px; height:32px; border-radius:8px; cursor:pointer; }
 .us-senha button:hover { background:#f1f5f9; }
 
 .us-opcs { display:flex; gap:6px; flex-wrap:wrap; }
-.us-opc { position:relative; display:inline-flex; align-items:center; gap:6px; font-size:12.5px; font-weight:700; padding:7px 13px;
-          border-radius:99px; border:1.5px solid #d7e3dc; color:#4b6358; background:#fff; cursor:pointer; }
+.us-opc { position:relative; display:inline-flex; align-items:center; gap:6px; font-size:13px; font-weight:700; padding:9px 15px; border-radius:12px;
+          border:1.5px solid #e2ebe6; color:#4b6358; background:#fbfdfc; cursor:pointer; transition:all .15s; }
+.us-opc:hover { border-color:#c9dbd1; }
 .us-opc input { position:absolute; opacity:0; pointer-events:none; }
-.us-opc:has(input:checked) { background:#0f3d2e; border-color:#0f3d2e; color:#fff; }
-.us-opc.us-opc-adm:has(input:checked) { background:#b45309; border-color:#b45309; }
-.us-opc.us-opc-ina:has(input:checked) { background:#64748b; border-color:#64748b; }
-.us-opc:focus-within { outline:3px solid rgba(34,197,94,.45); outline-offset:2px; }
-.us-dica { margin-top:7px; font-size:12px; color:#64748b; }
-.us-dica b { color:#b45309; }
+.us-opc:has(input:checked) { background:linear-gradient(135deg,#2563eb,#1e40af); border-color:transparent; color:#fff; box-shadow:0 6px 14px rgba(37,99,235,.28); }
+.us-opc.us-opc-adm:has(input:checked) { background:linear-gradient(135deg,#f59e0b,#b45309); box-shadow:0 6px 14px rgba(180,83,9,.28); }
+.us-opc.us-opc-ati:has(input:checked) { background:linear-gradient(135deg,#16a34a,#166534); box-shadow:0 6px 14px rgba(22,163,74,.28); }
+.us-opc.us-opc-ina:has(input:checked) { background:linear-gradient(135deg,#64748b,#334155); box-shadow:0 6px 14px rgba(51,65,85,.25); }
+.us-opc:focus-within { outline:3px solid rgba(37,99,235,.35); outline-offset:2px; }
+.us-dica { margin:8px 0 0; font-size:12px; color:#64748b; line-height:1.45; } .us-dica b { color:#b45309; }
 
-.us-perfis { display:grid; grid-template-columns:repeat(auto-fill, minmax(230px,1fr)); gap:10px; }
-.us-pf { position:relative; display:flex; flex-direction:column; gap:3px; padding:11px 12px 10px 40px; border:1.5px solid #e2e8f0;
-         border-radius:12px; background:#fff; cursor:pointer; min-width:0; transition:border-color .12s, background .12s; }
-.us-pf:hover { border-color:#bbf7d0; }
+.us-perfis { display:grid; grid-template-columns:repeat(auto-fill, minmax(240px,1fr)); gap:12px; }
+.us-pf { position:relative; display:flex; flex-direction:column; gap:5px; padding:14px 14px 13px 48px; border:1.5px solid #e6eeea; border-radius:14px; background:#fff;
+         cursor:pointer; min-width:0; transition:border-color .15s, background .15s, box-shadow .15s; }
+.us-pf:hover { border-color:#c7cdfb; box-shadow:0 10px 24px rgba(79,70,229,.08); }
 .us-pf input { position:absolute; opacity:0; pointer-events:none; }
-.us-pf i.us-ck { position:absolute; left:12px; top:12px; width:18px; height:18px; border-radius:6px; border:1.5px solid #cbd5e1; background:#fff; }
-.us-pf:has(input:checked) { border-color:#16a34a; background:#f0fdf4; }
-.us-pf:has(input:checked) i.us-ck { background:#16a34a; border-color:#16a34a; }
-.us-pf:has(input:checked) i.us-ck::after { content:""; position:absolute; left:5px; top:1px; width:5px; height:10px; border:solid #fff;
-                                           border-width:0 2px 2px 0; transform:rotate(45deg); }
-.us-pf:focus-within { outline:3px solid rgba(34,197,94,.45); outline-offset:2px; }
-.us-pf b { font-size:13px; color:#0f172a; text-transform:uppercase; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.us-pf small { font-size:11.5px; color:#64748b; }
-.us-pf .us-pf-desc { font-size:11.5px; color:#94a3b8; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.us-pf a { position:absolute; right:9px; top:9px; font-size:11px; color:#94a3b8; text-decoration:none; padding:2px 5px; border-radius:6px; }
-.us-pf a:hover { color:#15803d; background:#dcfce7; }
+.us-pf i.us-ck { position:absolute; left:14px; top:14px; width:22px; height:22px; border-radius:7px; border:2px solid #cbd5e1; background:#fff; }
+.us-pf:has(input:checked) { border-color:#4f46e5; background:linear-gradient(135deg,#eef2ff,#fff 70%); box-shadow:0 0 0 3px #e0e7ff; }
+.us-pf:has(input:checked) i.us-ck { background:#4f46e5; border-color:#4f46e5; }
+.us-pf:has(input:checked) i.us-ck::after { content:""; position:absolute; left:6px; top:2px; width:5px; height:10px; border:solid #fff; border-width:0 2px 2px 0; transform:rotate(45deg); }
+.us-pf:focus-within { outline:3px solid rgba(79,70,229,.35); outline-offset:2px; }
+.us-pf b { font-size:13.5px; color:#0f172a; text-transform:uppercase; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; padding-right:22px; }
+.us-pf-n { display:flex; gap:6px; flex-wrap:wrap; }
+.us-pf-n span { font-size:11px; font-weight:800; color:#4338ca; background:#eef2ff; border-radius:99px; padding:2px 8px; }
+.us-pf-n span.u { color:#475569; background:#f1f5f9; }
+.us-pf .us-pf-desc { font-size:12px; color:#64748b; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.us-pf a { position:absolute; right:10px; top:11px; font-size:11px; color:#94a3b8; text-decoration:none; padding:3px 6px; border-radius:7px; }
+.us-pf a:hover { color:#4338ca; background:#e0e7ff; }
 .us-pf-adm .us-perfis { opacity:.45; pointer-events:none; }
 
-.us-res { background:#fff; border:1px solid #e2e8f0; border-radius:16px; padding:16px; box-shadow:0 1px 2px rgba(15,23,42,.04); }
-.us-res h3 { margin:0 0 2px; font-size:14px; font-weight:800; color:#0f3d2e; }
-.us-res > p { margin:0 0 12px; font-size:12px; color:#64748b; }
-.us-big { display:flex; align-items:baseline; gap:8px; margin-bottom:12px; }
-.us-big strong { font-size:30px; line-height:1; color:#0f3d2e; }
-.us-big span { font-size:12.5px; color:#64748b; }
-.us-dep { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:3px 10px; align-items:center; padding:6px 0; border-top:1px solid #f1f5f9; }
-.us-dep span { font-size:12.5px; font-weight:700; color:#334155; }
-.us-dep em { font-style:normal; font-size:12px; font-weight:800; color:#64748b; }
-.us-dep .us-barra { grid-column:1 / -1; height:5px; border-radius:99px; background:#eef2f0; overflow:hidden; }
-.us-dep .us-barra i { display:block; height:100%; background:#16a34a; border-radius:99px; transition:width .2s; }
-.us-dep.zero span, .us-dep.zero em { color:#94a3b8; font-weight:600; }
-.us-res .cli-selo { margin-top:12px; }
-.us-res-acoes { display:flex; gap:8px; margin-top:14px; }
-.us-res-acoes .ef-btn { flex:1; justify-content:center; }
-.us-res .us-salvar { background:#16a34a; color:#fff; border:0; }
-.us-res .us-salvar:hover { background:#15803d; }
-.us-res .us-volta { background:#f1f5f9; color:#334155; border:0; }
-.us-exc-lista { margin:6px 0 0; padding:0; list-style:none; display:flex; flex-direction:column; gap:5px; }
-.us-exc-lista a { font-size:12.5px; font-weight:700; color:#0f3d2e; }
-.us-exc-lista small { color:#94a3b8; }
+.us-dl { display:grid; grid-template-columns:repeat(2, minmax(0,1fr)); gap:10px; margin:0; }
+.us-dl > div { min-width:0; background:#f8fafc; border-radius:11px; padding:9px 12px; } .us-dl .us-dl-l { grid-column:1/-1; }
+.us-dl dt { font-size:10.5px; font-weight:800; letter-spacing:.5px; text-transform:uppercase; color:#94a3b8; }
+.us-dl dd { margin:3px 0 0; font-size:13.5px; color:#0f172a; font-weight:600; overflow-wrap:anywhere; }
+.us-dl dd.sem { color:#cbd5e1; }
+.us-exc-lista { margin:10px 0 0; padding:0; list-style:none; display:flex; flex-direction:column; gap:6px; }
+.us-exc-lista li { background:#f8fafc; border-radius:10px; padding:8px 12px; }
+.us-exc-lista a { font-size:13px; font-weight:700; color:#0f3d2e; text-decoration:none; } .us-exc-lista small { color:#94a3b8; }
 .us-txt { margin:0; font-size:12.5px; color:#475569; line-height:1.5; }
+.us-dre-auto { display:flex; gap:10px; align-items:flex-start; margin-top:14px; padding:10px 12px; border-radius:12px; background:#fdf2f8; border:1px solid #fbd5e8; font-size:12.5px; color:#831843; line-height:1.5; }
+.us-dre-auto i { color:#db2777; margin-top:3px; }
 
-@media (max-width:1100px) { .us-cols { grid-template-columns:1fr; } .us-lado { position:static; } }
-@media (max-width:700px) { .us-campos { grid-template-columns:1fr; } .us-cab .ef-hero-sub span { display:block; }
-                           .us-cab .ef-hero-sub span + span::before { content:none; } .us-ava { width:46px; height:46px; font-size:16px; } }
+/* painel da direita */
+.us-res { background:#fff; border:1px solid var(--linha); border-radius:18px; box-shadow:0 10px 28px rgba(15,61,46,.08); overflow:hidden; }
+.us-res-h { padding:16px 18px 14px; color:#fff; background:linear-gradient(135deg,#0f3d2e,#16a34a); }
+.us-res-h h3 { margin:0; font-size:14.5px; font-weight:800; display:flex; gap:8px; align-items:center; color:#fff; } .us-res-h h3 i { color:#bbf7d0; }
+.us-res-h p { margin:3px 0 12px; font-size:12px; opacity:.85; line-height:1.4; }
+.us-big { display:flex; align-items:baseline; gap:8px; }
+.us-big strong { font-size:36px; line-height:1; font-weight:800; letter-spacing:-.02em; } .us-big span { font-size:13px; opacity:.9; }
+.us-big-barra { height:7px; border-radius:99px; background:rgba(255,255,255,.22); margin-top:10px; overflow:hidden; }
+.us-big-barra i { display:block; height:100%; width:0; border-radius:99px; background:#bbf7d0; transition:width .25s; }
+.us-res-b { padding:8px 18px 18px; }
+.us-dep { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:4px 10px; align-items:center; padding:8px 0; border-top:1px solid #f1f5f9; }
+.us-dep:first-child { border-top:0; }
+.us-dep span { font-size:12.5px; font-weight:700; color:#334155; }
+.us-dep em { font-style:normal; font-size:11.5px; font-weight:800; color:#15803d; background:#f0fdf4; border-radius:99px; padding:1px 8px; font-variant-numeric:tabular-nums; }
+.us-dep .us-barra { grid-column:1 / -1; height:6px; border-radius:99px; background:#eef2f0; overflow:hidden; }
+.us-dep .us-barra i { display:block; height:100%; background:linear-gradient(90deg,#22c55e,#15803d); border-radius:99px; transition:width .2s; }
+.us-dep.zero span { color:#94a3b8; font-weight:600; } .us-dep.zero em { color:#94a3b8; background:#f1f5f9; }
+.us-res .cli-selo { margin-top:12px; }
+.us-lib { width:100%; display:flex; align-items:center; justify-content:center; gap:8px; margin-top:12px; padding:10px; border-radius:12px; border:1.5px dashed #cbd5e1;
+          background:#f8fafc; color:#334155; font:inherit; font-size:13px; font-weight:700; cursor:pointer; } .us-lib:hover { border-color:#16a34a; color:#15803d; background:#f0fdf4; }
+.us-res-acoes { display:flex; gap:8px; margin-top:14px; }
+.us-res-acoes > * { flex:1; display:inline-flex; align-items:center; justify-content:center; gap:7px; padding:11px; border-radius:12px; font:inherit; font-size:14px; font-weight:800; text-decoration:none; cursor:pointer; border:0; }
+.us-volta { background:#f1f5f9; color:#334155; } .us-volta:hover { background:#e2e8f0; color:#0f172a; }
+.us-salvar { background:linear-gradient(135deg,#16a34a,#166534); color:#fff; box-shadow:0 8px 18px rgba(22,163,74,.3); } .us-salvar:hover { filter:brightness(1.05); }
+
+@media (max-width:1100px) { .us-cols { grid-template-columns:minmax(0,1fr); } .us-lado { position:static; } }
+@media (max-width:640px) { .us-dl { grid-template-columns:minmax(0,1fr); } .mc-abas.n2 { grid-template-columns:minmax(0,1fr); } .us-acoes { width:100%; } .us-acoes > * { flex:1; justify-content:center; } }
 </style>
 
 {% set pn = (usuario.nome if usuario else '').split() %}
-<form method="POST" autocomplete="off" id="usForm">
+{% set TIPOS = [('ASSISTENTE','Assistente'),('ESTAGIARIO','Estagiário'),('CONTADOR','Contador'),('GERENTE','Gerente'),('ADMIN','Administrador')] %}
+{% set rec = (contas | selectattr('recebe_pagamentos') | list | first) if contas else None %}
+{% set rec = rec or (banco if banco and (banco.banco_nome or banco.pix_chave) else None) %}
+<form method="POST" autocomplete="off" id="usForm" class="mc">
 <div class="ef-hero">
     <div class="ef-hero-inner ef-hero-head">
-        <div class="us-cab">
-            <span class="us-ava" id="usAva">{% if pn %}{{ pn[0][:1] }}{{ pn[-1][:1] if pn|length > 1 }}{% else %}<i class="fas fa-user-plus"></i>{% endif %}</span>
+        <div class="mc-cab">
+            <span class="mc-ava" id="usAva">{% if pn %}{{ pn[0][:1] }}{{ pn[-1][:1] if pn|length > 1 }}{% else %}<i class="fas fa-user-plus"></i>{% endif %}</span>
             <div style="min-width:0">
                 <h1 class="ef-hero-title" id="usTitulo">{{ usuario.nome if usuario else 'Novo usuário' }}</h1>
                 <p class="ef-hero-sub">
                     {% if usuario %}
-                    <span>Login <b>{{ usuario.login }}</b></span>
-                    <span>{{ 'Ativo' if usuario.situacao == 'ATIVO' else 'Inativo' }}</span>
-                    {% if usuario.ultimo_acesso %}<span>Último acesso {{ usuario.ultimo_acesso.strftime('%d/%m/%Y às %H:%M') }}{% if usuario.ultimo_ip %} · IP {{ usuario.ultimo_ip }}{% endif %}</span>{% endif %}
-                    {% if usuario.criado_em %}<span>Cadastrado em {{ usuario.criado_em.strftime('%d/%m/%Y') }}</span>{% endif %}
+                    <span><i class="fas fa-key"></i>login <b>{{ usuario.login }}</b></span>
+                    {% if usuario.situacao == 'ATIVO' %}<span class="ok"><i class="fas fa-circle-check"></i>Ativo</span>{% else %}<span class="ina"><i class="fas fa-circle-pause"></i>Inativo</span>{% endif %}
+                    {% if usuario.ultimo_acesso %}<span><i class="fas fa-clock"></i>último acesso {{ usuario.ultimo_acesso.strftime('%d/%m/%Y às %H:%M') }}{% if usuario.ultimo_ip %} · IP {{ usuario.ultimo_ip }}{% endif %}</span>{% endif %}
+                    {% if usuario.criado_em %}<span><i class="fas fa-calendar-plus"></i>cadastrado em {{ usuario.criado_em.strftime('%d/%m/%Y') }}</span>{% endif %}
                     {% else %}
-                    <span>Preencha os dados, escolha o perfil e salve</span>
+                    <span><i class="fas fa-circle-info"></i>Preencha os dados, escolha o perfil e salve</span>
                     {% endif %}
                 </p>
             </div>
         </div>
-        <div class="ef-hero-actions">
-            <a href="{{ url_for('configuracoes.usuarios') }}" class="ef-btn"><i class="fas fa-arrow-left"></i> Usuários</a>
-            <button type="submit" class="ef-btn ef-btn-primary"><i class="fas fa-check"></i> {{ 'Salvar' if usuario else 'Criar usuário' }}</button>
+        <div class="us-acoes">
+            <a href="{{ url_for('configuracoes.usuarios') }}" class="us-hbt"><i class="fas fa-arrow-left"></i> Usuários</a>
+            <button type="submit" class="mc-btn"><i class="fas fa-check"></i> {{ 'Salvar' if usuario else 'Criar usuário' }}</button>
         </div>
     </div>
 </div>
 
 <div class="ef-body">
+<div class="mc-abas{{ ' n2' if not usuario }}">
+    <a class="mc-aba mc-a-pes" href="#usPfBloco"><span class="mc-aba-ico"><i class="fas fa-shield-halved"></i></span>
+      <span class="mc-aba-txt"><span class="mc-aba-lbl">Acesso</span><span class="mc-aba-val" id="usAbaTelas">—</span><span class="mc-aba-sub" id="usAbaTelasS">—</span></span></a>
+    <a class="mc-aba mc-a-end" href="#usEntrada"><span class="mc-aba-ico"><i class="fas fa-id-badge"></i></span>
+      <span class="mc-aba-txt"><span class="mc-aba-lbl">Entrada</span><span class="mc-aba-val" id="usAbaTipo">—</span><span class="mc-aba-sub" id="usAbaDep">sem departamento</span></span></a>
+    {% if usuario %}
+    {% set _rlogo = logo_banco_url(rec.banco_codigo or rec.banco_nome) if rec else None %}
+    <a class="mc-aba mc-a-rec" href="#contas"><span class="mc-aba-ico{{ ' logo' if _rlogo }}">{% if _rlogo %}<img src="{{ _rlogo }}" alt="" width="34" height="34">{% else %}<i class="fas fa-hand-holding-dollar"></i>{% endif %}</span>
+      <span class="mc-aba-txt"><span class="mc-aba-lbl">Recebe em</span>
+      {% if rec %}<span class="mc-aba-val">{{ (rec.banco_nome or '').split('—')[-1].strip() or rec.apelido or 'Conta escolhida' }}</span><span class="mc-aba-sub">{{ ('Pix · ' ~ rec.pix_chave) if rec.pix_chave else 'sem chave Pix' }}</span>
+      {% else %}<span class="mc-aba-val">Nenhuma conta</span><span class="mc-aba-sub">a pessoa cadastra em Meu cadastro</span>{% endif %}</span></a>
+    <a class="mc-aba mc-a-ctas" href="#dre"><span class="mc-aba-ico"><i class="fas fa-chart-pie"></i></span>
+      <span class="mc-aba-txt"><span class="mc-aba-lbl">No DRE</span><span class="mc-aba-val" id="usAbaDre">—</span><span class="mc-aba-sub" id="usAbaDreS">—</span></span></a>
+    {% endif %}
+</div>
+
 <div class="us-cols">
 <div>
-    <div class="cli-filtros us-bloco">
-        <div class="cli-f-row">
-            <span class="cli-seg-rot"><i class="fas fa-id-card"></i> Dados da pessoa</span>
-            <div class="us-campos">
-                <label class="us-campo"><span>Nome <em>*</em></span>
-                    <input type="text" name="nome" id="usNome" value="{{ usuario.nome if usuario else '' }}" required></label>
-                <label class="us-campo"><span>Login <em>*</em></span>
-                    <input type="text" name="login" value="{{ usuario.login if usuario else '' }}" required placeholder="nome.usuario" autocomplete="off">
-                    <small>É o que a pessoa digita para entrar. Sem espaços.</small></label>
-                <label class="us-campo"><span>E-mail <em>*</em></span>
-                    <input type="email" name="email" value="{{ usuario.email if usuario else '' }}" required></label>
-                <label class="us-campo"><span>Telefone</span>
-                    <input type="text" name="telefone" value="{{ usuario.telefone if usuario and usuario.telefone else '' }}"></label>
-                <label class="us-campo"><span>Cargo</span>
-                    <input type="text" name="cargo" value="{{ usuario.cargo if usuario and usuario.cargo else '' }}" placeholder="ex.: Assistente fiscal"></label>
-                <label class="us-campo"><span>Departamento</span>
-                    <select name="departamento_id" id="departamento_id">
-                        <option value="">Sem departamento</option>
-                        {% for d in departamentos %}
-                        <option value="{{ d.id }}" {{ 'selected' if usuario and usuario.departamento_id == d.id }}>{{ d.nome }}</option>
-                        {% endfor %}
-                    </select>
-                    <small>Os avisos por e-mail vão para a caixa do departamento, não para o e-mail pessoal. <a href="{{ url_for('configuracoes.departamentos') }}">Ver departamentos</a></small></label>
-            </div>
-        </div>
-    </div>
+    <section class="mc-sec mc-s-pes">
+        <header class="mc-sec-h"><span class="mc-sec-ic"><i class="fas fa-id-card"></i></span>
+            <div class="mc-sec-t"><b>Dados da pessoa</b><small>Nome, login e onde a pessoa trabalha</small></div></header>
+        <div class="mc-sec-b"><div class="mc-campos">
+            <label class="mc-campo"><span>Nome <em>*</em></span>
+                <input type="text" name="nome" id="usNome" value="{{ usuario.nome if usuario else '' }}" required></label>
+            <label class="mc-campo"><span>Login <em>*</em></span>
+                <input type="text" name="login" value="{{ usuario.login if usuario else '' }}" required placeholder="nome.usuario" autocomplete="off">
+                <small>É o que a pessoa digita para entrar. Sem espaços.</small></label>
+            <label class="mc-campo"><span>E-mail <em>*</em></span>
+                <input type="email" name="email" value="{{ usuario.email if usuario else '' }}" required></label>
+            <label class="mc-campo"><span>Telefone</span>
+                <input type="text" name="telefone" value="{{ usuario.telefone if usuario and usuario.telefone else '' }}"></label>
+            <label class="mc-campo"><span>Cargo</span>
+                <input type="text" name="cargo" value="{{ usuario.cargo if usuario and usuario.cargo else '' }}" placeholder="ex.: Assistente fiscal"></label>
+            <label class="mc-campo"><span>Departamento</span>
+                <select name="departamento_id" id="departamento_id">
+                    <option value="">Sem departamento</option>
+                    {% for d in departamentos %}
+                    <option value="{{ d.id }}" {{ 'selected' if usuario and usuario.departamento_id == d.id }}>{{ d.nome }}</option>
+                    {% endfor %}
+                </select>
+                <small>Os avisos por e-mail vão para a caixa do departamento, não para o e-mail pessoal. <a href="{{ url_for('configuracoes.departamentos') }}">Ver departamentos</a></small></label>
+        </div></div>
+    </section>
 
-    <div class="cli-filtros us-bloco">
-        <div class="cli-f-row">
-            <span class="cli-seg-rot"><i class="fas fa-key"></i> Entrada no sistema</span>
-            <div class="us-campos">
-                <div class="us-campo"><span>Tipo de usuário</span>
-                    <div class="us-opcs" role="radiogroup" aria-label="Tipo de usuário">
-                        {% for t, rot in [('ASSISTENTE','Assistente'),('ESTAGIARIO','Estagiário'),('CONTADOR','Contador'),('GERENTE','Gerente'),('ADMIN','Administrador')] %}
-                        <label class="us-opc{{ ' us-opc-adm' if t == 'ADMIN' }}"><input type="radio" name="tipo_usuario" value="{{ t }}"
-                            {{ 'checked' if (usuario and usuario.tipo_usuario == t) or (not usuario and t == 'ASSISTENTE') }}>{{ rot }}</label>
-                        {% endfor %}
-                    </div>
-                    <p class="us-dica" id="usDicaTipo"></p>
+    <section class="mc-sec mc-s-ent" id="usEntrada">
+        <header class="mc-sec-h"><span class="mc-sec-ic"><i class="fas fa-key"></i></span>
+            <div class="mc-sec-t"><b>Entrada no sistema</b><small>Tipo de usuário, situação e senha</small></div></header>
+        <div class="mc-sec-b"><div class="mc-campos">
+            <div class="mc-campo"><span>Tipo de usuário</span>
+                <div class="us-opcs" role="radiogroup" aria-label="Tipo de usuário">
+                    {% for t, rot in TIPOS %}
+                    <label class="us-opc{{ ' us-opc-adm' if t == 'ADMIN' }}"><input type="radio" name="tipo_usuario" value="{{ t }}" data-rot="{{ rot }}"
+                        {{ 'checked' if (usuario and usuario.tipo_usuario == t) or (not usuario and t == 'ASSISTENTE') }}>{% if t == 'ADMIN' %}<i class="fas fa-crown"></i>{% endif %}{{ rot }}</label>
+                    {% endfor %}
                 </div>
-                {% if usuario %}
-                <div class="us-campo"><span>Situação</span>
-                    <div class="us-opcs" role="radiogroup" aria-label="Situação">
-                        <label class="us-opc"><input type="radio" name="situacao" value="ATIVO" {{ 'checked' if usuario.situacao == 'ATIVO' }}>Ativo</label>
-                        <label class="us-opc us-opc-ina"><input type="radio" name="situacao" value="INATIVO" {{ 'checked' if usuario.situacao == 'INATIVO' }}>Inativo</label>
-                    </div>
-                    <p class="us-dica">Inativo não entra mais no sistema. Nada do que fez é apagado.</p>
-                </div>
-                {% endif %}
-                <label class="us-campo"><span>{% if usuario %}Nova senha{% else %}Senha <em>*</em>{% endif %}</span>
-                    <span class="us-senha">
-                        <input type="password" name="{{ 'nova_senha' if usuario else 'senha' }}" id="usSenha" {{ 'required' if not usuario }}
-                               autocomplete="new-password" placeholder="{{ 'Deixe em branco para manter a atual' if usuario else '' }}">
-                        <button type="button" id="usOlho" title="Mostrar a senha" aria-label="Mostrar a senha"><i class="fas fa-eye"></i></button>
-                    </span></label>
+                <p class="us-dica" id="usDicaTipo"></p>
             </div>
-        </div>
-    </div>
+            {% if usuario %}
+            <div class="mc-campo"><span>Situação</span>
+                <div class="us-opcs" role="radiogroup" aria-label="Situação">
+                    <label class="us-opc us-opc-ati"><input type="radio" name="situacao" value="ATIVO" {{ 'checked' if usuario.situacao == 'ATIVO' }}><i class="fas fa-circle-check"></i>Ativo</label>
+                    <label class="us-opc us-opc-ina"><input type="radio" name="situacao" value="INATIVO" {{ 'checked' if usuario.situacao == 'INATIVO' }}><i class="fas fa-circle-pause"></i>Inativo</label>
+                </div>
+                <p class="us-dica">Inativo não entra mais no sistema. Nada do que fez é apagado.</p>
+            </div>
+            {% endif %}
+            <label class="mc-campo"><span>{% if usuario %}Nova senha{% else %}Senha <em>*</em>{% endif %}</span>
+                <div class="us-senha">
+                    <input type="password" name="{{ 'nova_senha' if usuario else 'senha' }}" id="usSenha" {{ 'required' if not usuario }}
+                           autocomplete="new-password" placeholder="{{ 'Deixe em branco para manter a atual' if usuario else '' }}">
+                    <button type="button" id="usOlho" title="Mostrar a senha" aria-label="Mostrar a senha"><i class="fas fa-eye"></i></button>
+                </div></label>
+        </div></div>
+    </section>
 
-    <div class="cli-filtros us-bloco" id="usPfBloco">
-        <div class="cli-f-row">
-            <span class="cli-seg-rot"><i class="fas fa-user-shield"></i> Perfis de acesso · <b id="usPfN">0</b> marcado(s)</span>
-            <p class="us-dica" style="margin:-4px 0 10px">A pessoa pode tudo o que <b style="color:#0f3d2e">qualquer um</b> dos perfis marcados permite. Para mudar o que um perfil libera, abra o perfil.</p>
-            <div class="us-perfis">
-                {% for p in perfis_info %}
-                <label class="us-pf" data-pid="{{ p.id }}">
-                    <input type="checkbox" name="perfis" value="{{ p.id }}" {{ 'checked' if p.id in perfis_usuario }}>
-                    <i class="us-ck"></i>
-                    <b title="{{ p.nome }}">{{ p.nome }}</b>
-                    <small>{{ p.qtd_telas }} tela{{ '' if p.qtd_telas == 1 else 's' }} · {{ p.qtd_usuarios }} usuário{{ '' if p.qtd_usuarios == 1 else 's' }}</small>
-                    {% if p.descricao %}<span class="us-pf-desc" title="{{ p.descricao }}">{{ p.descricao }}</span>{% endif %}
-                    <a href="{{ url_for('configuracoes.perfil_editar', pid=p.id) }}" target="_blank" title="Abrir o perfil {{ p.nome }}"><i class="fas fa-arrow-up-right-from-square"></i></a>
-                </label>
-                {% else %}
-                <p class="us-txt">Nenhum perfil cadastrado. <a href="{{ url_for('configuracoes.perfil_novo') }}">Criar perfil</a>.</p>
-                {% endfor %}
-            </div>
-        </div>
-    </div>
+    <section class="mc-sec mc-s-pf" id="usPfBloco">
+        <header class="mc-sec-h"><span class="mc-sec-ic"><i class="fas fa-user-shield"></i></span>
+            <div class="mc-sec-t"><b>Perfis de acesso</b><small>A pessoa pode tudo o que <b>qualquer um</b> dos perfis marcados permite. Para mudar o que um perfil libera, abra o perfil.</small></div>
+            <span class="mc-chip"><b id="usPfN">0</b>&nbsp;marcado(s)</span></header>
+        <div class="mc-sec-b"><div class="us-perfis">
+            {% for p in perfis_info %}
+            <label class="us-pf" data-pid="{{ p.id }}">
+                <input type="checkbox" name="perfis" value="{{ p.id }}" {{ 'checked' if p.id in perfis_usuario }}>
+                <i class="us-ck"></i>
+                <b title="{{ p.nome }}">{{ p.nome }}</b>
+                <span class="us-pf-n"><span>{{ p.qtd_telas }} tela{{ '' if p.qtd_telas == 1 else 's' }}</span><span class="u">{{ p.qtd_usuarios }} usuário{{ '' if p.qtd_usuarios == 1 else 's' }}</span></span>
+                {% if p.descricao %}<span class="us-pf-desc" title="{{ p.descricao }}">{{ p.descricao }}</span>{% endif %}
+                <a href="{{ url_for('configuracoes.perfil_editar', pid=p.id) }}" target="_blank" title="Abrir o perfil {{ p.nome }}"><i class="fas fa-arrow-up-right-from-square"></i></a>
+            </label>
+            {% else %}
+            <p class="us-txt">Nenhum perfil cadastrado. <a href="{{ url_for('configuracoes.perfil_novo') }}">Criar perfil</a>.</p>
+            {% endfor %}
+        </div></div>
+    </section>
 
     {% if usuario %}
     {# 17/11/2026 — Anderson: "Quando os meninos se cadastraram tinham que por esses dados... sumiram os dados por que era para
        colocar no CONFIG". O que a pessoa preencheu no link de cadastro aparece aqui; banco e Pix se corrigem aqui. #}
     {% if cadastro %}
-    <div class="cli-filtros us-bloco">
-        <div class="cli-f-row">
-            <span class="cli-seg-rot"><i class="fas fa-address-card"></i> O que a pessoa preencheu no cadastro</span>
-            <dl class="us-dl">
-                <div><dt>Nome completo</dt><dd>{{ cadastro.nome_completo or '—' }}</dd></div>
-                <div><dt>CPF</dt><dd>{{ cadastro.cpf or '—' }}</dd></div>
-                <div><dt>Nascimento</dt><dd>{{ cadastro.data_nascimento.strftime('%d/%m/%Y') if cadastro.data_nascimento else '—' }}</dd></div>
-                <div><dt>Trabalho</dt><dd>{{ (cadastro.modalidade_trabalho or '—') | capitalize }}</dd></div>
-                <div><dt>E-mail pessoal</dt><dd>{{ cadastro.email_pessoal or '—' }}</dd></div>
-                <div><dt>E-mail da empresa</dt><dd>{{ cadastro.email_corporativo or '—' }}</dd></div>
-                <div><dt>Celular pessoal</dt><dd>{{ cadastro.celular_pessoal or '—' }}</dd></div>
-                <div><dt>Celular da empresa</dt><dd>{{ cadastro.celular_corporativo or '—' }}</dd></div>
-                <div class="us-dl-l"><dt>Endereço</dt><dd>{{ [cadastro.logradouro, cadastro.numero, cadastro.complemento, cadastro.bairro] | select | join(', ') or '—' }}{% if cadastro.cidade %} — {{ cadastro.cidade }}{% if cadastro.estado %}/{{ cadastro.estado }}{% endif %}{% endif %}{% if cadastro.cep %} · CEP {{ cadastro.cep }}{% endif %}</dd></div>
-            </dl>
-            <p class="us-txt" style="margin-top:8px">Preenchido pela pessoa em {{ cadastro.criado_em.strftime('%d/%m/%Y') if cadastro.criado_em else '—' }} pelo link de cadastro.</p>
-        </div>
-    </div>
+    {% macro _dd(v) %}{% if v %}<dd>{{ v }}</dd>{% else %}<dd class="sem">—</dd>{% endif %}{% endmacro %}
+    <section class="mc-sec mc-s-cad">
+        <header class="mc-sec-h"><span class="mc-sec-ic"><i class="fas fa-address-card"></i></span>
+            <div class="mc-sec-t"><b>O que a pessoa preencheu no cadastro</b><small>Pelo link de cadastro em {{ cadastro.criado_em.strftime('%d/%m/%Y') if cadastro.criado_em else '—' }}. A pessoa corrige em Meu cadastro.</small></div></header>
+        <div class="mc-sec-b"><dl class="us-dl">
+            <div><dt>Nome completo</dt>{{ _dd(cadastro.nome_completo) }}</div>
+            <div><dt>CPF</dt>{{ _dd(cadastro.cpf) }}</div>
+            <div><dt>Nascimento</dt>{{ _dd(cadastro.data_nascimento.strftime('%d/%m/%Y') if cadastro.data_nascimento else '') }}</div>
+            <div><dt>Trabalho</dt>{{ _dd((cadastro.modalidade_trabalho or '') | replace('_', ' ') | capitalize) }}</div>
+            <div><dt>E-mail pessoal</dt>{{ _dd(cadastro.email_pessoal) }}</div>
+            <div><dt>E-mail da empresa</dt>{{ _dd(cadastro.email_corporativo) }}</div>
+            <div><dt>Celular pessoal</dt>{{ _dd(cadastro.celular_pessoal) }}</div>
+            <div><dt>Celular da empresa</dt>{{ _dd(cadastro.celular_corporativo) }}</div>
+            <div class="us-dl-l"><dt>Endereço</dt><dd>{{ [cadastro.logradouro, cadastro.numero, cadastro.complemento, cadastro.bairro] | select | join(', ') or '—' }}{% if cadastro.cidade %} — {{ cadastro.cidade }}{% if cadastro.estado %}/{{ cadastro.estado }}{% endif %}{% endif %}{% if cadastro.cep %} · CEP {{ cadastro.cep }}{% endif %}</dd></div>
+        </dl></div>
+    </section>
     {% endif %}
-    <div class="cli-filtros us-bloco">
-        <div class="cli-f-row">
-            <span class="cli-seg-rot"><i class="fas fa-building-columns"></i> Contas para receber <small style="text-transform:none; letter-spacing:0; font-weight:600; color:#94a3b8">— a marcada sai no pedido de comissão, com o nome do titular no Pix</small></span>
+
+    <section class="mc-sec mc-s-ctas" id="contas">
+        <header class="mc-sec-h"><span class="mc-sec-ic"><i class="fas fa-hand-holding-dollar"></i></span>
+            <div class="mc-sec-t"><b>Contas para receber</b><small>A marcada sai no pedido de comissão, com o nome do titular no Pix</small></div>
+            <span class="mc-chip">{{ contas | length }} {{ 'conta' if contas|length == 1 else 'contas' }}</span></header>
+        <div class="mc-sec-b">
             {% if contas and contas|length > 1 %}
             {# 18/11/2026: a pessoa pode ter várias contas (a dela, a de outra pessoa, a da empresa); aqui o admin vê e escolhe #}
-            <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(280px, 1fr)); gap:10px; margin-bottom:12px">
+            <div class="mc-contas" style="padding-top:6px; margin-bottom:14px">
               {% for c in contas %}
-              <div style="border:1.5px solid {{ '#16a34a' if c.recebe_pagamentos else '#e2e8f0' }}; background:{{ '#f0fdf4' if c.recebe_pagamentos else '#fff' }}; border-radius:12px; padding:10px 12px; font-size:12.5px; color:#334155">
-                <b style="color:#0f172a">{{ c.apelido or c.titular_nome or 'Conta ' ~ loop.index }}</b>{% if c.recebe_pagamentos %} <span style="font-size:11px; font-weight:800; color:#15803d; background:#dcfce7; border-radius:99px; padding:2px 8px">recebe os pagamentos</span>{% endif %}<br>
-                {{ c.titular_nome or '' }}{% if c.titular_cpf %} · {{ c.titular_cpf }}{% endif %}<br>{{ c.banco_nome or '' }}{% if c.pix_chave %} · Pix: {{ c.pix_chave }}{% endif %}
-                {% if not c.recebe_pagamentos %}<div style="margin-top:6px"><button type="submit" formaction="{{ url_for('configuracoes.usuario_conta_usar', uid=usuario.id, cid=c.id) }}" formmethod="post" formnovalidate class="btn btn-sm" style="font-size:12px; font-weight:700; color:#15803d; border:1.5px solid #bbf7d0; background:#f0fdf4; border-radius:8px; padding:4px 9px"><i class="fas fa-check"></i> Usar esta para receber</button></div>{% endif %}
+              <div class="mc-conta{{ ' on' if c.recebe_pagamentos }}">
+                {% if c.recebe_pagamentos %}<span class="mc-selo"><i class="fas fa-check"></i> recebe os pagamentos</span>{% endif %}
+                <div class="mc-conta-t"><span class="mc-logo">{{ logo_banco(c.banco_codigo or c.banco_nome, tam=34, titulo=c.banco_nome or '') }}</span>
+                  <div class="mc-conta-n"><b>{{ c.apelido or c.titular_nome or 'Conta ' ~ loop.index }}</b><small>{{ c.banco_nome or 'banco não informado' }}</small></div></div>
+                <dl class="mc-dl">
+                  {% if c.titular_nome %}<dt>Titular</dt><dd>{{ c.titular_nome }}{% if c.titular_cpf %} · {{ c.titular_cpf }}{% endif %}</dd>{% endif %}
+                  <dt>Pix</dt>{% if c.pix_chave %}<dd>{{ c.pix_chave }}</dd>{% else %}<dd class="sem">sem chave Pix</dd>{% endif %}
+                </dl>
+                {% if not c.recebe_pagamentos %}<div class="mc-conta-ac"><button type="submit" class="mc-bt ok" formaction="{{ url_for('configuracoes.usuario_conta_usar', uid=usuario.id, cid=c.id) }}" formmethod="post" formnovalidate><i class="fas fa-check"></i> Usar esta para receber</button></div>{% endif %}
               </div>
               {% endfor %}
             </div>
-            <p class="us-txt" style="margin:0 0 8px">O formulário abaixo altera a conta que recebe. As outras a pessoa edita em Meu cadastro.</p>
+            <p class="mc-txt" style="margin:0 0 14px"><i class="fas fa-circle-info"></i><span>O formulário abaixo altera a conta que recebe. As outras a pessoa edita em Meu cadastro.</span></p>
             {% endif %}
             <input type="hidden" name="banco_form" value="1">
-            <div class="us-campos">
-                <label class="us-campo"><span>Tipo da chave Pix</span>
-                    <select name="pix_tipo"><option value="">—</option>{% for k, v in [('CPF', 'CPF'), ('CNPJ', 'CNPJ'), ('TELEFONE', 'Celular'), ('EMAIL', 'E-mail'), ('ALEATORIA', 'Chave aleatória')] %}<option value="{{ k }}"{{ ' selected' if banco.pix_tipo == k }}>{{ v }}</option>{% endfor %}</select></label>
-                <label class="us-campo"><span>Chave Pix</span><input type="text" name="pix_chave" value="{{ banco.pix_chave or '' }}" autocomplete="off"></label>
-                <label class="us-campo"><span>Banco (código)</span><input type="text" name="banco_codigo" value="{{ banco.banco_codigo or '' }}" placeholder="ex.: 260"></label>
-                <label class="us-campo"><span>Banco (nome)</span><input type="text" name="banco_nome" value="{{ banco.banco_nome or '' }}" placeholder="ex.: Nubank"></label>
-                <label class="us-campo"><span>Agência</span><input type="text" name="agencia" value="{{ banco.agencia or '' }}"></label>
-                <label class="us-campo"><span>Conta</span><input type="text" name="conta" value="{{ banco.conta or '' }}"></label>
-                <label class="us-campo"><span>Tipo de conta</span>
+            <div class="mc-campos c4">
+                <label class="mc-campo l2"><span>Titular (nome)</span><input type="text" name="titular_nome" value="{{ banco.titular_nome or '' }}" placeholder="nome: é o que vai no Pix"></label>
+                <label class="mc-campo"><span>CPF ou CNPJ do titular</span><input type="text" name="titular_cpf" value="{{ banco.titular_cpf or '' }}" maxlength="18" inputmode="numeric"></label>
+                <label class="mc-campo"><span>Tipo de conta</span>
                     <select name="conta_tipo"><option value="">—</option>{% for k, v in [('CORRENTE', 'Corrente'), ('POUPANCA', 'Poupança'), ('SALARIO', 'Salário'), ('PAGAMENTO', 'Pagamento')] %}<option value="{{ k }}"{{ ' selected' if banco.conta_tipo == k }}>{{ v }}</option>{% endfor %}</select></label>
-                <label class="us-campo"><span>Titular (nome / CPF ou CNPJ)</span>
-                    <div style="display:flex; gap:6px"><input type="text" name="titular_nome" value="{{ banco.titular_nome or '' }}" placeholder="nome: é o que vai no Pix"><input type="text" name="titular_cpf" value="{{ banco.titular_cpf or '' }}" placeholder="CPF ou CNPJ" maxlength="18" style="max-width:170px"></div></label>
+                <label class="mc-campo"><span>Tipo da chave Pix</span>
+                    <select name="pix_tipo"><option value="">—</option>{% for k, v in [('CPF', 'CPF'), ('CNPJ', 'CNPJ'), ('TELEFONE', 'Celular'), ('EMAIL', 'E-mail'), ('ALEATORIA', 'Chave aleatória')] %}<option value="{{ k }}"{{ ' selected' if banco.pix_tipo == k }}>{{ v }}</option>{% endfor %}</select></label>
+                <label class="mc-campo l2"><span>Chave Pix</span><input type="text" name="pix_chave" value="{{ banco.pix_chave or '' }}" autocomplete="off"></label>
+                <span></span>
+                {{ bc.campo(banco or {}) }}
+                <label class="mc-campo"><span>Agência</span><input type="text" name="agencia" value="{{ banco.agencia or '' }}"></label>
+                <label class="mc-campo"><span>Conta</span><input type="text" name="conta" value="{{ banco.conta or '' }}"></label>
             </div>
-            <p class="us-txt" style="margin-top:8px"><i class="fas fa-shield-halved"></i> Só o administrador vê esta parte. Os números não vão para a Auditoria, só o aviso de que mudaram.</p>
+            <p class="mc-txt"><i class="fas fa-shield-halved"></i><span>Só o administrador vê esta parte. Os números não vão para a Auditoria, só o aviso de que mudaram.</span></p>
         </div>
-    </div>
+    </section>
+
     {# 19/11/2026 — Anderson: "em qual parte do DRE ficaria cada coisa de cada funcionário" #}
-    <div class="cli-filtros us-bloco" id="dre">
-        <div class="cli-f-row">
-            <span class="cli-seg-rot"><i class="fas fa-chart-pie"></i> No DRE <small style="text-transform:none; letter-spacing:0; font-weight:600; color:#94a3b8">— em que conta cai cada pagamento desta pessoa</small></span>
+    <section class="mc-sec mc-s-dre" id="dre">
+        <header class="mc-sec-h"><span class="mc-sec-ic"><i class="fas fa-chart-pie"></i></span>
+            <div class="mc-sec-t"><b>No DRE</b><small>Em que conta cai cada pagamento desta pessoa</small></div></header>
+        <div class="mc-sec-b">
             <input type="hidden" name="dre_form" value="1">
-            <div class="us-campos">
+            <div class="mc-campos c3">
                 {% for papel, rot in dre_papeis %}
-                <label class="us-campo"><span>{{ rot }}</span>
-                    <select name="dre_{{ papel }}"><option value="">— não vinculado —</option>
+                <label class="mc-campo"><span>{{ rot }}</span>
+                    <select name="dre_{{ papel }}" data-rot="{{ rot | lower }}"><option value="">— não vinculado —</option>
                     {% for g, cs in dre_cats | groupby('grupo') %}<optgroup label="{{ g }}">{% for c in cs %}<option value="{{ c.id }}"{{ ' selected' if dre.get(papel) == c.id }}>{{ c.nome }}</option>{% endfor %}</optgroup>{% endfor %}
                     </select></label>
                 {% endfor %}
             </div>
-            <p class="us-txt" style="margin-top:8px"><i class="fas fa-bolt"></i> A <b>comissão</b> vai sozinha: quando o extrato traz o pagamento de um pedido de comissão, a saída já entra nessa conta do DRE. Sem vínculo, o pedido de comissão pede a conta antes de registrar o pagamento.</p>
+            <div class="us-dre-auto"><i class="fas fa-bolt"></i><span>A <b>comissão</b> vai sozinha: quando o extrato traz o pagamento de um pedido de comissão, a saída já entra nessa conta do DRE. Sem vínculo, o pedido de comissão pede a conta antes de registrar o pagamento.</span></div>
         </div>
-    </div>
+    </section>
     {% endif %}
 
     {# A antiga "Empresas Permitidas" saiu em 02/10/2026; a regra que vale é a
        EMPRESA RESERVADA, marcada na ficha da empresa e aplicada por utils/acesso.py. #}
-    <div class="cli-filtros us-bloco">
-        <div class="cli-f-row">
-            <span class="cli-seg-rot"><i class="fas fa-building-lock"></i> Empresas reservadas</span>
-            <p class="us-txt">Por padrão a pessoa vê todas as empresas, dentro do que o perfil permite. Uma empresa marcada como
-               <b>reservada</b> (na ficha da empresa) some para quem não é administrador, salvo as exceções escolhidas lá.</p>
+    <section class="mc-sec mc-s-res">
+        <header class="mc-sec-h"><span class="mc-sec-ic"><i class="fas fa-building-lock"></i></span>
+            <div class="mc-sec-t"><b>Empresas reservadas</b><small>Por padrão a pessoa vê todas as empresas, dentro do que o perfil permite</small></div>
+            {% if usuario and usuario.tipo_usuario != 'ADMIN' %}<span class="mc-chip">{{ excecoes_reservadas | length }} exceç{{ 'ão' if excecoes_reservadas|length == 1 else 'ões' }}</span>{% endif %}</header>
+        <div class="mc-sec-b">
+            <p class="us-txt">Uma empresa marcada como <b>reservada</b> (na ficha da empresa) some para quem não é administrador, salvo as exceções escolhidas lá.</p>
             {% if usuario and usuario.tipo_usuario == 'ADMIN' %}
-            <p class="us-txt" style="margin-top:8px"><i class="fas fa-shield-halved"></i> Administrador: vê todas, inclusive as reservadas.</p>
+            <p class="mc-txt"><i class="fas fa-shield-halved"></i><span>Administrador: vê todas, inclusive as reservadas.</span></p>
             {% elif excecoes_reservadas %}
-            <p class="us-txt" style="margin-top:8px"><b>Esta pessoa é exceção em:</b></p>
             <ul class="us-exc-lista">
                 {% for c in excecoes_reservadas %}
                 <li><a href="{{ url_for('clientes.detalhes', id=c.id) }}#acesso">{% if c.numero_cliente %}{{ c.numero_cliente }} - {% endif %}{{ c.nome_razao_social }}</a>{% if not c.acesso_reservado %} <small>(não está reservada no momento)</small>{% endif %}</li>
                 {% endfor %}
             </ul>
             {% elif usuario %}
-            <p class="us-txt" style="margin-top:8px;color:#94a3b8">Não é exceção em nenhuma empresa reservada.</p>
+            <p class="mc-txt"><i class="fas fa-circle-info"></i><span>Não é exceção em nenhuma empresa reservada.</span></p>
             {% endif %}
         </div>
-    </div>
+    </section>
 </div>
 
 <aside class="us-lado">
     <div class="us-res" id="usRes">
-        <h3>O que esta pessoa acessa</h3>
-        <p>Soma dos perfis marcados. Muda na hora em que você marca ou desmarca.</p>
-        <div class="us-big"><strong id="usTelas">0</strong><span id="usTelasT">telas liberadas</span></div>
-        <div id="usDeps">
-            {% for d in deps_resumo %}
-            <div class="us-dep" data-dep="{{ d.cor }}"><span>{{ d.grupo }}</span><em>0/0</em><span class="us-barra"><i style="width:0"></i></span></div>
-            {% endfor %}
+        <div class="us-res-h">
+            <h3><i class="fas fa-shield-halved"></i> O que esta pessoa acessa</h3>
+            <p>Soma dos perfis marcados. Muda na hora em que você marca ou desmarca.</p>
+            <div class="us-big"><strong id="usTelas">0</strong><span id="usTelasT">telas liberadas</span></div>
+            <div class="us-big-barra"><i id="usTelasBar"></i></div>
         </div>
-        <div id="usSelo"></div>
-        {% if usuario and usuario.situacao == 'ATIVO' %}
-        <button type="button" class="ef-btn us-volta" id="usLiberar" style="width:100%;justify-content:center;margin-top:12px"
-                data-id="{{ usuario.id }}" data-nome="{{ usuario.nome }}">
-            <i class="fas fa-unlock"></i> {{ 'Liberado sem código até ' ~ usuario.login_liberado_ate.strftime('%d/%m %H:%M') if usuario.login_liberado_ate and usuario.login_liberado_ate > agora else 'Liberar entrada sem código' }}
-        </button>
-        {% endif %}
-        <div class="us-res-acoes">
-            <a href="{{ url_for('configuracoes.usuarios') }}" class="ef-btn us-volta">Cancelar</a>
-            <button type="submit" class="ef-btn us-salvar"><i class="fas fa-check"></i> {{ 'Salvar' if usuario else 'Criar usuário' }}</button>
+        <div class="us-res-b">
+            <div id="usDeps">
+                {% for d in deps_resumo %}
+                <div class="us-dep" data-dep="{{ d.cor }}"><span>{{ d.grupo }}</span><em>0/0</em><span class="us-barra"><i style="width:0"></i></span></div>
+                {% endfor %}
+            </div>
+            <div id="usSelo"></div>
+            {% if usuario and usuario.situacao == 'ATIVO' %}
+            <button type="button" class="us-lib" id="usLiberar" data-id="{{ usuario.id }}" data-nome="{{ usuario.nome }}">
+                <i class="fas fa-unlock"></i> {{ 'Liberado sem código até ' ~ usuario.login_liberado_ate.strftime('%d/%m %H:%M') if usuario.login_liberado_ate and usuario.login_liberado_ate > agora else 'Liberar entrada sem código' }}
+            </button>
+            {% endif %}
+            <div class="us-res-acoes">
+                <a href="{{ url_for('configuracoes.usuarios') }}" class="us-volta">Cancelar</a>
+                <button type="submit" class="us-salvar"><i class="fas fa-check"></i> {{ 'Salvar' if usuario else 'Criar usuário' }}</button>
+            </div>
         </div>
     </div>
 </aside>
 </div>
+
+<div class="mc-barra" id="mcBarra"><span><i class="fas fa-pen-to-square"></i>Você alterou {{ 'o cadastro de ' ~ usuario.nome.split()[0] if usuario else 'o novo usuário' }}. Salve para não perder.</span>
+    <button type="submit" class="mc-btn"><i class="fas fa-check"></i> {{ 'Salvar' if usuario else 'Criar usuário' }}</button></div>
 </div>
 </form>
 
@@ -357,6 +394,7 @@
         });
         document.getElementById('usTelas').textContent = tot;
         document.getElementById('usTelasT').textContent = 'de ' + TELAS.length + ' telas liberadas';
+        document.getElementById('usTelasBar').style.width = (TELAS.length ? Math.round(100 * tot / TELAS.length) : 0) + '%';
         document.querySelectorAll('.us-dep').forEach(function (el) {
             var d = porDep[el.dataset.dep] || {lib: 0, n: 0};
             el.querySelector('em').textContent = d.lib + '/' + d.n;
@@ -375,6 +413,19 @@
             '': ''
         };
         document.getElementById('usDicaTipo').innerHTML = dica[tipo()] !== undefined ? dica[tipo()] : 'O que a pessoa pode fazer vem dos perfis marcados abaixo.';
+        // quadros de cima (21/11/2026)
+        document.getElementById('usAbaTelas').textContent = adm ? 'Acesso total' : (tot + ' de ' + TELAS.length + ' telas');
+        document.getElementById('usAbaTelasS').textContent = adm ? 'administrador vê tudo' : (marc.length ? marc.length + (marc.length === 1 ? ' perfil marcado' : ' perfis marcados') : 'nenhum perfil marcado');
+        var rt = form.querySelector('input[name="tipo_usuario"]:checked'), st = form.querySelector('input[name="situacao"]:checked');
+        document.getElementById('usAbaTipo').textContent = (rt ? rt.dataset.rot : '—') + (st ? (st.value === 'ATIVO' ? ' · Ativo' : ' · Inativo') : '');
+        var dp = document.getElementById('departamento_id');
+        document.getElementById('usAbaDep').textContent = dp && dp.value ? dp.options[dp.selectedIndex].text : 'sem departamento';
+        var dres = form.querySelectorAll('select[name^="dre_"]');
+        if (dres.length && document.getElementById('usAbaDre')) {
+            var faltam = [].filter.call(dres, function (x) { return !x.value; }).map(function (x) { return x.dataset.rot; });
+            document.getElementById('usAbaDre').textContent = (dres.length - faltam.length) + ' de ' + dres.length + ' vinculados';
+            document.getElementById('usAbaDreS').textContent = faltam.length ? 'falta: ' + faltam.join(', ') : 'tudo vinculado';
+        }
     }
     form.addEventListener('change', soma);
     var nome = document.getElementById('usNome');
@@ -389,6 +440,9 @@
         this.innerHTML = ver ? '<i class="fas fa-eye-slash"></i>' : '<i class="fas fa-eye"></i>';
     });
     soma();
+    var barra = document.getElementById('mcBarra');
+    function mudou() { barra.classList.add('on'); }
+    form.addEventListener('input', mudou); form.addEventListener('change', mudou);
     var lib = document.getElementById('usLiberar');
     if (lib) lib.addEventListener('click', function () {
         if (!confirm('Liberar ' + lib.dataset.nome + ' para entrar SEM o código do e-mail?' + String.fromCharCode(10, 10) + 'Vale uma vez, nas próximas 24 horas. Use quando o e-mail não chegar.')) return;
@@ -397,4 +451,5 @@
     });
 })();
 </script>
+{% if usuario %}{{ bc.script() }}{% endif %}
 {% endblock %}

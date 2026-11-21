@@ -1,0 +1,43 @@
+{# Campo do banco com a logo (20/11/2026 — Anderson: "o campo do banco vamos colocar a logo"). Um campo só: nome com a
+   logo à esquerda + código à direita; a logo troca na hora pelo código ou pelo nome; escolher na lista preenche o código.
+   Grava nos mesmos banco_nome / banco_codigo. Uso: {% import '_banco_campo.html' as bc %} … {{ bc.campo(banco) }} … {{ bc.script() }} #}
+{% set BANCOS_LISTA = [('001', 'Banco do Brasil'), ('033', 'Santander'), ('077', 'Inter'), ('104', 'Caixa Econômica Federal'), ('208', 'BTG Pactual'),
+                       ('237', 'Bradesco'), ('260', 'Nubank'), ('323', 'Mercado Pago'), ('336', 'C6 Bank'), ('341', 'Itaú'), ('348', 'XP'),
+                       ('364', 'Efí'), ('403', 'Cora'), ('422', 'Safra'), ('748', 'Sicredi'), ('756', 'Sicoob')] %}
+{% macro campo(banco, classe='l2') %}
+<label class="mc-campo mc-bco {{ classe }}"><span>Banco</span>
+  <div class="mc-bco-in"><span class="mc-bco-logo" id="mcBcoLogo">{{ logo_banco(banco.banco_codigo or banco.banco_nome, tam=26) if (banco.banco_codigo or banco.banco_nome) else '' }}<i class="fas fa-building-columns mc-bco-sem"></i></span>
+    <input name="banco_nome" id="mcBcoNome" value="{{ banco.banco_nome or '' }}" list="mcBcoLista" placeholder="digite ou escolha: Nubank, C6, Itaú…" autocomplete="off">
+    <input name="banco_codigo" id="mcBcoCod" class="mc-bco-cod" value="{{ banco.banco_codigo or '' }}" maxlength="5" placeholder="código" title="Código do banco (ex.: 260)" inputmode="numeric"></div>
+  <datalist id="mcBcoLista">{% for c, n in BANCOS_LISTA %}<option value="{{ n }}" data-c="{{ c }}">{{ c }}</option>{% endfor %}</datalist></label>
+{% endmacro %}
+
+{% macro script() %}
+<script>
+(function () {   /* logo do banco no campo: muda conforme o código ou o nome */
+  var LOGOS = {{ logos_banco() | tojson }}, LISTA = {{ BANCOS_LISTA | tojson }};
+  var POR_NOME = [[/bradesco/i,'237'],[/\bc6\b/i,'336'],[/\bcora\b/i,'403'],[/\bef[ií]\b|gerencianet/i,'364'],[/sicredi/i,'748'],[/nubank|nu pagamentos/i,'260'],
+    [/\bxp\b/i,'348'],[/mercado ?pago/i,'323'],[/ita[uú]/i,'341'],[/santander/i,'033'],[/caixa/i,'104'],[/banco do brasil|^bb\b/i,'001'],[/\binter\b/i,'077'],[/btg/i,'208'],[/safra/i,'422'],[/sicoob/i,'756']];
+  var nome = document.getElementById('mcBcoNome'), cod = document.getElementById('mcBcoCod'), box = document.getElementById('mcBcoLogo');
+  if (!nome) return;
+  function codigo() {
+    var c = (cod.value || '').replace(/\D/g, '') || ((nome.value.match(/^\s*(\d{1,4})\b/) || [])[1] || '');
+    if (c) return String(parseInt(c, 10));
+    for (var i = 0; i < POR_NOME.length; i++) if (POR_NOME[i][0].test(nome.value)) return String(parseInt(POR_NOME[i][1], 10));
+    return '';
+  }
+  function pinta() {
+    var u = LOGOS[codigo()];
+    box.querySelectorAll('img').forEach(function (i) { i.remove(); });
+    if (u) { var im = new Image(26, 26); im.src = u; im.alt = ''; box.insertBefore(im, box.firstChild); }
+    box.classList.toggle('tem', !!u);
+  }
+  nome.addEventListener('input', function () {
+    for (var i = 0; i < LISTA.length; i++) if (LISTA[i][1].toLowerCase() === nome.value.trim().toLowerCase()) { cod.value = LISTA[i][0]; break; }
+    pinta();
+  });
+  cod.addEventListener('input', pinta);
+  pinta();
+})();
+</script>
+{% endmacro %}
