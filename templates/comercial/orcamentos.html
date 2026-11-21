@@ -322,7 +322,7 @@
       $('ocTitulo').value = dados.titulo || ''; $('ocObs').value = dados.observacao || ''; $('ocNotaInt').value = dados.nota_interna || '';
       if (dados.validade) { var dias = Math.round((new Date(dados.validade + 'T00:00:00') - new Date(new Date().toDateString())) / 86400000); $('ocVal').value = dias > 0 ? dias : 0; document.querySelectorAll('#ocVals button').forEach(function (b) { b.classList.toggle('on', String(b.dataset.v) === String(dias)); }); }
     }
-    ocResumo(); setTimeout(function () { if (!$('ocCli').value) ocEmpAbrir(); }, 120);
+    ocResumo();      // 21/11/2026 — Anderson: "não aparecer essa página de sugestões, entra nessa direto": a caixa da empresa abre só quando tocar
   };
   window.ocNovoFechar = function () { $('ocNovoFundo').hidden = true; document.body.style.overflow = trava || ''; };
   window.ocIntSet = function (b) { if (!b) return; $('ocInterno').value = b.dataset.v; document.querySelectorAll('#ocIntOps .ns-op').forEach(function (x) { x.classList.toggle('on', x === b); }); $('ocSolSec').hidden = b.dataset.v === '1'; ocResumo(); };
