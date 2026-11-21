@@ -4,35 +4,82 @@
 
 {% block content %}
 {% include 'financeiro/_nav_financeiro.html' %}
+{# 21/11/2026 — Anderson: a Configuração fiscal mora dentro de EMPRESAS e ganha o visual da casa (hero verde + corpo
+   claro). A matriz em cartões (nfse/_matriz_cartoes.html) é a mesma do Fiscal; Serviços e Séries viraram cartões. #}
+<style>
+.cf-emps { display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-top:18px; }
+.cf-emps small { font-size:10px; letter-spacing:1.4px; font-weight:800; text-transform:uppercase; color:#a7d9c0; margin-right:4px; }
+.cf-emps .ef-btn { padding:7px 14px; font-weight:800; }
+.cf-doc { font-family:ui-monospace, Consolas, monospace; font-size:17px; font-weight:700; color:#bbf7d0; margin-top:6px; letter-spacing:.3px; }
+.cf-linha { display:flex; flex-wrap:wrap; gap:10px 28px; margin-top:16px; }
+.cf-linha small { display:block; font-size:11px; color:#a7d9c0; font-weight:600; letter-spacing:.3px; }
+.cf-linha b { display:block; font-size:14px; font-weight:700; color:#fff; margin-top:1px; }
+.cf-linha b.r { color:#fecaca; } .cf-linha b.l { color:#fde68a; }
+.cf-selo { display:inline-flex; align-items:center; gap:6px; font-size:11.5px; font-weight:800; border-radius:99px; padding:4px 11px; background:rgba(255,255,255,.14); color:#eafff3; }
+.cf-selo.ok { background:#4ade80; color:#052e16; }
+.ef-hero-sub.cf-sub { font-size:12.5px; color:#d1fae5; margin-top:6px; }
+/* a matriz: some o cartão verde (a empresa já está no hero); "Para emitir" vira a faixa que flutua sobre o hero */
+.ef-body .mc-bento { margin-top:0; }
+.ef-body .mc-bento > .mc-b.mc-id { display:none; }
+.ef-body .mc-bento > .mc-b.mc-prog { grid-column:1 / -1; flex-direction:row; flex-wrap:wrap; align-items:center; gap:8px 22px; padding:16px 22px;
+                    margin-top:-66px; border:1px solid #e3ece7; box-shadow:0 8px 22px rgba(16,120,70,.10); }
+.ef-body .mc-prog h3 { font-size:10px; letter-spacing:1.6px; text-transform:uppercase; color:#7d968a; }
+.ef-body .mc-prog .mc-big { margin:0; font-size:34px; letter-spacing:-1px; }
+.ef-body .mc-prog .mc-big small { font-size:14px; }
+.ef-body .mc-prog .mc-trilho { margin:0; flex:0 0 200px; }
+.ef-body .mc-prog .mc-tudo { margin:0; font-size:13.5px; }
+.ef-body .mc-prog .mc-pd { margin:0; flex:1 1 300px; padding:9px 13px; font-size:13px; }
+.ef-body .mc-prog .mc-oks { margin:0; }
+.ef-body .mc-prog .mc-acao { margin:0; flex-direction:row; align-items:center; }
+.ef-body .mc-prog .mc-acao .mc-bt { width:auto; padding:9px 14px; font-size:13px; }
+.ef-body .mc-prog .mc-lib { text-align:left; }
+.ef-body .mc-prog .mc-st { margin:0 0 0 auto; padding:0; border:0; white-space:nowrap; }
+.ef-body .nf-sec { border:0; border-radius:22px; padding:22px; margin:16px 0 0; box-shadow:0 1px 2px rgba(15,23,42,.04), 0 10px 30px rgba(15,61,46,.06); }
+.ef-body .nf-sec > h3 { display:flex; align-items:center; gap:11px; margin:0 0 14px; font-size:15.5px; font-weight:700; letter-spacing:-.2px; color:#0f172a; text-transform:none; }
+.ef-body .nf-sec > h3 > i { width:36px; height:36px; border-radius:11px; display:inline-flex; align-items:center; justify-content:center; font-size:15px; flex:0 0 36px; }
+.ef-body .nf-sec > h3 small { display:block; font-weight:500; font-size:12.5px; color:#64748b; margin-top:2px; }
+.ef-body .nf-sec > h3 > span.cf-t { display:flex; flex-direction:column; }
+.ef-body #servicos > h3 > i { background:#ede9fe; color:#6d28d9; }
+.ef-body #series > h3 > i { background:#dbeafe; color:#1d4ed8; }
+.cf-hero { padding-bottom:98px; }
+@media (max-width:760px) { .cf-hero { padding-bottom:70px; } .ef-body .mc-bento > .mc-b.mc-prog { margin-top:-40px; } .ef-body .mc-prog .mc-st { margin-left:0; white-space:normal; } }
+</style>
 
-<div class="page-header">
+{% set cert = emp.certificado %}
+{% set _emissor = cfg.emissor or 'nacional' %}
+<div class="ef-hero cf-hero">
+  <div class="ef-hero-inner ef-hero-head">
     <div>
-        <h1 class="page-title">
-            <i class="fas fa-sliders-h" style="color: var(--primary-green);"></i>
-            Configuração fiscal da empresa
-        </h1>
-        <p class="page-subtitle">O padrão que cada nota nova já traz preenchido — na nota, qualquer campo pode ser alterado</p>
+      <span class="ef-hero-num">NFS-e{% if emp.numero_cliente %} · #{{ emp.numero_cliente }}{% endif %} · {{ empresa.apelido if empresa else '' }}</span>
+      <h1 class="ef-hero-title">{{ emp.nome|nome_proprio }}</h1>
+      <div class="cf-doc">{{ emp.doc_fmt }}</div>
+      <p class="ef-hero-sub cf-sub">Configuração fiscal · o padrão que cada nota nova já traz preenchido; na nota, qualquer campo pode ser alterado</p>
+      <div class="cf-linha">
+        <div><small>Regime</small><b>{{ emp.regime_rotulo or '—' }}</b></div>
+        <div><small>Cidade</small><b>{{ (emp.cidade|title ~ '/' ~ emp.uf) if emp.cidade else '—' }}</b></div>
+        <div><small>Certificado</small>{% if cert %}{% set st = cert.status %}{% if st.nivel == 'vencido' %}<b class="r">Vencido</b>{% elif st.nivel == 'sem_data' %}<b class="r">Sem validade</b>{% elif st.nivel == 'laranja' %}<b class="l">Vence em {{ st.dias }} dias</b>{% else %}<b>Válido{{ ' até ' ~ cert.validade.strftime('%d/%m/%Y') if cert.validade }}</b>{% endif %}{% else %}<b class="r">Não tem</b>{% endif %}</div>
+        <div><small>Por onde a nota sai</small><b>{{ EMISSORES.get(_emissor, _emissor) }}</b></div>
+        <div><small>Situação</small><b>{% if cfg.liberado_em %}<span class="cf-selo ok"><i class="fas fa-check-double"></i> Liberada para emitir</span>{% elif salva %}<span class="cf-selo">Salva · falta o Fiscal liberar</span>{% else %}<span class="cf-selo">Sem configuração</span>{% endif %}</b></div>
+      </div>
+      {% if fin_empresas|length > 1 %}
+      <div class="cf-emps"><small>Empresa</small>
+        {% for e in fin_empresas %}<a class="ef-btn{{ ' ef-btn-primary' if e.cliente_id == emp_id }}" title="{{ e.nome_razao_social }}" href="{{ url_for('financeiro.notas_config', emp=e.cliente_id) }}">{{ e.apelido }}</a>{% endfor %}
+      </div>
+      {% endif %}
     </div>
-    <div class="page-actions">
-        <a class="btn btn-outline" href="{{ url_for('financeiro.notas', emp=emp_id) }}"><i class="fas fa-arrow-left"></i> Notas</a>
+    <div class="ef-hero-actions">
+      <a class="ef-btn" href="{{ url_for('financeiro.empresas') }}"><i class="fas fa-arrow-left"></i> Minhas empresas</a>
+      <a class="ef-btn" href="{{ url_for('clientes.detalhes', id=emp.id) }}" target="_blank" rel="noopener" title="Regime, cidade e certificado vêm do cadastro: corrija lá"><i class="fas fa-up-right-from-square"></i> Abrir cadastro</a>
+      {% if pode_rota('financeiro.cobrancas') %}<a class="ef-btn" href="{{ url_for('financeiro.cobrancas', emp=emp_id) }}" title="As notas e os boletos já emitidos por esta empresa"><i class="fas fa-file-invoice"></i> Notas emitidas</a>{% endif %}
     </div>
+  </div>
 </div>
 
-<div class="fin-escopo">
-    <span class="fin-escopo-lbl"><i class="fas fa-building"></i> Empresa</span>
-    <div class="fin-chips">
-        {% for e in fin_empresas %}
-        <a class="fin-chip {{ 'ativo' if e.cliente_id == emp_id }}" title="{{ e.nome_razao_social }}"
-           href="{{ url_for('financeiro.notas_config', emp=e.cliente_id) }}">{{ e.apelido }}</a>
-        {% endfor %}
-    </div>
-    <span class="fin-selo"><i class="fas fa-id-card"></i> {{ empresa.nome_razao_social if empresa else emp_id }}</span>
-</div>
-
+<div class="ef-body">
 {% include 'nfse/_matriz_cartoes.html' %}
 
 <div class="nf-sec" id="servicos">
-    <h3><i class="fas fa-concierge-bell" style="color:#6d28d9;"></i> Serviços <small>a lista que a nota escolhe: o nome vai na lista, a descrição vira o texto da nota</small></h3>
+    <h3><i class="fas fa-concierge-bell"></i><span class="cf-t">Serviços <small>a lista que a nota escolhe: o nome vai na lista, a descrição vira o texto da nota</small></span></h3>
     {% if servicos %}
     <div class="fin-rolar">
         <table class="fin-tab nf-tab-servicos" style="min-width:0;">
@@ -123,7 +170,7 @@
 </div>
 
 <div class="nf-sec" id="series">
-    <h3><i class="fas fa-list-ol" style="color:#1d4ed8;"></i> Séries <small>todas as numerações, inclusive as de teste e a da prefeitura de SP</small></h3>
+    <h3><i class="fas fa-list-ol"></i><span class="cf-t">Séries <small>todas as numerações, inclusive as de teste e a da prefeitura de SP</small></span></h3>
     {% if series %}
     <div class="fin-rolar">
         <table class="fin-tab" style="min-width:0;">
@@ -183,6 +230,7 @@
             <button type="submit" class="btn btn-outline"><i class="fas fa-plus"></i> Abrir série</button>
         </div>
     </form>
+</div>
 </div>
 {% endblock %}
 

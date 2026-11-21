@@ -1,29 +1,187 @@
 {% extends "base.html" %}
 
-{% block title %}Minhas Empresas - Financeiro - Qualicontax
+{% block title %}Minhas Empresas - Financeiro - Qualicontax{% endblock %}
+
+{% block content %}
+{% include 'financeiro/_nav_financeiro.html' %}
+{# 21/11/2026 — Anderson: "tanto a ABA MINHAS EMPRESAS como a Configuração Fiscal da Empresa tem que ser repaginadas...
+   bem elegantes igual estamos usando". Hero verde + cartões no molde de Clientes (gc-card), um por empresa, com a
+   Configuração fiscal dentro de cada uma. A tabela antiga saiu. #}
+<style>
+.me-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(380px, 1fr)); gap:16px; }
+.me-card { background:#fff; border:1px solid #e3ece7; border-radius:15px; padding:18px 20px 16px; display:flex; flex-direction:column; gap:12px;
+           min-width:0; transition:border-color .15s, box-shadow .15s; }
+.me-card:hover { border-color:#bfe3cc; box-shadow:0 8px 22px rgba(16,120,70,.08); }
+.me-card.off { opacity:.62; }
+.me-head { display:flex; align-items:center; gap:12px; }
+.me-ava { width:46px; height:46px; border-radius:12px; background:linear-gradient(135deg,#16a34a,#0f3d2e); color:#fff; display:flex; align-items:center;
+          justify-content:center; font-weight:800; font-size:14px; letter-spacing:.3px; flex-shrink:0; }
+.me-ava.pf { background:linear-gradient(135deg,#8b5cf6,#5b21b6); }
+.me-ava.n4 { font-size:12px; letter-spacing:0; }
+.me-tit { flex:1; min-width:0; }
+.me-tit h3 { margin:0; font-size:17px; font-weight:800; color:#0f172a; letter-spacing:.2px; line-height:1.2; }
+.me-tit small { display:block; font-size:12px; color:#64748b; margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.me-tit .mono { font-family:ui-monospace, Consolas, monospace; color:#0f3d2e; font-weight:800; }
+.me-sit { font-size:11.5px; font-weight:700; padding:3px 10px; border-radius:99px; flex-shrink:0; }
+.me-sit.on { background:#dcfce7; color:#166534; } .me-sit.off { background:#f1f5f9; color:#64748b; }
+.me-tags { display:flex; flex-wrap:wrap; gap:6px; }
+.me-tag { font-size:12px; font-weight:600; border:1px solid; border-radius:7px; padding:2px 9px; }
+.me-reg-SIMPLES { background:#f0fdf4; color:#15803d; border-color:#bbf7d0; }
+.me-reg-LUCRO_PRESUMIDO { background:#fff7ed; color:#c2410c; border-color:#fed7aa; }
+.me-reg-LUCRO_REAL { background:#eff6ff; color:#1d4ed8; border-color:#bfdbfe; }
+.me-reg-MEI { background:#fefce8; color:#a16207; border-color:#fde68a; }
+.me-reg- { background:#f8fafc; color:#64748b; border-color:#e2e8f0; }
+.me-cid { font-size:12px; font-weight:600; border-radius:99px; padding:2px 10px 2px 8px; background:#e0f2fe; color:#0369a1; }
+.me-cid i { font-size:10.5px; margin-right:2px; opacity:.8; }
+.me-grade { display:grid; grid-template-columns:1fr 1fr; gap:8px 14px; padding:10px 12px; background:#f7fbf8; border:1px solid #e8f1ec; border-radius:11px; }
+.me-campo { min-width:0; }
+.me-rot { display:block; font-size:9.5px; font-weight:800; letter-spacing:.6px; text-transform:uppercase; color:#7d968a; line-height:1.2; }
+.me-val { display:block; font-size:14px; font-weight:800; color:#0f172a; margin-top:2px; font-variant-numeric:tabular-nums; }
+.me-val small { font-size:11px; font-weight:600; color:#64748b; margin-left:3px; }
+.me-val.vazio { color:#94a3b8; font-weight:600; }
+.me-cons { display:inline-flex; align-items:center; gap:6px; margin-top:2px; font:inherit; font-size:12.5px; font-weight:800; border-radius:99px; padding:3px 10px; cursor:pointer; border:1px solid; }
+.me-cons.sim { background:#dcfce7; color:#166534; border-color:#bbf7d0; } .me-cons.nao { background:#f1f5f9; color:#64748b; border-color:#e2e8f0; }
+.me-cons:hover { filter:brightness(.96); }
+/* Configuração fiscal dentro do cartão */
+.me-fis { border:1px solid #e3ece7; border-radius:12px; padding:12px 14px; display:flex; flex-direction:column; gap:8px; }
+.me-fis.ok { background:#f0fdf4; border-color:#bbf7d0; } .me-fis.nao { background:#fffbeb; border-color:#fde68a; }
+.me-fis-h { display:flex; align-items:center; gap:9px; }
+.me-fis-h i { width:30px; height:30px; border-radius:9px; display:inline-flex; align-items:center; justify-content:center; font-size:13px; background:#dcfce7; color:#15803d; flex-shrink:0; }
+.me-fis.nao .me-fis-h i { background:#fef3c7; color:#b45309; }
+.me-fis-h b { font-size:13.5px; color:#0f172a; }
+.me-fis-h em { margin-left:auto; font-style:normal; font-size:11.5px; font-weight:700; border-radius:99px; padding:3px 9px; background:#dcfce7; color:#166534; white-space:nowrap; }
+.me-fis.nao .me-fis-h em { background:#fef3c7; color:#92400e; }
+.me-fis-l { display:flex; flex-wrap:wrap; gap:4px 14px; font-size:12.5px; color:#334155; }
+.me-fis-l span i { color:#64748b; margin-right:4px; font-size:11px; }
+.me-fis-l .r { color:#b91c1c; font-weight:700; } .me-fis-l .l { color:#b45309; font-weight:700; }
+.me-fis a.me-abrir { align-self:flex-start; display:inline-flex; align-items:center; gap:7px; margin-top:2px; font-size:13px; font-weight:800; color:#fff; background:#16a34a;
+                     border-radius:10px; padding:8px 13px; text-decoration:none; }
+.me-fis a.me-abrir:hover { background:#15803d; color:#fff; }
+.me-fis.nao a.me-abrir { background:#d97706; } .me-fis.nao a.me-abrir:hover { background:#b45309; }
+/* rodapé de ações */
+.me-pe { display:flex; flex-wrap:wrap; gap:6px; padding-top:10px; border-top:1px solid #eef2f0; margin-top:auto; }
+.me-pe form { margin:0; display:inline; }
+.me-bt { display:inline-flex; align-items:center; gap:6px; font:inherit; font-size:12.5px; font-weight:700; color:#0f3d2e; background:#fff; border:1px solid #d9e7df;
+         border-radius:9px; padding:7px 11px; cursor:pointer; text-decoration:none; }
+.me-bt:hover { border-color:#86efac; background:#f0fdf4; color:#0f3d2e; }
+.me-bt.off { color:#64748b; }
+.me-bt i { font-size:11.5px; }
+.me-nota { font-size:12.5px; color:#64748b; margin:18px 2px 0; display:flex; gap:8px; align-items:flex-start; }
+.me-nota i { color:#16a34a; margin-top:2px; }
+.me-vazio { text-align:center; color:#94a3b8; padding:40px 0; font-size:14px; }
+/* busca da caixa Adicionar */
+.socio-res-item { display:block; width:100%; text-align:left; padding:8px 10px; border:1px solid #e5e7eb; border-radius:8px; background:#fff; cursor:pointer; margin-top:4px; font:inherit; }
+.socio-res-item:hover { background:#f0fdf4; border-color:#86efac; }
+.socio-res-vazio { padding:8px 10px; color:#6b7280; margin-top:4px; }
+@media (max-width:600px) { .me-grid { grid-template-columns:1fr; } .me-grade { grid-template-columns:1fr 1fr; } }
+</style>
+
+<div class="ef-hero">
+  <div class="ef-hero-inner ef-hero-head">
+    <div>
+      <h1 class="ef-hero-title">Minhas empresas</h1>
+      <p class="ef-hero-sub">Quem participa do financeiro · cada uma vira um chip em todas as telas · {{ ativas }} ativa{{ 's' if ativas != 1 }}{% if inativas %} · {{ inativas }} desativada{{ 's' if inativas != 1 }}{% endif %}</p>
+    </div>
+    <div class="ef-hero-actions">
+      <button type="button" class="ef-btn ef-btn-primary" onclick="meAbrirNova()"><i class="fas fa-plus"></i> Adicionar empresa</button>
+    </div>
+  </div>
+</div>
+
+<div class="ef-body">
+  {% if empresas %}
+  <div class="me-grid">
+    {% for e in empresas %}
+    <article class="me-card{{ ' off' if not e.ativo }}">
+      <header class="me-head">
+        <span class="me-ava{{ ' pf' if e.tipo_pessoa == 'PF' }}{{ ' n4' if (e.numero_cliente or '')|length > 3 }}" title="Número do cliente">{{ e.numero_cliente or '—' }}</span>
+        <div class="me-tit">
+          <h3 title="Apelido: é o nome do chip">{{ e.apelido }}</h3>
+          <small title="{{ e.nome_razao_social }}">{{ e.nome_razao_social }}</small>
+          <small>{{ 'CPF' if e.tipo_pessoa == 'PF' else 'CNPJ' }} <span class="mono">{{ e.cpf_cnpj or '—' }}</span></small>
+        </div>
+        <span class="me-sit {{ 'on' if e.ativo else 'off' }}">{{ 'Ativa' if e.ativo else 'Desativada' }}</span>
+      </header>
+
+      <div class="me-tags">
+        <span class="me-tag me-reg-{{ e.regime_tributario or '' }}">{{ {'SIMPLES': 'Simples Nacional', 'LUCRO_PRESUMIDO': 'Lucro Presumido', 'LUCRO_REAL': 'Lucro Real', 'MEI': 'MEI'}.get(e.regime_tributario, 'Pessoa física' if e.tipo_pessoa == 'PF' else 'Regime não informado') }}</span>
+        {% if e.cidade %}<span class="me-cid"><i class="fas fa-location-dot"></i> {{ e.cidade }}{{ '/' ~ e.uf if e.uf }}</span>{% endif %}
+      </div>
+
+      <div class="me-grade">
+        <div class="me-campo"><span class="me-rot">Contas bancárias</span>
+          {% if e.contas %}<a class="me-val" href="{{ url_for('financeiro.contas') }}" style="text-decoration:none">{{ e.contas }}<small>ativa{{ 's' if e.contas != 1 }}</small></a>{% else %}<span class="me-val vazio">nenhuma</span>{% endif %}</div>
+        <div class="me-campo"><span class="me-rot">Notas emitidas</span>
+          {% if e.notas %}<span class="me-val">{{ e.notas }}<small>última {{ e.ultima_nota }}</small></span>{% else %}<span class="me-val vazio">nenhuma</span>{% endif %}</div>
+        <div class="me-campo"><span class="me-rot">A receber em aberto</span>
+          {% if e.aberto_n %}<span class="me-val">{{ e.aberto_fmt }}<small>{{ e.aberto_n }} título{{ 's' if e.aberto_n != 1 }}</small></span>{% else %}<span class="me-val vazio">nada em aberto</span>{% endif %}</div>
+        <div class="me-campo"><span class="me-rot">Na visão Todas</span>
+          <form method="POST" action="{{ url_for('financeiro.empresa_atualizar', emp_id=e.id) }}">
+            <input type="hidden" name="acao" value="consolidado">
+            <button class="me-cons {{ 'sim' if e.no_consolidado else 'nao' }}" title="{{ 'Entra no consolidado padrão: clique para tirar' if e.no_consolidado else 'Fora do consolidado padrão: clique para incluir' }}"><i class="fas fa-{{ 'check' if e.no_consolidado else 'minus' }}"></i> {{ 'Entra' if e.no_consolidado else 'Fora' }}</button>
+          </form></div>
+      </div>
+
+      {% set f = e.fiscal %}
+      <div class="me-fis {{ 'ok' if f.salva else 'nao' }}">
+        <div class="me-fis-h"><i class="fas fa-sliders"></i><b>Configuração fiscal</b>
+          <em>{{ 'Configurada' if f.salva else 'Ainda não configurada' }}</em></div>
+        <div class="me-fis-l">
+          {% if f.salva %}
+            <span><i class="fas fa-paper-plane"></i>{{ f.emissor_rot }}</span>
+            {% if f.serie %}<span><i class="fas fa-list-ol"></i>série {{ f.serie }}</span>{% endif %}
+            {% if f.liberado_em %}<span><i class="fas fa-circle-check"></i>liberada em {{ f.liberado_em }}</span>{% elif f.atualizado_em %}<span><i class="fas fa-clock"></i>salva em {{ f.atualizado_em }}</span>{% endif %}
+          {% else %}
+            <span><i class="fas fa-circle-info"></i>A nota fiscal desta empresa ainda não tem o padrão gravado.</span>
+          {% endif %}
+          {% if f.cert == 'ok' %}<span><i class="fas fa-shield-halved"></i>certificado até {{ f.cert_validade }}</span>
+          {% elif f.cert == 'vence' %}<span class="l"><i class="fas fa-triangle-exclamation"></i>certificado vence em {{ f.cert_dias }} dia{{ 's' if f.cert_dias != 1 }}</span>
+          {% elif f.cert == 'vencido' %}<span class="r"><i class="fas fa-circle-xmark"></i>certificado vencido</span>
+          {% else %}<span class="l"><i class="fas fa-shield-halved"></i>sem certificado no cadastro</span>{% endif %}
+        </div>
+        {% if pode_rota('financeiro.notas_config') %}
+        <a class="me-abrir" href="{{ url_for('financeiro.notas_config', emp=e.cliente_id) }}"><i class="fas fa-{{ 'pen' if f.salva else 'wand-magic-sparkles' }}"></i> {{ 'Abrir configuração fiscal' if f.salva else 'Configurar a nota fiscal' }}</a>
+        {% endif %}
+      </div>
+
+      <footer class="me-pe">
+        <button type="button" class="me-bt" data-id="{{ e.id }}" data-apelido="{{ e.apelido }}" onclick="meRenomear(this)" title="Trocar o nome do chip"><i class="fas fa-pen"></i> Apelido</button>
+        <a class="me-bt" href="{{ url_for('clientes.detalhes', id=e.cliente_id) }}" title="Ficha completa no Cadastros"><i class="fas fa-id-card"></i> Cadastro</a>
+        <form method="POST" action="{{ url_for('financeiro.empresa_atualizar', emp_id=e.id) }}">
+          <input type="hidden" name="acao" value="ativo">
+          <button class="me-bt{{ '' if e.ativo else ' off' }}" title="{{ 'Desativar: some dos chips, o histórico fica' if e.ativo else 'Reativar' }}"><i class="fas fa-{{ 'toggle-on' if e.ativo else 'toggle-off' }}" style="color:{{ '#16a34a' if e.ativo else '#9ca3af' }}"></i> {{ 'Desativar' if e.ativo else 'Reativar' }}</button>
+        </form>
+      </footer>
+    </article>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="me-vazio"><i class="fas fa-building"></i> Nenhuma empresa no financeiro ainda. Adicione a primeira.</div>
+  {% endif %}
+  <p class="me-nota"><i class="fas fa-circle-info"></i><span><b>Na visão Todas</b> diz quem entra por padrão quando a tela está em TODAS as empresas. Em qualquer tela dá para juntar só algumas clicando nos chips. Desativar tira a empresa dos chips e dos lançamentos novos; o histórico continua guardado.</span></p>
+</div>
+
 <!-- ── Modal: adicionar empresa ──────────────────────────────────── -->
 <div id="meModalNova" class="modal" style="display:none;">
     <div class="modal-content" style="max-width:560px;">
         <div class="modal-header">
-            <h3>Adicionar Empresa ao Financeiro</h3>
+            <h3>Adicionar empresa ao financeiro</h3>
             <button class="modal-close" onclick="meFecharNova()">&times;</button>
         </div>
         <form method="POST" action="{{ url_for('financeiro.empresa_marcar') }}" id="meForm">
             <div class="modal-body">
                 <div class="form-group" id="meBuscaBox">
-                    <label >Adicionar empresa (busque no cadastro de clientes)</label>
-                    <input type="text" id="meBusca" class="form-control" autocomplete="off"
-                           placeholder="Nome, CNPJ/CPF ou número do cliente">
+                    <label>Busque no cadastro de clientes</label>
+                    <input type="text" id="meBusca" class="form-control" autocomplete="off" placeholder="Nome, CNPJ/CPF ou número do cliente">
                     <div id="meResultados"></div>
                 </div>
                 <div class="form-group" id="meEscolhida" style="display:none;">
-                    <label >Escolhida</label>
+                    <label>Escolhida</label>
                     <div style="padding-top:8px; font-weight:700;" id="meEscNome"></div>
                 </div>
                 <div class="form-group">
-                    <label >Apelido (nome do chip)</label>
-                    <input type="text" name="apelido" id="meApelido" class="form-control"
-                           maxlength="40" placeholder="Ex.: BRILHO">
+                    <label>Apelido (nome do chip)</label>
+                    <input type="text" name="apelido" id="meApelido" class="form-control" maxlength="40" placeholder="Ex.: BRILHO">
                 </div>
                 <div class="modal-footer">
                     <input type="hidden" name="cliente_id" id="meClienteId">
@@ -35,101 +193,11 @@
     </div>
 </div>
 
-{% endblock %}
-
-{% block content %}
-{% include 'financeiro/_nav_financeiro.html' %}
-<style>
-.me-inativa { opacity:.55; }
-.me-badge { padding:3px 10px; border-radius:99px; font-size:.78em; font-weight:700; }
-.me-sim { background:#dcfce7; color:#166534; }
-.me-nao { background:#f3f4f6; color:#6b7280; }
-.socio-res-item { display:block; width:100%; text-align:left; padding:8px 10px;
-  border:1px solid #e5e7eb; border-radius:8px; background:#fff; cursor:pointer;
-  margin-top:4px; font:inherit; }
-.socio-res-item:hover { background:#f0fdf4; border-color:#86efac; }
-.socio-res-vazio { padding:8px 10px; color:#6b7280; margin-top:4px; }
-</style>
-
-<div class="page-header">
-    <div>
-        <h1 class="page-title">
-            <i class="fas fa-building" style="color: var(--primary-green);"></i>
-            Minhas Empresas
-        </h1>
-        <p class="page-subtitle">Quem participa do financeiro — cada uma vira um chip em todas as telas</p>
-    </div>
-    <div class="page-actions">
-        <button class="btn btn-primary" onclick="meAbrirNova()">
-            <i class="fas fa-plus"></i> Adicionar Empresa
-        </button>
-    </div>
-</div>
-
-<div class="fin-caixa">
-    <div class="fin-rolar">
-        <table class="fin-tab">
-            <thead>
-                <tr>
-                    <th>Apelido (chip)</th>
-                    <th>Cadastro</th>
-                    <th>Tipo</th>
-                    <th>No consolidado</th>
-                    <th>Situação</th>
-                    <th>Ações</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for e in empresas %}
-                <tr class="{{ 'me-inativa' if not e.ativo }}">
-                    <td class="fin-td-titulo"><strong>{{ e.apelido }}</strong>
-                        <span class="fin-mob fin-fraco"><br>{{ e.nome_razao_social }}</span></td>
-                    <td class="fin-td-oculta">{{ e.numero_cliente or '—' }} · {{ e.nome_razao_social }}</td>
-                    <td class="fin-td-meta">{{ e.tipo_pessoa }}</td>
-                    <td>
-                        <form method="POST" style="display:inline;"
-                              action="{{ url_for('financeiro.empresa_atualizar', emp_id=e.id) }}">
-                            <input type="hidden" name="acao" value="consolidado">
-                            <button class="fin-btn-tag" title="Alternar participação no consolidado padrão">
-                                <span class="me-badge {{ 'me-sim' if e.no_consolidado else 'me-nao' }}">
-                                    {{ 'Entra' if e.no_consolidado else 'Fora' }}</span>
-                            </button>
-                        </form>
-                    </td>
-                    <td class="fin-td-extra">{{ 'Ativa' if e.ativo else 'Desativada' }}</td>
-                    <td class="fin-td-acao" style="white-space:nowrap;">
-                        <button class="fin-btn-tag" title="Trocar apelido"
-                                data-id="{{ e.id }}" data-apelido="{{ e.apelido }}"
-                                onclick="meRenomear(this)">
-                            <i class="fas fa-pen"></i> Apelido
-                        </button>
-                        <form method="POST" style="display:inline;"
-                              action="{{ url_for('financeiro.empresa_atualizar', emp_id=e.id) }}">
-                            <input type="hidden" name="acao" value="ativo">
-                            <button class="fin-btn-tag"
-                                    title="{{ 'Desativar (some dos chips; histórico fica)' if e.ativo else 'Reativar' }}">
-                                <i class="fas fa-{{ 'toggle-on' if e.ativo else 'toggle-off' }}"
-                                   style="color:{{ '#16a34a' if e.ativo else '#9ca3af' }};"></i>
-                                {{ 'Desativar' if e.ativo else 'Reativar' }}
-                            </button>
-                        </form>
-                    </td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-        <small style="color:#6b7280; display:block; margin-top:8px;">
-            "No consolidado" define quem entra por padrão na visão TODAS —
-            e em qualquer tela dá para juntar só algumas clicando nos chips.
-        </small>
-    </div>
-</div>
-
 <!-- ── Modal: trocar apelido ─────────────────────────────────────── -->
 <div id="meModalApelido" class="modal" style="display:none;">
     <div class="modal-content" style="max-width:420px;">
         <div class="modal-header">
-            <h3>Trocar Apelido</h3>
+            <h3>Trocar apelido</h3>
             <button class="modal-close" onclick="meFechar()">&times;</button>
         </div>
         <form method="POST" id="meFormApelido" action="">
@@ -137,8 +205,7 @@
             <div class="modal-body">
                 <div class="form-group">
                     <label>Apelido (aparece nos chips)</label>
-                    <input type="text" name="apelido" id="meNovoApelido" class="form-control"
-                           maxlength="40" required>
+                    <input type="text" name="apelido" id="meNovoApelido" class="form-control" maxlength="40" required>
                 </div>
             </div>
             <div class="modal-footer">
@@ -220,11 +287,4 @@ function meFechar() {
     });
 })();
 </script>
-<style>
-.socio-res-item { display: block; width: 100%; text-align: left; padding: 8px 10px;
-  border: 1px solid #e5e7eb; border-radius: 8px; background: #fff; cursor: pointer;
-  margin-top: 4px; font: inherit; }
-.socio-res-item:hover { background: #f0fdf4; border-color: #86efac; }
-.socio-res-vazio { padding: 8px 10px; color: #6b7280; margin-top: 4px; }
-</style>
 {% endblock %}

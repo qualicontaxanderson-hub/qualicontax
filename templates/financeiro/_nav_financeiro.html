@@ -34,6 +34,8 @@
 {% endfor %}
 {# Notas e boletos (as telas antigas de Cobranças) acendem COBRANÇAS, que agora é a tela de Títulos #}
 {% if request.path.startswith('/financeiro/boletos') or request.path.startswith('/financeiro/notas') or request.path.startswith('/financeiro/cobranca') %}{% set _ativa.pref = '/financeiro/titulos' %}{% endif %}
+{# 21/11/2026: a Configuração fiscal mora dentro de EMPRESAS #}
+{% if request.path.startswith('/financeiro/notas/config') %}{% set _ativa.pref = '/financeiro/empresas' %}{% endif %}
 
 <nav class="nav-fiscal" aria-label="Navegação do Financeiro">
     <div class="nav-fiscal-track">

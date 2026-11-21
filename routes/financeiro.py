@@ -3466,9 +3466,71 @@ def programacoes_gerar():
 @financeiro.route('/financeiro/empresas')
 @permission_required('financeiro.empresas')
 def empresas():
+    """Minhas empresas em cartões (21/11/2026, Anderson: "repaginadas... bem elegantes"), com a Configuração
+    fiscal dentro de cada uma. Só dado gravado: o medidor "N de 5 prontos" consulta o governo e fica na própria
+    Configuração fiscal."""
     from models.fin_empresa import FinEmpresa
-    return render_template('financeiro/empresas.html',
-                           empresas=FinEmpresa.listar(apenas_ativas=False))
+    from models.nfse_emissao import NfseConfig
+    from models.dfe_certificado import DfeCertificado
+    from utils.db_helper import execute_query as _q
+    from utils.titulos_receber import brl as _brl
+    emissor_rot = {'nacional': 'Emissor Nacional (Sefin)', 'sp': 'Prefeitura de São Paulo'}
+    hoje = date.today()
+    lista = FinEmpresa.listar(apenas_ativas=False)
+    extra = {r['id']: r for r in (_q(
+        """SELECT c.id, c.cpf_cnpj, c.regime_tributario FROM clientes c
+            WHERE c.id IN (SELECT cliente_id FROM fin_empresas)""", fetch=True) or [])}
+    contas = {r['empresa_id']: int(r['n']) for r in (_q(
+        'SELECT empresa_id, COUNT(*) n FROM fin_contas WHERE ativo = 1 GROUP BY empresa_id', fetch=True) or [])}
+    notas = {r['empresa_id']: r for r in (_q(
+        'SELECT empresa_id, COUNT(*) n, MAX(dh_emissao) ult FROM nfse_emitidas GROUP BY empresa_id', fetch=True) or [])}
+    ender = {}
+    for r in (_q("""SELECT cliente_id, cidade, estado FROM enderecos_clientes
+                   WHERE cliente_id IN (SELECT cliente_id FROM fin_empresas)
+                   ORDER BY principal DESC, (tipo = 'COMERCIAL') DESC, id""", fetch=True) or []):
+        ender.setdefault(r['cliente_id'], r)          # o primeiro é o principal/comercial
+    aberto = {r['empresa_id']: r for r in (_q(
+        """SELECT empresa_id, COUNT(*) n, SUM(valor - valor_baixado) v FROM fin_titulos
+            WHERE tipo = 'R' AND status IN ('aberto', 'parcial') GROUP BY empresa_id""", fetch=True) or [])}
+    for e in lista:
+        cid = e['cliente_id']
+        x = extra.get(cid) or {}
+        e['cpf_cnpj'] = x.get('cpf_cnpj') or ''
+        e['regime_tributario'] = x.get('regime_tributario') or ''
+        t = ender.get(cid) or {}
+        e['cidade'], e['uf'] = (t.get('cidade') or '').title(), t.get('estado') or ''
+        e['contas'] = contas.get(cid, 0)
+        n = notas.get(cid) or {}
+        e['notas'] = int(n.get('n') or 0)
+        e['ultima_nota'] = n['ult'].strftime('%d/%m') if n.get('ult') else ''
+        a = aberto.get(cid) or {}
+        e['aberto_n'] = int(a.get('n') or 0)
+        e['aberto_fmt'] = _brl(float(a.get('v') or 0)) if a.get('n') else ''
+        cfg = NfseConfig.get(cid) or {}
+        try:
+            cert = DfeCertificado.get_by_cliente(cid) or {}
+        except Exception:
+            cert = {}
+        val = cert.get('validade')
+        if hasattr(val, 'date') and not isinstance(val, date):
+            val = val.date()
+        if not val:
+            c_st, c_dias = 'sem', None
+        elif val < hoje:
+            c_st, c_dias = 'vencido', 0
+        elif (val - hoje).days <= 30:
+            c_st, c_dias = 'vence', (val - hoje).days
+        else:
+            c_st, c_dias = 'ok', (val - hoje).days
+        e['fiscal'] = {
+            'salva': bool(cfg), 'emissor_rot': emissor_rot.get(cfg.get('emissor') or 'nacional', cfg.get('emissor') or ''),
+            'serie': cfg.get('serie_nacional') or cfg.get('serie_sp') or '',
+            'liberado_em': cfg['liberado_em'].strftime('%d/%m/%Y') if cfg.get('liberado_em') else '',
+            'atualizado_em': cfg['atualizado_em'].strftime('%d/%m/%Y') if cfg.get('atualizado_em') else '',
+            'cert': c_st, 'cert_dias': c_dias, 'cert_validade': val.strftime('%d/%m/%Y') if val else '',
+        }
+    return render_template('financeiro/empresas.html', empresas=lista,
+                           ativas=sum(1 for e in lista if e['ativo']), inativas=sum(1 for e in lista if not e['ativo']))
 
 
 @financeiro.route('/financeiro/empresas/buscar')
