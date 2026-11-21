@@ -34,8 +34,8 @@
 {% endfor %}
 {# Notas e boletos (as telas antigas de Cobranças) acendem COBRANÇAS, que agora é a tela de Títulos #}
 {% if request.path.startswith('/financeiro/boletos') or request.path.startswith('/financeiro/notas') or request.path.startswith('/financeiro/cobranca') %}{% set _ativa.pref = '/financeiro/titulos' %}{% endif %}
-{# 21/11/2026: a Configuração fiscal mora dentro de EMPRESAS #}
-{% if request.path.startswith('/financeiro/notas/config') %}{% set _ativa.pref = '/financeiro/empresas' %}{% endif %}
+{# 21/11/2026: a Configuração fiscal e as contas bancárias moram dentro de EMPRESAS #}
+{% if request.path.startswith('/financeiro/notas/config') or (request.path.startswith('/financeiro/contas') and pode_rota('financeiro.empresas')) %}{% set _ativa.pref = '/financeiro/empresas' %}{% endif %}
 
 <nav class="nav-fiscal" aria-label="Navegação do Financeiro">
     <div class="nav-fiscal-track">
@@ -43,7 +43,7 @@
         {# NOTAS FISCAIS nasceu só-admin (01/11/2026): a aba só aparece para quem o portão deixa entrar #}
         {# CADASTRAR HONORÁRIOS é a porta de quem não tem a tela cheia (Melke, Gabriel, Guilherme, Alessandra) #}
         {# SERVIÇOS (20/11/2026) é só do administrador: o cadastro do que cobramos e quem recebe comissão #}
-        {% set _escondida = (_ep == 'financeiro.honorarios_cadastrar' and pode_rota('financeiro.honorarios')) or (_ep == 'financeiro.servicos' and not current_user.is_admin()) %}
+        {% set _escondida = (_ep == 'financeiro.honorarios_cadastrar' and pode_rota('financeiro.honorarios')) or (_ep == 'financeiro.servicos' and not current_user.is_admin()) or (_ep == 'financeiro.contas' and pode_rota('financeiro.empresas')) %}
         {# 20/11/2026 — Anderson (vendo como a Bruna): "só tem que aparecer o que o funcionário tem acesso... em todo o sistema". Toda aba passa pelo portão. #}
         {% if not _escondida and pode_rota(_ep) %}
         <a class="nff-tab {% if _pref == _ativa.pref %}active{% endif %}"

@@ -4,6 +4,7 @@
 
 {% block content %}
 {% include 'financeiro/_nav_financeiro.html' %}
+{% if dados %}{% include 'financeiro/_contas_css.html' %}{% endif %}
 {# 21/11/2026 — Anderson: "tanto a ABA MINHAS EMPRESAS como a Configuração Fiscal da Empresa tem que ser repaginadas...
    bem elegantes igual estamos usando". Hero verde + cartões no molde de Clientes (gc-card), um por empresa, com a
    Configuração fiscal dentro de cada uma. A tabela antiga saiu. #}
@@ -33,7 +34,7 @@
 .me-reg- { background:#f8fafc; color:#64748b; border-color:#e2e8f0; }
 .me-cid { font-size:12px; font-weight:600; border-radius:99px; padding:2px 10px 2px 8px; background:#e0f2fe; color:#0369a1; }
 .me-cid i { font-size:10.5px; margin-right:2px; opacity:.8; }
-.me-grade { display:grid; grid-template-columns:1fr 1fr; gap:8px 14px; padding:10px 12px; background:#f7fbf8; border:1px solid #e8f1ec; border-radius:11px; }
+.me-grade { display:grid; grid-template-columns:minmax(0,.9fr) minmax(0,1.3fr) auto; gap:8px 14px; padding:10px 12px; background:#f7fbf8; border:1px solid #e8f1ec; border-radius:11px; }
 .me-campo { min-width:0; }
 .me-rot { display:block; font-size:9.5px; font-weight:800; letter-spacing:.6px; text-transform:uppercase; color:#7d968a; line-height:1.2; }
 .me-val { display:block; font-size:14px; font-weight:800; color:#0f172a; margin-top:2px; font-variant-numeric:tabular-nums; }
@@ -74,13 +75,14 @@
 .socio-res-item:hover { background:#f0fdf4; border-color:#86efac; }
 .socio-res-vazio { padding:8px 10px; color:#6b7280; margin-top:4px; }
 @media (max-width:600px) { .me-grid { grid-template-columns:1fr; } .me-grade { grid-template-columns:1fr 1fr; } }
+.me-hero-pend { color:#fde68a; font-weight:800; text-decoration:none; } .me-hero-pend:hover { color:#fff; }
 </style>
 
 <div class="ef-hero">
   <div class="ef-hero-inner ef-hero-head">
     <div>
       <h1 class="ef-hero-title">Minhas empresas</h1>
-      <p class="ef-hero-sub">Quem participa do financeiro · cada uma vira um chip em todas as telas · {{ ativas }} ativa{{ 's' if ativas != 1 }}{% if inativas %} · {{ inativas }} desativada{{ 's' if inativas != 1 }}{% endif %}</p>
+      <p class="ef-hero-sub">Quem participa do financeiro · cada uma vira um chip em todas as telas · {{ ativas }} ativa{{ 's' if ativas != 1 }}{% if inativas %} · {{ inativas }} desativada{{ 's' if inativas != 1 }}{% endif %}<a id="mePendHero" class="me-hero-pend" href="#mePend" hidden> · <b></b> conta(s) nova(s) esperando empresa</a></p>
     </div>
     <div class="ef-hero-actions">
       <button type="button" class="ef-btn ef-btn-primary" onclick="meAbrirNova()"><i class="fas fa-plus"></i> Adicionar empresa</button>
@@ -88,7 +90,7 @@
   </div>
 </div>
 
-<div class="ef-body">
+<div class="ef-body"><div id="ctb">
   {% if empresas %}
   <div class="me-grid">
     {% for e in empresas %}
@@ -109,8 +111,6 @@
       </div>
 
       <div class="me-grade">
-        <div class="me-campo"><span class="me-rot">Contas bancárias</span>
-          {% if e.contas %}<a class="me-val" href="{{ url_for('financeiro.contas') }}" style="text-decoration:none">{{ e.contas }}<small>ativa{{ 's' if e.contas != 1 }}</small></a>{% else %}<span class="me-val vazio">nenhuma</span>{% endif %}</div>
         <div class="me-campo"><span class="me-rot">Notas emitidas</span>
           {% if e.notas %}<span class="me-val">{{ e.notas }}<small>última {{ e.ultima_nota }}</small></span>{% else %}<span class="me-val vazio">nenhuma</span>{% endif %}</div>
         <div class="me-campo"><span class="me-rot">A receber em aberto</span>
@@ -121,6 +121,11 @@
             <button class="me-cons {{ 'sim' if e.no_consolidado else 'nao' }}" title="{{ 'Entra no consolidado padrão: clique para tirar' if e.no_consolidado else 'Fora do consolidado padrão: clique para incluir' }}"><i class="fas fa-{{ 'check' if e.no_consolidado else 'minus' }}"></i> {{ 'Entra' if e.no_consolidado else 'Fora' }}</button>
           </form></div>
       </div>
+
+      {% if dados %}
+      <div class="me-bcos"><div class="me-bcos-h"><span class="me-rot">Bancos</span><small data-bc-n="{{ e.cliente_id }}"></small></div>
+        <div class="me-bco-l" data-emp="{{ e.cliente_id }}"></div></div>
+      {% endif %}
 
       {% set f = e.fiscal %}
       <div class="me-fis {{ 'ok' if f.salva else 'nao' }}">
@@ -158,8 +163,29 @@
   {% else %}
   <div class="me-vazio"><i class="fas fa-building"></i> Nenhuma empresa no financeiro ainda. Adicione a primeira.</div>
   {% endif %}
+  {% if dados %}
+  <section id="mePend"></section>
+  {% endif %}
   <p class="me-nota"><i class="fas fa-circle-info"></i><span><b>Na visão Todas</b> diz quem entra por padrão quando a tela está em TODAS as empresas. Em qualquer tela dá para juntar só algumas clicando nos chips. Desativar tira a empresa dos chips e dos lançamentos novos; o histórico continua guardado.</span></p>
-</div>
+  {% if dados %}
+  {% if pode_cobranca %}
+  <details class="me-mais" id="meCobranca">
+    <summary><span class="ic" style="background:linear-gradient(135deg,#0369a1,#075985)"><i class="fas fa-barcode"></i></span>
+      <span class="tx"><b>Cobrança dos bancos</b><small>Contas de cobrança (Efí, Bradesco, Cora): credenciais, teste e quem envia o aviso</small></span><i class="fas fa-chevron-down seta"></i></summary>
+    <div class="me-mais-b">{% include 'financeiro/_cobranca_contas.html' %}</div>
+  </details>
+  {% endif %}
+  <details class="me-mais">
+    <summary><span class="ic" style="background:linear-gradient(135deg,#475569,#1e293b)"><i class="fas fa-file-lines"></i></span>
+      <span class="tx"><b>Formatos de extrato que o sistema lê</b><small>OFX, PDF, CSV e Excel de cada banco</small></span><i class="fas fa-chevron-down seta"></i></summary>
+    <div class="me-mais-b" id="meFormatos"></div>
+  </details>
+  {% endif %}
+{% if dados %}
+<div id="ctbModais">{% include 'financeiro/_contas_modais.html' %}</div>
+{% include 'financeiro/_empresas_contas.html' %}
+{% endif %}
+</div></div>
 
 <!-- ── Caixa: adicionar empresa (21/11/2026 — Anderson: "estou aqui tentando cadastrar ela e precisamos melhorar") ── -->
 <style>

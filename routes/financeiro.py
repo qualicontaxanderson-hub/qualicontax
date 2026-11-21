@@ -1612,9 +1612,10 @@ def extrato_importar():
 # ninguém, lê a conta do arquivo e sabe de quem é. Aqui só se cadastra, se
 # responde a pendência e se apaga um período para refazer.
 # =======================================================================
-@financeiro.route('/financeiro/contas')
-@permission_required('financeiro.extrato')
-def contas():
+def _contas_ctx():
+    """Tudo o que a tela das contas bancárias usa (dado em JSON + cobrança). Desde 21/11/2026 as contas moram
+    dentro de EMPRESAS (Anderson: "essa ABA Contas SOME, e vamos por ela dentro do das empresas"); a rota antiga
+    /financeiro/contas leva para lá quem abre Empresas e continua de pé para quem só abre Contas."""
     from models.extrato_lancamento import FinContaBancaria, FinExtratoPendencia
     emps, sel, mapa = _empresas_ctx()
     # Órfã (chegou sem número no nome e com conta desconhecida) é sinal de
@@ -1707,14 +1708,24 @@ def contas():
             if c.get('cob') and _ext.get(c['id']):
                 x = _ext[c['id']]
                 c['ext'] = {k: x.get(k) for k in ('em', 'lidos', 'novos', 'baixados', 'pendentes', 'erro')}
-    return render_template(
-        'financeiro/contas.html', dados=dados, ano=ano,
+    return dict(dados=dados, ano=ano,
         contas=contas, fin_empresas=emps, sel_empresas=sel, emp_mapa=mapa,
         pode_cobranca=pode_cob, contas_cob=contas_cob,
         bancarias=FinContaBancaria.listar(empresa_ids=[e['cliente_id'] for e in emps], apenas_ativas=True),
         PROVEDORES=PROVEDORES, AMBIENTES=AMBIENTES, AVISA_POR=AVISA_POR, hoje=hoje,
         deps_envio=_deps_envio() if pode_cob else [],
         webhook_base=url_for('cobranca_webhook.efi', segredo='X', _external=True, _scheme='https').rsplit('X', 1)[0])
+
+
+
+
+@financeiro.route('/financeiro/contas')
+@permission_required('financeiro.extrato')
+def contas():
+    from utils.acesso import pode_rota
+    if pode_rota('financeiro.empresas'):
+        return redirect(url_for('financeiro.empresas', **{k: v for k, v in request.args.items() if k in ('ano',)}))
+    return render_template('financeiro/contas.html', **_contas_ctx())
 
 
 def _deps_envio():
@@ -3529,7 +3540,25 @@ def empresas():
             'atualizado_em': cfg['atualizado_em'].strftime('%d/%m/%Y') if cfg.get('atualizado_em') else '',
             'cert': c_st, 'cert_dias': c_dias, 'cert_validade': val.strftime('%d/%m/%Y') if val else '',
         }
-    return render_template('financeiro/empresas.html', empresas=lista, sugestoes=_sugestoes_extrato(),
+    from utils.acesso import pode_rota as _pode
+    ctx_contas = _contas_ctx() if _pode('financeiro.contas') else {}   # 21/11/2026: as contas bancárias moram aqui
+    if ctx_contas:
+        # arquivo de conta desconhecida: se as palavras do nome batem com UMA empresa do financeiro, ela já vem marcada
+        import re as _re
+        sug = {}
+        for p in ctx_contas['dados']['pend']:
+            if p.get('empresa_id'):
+                continue
+            base = _re.sub(r'\.[a-z0-9]+$', '', (p['arquivo'] or '').lower())
+            pal = [w for w in _re.split(r'[\s\-_.]+', base) if len(w) >= 2 and not _re.search(r'\d', w)
+                   and w not in ('de', 'da', 'do', 'das', 'dos', 'e', 'ltda', 'me', 'extrato', 'ofx', 'pdf')]
+            if not pal:
+                continue
+            hits = [e['cliente_id'] for e in lista if e['ativo'] and all(w.upper() in (e.get('nome_razao_social') or '').upper() for w in pal)]
+            if len(hits) == 1:
+                sug[p['id']] = hits[0]
+        ctx_contas['dados']['sugestao_emp'] = sug
+    return render_template('financeiro/empresas.html', empresas=lista, sugestoes=_sugestoes_extrato(), **ctx_contas,
                            ativas=sum(1 for e in lista if e['ativo']), inativas=sum(1 for e in lista if not e['ativo']))
 
 

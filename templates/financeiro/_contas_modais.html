@@ -1,0 +1,189 @@
+{# Janelas das contas bancárias: Nova conta e Ligar cobrança. Usado por contas.html e empresas.html (21/11/2026). #}
+<!-- ── Modal: nova conta ─────────────────────────────────────────── -->
+<div id="ctModalNova" class="modal" style="display:none;">
+    <div class="modal-content" style="max-width:560px;">
+        <div class="modal-header">
+            <h3>Nova Conta Bancária</h3>
+            <button class="modal-close" onclick="ctFecharNova()">&times;</button>
+        </div>
+        <form method="POST" action="{{ url_for('financeiro.conta_nova') }}">
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>Empresa *</label>
+                    <select name="empresa_id" id="ctNovaEmp" class="form-control" required>
+                        {% for e in fin_empresas %}
+                        <option value="{{ e.cliente_id }}"
+                                {% if sel_empresas | length == 1 and sel_empresas[0] == e.cliente_id %}selected{% endif %}>
+                            {{ e.apelido }} — {{ e.nome_razao_social }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Banco (código) *</label>
+                        <select name="banco_id" id="ctNovaBanco" class="form-control" required>
+                            <option value="237">237 — Bradesco</option>
+                            <option value="336">336 — C6</option>
+                            <option value="341">341 — Itaú</option>
+                            <option value="033">033 — Santander</option>
+                            <option value="001">001 — Banco do Brasil</option>
+                            <option value="104">104 — Caixa</option>
+                            <option value="748">748 — Sicredi</option>
+                            <option value="756">756 — Sicoob</option>
+                            <option value="403">403 — Cora</option>
+                            <option value="364">364 — EFí</option>
+                            <option value="077">077 — Inter</option>
+                            <option value="260">260 — Nubank</option>
+                            <option value="323">323 — Mercado Pago</option>
+                            <option value="348">348 — XP</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Agência</label>
+                        <input type="text" name="agencia" class="form-control"
+                               placeholder="opcional">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Conta *</label>
+                        <input type="text" name="conta" id="ctNovaConta" class="form-control" required
+                               placeholder="como aparece no extrato">
+                    </div>
+                    <div class="form-group">
+                        <label>Apelido</label>
+                        <input type="text" name="apelido" class="form-control"
+                               placeholder="Ex.: Conta movimento">
+                    </div>
+                </div>
+                <small style="color:#6b7280;">
+                    Com a conta cadastrada, o extrato dela entra sozinho e o nome do
+                    arquivo deixa de importar.
+                </small>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline" onclick="ctFecharNova()">Cancelar</button>
+                <button type="submit" class="btn btn-primary">Cadastrar</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- ── Ligar cobrança na conta (15/11/2026, modelo aprovado 14/11) ─────────── -->
+<style>
+#lgModal{position:fixed;inset:0;z-index:2000;background:rgba(15,40,30,.45);display:none;align-items:center;justify-content:center;padding:16px}
+#lgModal .lg-box{display:grid;grid-template-columns:280px minmax(0,1fr);width:100%;max-width:960px;max-height:calc(100vh - 32px);overflow:auto;border-radius:16px;background:#fff;box-shadow:0 20px 60px rgba(0,0,0,.25)}
+#lgModal .lg-esq{background:#0f3d2e;color:#d1fae5;padding:24px 20px;display:flex;flex-direction:column;gap:18px}
+#lgModal .lg-banco{display:flex;align-items:center;gap:12px}
+#lgModal .lg-logo{width:52px;height:52px;border-radius:12px;background:#fff;display:grid;place-items:center;flex:0 0 auto}
+#lgModal .lg-logo img{width:34px;height:34px}
+#lgModal .lg-banco b{display:block;color:#fff;font-size:17px}
+#lgModal .lg-banco small{font-family:ui-monospace,Consolas,monospace;font-size:12.5px;color:#a7f3d0}
+#lgModal .lg-cad{background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.12);border-radius:10px;padding:12px 14px;font-size:13px;line-height:1.55}
+#lgModal .lg-cad h5{margin:0 0 6px;font-size:11px;letter-spacing:1px;text-transform:uppercase;color:#a7f3d0}
+#lgModal .lg-cad div{display:flex;gap:7px;color:#fff}
+#lgModal .lg-cad i{color:#a7f3d0;margin-top:3px;font-size:11px}
+#lgModal .lg-passo{display:flex;gap:12px;align-items:flex-start;padding:10px 12px;border-radius:10px;font-size:13px}
+#lgModal .lg-passo.on{background:rgba(255,255,255,.1)}
+#lgModal .lg-passo .n{width:26px;height:26px;border-radius:50%;display:grid;place-items:center;flex:0 0 auto;border:2px solid #22c55e;color:#22c55e;font-weight:800;font-size:12px}
+#lgModal .lg-passo.on .n{background:#22c55e;color:#0f3d2e}
+#lgModal .lg-passo b{display:block;color:#fff}
+#lgModal .lg-passo small{color:#a7f3d0}
+#lgModal .lg-dir{padding:26px 28px;display:flex;flex-direction:column;gap:14px;min-width:0}
+#lgModal h3{margin:0;font-size:21px;color:#0f3d2e}
+#lgModal .lg-sub{margin:-8px 0 0;font-size:13.5px;color:#64748b}
+#lgModal .lg-g2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+#lgModal label.lg-l{display:block;font-size:11.5px;font-weight:800;letter-spacing:.4px;text-transform:uppercase;color:#334155;margin-bottom:5px}
+#lgModal input[type=text],#lgModal input[type=password]{width:100%;font:inherit;font-size:14px;border:1px solid #d7e3dc;border-radius:9px;padding:10px 12px;min-height:44px;background:#fff;color:#0f172a}
+#lgModal input:focus{outline:0;border-color:#22c55e;box-shadow:0 0 0 2px rgba(34,197,94,.15)}
+#lgModal .lg-ajuda{font-size:12px;color:#7d968a;margin-top:4px}
+#lgModal .lg-cert{display:flex;align-items:center;gap:12px;border:1px solid #bbf7d0;background:#f0fdf4;border-radius:10px;padding:12px 14px;font-size:13px}
+#lgModal .lg-cert.mal{border-color:#fecaca;background:#fff7f7}
+#lgModal .lg-cert b{display:block;color:#0f172a;font-size:13.5px}
+#lgModal .lg-cert small{color:#64748b}
+#lgModal .lg-cic{width:38px;height:38px;border-radius:9px;display:grid;place-items:center;background:#dcfce7;color:#15803d;flex:0 0 auto}
+#lgModal .lg-cic.mal{background:#fee2e2;color:#b91c1c}
+#lgModal .lg-seg{display:inline-flex;border:1px solid #d7e3dc;border-radius:9px;padding:3px;background:#f6f9f7}
+#lgModal .lg-seg label{margin:0;cursor:pointer}
+#lgModal .lg-seg input{position:absolute;opacity:0;pointer-events:none}
+#lgModal .lg-seg span{display:block;padding:8px 16px;border-radius:7px;font-size:13.5px;font-weight:700;color:#64748b}
+#lgModal .lg-seg input:checked + span{background:#fff;color:#0f3d2e;box-shadow:0 1px 3px rgba(0,0,0,.12)}
+#lgModal .lg-seg input:focus-visible + span{outline:2px solid #15803d}
+#lgModal .lg-pad{border:1px dashed #d7e3dc;border-radius:10px;padding:12px 14px;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;font-size:13px}
+#lgModal .lg-pad dt{font-size:10.5px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;color:#7d968a}
+#lgModal .lg-pad dd{margin:2px 0 0;font-weight:700;color:#0f172a}
+#lgModal .lg-pad p{grid-column:1 / -1;margin:0;font-size:12.5px;color:#64748b}
+#lgModal .lg-pe{display:flex;justify-content:flex-end;gap:10px;border-top:1px solid #e3ece7;padding-top:14px;margin-top:2px}
+#lgModal .lg-pe button{font:inherit;font-size:14px;font-weight:700;border-radius:9px;padding:10px 18px;min-height:44px;cursor:pointer}
+#lgModal .lg-cancel{border:1px solid #d7e3dc;background:#fff;color:#334155}
+#lgModal .lg-ok{border:1px solid #15803d;background:#15803d;color:#fff}
+#lgModal .lg-ok:disabled{opacity:.55;cursor:not-allowed}
+#lgModal a.lg-alt{font-size:12px;color:#15803d;font-weight:700}
+@media (max-width:760px){
+  #lgModal{padding:0;align-items:stretch}
+  #lgModal .lg-box{grid-template-columns:minmax(0,1fr);max-height:100vh;border-radius:0}
+  #lgModal .lg-esq{padding:18px 16px;gap:12px}
+  #lgModal .lg-passos{display:none}
+  #lgModal .lg-dir{padding:18px 16px}
+  #lgModal .lg-g2{grid-template-columns:minmax(0,1fr)}
+  #lgModal .lg-pad{grid-template-columns:1fr 1fr}
+}
+</style>
+<div id="lgModal" role="dialog" aria-modal="true" aria-labelledby="lgTit">
+  <form class="lg-box" method="POST" action="" autocomplete="off" enctype="multipart/form-data">
+    <aside class="lg-esq">
+      <div class="lg-banco"><span class="lg-logo"><img id="lgLogo" src="{{ url_for('static', filename='images/bancos/237.svg') }}" alt=""></span>
+        <span><b id="lgNome">Bradesco</b><small id="lgNum"></small></span></div>
+      <div class="lg-cad"><h5>Já vem do cadastro</h5>
+        <div><i class="fas fa-lock"></i><span id="lgEmp"></span></div>
+        <div><i class="fas fa-lock"></i><span id="lgAgCc"></span></div>
+        <a href="#" id="lgContaAlt" class="lg-alt" style="color:#a7f3d0">A conta da cobrança é sem o dígito? Corrigir</a>
+      </div>
+      <div class="lg-passos">
+        <div class="lg-passo on"><span class="n">1</span><span><b>Acesso ao banco</b><small id="lgPasso1">chaves do portal Bradesco</small></span></div>
+        <div class="lg-passo"><span class="n"><i class="fas fa-check"></i></span><span><b>Boleto</b><small>já vem do padrão do escritório</small></span></div>
+        <div class="lg-passo"><span class="n"><i class="fas fa-check"></i></span><span><b>Aviso ao cliente</b><small>Financeiro · pelo nosso app</small></span></div>
+      </div>
+    </aside>
+    <div class="lg-dir">
+      <h3 id="lgTit">Acesso ao banco</h3>
+      <p class="lg-sub" id="lgSub">Cole as duas chaves que o portal do Bradesco mostrou. O resto já está pronto.</p>
+      <div class="lg-g2">
+        <div><label class="lg-l" for="lgCid">Client ID</label><input type="text" id="lgCid" name="client_id" spellcheck="false"></div>
+        <div id="lgSecWrap"><label class="lg-l" for="lgSec">Client Secret</label><input type="password" id="lgSec" name="client_secret" spellcheck="false" autocomplete="new-password"></div>
+      </div>
+      <div id="lgCertWrap"><label class="lg-l">Certificado digital</label><div class="lg-cert" id="lgCert"></div></div>
+      <div id="lgCoraWrap" hidden>
+        <label class="lg-l">Certificado e chave do app do Cora</label>
+        <div class="lg-cert" id="lgCoraCert"></div>
+        <div class="lg-g2" style="margin-top:8px">
+          <div><label class="lg-l" for="lgCoraCertArq">certificate.pem</label><input type="file" id="lgCoraCertArq" name="cora_cert" accept=".pem,.crt,.cer,.txt"></div>
+          <div><label class="lg-l" for="lgCoraKeyArq">private-key.key</label><input type="file" id="lgCoraKeyArq" name="cora_key" accept=".key,.pem,.txt"></div>
+        </div>
+        <div class="lg-ajuda">No app do Cora: Conta → Integrações via APIs → gerar certificado. Baixe os dois arquivos da mesma geração e anexe aqui. Eles ficam cifrados no sistema; nada vai para o Railway.</div>
+      </div>
+      <div id="lgAgWrap" hidden><label class="lg-l" for="lgAg">Agência</label><input type="text" id="lgAg" name="agencia" inputmode="numeric" maxlength="6" placeholder="4 números, sem o dígito">
+        <div class="lg-ajuda">O cadastro desta conta está sem a agência. Digite uma vez e ela fica guardada na conta.</div></div>
+      <div id="lgContaWrap" hidden><label class="lg-l" for="lgConta">Conta da cobrança (sem o dígito)</label><input type="text" id="lgConta" name="conta_cobranca" inputmode="numeric" maxlength="8">
+        <div class="lg-ajuda">Como o gerente passou. Ex.: conta 1686-5 → 1686.</div></div>
+      <div class="lg-g2">
+        <div id="lgCartWrap"><label class="lg-l" for="lgCarteira">Carteira</label><input type="text" id="lgCarteira" name="carteira" inputmode="numeric" maxlength="3">
+          <div class="lg-ajuda">o número que o gerente passou</div></div>
+        <div><label class="lg-l">Ambiente</label>
+          <div class="lg-seg"><label><input type="radio" name="ambiente" value="producao" checked><span>Produção</span></label><label><input type="radio" name="ambiente" value="homologacao"><span>Teste</span></label></div></div>
+      </div>
+      <dl class="lg-pad">
+        <div><dt>Juros e multa</dt><dd>não cobra</dd></div>
+        <div><dt>Baixa após vencer</dt><dd id="lgPadBaixa">365 dias</dd></div>
+        <div id="lgPadTel"><dt>Telefone</dt><dd>(11) 2523-1815</dd></div>
+        <div><dt>Envia por</dt><dd>Financeiro</dd></div>
+        <p><i class="fas fa-circle-check" style="color:#15803d"></i> Padrão do escritório, igual à Efí. Ao clicar, o sistema já pergunta ao banco se está tudo certo.</p>
+      </dl>
+      <div class="lg-pe">
+        <button type="button" class="lg-cancel" data-lg-fechar>Cancelar</button>
+        <button type="submit" class="lg-ok" id="lgOk">Testar e ligar <i class="fas fa-arrow-right"></i></button>
+      </div>
+    </div>
+  </form>
+</div>

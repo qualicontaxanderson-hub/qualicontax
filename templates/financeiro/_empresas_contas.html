@@ -1,0 +1,392 @@
+{# Contas bancárias dentro de EMPRESAS (21/11/2026 — Anderson: "essa ABA Contas SOME, e vamos por ela dentro do das
+   empresas... um campo que vai aparecer todos os Bancos tipo uns quadrinhos só com as logo... e no final, vamos supor
+   que existe uma conta nova teremos os CARDs na ABA empresas abaixo das empresas, e depois de vinculada some e fica
+   dentro da empresa"). Cada empresa mostra os bancos em quadrinhos com a logo; clicar abre a janela da conta com tudo o
+   que a antiga tela Contas mostrava (meses do ano, ver extrato, desativar, boletos, extrato pela API). Os arquivos que
+   chegaram de conta desconhecida ficam em cartões embaixo das empresas; vinculados, somem dali e a conta aparece na
+   empresa. Espera do _contas_ctx(): dados (o mesmo JSON da antiga tela). Mude junto com contas.html. #}
+<style>
+.me-bcos { display:flex; flex-direction:column; gap:8px; }
+.me-bcos-h { display:flex; align-items:baseline; gap:8px; }
+.me-bcos-h small { font-size:11.5px; color:#94a3b8; font-weight:600; }
+.me-bcos-h small b { color:#b45309; }
+.me-bco-l { display:flex; flex-wrap:wrap; gap:8px; }
+.me-bco { position:relative; width:52px; height:52px; border-radius:14px; background:#fff; border:1.5px solid #e3ece7; display:flex; align-items:center; justify-content:center;
+          cursor:pointer; padding:0; transition:transform .12s, border-color .12s, box-shadow .12s; box-shadow:0 2px 6px rgba(15,61,46,.05); }
+.me-bco:hover { transform:translateY(-2px); border-color:#86efac; box-shadow:0 8px 18px rgba(15,61,46,.12); }
+.me-bco img { width:30px; height:30px; border-radius:8px; }
+.me-bco > i.cor { width:22px; height:22px; border-radius:7px; display:block; }
+.me-bco .dot { position:absolute; right:-3px; bottom:-3px; width:14px; height:14px; border-radius:50%; border:2.5px solid #fff; background:#22c55e; }
+.me-bco .dot.amb { background:#f59e0b; } .me-bco .dot.verm { background:#ef4444; } .me-bco .dot.cinza { background:#cbd5e1; }
+.me-bco .cob { position:absolute; left:-6px; top:-6px; width:20px; height:20px; border-radius:50%; background:#2563eb; color:#fff; font-size:9.5px; display:flex; align-items:center; justify-content:center; border:2px solid #fff; }
+.me-bco.off { opacity:.45; }
+.me-bco.semcad { border:1.5px dashed #f59e0b; background:#fffbeb; }
+.me-bco.novo { border:1.5px dashed #c9dbd1; background:#f8fbf9; color:#16a34a; font-size:16px; }
+.me-bco.novo:hover { border-color:#16a34a; background:#f0fdf4; }
+.me-bco-vazio { font-size:12.5px; color:#94a3b8; align-self:center; }
+
+/* arquivos esperando empresa, embaixo dos cartões */
+.me-sec { display:flex; align-items:center; gap:10px; margin:26px 2px 12px; font-size:12px; font-weight:800; letter-spacing:.07em; text-transform:uppercase; color:#475569; }
+.me-sec::after { content:''; flex:1; height:1px; background:#e3ece7; }
+.me-sec .n { font-size:11.5px; font-weight:800; letter-spacing:0; background:#fef3c7; color:#b45309; border-radius:99px; padding:2px 9px; text-transform:none; }
+.me-sec small { font-weight:600; letter-spacing:0; text-transform:none; color:#94a3b8; font-size:12.5px; }
+#ctb .pend { border-radius:16px; box-shadow:0 6px 16px rgba(15,23,42,.05); }
+
+/* janela da conta */
+.bc-fundo { position:fixed; inset:0; z-index:1500; background:rgba(15,23,42,.5); backdrop-filter:blur(2px); display:none; align-items:flex-start; justify-content:center; padding:7vh 12px 12px; }
+.bc-fundo.on { display:flex; }
+.bc-cx { width:min(640px, 100%); max-height:86vh; overflow:auto; background:#f6faf7; border-radius:22px; box-shadow:0 30px 80px rgba(2,44,22,.35); }
+.bc-cab { display:flex; align-items:center; gap:14px; padding:16px 18px; color:#fff; background:linear-gradient(135deg,#0f3d2e,#16a34a); position:sticky; top:0; z-index:2; }
+.bc-logo { width:50px; height:50px; border-radius:14px; background:#fff; display:flex; align-items:center; justify-content:center; flex-shrink:0; box-shadow:0 6px 14px rgba(0,0,0,.18); }
+.bc-logo img { width:34px; height:34px; border-radius:8px; } .bc-logo i { width:24px; height:24px; border-radius:7px; display:block; }
+.bc-cab .tx { flex:1; min-width:0; } .bc-cab b { display:block; font-size:17px; } .bc-cab small { display:block; font-size:12.5px; opacity:.88; font-family:ui-monospace, Consolas, monospace; }
+.bc-x { width:34px; height:34px; border:0; border-radius:10px; background:rgba(255,255,255,.16); color:#fff; cursor:pointer; font-size:15px; flex-shrink:0; }
+.bc-x:hover { background:rgba(255,255,255,.28); }
+.bc-corpo { padding:16px 18px 18px; display:flex; flex-direction:column; gap:14px; }
+.bc-nums { display:grid; grid-template-columns:repeat(3, minmax(0,1fr)); gap:10px; }
+.bc-num { background:#fff; border:1px solid #e3ece7; border-radius:13px; padding:10px 12px; }
+.bc-num span { display:block; font-size:10.5px; font-weight:800; letter-spacing:.05em; text-transform:uppercase; color:#7d968a; }
+.bc-num b { display:block; font-size:17px; color:#0f172a; margin-top:2px; font-variant-numeric:tabular-nums; }
+.bc-bloco { background:#fff; border:1px solid #e3ece7; border-radius:14px; padding:12px 14px; display:grid; grid-template-columns:minmax(0,1fr) auto; gap:6px 12px; }
+.bc-bloco h4 { grid-column:1 / -1; margin:0; font-size:11px; font-weight:800; letter-spacing:.06em; text-transform:uppercase; color:#475569; display:flex; align-items:center; gap:8px; }
+.bc-bloco h4 .sit { margin-left:auto; text-transform:none; letter-spacing:0; }
+.bc-acoes { display:flex; flex-wrap:wrap; gap:8px; }
+.bc-acoes form { margin:0; }
+.bc-bt { display:inline-flex; align-items:center; gap:7px; border:1.5px solid #d9e7df; background:#fff; color:#0f3d2e; border-radius:11px; padding:9px 14px; font:inherit; font-size:13px; font-weight:800; cursor:pointer; text-decoration:none; }
+.bc-bt:hover { border-color:#86efac; background:#f0fdf4; color:#0f3d2e; }
+.bc-bt.pri { background:linear-gradient(135deg,#16a34a,#166534); color:#fff; border-color:transparent; }
+.bc-bt.no { color:#64748b; }
+.bc-aviso { display:flex; gap:10px; background:#fffbeb; border:1px solid #fde68a; border-radius:12px; padding:10px 12px; font-size:13px; color:#78350f; line-height:1.45; }
+
+/* rodapé: cobrança e formatos */
+.me-mais { margin-top:14px; background:#fff; border:1px solid #e3ece7; border-radius:16px; overflow:hidden; }
+.me-mais > summary { list-style:none; cursor:pointer; display:flex; align-items:center; gap:12px; padding:14px 18px; }
+.me-mais > summary::-webkit-details-marker { display:none; }
+.me-mais > summary .ic { width:38px; height:38px; border-radius:12px; display:flex; align-items:center; justify-content:center; color:#fff; flex-shrink:0; }
+.me-mais > summary .tx { flex:1; min-width:0; } .me-mais > summary b { display:block; font-size:14.5px; color:#0f172a; } .me-mais > summary small { font-size:12.5px; color:#64748b; }
+.me-mais > summary .seta { color:#94a3b8; transition:transform .15s; } .me-mais[open] > summary .seta { transform:rotate(180deg); }
+.me-mais-b { padding:4px 18px 18px; border-top:1px solid #eef2f0; }
+@media (max-width:640px) {
+  .bc-fundo { padding:0; align-items:flex-end; } .bc-cx { border-radius:22px 22px 0 0; max-height:94vh; }
+  .bc-nums { grid-template-columns:1fr 1fr; }
+}
+</style>
+
+<div class="bc-fundo" id="bcModal" onclick="if (event.target === this) bcFechar()"><div class="bc-cx" role="dialog" aria-modal="true" id="bcCx"></div></div>
+
+<script id="ctDados" type="application/json">{{ dados | tojson }}</script>
+<script id="ctUrls" type="application/json">{{ {
+    'resolver': url_for('financeiro.pendencia_resolver', pid=0),
+    'abrir_pdf': url_for('financeiro.pendencia_abrir_pdf', pid=0),
+    'alternar': url_for('financeiro.conta_alternar', conta_id=0),
+    'extrato': url_for('financeiro.extrato'),
+} | tojson }}</script>
+<script>
+function ctAbrirNova(empresaId, conta) {
+    if (empresaId) document.getElementById('ctNovaEmp').value = empresaId;
+    if (conta) document.getElementById('ctNovaConta').value = conta;
+    document.getElementById('ctModalNova').style.display = 'block';
+}
+function ctFecharNova() { document.getElementById('ctModalNova').style.display = 'none'; }
+function bcFechar() { document.getElementById('bcModal').classList.remove('on'); }
+
+(function () {
+const D = JSON.parse(document.getElementById('ctDados').textContent);
+const U = JSON.parse(document.getElementById('ctUrls').textContent);
+const ANO = D.ano, MES_ABERTO = D.mes_aberto;
+const ultimoMesFechado = Math.min(12, MES_ABERTO - 1);
+const MESES = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const url = (u, id) => u.replace(/\/0(\/|$)/, '/' + id + '$1');
+const ID_POR_NOME = Object.fromEntries(D.contas.map(c => [c.banco_nome, c.banco_id]));
+const corDe = (id, nome) => D.cores[String(id || ID_POR_NOME[nome] || '').replace(/^0+/, '')] || '#94a3b8';
+const LOGOS = D.logos || {};
+const chaveBanco = (id, nome) => String(id || ID_POR_NOME[nome] || '').replace(/^0+/, '');
+const marca = (id, nome, tam = 20) => { const k = chaveBanco(id, nome);
+  return LOGOS[k] ? `<img class="bco-logo" src="${LOGOS[k]}" alt="" style="width:${tam}px;height:${tam}px">` : `<i class="cor" style="background:${corDe(id, nome)}"></i>`; };
+const apel = Object.fromEntries(D.emps.map(e => [e.cliente_id, e]));
+const dm = iso => iso ? new Date(iso.slice(0, 10) + 'T12:00').toLocaleDateString('pt-BR', {day:'2-digit', month:'2-digit'}) : '';
+const dmy = iso => iso ? new Date(iso.slice(0, 10) + 'T12:00').toLocaleDateString('pt-BR') : '';
+const COB_POR_CONTA = Object.fromEntries(D.cobertura.filter(c => c.conta_id).map(c => [c.conta_id, c]));
+const primeiroMes = meses => { const ks = Object.keys(meses || {}).map(Number).filter(m => meses[m]); return ks.length ? Math.min(...ks) : MES_ABERTO; };
+const nomeMes = m => MESES[m - 1] || '';
+
+function estadoConta(c) {
+  if (!c.ativo) return {k:'off', t:'Desativada', cls:'cinza'};
+  const cb = COB_POR_CONTA[c.id];
+  if (!cb || !cb.total) return {k:'nunca', t:'Nenhum extrato em ' + ANO, cls:'verm'};
+  if (!ultimoMesFechado || cb.meses[ultimoMesFechado]) return {k:'dia', t:'Em dia', cls:'verde'};
+  return {k:'atraso', t:'Falta ' + nomeMes(ultimoMesFechado), cls:'amb'};
+}
+function tipoPend(p) {
+  if (p.banco_nome === 'PDF com senha' && !p.conta) return {k:'senha', t:'PDF com senha', cls:'amb'};
+  if (p.banco_nome === 'PDF de outro banco' || p.banco_nome === 'CSV de outro layout') return {k:'formato', t:'Formato que não leio', cls:'cinza'};
+  if (!p.conta) return {k:'semconta', t:'Arquivo sem a conta', cls:'amb'};
+  return {k:'empresa', t:'Dizer de quem é', cls:'verde'};
+}
+function tira(meses) {
+  const p0 = primeiroMes(meses);
+  let h = '<div class="tira">';
+  for (let m = 1; m <= 12; m++) {
+    const n = meses?.[m];
+    h += n ? `<span class="ok" title="${nomeMes(m)}: ${n} lançamento(s)">${n}</span>`
+           : (m < MES_ABERTO && m > p0) ? `<span class="falta" title="${nomeMes(m)}: sem extrato">—</span>` : '<span class="fut">·</span>';
+  }
+  return h + '</div><div class="tira-rot">' + MESES.map(x => `<span>${x[0]}</span>`).join('') + '</div>';
+}
+
+/* ---------- quadrinhos dos bancos em cada empresa ---------- */
+const DOT = {dia:'', atraso:'amb', nunca:'verm', off:'cinza'};
+function quadrinhos() {
+  document.querySelectorAll('.me-bco-l[data-emp]').forEach(box => {
+    const emp = +box.dataset.emp;
+    const cs = D.contas.filter(c => c.empresa_id === emp).sort((a, b) => (b.ativo - a.ativo) || String(a.banco_nome).localeCompare(String(b.banco_nome)));
+    const sc = D.cobertura.filter(c => !c.cadastrada && c.empresa_id === emp);
+    let h = cs.map(c => { const st = estadoConta(c), nome = c.apelido && c.apelido !== c.banco_nome ? c.apelido : (c.banco_nome || c.banco_id);
+      return `<button type="button" class="me-bco ${c.ativo ? '' : 'off'}" data-conta="${c.id}" title="${esc(nome)} · cc ${esc(c.conta)} · ${esc(st.t)}">${marca(c.banco_id, c.banco_nome, 30)}${c.cob && c.cob.ativo ? '<span class="cob" title="boletos ligados"><i class="fas fa-barcode"></i></span>' : ''}<span class="dot ${DOT[st.k]}"></span></button>`; }).join('');
+    h += sc.map((s, i) => `<button type="button" class="me-bco semcad" data-semcad="${emp}:${i}" title="${esc(s.banco)} · cc ${esc(s.conta)} · chegou extrato e a conta não está cadastrada">${marca(null, s.banco, 30)}<span class="dot amb"></span></button>`).join('');
+    h += `<button type="button" class="me-bco novo" data-nova="${emp}" title="Cadastrar outra conta desta empresa"><i class="fas fa-plus"></i></button>`;
+    box.innerHTML = h;
+    const n = cs.filter(c => c.ativo).length, atr = cs.filter(c => ['atraso', 'nunca'].includes(estadoConta(c).k)).length;
+    const lab = document.querySelector(`[data-bc-n="${emp}"]`);
+    if (lab) lab.innerHTML = (n ? `${n} conta${n !== 1 ? 's' : ''}` : 'nenhuma conta') + (atr && ultimoMesFechado ? ` · <b>${atr} sem o extrato de ${nomeMes(ultimoMesFechado)}</b>` : '') + (sc.length ? ` · <b>${sc.length} sem cadastro</b>` : '');
+  });
+}
+
+/* ---------- janela da conta ---------- */
+function janelaConta(id) {
+  const c = D.contas.find(x => x.id === id); if (!c) return;
+  const st = estadoConta(c), cb = COB_POR_CONTA[c.id] || {}, e = apel[c.empresa_id] || {};
+  const nome = c.apelido && c.apelido !== c.banco_nome ? c.apelido : (c.banco_nome || c.banco_id);
+  const nMeses = Object.values(cb.meses || {}).filter(Boolean).length;
+  const cobHtml = blocoCobranca(c);
+  document.getElementById('bcCx').innerHTML = `
+    <header class="bc-cab"><span class="bc-logo">${marca(c.banco_id, c.banco_nome, 34)}</span>
+      <div class="tx"><b>${esc(nome)}</b><small>${c.agencia ? 'ag ' + esc(c.agencia) + ' · ' : ''}cc ${esc(c.conta)} · ${esc(e.apelido || '')}</small></div>
+      <button type="button" class="bc-x" onclick="bcFechar()" title="Fechar (Esc)"><i class="fas fa-xmark"></i></button></header>
+    <div class="bc-corpo">
+      <div class="bc-nums">
+        <div class="bc-num"><span>Situação</span><b><span class="sit ${st.cls}">${esc(st.t)}</span></b></div>
+        <div class="bc-num"><span>Último extrato</span><b>${cb.ultimo ? dmy(cb.ultimo) : '—'}</b></div>
+        <div class="bc-num"><span>Lançamentos em ${ANO}</span><b>${(cb.total || 0).toLocaleString('pt-BR')}</b></div>
+      </div>
+      <div class="bc-bloco"><h4><i class="fas fa-calendar-days"></i> Extratos de ${ANO} <span class="sit cinza">${nMeses} mês(es) com extrato</span></h4>${tira(cb.meses)}
+        <div class="leg" style="grid-column:1 / -1;margin:4px 0 0"><span><i style="background:var(--verde-claro)"></i>com extrato (nº de lançamentos)</span><span><i style="background:var(--verm-fundo)"></i>mês fechado sem extrato</span></div></div>
+      ${cobHtml ? `<div class="bc-bloco"><h4><i class="fas fa-barcode"></i> Boletos e extrato pelo banco</h4>${cobHtml}</div>` : ''}
+      <div class="bc-acoes">
+        ${cb.total ? `<a class="bc-bt pri" href="${esc(U.extrato)}?conta=c${c.id}"><i class="fas fa-list"></i> Ver extrato</a>` : ''}
+        <form method="POST" action="${esc(url(U.alternar, c.id))}"><button class="bc-bt no" type="submit" title="${c.ativo ? 'Os extratos desta conta voltam a ficar pendentes' : 'Volta a aceitar os extratos'}"><i class="fas fa-${c.ativo ? 'toggle-off' : 'toggle-on'}"></i> ${c.ativo ? 'Desativar conta' : 'Reativar conta'}</button></form>
+      </div>
+    </div>`;
+  document.getElementById('bcModal').classList.add('on');
+}
+function janelaSemCad(emp, i) {
+  const s = D.cobertura.filter(c => !c.cadastrada && c.empresa_id === emp)[i]; if (!s) return;
+  document.getElementById('bcCx').innerHTML = `
+    <header class="bc-cab"><span class="bc-logo">${marca(null, s.banco, 34)}</span>
+      <div class="tx"><b>${esc(s.banco)}</b><small>cc ${esc(s.conta)} · ${esc((apel[emp] || {}).apelido || '')}</small></div>
+      <button type="button" class="bc-x" onclick="bcFechar()"><i class="fas fa-xmark"></i></button></header>
+    <div class="bc-corpo">
+      <div class="bc-aviso"><i class="fas fa-triangle-exclamation"></i><span>Chegou extrato desta conta, mas ela não está cadastrada: o próximo extrato fica parado esperando. Cadastre uma vez e eles passam a entrar sozinhos.</span></div>
+      <div class="bc-bloco"><h4><i class="fas fa-calendar-days"></i> Extratos de ${ANO}</h4>${tira(s.meses)}</div>
+      <div class="bc-acoes"><button type="button" class="bc-bt pri" data-cad-emp="${emp}" data-cad-conta="${esc(s.conta)}"><i class="fas fa-plus"></i> Cadastrar esta conta</button></div>
+    </div>`;
+  document.getElementById('bcModal').classList.add('on');
+}
+
+/* ---------- boletos e extrato pela API (o mesmo da antiga tela Contas) ---------- */
+const COM_COBRANCA = {'237': 'Bradesco', '403': 'Cora'};
+const PROV_DE = {'237': 'bradesco', '403': 'cora'};
+const temCobranca = c => !!COM_COBRANCA[String(c.banco_id || '').replace(/^0+/, '')];
+const cobVisivel = c => !!c.cob || (D.cob_on || []).includes(c.id);
+function chaveCobranca(c, on) {
+  return `<form class="cc-chave" method="POST" action="${esc(url(D.url_cob_visivel, c.id))}">
+      <input type="hidden" name="ligar" value="${on ? '0' : '1'}">
+      <button type="submit" class="sw ${on ? 'on' : ''}" role="switch" aria-checked="${on}" title="${on ? 'Esconder a cobrança desta conta' : 'Mostrar a cobrança nesta conta'}"><i></i></button>
+      <span>Cobrança ${on ? 'ligada nesta conta' : 'desligada'}</span></form>`;
+}
+function blocoCobranca(c) {
+  if (!D.pode_ligar || !c.ativo) return '';
+  const k = c.cob;
+  if (!k && !cobVisivel(c)) return chaveCobranca(c, false);
+  if (!k && !temCobranca(c)) return `${chaveCobranca(c, true)}
+      <div class="cc-cob"><span class="ic"><i class="fas fa-barcode"></i></span>
+        <span class="tx"><b>Boletos</b><small>a cobrança pela API ainda não existe para ${esc(c.banco_nome || 'este banco')} — hoje: Bradesco, Cora e Efí</small></span><span class="bol"></span></div>`;
+  if (!k) return `${chaveCobranca(c, true)}
+      <div class="cc-cob"><span class="ic"><i class="fas fa-barcode"></i></span>
+        <span class="tx"><b>Boletos</b><small>ainda não ligado</small></span><span class="bol"></span></div>
+      <button class="cc-ligar" type="button" data-ligar="${c.id}"><i class="fas fa-plug"></i> Ligar cobrança</button>`;
+  const ok = (k.teste || '').startsWith('OK');
+  const amb = k.ambiente === 'producao' ? 'Produção' : 'Teste (sandbox)';
+  if (k.provedor === 'efi') {
+    const estE = !k.ativo ? 'desligado' : `ligado · ${amb}${k.testado_em ? ' · teste ' + (ok ? 'OK' : 'falhou') + ' em ' + dmy(k.testado_em) : ''}`;
+    return `
+      <div class="cc-cob ${k.ativo && ok ? 'on' : (k.teste && !ok ? 'mal' : '')}"><span class="ic"><i class="fas fa-barcode"></i></span>
+        <span class="tx"><b>Boletos</b><small>${esc(estE)}</small></span><span class="bol"></span></div>
+      <div class="cc-cob-acoes"><a class="lnk" href="#meCobranca" data-ir-cob="1"><i class="fas fa-gear"></i> Ver e testar em Cobrança dos bancos</a></div>`;
+  }
+  let est = !k.ativo ? 'desligado' : !k.teste ? 'ligado · ainda não testado'
+            : ok ? `ligado · ${amb} · teste OK em ${dmy(k.testado_em)}` : `ligado · ${amb} · o último teste falhou`;
+  if (k.provedor === 'cora' && k.cert_validade) est += ` · certificado vence ${dmy(k.cert_validade)}`;
+  return `
+      <div class="cc-cob ${k.ativo && ok ? 'on' : (k.teste && !ok ? 'mal' : '')}"><span class="ic"><i class="fas fa-barcode"></i></span>
+        <span class="tx"><b>Boletos</b><small>${esc(est)}</small>${k.teste && !ok ? `<small style="color:var(--verm)">${esc(k.teste)}</small>` : ''}</span><span class="bol"></span></div>
+      <div class="cc-cob-acoes">
+        <form method="POST" action="${esc(url(D.url_testar_cob, c.id))}"><button class="lnk" type="submit"><i class="fas fa-vial"></i> Testar</button></form>
+        <button class="lnk" type="button" data-ligar="${c.id}"><i class="fas fa-key"></i> ${k.provedor === 'cora' ? 'Trocar chave ou certificado' : 'Trocar chaves ou carteira'}</button>
+      </div>${blocoExtrato(c)}`;
+}
+function blocoExtrato(c) {
+  const k = c.cob;
+  if (!k || !k.ativo || k.ambiente !== 'producao') return '';
+  const x = c.ext;
+  const quando = x && x.em ? new Date(x.em.replace(' ', 'T')).toLocaleString('pt-BR', {day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit'}) : '';
+  const est = !x ? 'ligado · entra sozinho de 30 em 30 minutos, das 7h às 22h'
+            : x.erro ? `a última puxada falhou (${quando})`
+            : `puxado em ${quando} · ${x.lidos} lido(s), ${x.novos} novo(s), ${(x.baixados || []).length} baixa(s)`;
+  const pend = x && !x.erro && (x.pendentes || []).length ? `<small>${x.pendentes.length} Pix recebido(s) sem título — escolha no Extrato (Vincular)</small>` : '';
+  return `
+      <div class="cc-cob ${x && x.erro ? 'mal' : 'on'}"><span class="ic"><i class="fas fa-file-invoice-dollar"></i></span>
+        <span class="tx"><b>Extrato pela API</b><small>${esc(est)}</small>${pend}${x && x.erro ? `<small style="color:var(--verm)">${esc(x.erro)}</small>` : ''}</span><span class="bol"></span></div>
+      <div class="cc-cob-acoes"><form method="POST" action="${esc(url(D.url_puxar_ext, c.id))}" data-puxar="1"><button class="lnk" type="submit"><i class="fas fa-rotate"></i> Puxar agora</button></form></div>`;
+}
+function abrirLigar(id) {
+  const c = D.contas.find(x => x.id === id); if (!c) return;
+  bcFechar();
+  const e = apel[c.empresa_id] || {}, k = c.cob, cert = (D.certs || {})[c.empresa_id];
+  const prov = PROV_DE[String(c.banco_id || '').replace(/^0+/, '')] || 'bradesco', cora = prov === 'cora';
+  const m = document.getElementById('lgModal');
+  m.querySelector('#lgPasso1').textContent = cora ? 'Client ID, certificado e chave do app do Cora' : 'chaves do portal Bradesco';
+  m.querySelector('#lgSub').textContent = cora ? 'Cole o Client ID e anexe o certificado e a chave que o app do Cora gerou. O resto já está pronto.'
+                                               : 'Cole as duas chaves que o portal do Bradesco mostrou. O resto já está pronto.';
+  ['lgSecWrap', 'lgCertWrap', 'lgCartWrap', 'lgPadTel'].forEach(i => { m.querySelector('#' + i).hidden = cora; });
+  m.querySelector('#lgCoraWrap').hidden = !cora;
+  m.querySelector('#lgPadBaixa').textContent = cora ? 'não há (fica em atraso até pagar)' : '365 dias';
+  m.querySelector('#lgContaAlt').hidden = cora;
+  m.querySelector('form').action = url(D.url_ligar, c.id);
+  m.querySelector('#lgNome').textContent = COM_COBRANCA[String(c.banco_id).replace(/^0+/, '')] || c.banco_nome;
+  const lg = LOGOS[String(c.banco_id || '').replace(/^0+/, '')]; if (lg) m.querySelector('#lgLogo').src = lg;
+  m.querySelector('#lgNum').textContent = (c.agencia ? 'ag ' + c.agencia + ' · ' : '') + 'cc ' + c.conta;
+  const doc = String(D.cnpjs?.[c.empresa_id] || '').replace(/\D/g, '');
+  const docF = doc.length === 14 ? doc.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, '$1.$2.$3/$4-$5') : doc;
+  m.querySelector('#lgEmp').textContent = (e.apelido || '') + (docF ? ' · CNPJ ' + docF : '');
+  const contaCob = (k && k.conta) || String(c.conta || '').replace(/\D/g, '').slice(0, 7);
+  m.querySelector('#lgAgCc').textContent = (c.agencia ? 'Agência ' + c.agencia + ' · ' : '') + 'Conta ' + contaCob;
+  m.querySelector('#lgAgWrap').hidden = !!(c.agencia || (c.cob && c.cob.agencia));
+  m.querySelector('#lgAg').required = !c.agencia;
+  m.querySelector('#lgConta').value = contaCob;
+  m.querySelector('#lgContaWrap').hidden = true;
+  m.querySelector('#lgCarteira').value = (k && k.carteira) || '09';
+  m.querySelector(`input[name="ambiente"][value="${k && k.ambiente === 'homologacao' ? 'homologacao' : 'producao'}"]`).checked = true;
+  ['lgCid', 'lgSec'].forEach(i => { const x = m.querySelector('#' + i); x.value = ''; x.required = !k;
+    x.placeholder = k ? 'deixe em branco para manter a que já está salva' : 'cole aqui'; });
+  m.querySelector('#lgCert').innerHTML = cert
+    ? `<span class="lg-cic"><i class="fas fa-file-shield"></i></span><span><b>Certificado A1 da ${esc(e.apelido || 'empresa')}</b><small>já cadastrado no sistema · vence ${dmy(cert.validade)}</small></span>`
+    : `<span class="lg-cic mal"><i class="fas fa-triangle-exclamation"></i></span><span><b>A empresa não tem certificado A1 válido</b><small>cadastre o certificado na ficha da empresa antes de ligar</small></span>`;
+  m.querySelector('#lgCert').classList.toggle('mal', !cert);
+  if (cora) {
+    const temCert = !!(k && k.cert_validade);
+    m.querySelector('#lgSec').required = false;
+    m.querySelector('#lgCoraCert').innerHTML = temCert
+      ? `<span class="lg-cic"><i class="fas fa-file-shield"></i></span><span><b>Certificado do Cora já enviado</b><small>vence ${dmy(k.cert_validade)} · anexe os dois arquivos só para trocar</small></span>`
+      : `<span class="lg-cic mal"><i class="fas fa-triangle-exclamation"></i></span><span><b>Ainda sem certificado e chave</b><small>anexe o certificate.pem e a private-key.key gerados no app do Cora</small></span>`;
+    m.querySelector('#lgCoraCert').classList.toggle('mal', !temCert);
+    ['lgCoraCertArq', 'lgCoraKeyArq'].forEach(i => { const x = m.querySelector('#' + i); x.value = ''; x.required = !k; });
+    m.querySelector('#lgOk').disabled = false;
+  } else {
+    ['lgCoraCertArq', 'lgCoraKeyArq'].forEach(i => { const x = m.querySelector('#' + i); x.value = ''; x.required = false; });
+    m.querySelector('#lgOk').disabled = !cert;
+  }
+  m.style.display = 'flex';
+  setTimeout(() => m.querySelector(cora ? (k ? '#lgCoraCertArq' : '#lgCid') : (k ? '#lgCarteira' : '#lgCid')).focus(), 30);
+}
+
+/* ---------- arquivos esperando empresa (embaixo dos cartões) ---------- */
+function msgCurta(p, t) {
+  if (t.k === 'empresa') return 'Conta nova. Diga uma vez de quem é: a conta vai para dentro da empresa e os próximos extratos dela entram sozinhos.';
+  if (t.k === 'semconta') return `Este ${esc(p.banco_nome)} não traz o número da conta. Informe a conta e a empresa, ou mande o OFX.`;
+  if (t.k === 'senha') return 'O PDF tem senha e nenhum CPF/CNPJ cadastrado abriu. Informe o documento do titular e eu tento de novo.';
+  return esc(p.motivo);
+}
+function cartaoPend(p, t) {
+  const orfa = !p.empresa_id;
+  const sug = (D.sugestao_emp || {})[p.id];
+  const opts = '<option value="">Escolha a empresa</option>' + D.emps.map(e =>
+    `<option value="${e.cliente_id}" ${(p.empresa_id || sug) === e.cliente_id ? 'selected' : ''}>${esc(e.numero_cliente)} · ${esc(e.apelido)}</option>`).join('');
+  const cab = `<div class="pend-top">
+      <span class="banco">${p.banco_id ? marca(p.banco_id, p.banco_nome, 22) : '<i style="background:var(--apagado)"></i>'}${esc(p.banco_nome || 'Banco não identificado')}</span>
+      <span class="sit ${t.cls}">${t.t}</span></div>
+    <div class="pend-arq">${esc(p.arquivo)}</div>
+    <div class="pend-meta">
+      ${p.conta ? `<span>conta <b>${esc(p.conta)}</b></span>` : ''}
+      ${p.qtd_lancamentos ? `<span><b>${p.qtd_lancamentos}</b> lançamento(s)</span>` : ''}
+      ${p.periodo ? `<span>${esc(p.periodo)}</span>` : ''}
+      ${orfa ? '<span class="sit amb" title="Chegou sem o número da empresa no nome e com conta desconhecida">sem identificação</span>'
+             : `<span>o nome diz empresa <b>${esc(p.numero_no_nome || '')}</b>${p.nome_razao_social ? ' (' + esc(p.nome_razao_social.trim()) + ')' : ''}</span>`}
+      ${p.criado_em ? `<span>chegou ${new Date(p.criado_em).toLocaleDateString('pt-BR')}</span>` : ''}
+    </div>
+    <div class="pend-msg">${msgCurta(p, t)}</div>`;
+  if (t.k === 'formato')
+    return `<div class="pend cinza">${cab}<div class="pend-pe"><i class="fas fa-file-pdf"></i>&nbsp; Nada a responder aqui. Apague o arquivo da pasta e o cartão some sozinho.</div></div>`;
+  if (t.k === 'senha')
+    return `<div class="pend amb">${cab}
+      <form class="pend-form doc" method="POST" action="${esc(url(U.abrir_pdf, p.id))}">
+        <div><label for="ctd${p.id}">CPF/CNPJ do titular</label><input id="ctd${p.id}" name="documento" inputmode="numeric" placeholder="só os números" required></div>
+        <button class="ct-btn" type="submit"><i class="fas fa-unlock"></i> Tentar abrir</button>
+      </form></div>`;
+  return `<div class="pend ${t.k === 'semconta' ? 'amb' : ''}">${cab}
+    <form class="pend-form" method="POST" action="${esc(url(U.resolver, p.id))}">
+      <div class="larga"><label for="cte${p.id}">De qual empresa é *</label><select id="cte${p.id}" name="empresa_id" required>${opts}</select></div>
+      <div><label for="ctc${p.id}">Conta *</label><input id="ctc${p.id}" name="conta" value="${esc(p.conta || '')}" placeholder="número da conta" required></div>
+      <div><label for="cta${p.id}">Agência</label><input id="cta${p.id}" name="agencia" value="${esc(p.agencia || '')}" placeholder="opcional"></div>
+      <button class="ct-btn" type="submit"><i class="fas fa-check"></i> Vincular e ler</button>
+    </form></div>`;
+}
+function pendencias() {
+  const box = document.getElementById('mePend'); if (!box) return;
+  const tp = D.pend.map(p => [p, tipoPend(p)]).sort((a, b) => (a[1].k === 'formato') - (b[1].k === 'formato'));
+  const orfas = D.pend.filter(p => !p.empresa_id).length;
+  if (!tp.length) { box.innerHTML = ''; return; }
+  box.innerHTML = `<div class="me-sec">Contas novas esperando empresa <span class="n">${tp.length}</span> <small>vinculada, a conta vai para dentro da empresa e o cartão some daqui</small></div>
+    ${D.eh_admin && orfas ? `<div class="admin-aviso"><b>Você é admin:</b> ${orfas} arquivo(s) <span class="sit amb">sem identificação</span> chegaram sem o número da empresa no nome e com conta desconhecida. Nada foi lançado: eles esperam na pasta.</div>` : ''}
+    <div class="pend-grid">${tp.map(([p, t]) => cartaoPend(p, t)).join('')}</div>`;
+  const hs = document.getElementById('mePendHero');
+  if (hs) { hs.hidden = false; hs.querySelector('b').textContent = tp.length; }
+}
+
+/* ---------- formatos que o sistema lê ---------- */
+function formatos() {
+  const box = document.getElementById('meFormatos'); if (!box) return;
+  const cls = {ok:'verde', irregular:'amb', igual:'azul', nao:'cinza'};
+  box.innerHTML = `<p class="leg" style="margin:10px 0">OFX é o padrão. PDF, CSV e Excel são o mesmo extrato em outro formato; o que já entrou por um não entra de novo por outro.</p>
+   <div class="tbl-card"><div class="tbl-scroll"><table class="ct-tab fmt"><thead><tr><th>Banco</th><th>OFX</th><th>PDF</th><th>CSV</th><th>Excel</th></tr></thead><tbody>
+   ${D.formatos.map(b => `<tr><td><span class="banco">${marca(b.banco_id, null, 20)}${esc(b.nome)}</span><div class="fnota">${esc(b.banco_id)}</div></td>
+     ${['ofx', 'pdf', 'csv', 'xls'].map(k => `<td data-label="${k === 'xls' ? 'Excel' : k.toUpperCase()}"><span class="sit ${cls[b[k].status]}">${esc(b[k].rotulo)}</span><div class="fnota">${esc(b[k].nota)}</div></td>`).join('')}</tr>`).join('')}
+   </tbody></table></div></div>`;
+}
+
+document.addEventListener('click', ev => {
+  const t = ev.target;
+  let b;
+  if ((b = t.closest('[data-conta]'))) { janelaConta(+b.dataset.conta); return; }
+  if ((b = t.closest('[data-semcad]'))) { const [e, i] = b.dataset.semcad.split(':'); janelaSemCad(+e, +i); return; }
+  if ((b = t.closest('[data-nova]'))) { ctAbrirNova(b.dataset.nova); return; }
+  if ((b = t.closest('[data-cad-emp]'))) { bcFechar(); ctAbrirNova(b.dataset.cadEmp, b.dataset.cadConta); return; }
+  if ((b = t.closest('[data-ligar]'))) { abrirLigar(+b.dataset.ligar); return; }
+  if (t.closest('[data-ir-cob]')) { ev.preventDefault(); bcFechar(); const d = document.getElementById('meCobranca'); if (d) { d.open = true; d.scrollIntoView({behavior: 'smooth'}); } return; }
+  if (t.closest('[data-lg-fechar]') || t.id === 'lgModal') document.getElementById('lgModal').style.display = 'none';
+  if (t.closest('#lgContaAlt')) { ev.preventDefault(); const w = document.getElementById('lgContaWrap'); w.hidden = false; w.querySelector('input').focus(); }
+});
+document.addEventListener('keydown', ev => { if (ev.key === 'Escape') { bcFechar(); document.getElementById('lgModal').style.display = 'none'; } });
+document.getElementById('lgModal').querySelector('form').addEventListener('submit', () => {
+  const b = document.getElementById('lgOk'); b.disabled = true; b.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Testando com o banco…';
+});
+document.addEventListener('submit', ev => {
+  if (!ev.target.matches('form[data-puxar]')) return;
+  const b = ev.target.querySelector('button'); b.disabled = true; b.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Puxando do banco…';
+});
+['bcModal', 'lgModal', 'ctModalNova'].forEach(i => { const el = document.getElementById(i); if (el) document.body.appendChild(el); });   // fora do corpo da página, para ficar por cima da barra
+quadrinhos(); pendencias(); formatos();
+if (location.hash === '#cobranca') { const d = document.getElementById('meCobranca'); if (d) { d.open = true; setTimeout(() => d.scrollIntoView(), 50); } }
+})();
+</script>
