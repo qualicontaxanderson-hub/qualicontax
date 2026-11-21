@@ -40,6 +40,11 @@
 .mc-aba-lbl { display:block; font-size:12px; font-weight:700; letter-spacing:.6px; text-transform:uppercase; opacity:.92; }
 .mc-aba-val { display:block; font-size:19px; font-weight:800; letter-spacing:-.02em; line-height:1.2; margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .mc-aba-sub { display:block; font-size:12px; color:rgba(255,255,255,.85); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.mc-aba-ico.logo { background:#fff; box-shadow:0 4px 12px rgba(0,0,0,.18); } .mc-aba-ico.logo img { border-radius:10px; }
+.mc-aba-bcos { display:flex; gap:5px; flex-wrap:nowrap; overflow:hidden; margin-top:4px; }
+.mc-aba-bco { display:inline-flex; align-items:center; gap:5px; flex-shrink:0; background:rgba(255,255,255,.95); color:#3b0764; border-radius:99px; padding:2px 9px 2px 3px; font-size:11.5px; font-weight:800; white-space:nowrap; }
+.mc-aba-bco img { border-radius:50%; } .mc-aba-bco i { width:18px; text-align:center; font-size:10px; color:#7c3aed; }
+.mc-aba-bco.rec { box-shadow:0 0 0 2px #86efac; }
 .mc-a-pes { --cor:#16a34a; --cor-e:#166534; } .mc-a-end { --cor:#2563eb; --cor-e:#1e40af; }
 .mc-a-rec { --cor:#f97316; --cor-e:#c2410c; } .mc-a-ctas { --cor:#7c3aed; --cor-e:#5b21b6; }
 
@@ -171,13 +176,15 @@
       <span class="mc-aba-txt"><span class="mc-aba-lbl">Endereço</span>
       {% if cad and cad.cidade %}<span class="mc-aba-val">{{ cad.cidade | title }}{% if cad.estado %}/{{ cad.estado }}{% endif %}</span><span class="mc-aba-sub">{{ 'completo' if not _end_falta else _end_falta ~ ' campo(s) em branco' }}</span>
       {% else %}<span class="mc-aba-val">A preencher</span><span class="mc-aba-sub">{{ 'CEP, rua, número, cidade' if cad else 'sem ficha' }}</span>{% endif %}</span></a>
-    <a class="mc-aba mc-a-rec" href="#contas"><span class="mc-aba-ico"><i class="fas fa-hand-holding-dollar"></i></span>
+    {% set _rlogo = logo_banco_url(rec.banco_codigo or rec.banco_nome) if rec else None %}
+    <a class="mc-aba mc-a-rec" href="#contas"><span class="mc-aba-ico{{ ' logo' if _rlogo }}">{% if _rlogo %}<img src="{{ _rlogo }}" alt="" width="34" height="34">{% else %}<i class="fas fa-hand-holding-dollar"></i>{% endif %}</span>
       <span class="mc-aba-txt"><span class="mc-aba-lbl">Recebe em</span>
-      {% if rec %}<span class="mc-aba-val">{{ rec.banco_nome or rec.apelido or 'Conta escolhida' }}</span><span class="mc-aba-sub">{{ ('Pix ' ~ (PIXN.get(rec.pix_tipo, rec.pix_tipo) or '') ~ ' · ' ~ rec.pix_chave) if rec.pix_chave else 'sem chave Pix' }}</span>
+      {% if rec %}<span class="mc-aba-val">{{ (rec.banco_nome or '').split('—')[-1].strip() or rec.apelido or 'Conta escolhida' }}</span><span class="mc-aba-sub">{{ ('Pix ' ~ (PIXN.get(rec.pix_tipo, rec.pix_tipo) or '') ~ ' · ' ~ rec.pix_chave) if rec.pix_chave else 'sem chave Pix' }}</span>
       {% else %}<span class="mc-aba-val">Nenhuma conta</span><span class="mc-aba-sub">cadastre onde quer receber</span>{% endif %}</span></a>
     <a class="mc-aba mc-a-ctas" href="#contas"><span class="mc-aba-ico"><i class="fas fa-building-columns"></i></span>
       <span class="mc-aba-txt"><span class="mc-aba-lbl">Contas cadastradas</span><span class="mc-aba-val">{{ contas | length }} {{ 'conta' if contas|length == 1 else 'contas' }}</span>
-      <span class="mc-aba-sub">a marcada sai no pedido de comissão</span></span></a>
+      {% if contas %}<span class="mc-aba-bcos">{% for c in contas %}{% set _u = logo_banco_url(c.banco_codigo or c.banco_nome) %}<span class="mc-aba-bco{{ ' rec' if c.recebe_pagamentos }}" title="{{ c.apelido or c.titular_nome }}">{% if _u %}<img src="{{ _u }}" alt="" width="18" height="18">{% else %}<i class="fas fa-building-columns"></i>{% endif %}{{ (c.banco_nome or 'banco').split('—')[-1].strip() }}</span>{% endfor %}</span>
+      {% else %}<span class="mc-aba-sub">a marcada sai no pedido de comissão</span>{% endif %}</span></a>
   </div>
 
   {% if cad %}
