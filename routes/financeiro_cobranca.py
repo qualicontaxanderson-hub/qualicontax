@@ -670,13 +670,39 @@ def boleto_cancelar(boleto_id):
         return redirect(volta)
     FinBoleto.atualizar_situacao(boleto_id, 'canceled')
     titulo_cancelado = False
+    voltaram = []
     if not b.get('nfse_id') and b.get('titulo_id'):      # boleto sem nota: o título nasceu com ele e vai junto
         from models.fin_titulo import FinTitulo
         titulo_cancelado = bool(FinTitulo.cancelar(b['titulo_id']))
+        # 22/11/2026 — Anderson: "quando eu cancelar o boleto, o orçamento cancela também ou volta para cobrança?". Volta: o
+        # lançamento que gerou a cobrança fica "aprovado sem cobrança" (botão Cobrar de novo em Lançamentos) e o orçamento
+        # volta para "Em cobrança". Nada se perde: o serviço foi feito e aceito; só a cobrança precisa sair de novo.
+        voltaram = _voltar_lancamentos_do_titulo(b['titulo_id'])
     registrar('escrita.cancelou_boleto', 'financeiro', tabela='fin_boletos', registro_id=boleto_id,
-              depois={'charge_id': b['charge_id'], 'titulo_cancelado': titulo_cancelado})
-    flash(f"Boleto cancelado {BANCO_EM.get(b['provedor'], 'no banco')}." + (' O título a receber foi cancelado junto.' if titulo_cancelado else ''), 'success')
+              depois={'charge_id': b['charge_id'], 'titulo_cancelado': titulo_cancelado, 'lancamentos_voltaram': voltaram or None})
+    flash(f"Boleto cancelado {BANCO_EM.get(b['provedor'], 'no banco')}." + (' O título a receber foi cancelado junto.' if titulo_cancelado else '')
+          + ((' O lançamento %s voltou para "aprovado, sem cobrança": em Lançamentos › Cobrados use "Cobrar de novo".' % ', '.join('nº %d' % x for x in voltaram)) if voltaram else ''), 'success')
     return redirect(volta)
+
+
+def _voltar_lancamentos_do_titulo(titulo_id):
+    """Título cancelado junto com o boleto: os lançamentos faturados nele voltam para APROVADO sem cobrança (titulo/boleto
+    zerados) e o orçamento de origem volta para EM COBRANÇA, com a linha do tempo dizendo o porquê."""
+    from flask_login import current_user
+    ls = execute_query("""SELECT id, orcamento_id FROM fin_lancamentos WHERE titulo_id = %s AND status = 'FATURADO'""", (titulo_id,), fetch=True) or []
+    ids = [l['id'] for l in ls]
+    if not ids:
+        return []
+    execute_query('UPDATE fin_lancamentos SET status = %%s, titulo_id = NULL, boleto_id = NULL WHERE id IN (%s)' % ','.join(str(i) for i in ids), ('APROVADO',), fetch=False)
+    for l in ls:
+        if l.get('orcamento_id'):
+            try:
+                from models.orcamento import Orcamento
+                Orcamento.mudar(l['orcamento_id'], 'COBRANCA', current_user, 'cobranca',
+                                'Boleto cancelado por %s: a cobrança precisa sair de novo. O lançamento nº %s voltou para "aprovado, sem cobrança" em Financeiro › Lançamentos (botão Cobrar de novo).' % (current_user.nome, l['id']))
+            except Exception:
+                logger.exception('[boleto] orçamento %s ao cancelar', l.get('orcamento_id'))
+    return ids
 
 
 @financeiro.route('/financeiro/boletos/<int:boleto_id>/sincronizar', methods=['POST'])

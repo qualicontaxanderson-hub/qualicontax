@@ -785,6 +785,9 @@ def _orcamento_apos(l, o_que, motivo=None, ok=None):
         if o_que == 'aprovado':
             Orcamento.mudar(l['orcamento_id'], 'CONCLUIDO', current_user, 'concluido',
                             'Cobrança aprovada por %s em Financeiro › Lançamentos%s' % (current_user.nome, '' if ok is None else (' · nota e boleto emitidos' if ok else ' · a cobrança não saiu, veja em Lançamentos')))
+        elif o_que == 'recobrado':
+            Orcamento.mudar(l['orcamento_id'], 'CONCLUIDO', current_user, 'concluido',
+                            'Cobrança emitida de novo por %s em Financeiro › Lançamentos (Cobrar de novo).' % current_user.nome)
         elif o_que == 'reprovado':
             Orcamento.mudar(l['orcamento_id'], 'APROVADO', current_user, 'reprovado',
                             'Cobrança reprovada por %s em Lançamentos%s. O orçamento volta para "aprovado": corrija e mande de novo.' % (current_user.nome, (': ' + motivo) if motivo else ''),
@@ -1090,6 +1093,8 @@ def lancamento_cobrar(lid):
     registrar('escrita.cobrou_lancamento_de_novo', 'financeiro', tabela='fin_lancamentos', registro_id=lid,
               depois={'empresa': l['nome_razao_social'], 'servico': l['servico_nome'], 'valor': str(l['valor_total']),
                       'saiu': ok, 'mensagens': msgs})
+    if ok:
+        _orcamento_apos(l, 'recobrado')
     for m in msgs:
         flash(m, 'success' if ok else 'warning')
     flash('Cobrança emitida: o lançamento está em cobrança.' if ok else 'A cobrança ainda não saiu. Corrija o que o aviso pede e cobre de novo.',
