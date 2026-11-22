@@ -86,6 +86,20 @@ def _ler_form(f):
     if not rep['rep_nome'] or not rep['rep_email']:
         raise ValueError('Informe quem assina pela empresa e o e-mail dele (a assinatura vai por e-mail).')
     empresas[0].update(rep)
+    # (d) mais um assinante pela contratante (22/11/2026 — Anderson, NH Goiatuba: "cadastro do posto, do sócio do posto + cadastro do Anderson")
+    extra = None
+    if (f.get('extra_nome') or '').strip():
+        extra = {'nome': f.get('extra_nome').strip(), 'cpf': (f.get('extra_cpf') or '').strip(), 'documento': (f.get('extra_documento') or '').strip(),
+                 'cargo': (f.get('extra_cargo') or 'representante autorizado(a)').strip(), 'email': (f.get('extra_email') or '').strip().lower(), 'celular': (f.get('extra_celular') or '').strip()}
+        if not extra['email']:
+            raise ValueError('O assinante extra (%s) precisa de e-mail: a assinatura vai por e-mail.' % extra['nome'])
+    # (c) contrato em grupo: sócios iguais passam; diferentes pedem autorização do escritório (a aprovação autoriza)
+    iguais, detalhe = PrestContrato.socios_iguais([e['cliente_id'] for e in empresas])
+    # (b) carteira: quem tem a marca escolhe se este contrato entra na carteira dele
+    carteira = None
+    _pct = execute_query('SELECT carteira_pct FROM usuarios WHERE id = %s', (current_user.id,), fetch=True, fetch_one=True) or {}
+    if _pct.get('carteira_pct') and f.get('carteira_para') == '1':
+        carteira = {'usuario_id': current_user.id, 'nome': getattr(current_user, 'nome', ''), 'pct': float(_pct['carteira_pct'])}
     areas = [a for a in f.getlist('areas') if a in AREAS]
     extras = [s.strip() for s in f.getlist('servico_extra') if (s or '').strip()]
     if not areas and not extras:
@@ -108,6 +122,9 @@ def _ler_form(f):
     assinantes = [{'papel': 'CONTRATANTE', 'ordem': 1, 'nome': rep['rep_nome'], 'cpf': rep['rep_cpf'], 'documento': rep['rep_documento'],
                    'email': rep['rep_email'], 'empresa': empresas[0]['razao'] if len(empresas) == 1 else (f.get('apelido') or '').strip().upper() or empresas[0]['razao']},
                   {'papel': 'CONTRATADA', 'ordem': 1, 'nome': q['nome'], 'cpf': q['cpf'], 'documento': q['documento'], 'email': q['email'], 'usuario_id': q['usuario_id']}]
+    if extra:
+        assinantes.insert(1, {'papel': 'CONTRATANTE', 'ordem': 2, 'nome': extra['nome'], 'cpf': extra['cpf'], 'documento': extra['documento'], 'email': extra['email'],
+                              'empresa': (extra.get('cargo') or 'autorizado(a)') + ' · ' + (empresas[0]['razao'] if len(empresas) == 1 else ((f.get('apelido') or '').strip().upper() or empresas[0]['razao']))})
     for n, uid in enumerate(f.getlist('testemunha_id'), 1):
         if not (uid or '').isdigit():
             continue
@@ -130,6 +147,8 @@ def _ler_form(f):
         'inicio': (f.get('inicio') or date.today().isoformat()), 'lgpd': bool(f.get('lgpd')), 'assina_qualicontax': assina_q,
         'assina': q, 'contratada': contratada,            # congelados: o contrato diz o que o cadastro dizia na hora
         'assinantes': assinantes, 'titulo': (f.get('titulo') or '').strip() or None,
+        'assinante_extra': extra, 'carteira': carteira,
+        'grupo': {'n': len(empresas), 'socios_iguais': iguais, 'detalhe': detalhe, 'autorizacao_necessaria': (len(empresas) > 1 and not iguais)},
     }
     return dados
 
@@ -214,6 +233,33 @@ def _avisar_aprovadores(c):
 _DECIMO = {'COBRADO': 'DUAS', 'UNICA': 'UNICA', 'ISENTO': 'NENHUM'}
 
 
+def _carteira_do_contrato(c, aprovado_por, avisos):
+    """Na aprovação, a comissão de carteira de quem montou (se marcou) nasce sozinha: um acordo HONORARIOS por empresa do contrato,
+    a partir do mês de início. Quem já tinha acordo vigente na empresa fica como está."""
+    from models.fin_lancamento import FinComissaoAcordo
+    d = c['dados']
+    k = d.get('carteira')
+    if not k or not k.get('usuario_id') or not k.get('pct'):
+        return []
+    try:
+        inicio = date.fromisoformat((d.get('inicio') or '')[:10]).replace(day=1)
+    except ValueError:
+        inicio = date.today().replace(day=1)
+    feitos = []
+    for e in d.get('empresas') or []:
+        cid = e['cliente_id']
+        ja = [a for a in FinComissaoAcordo.listar(usuario_id=k['usuario_id'], so_ativos=True) if a['base'] == 'HONORARIOS' and a.get('cliente_id') == cid]
+        if ja:
+            avisos.append('%s já estava na carteira de %s' % (e['razao'], k['nome'].split(' ')[0])); continue
+        aid = FinComissaoAcordo.criar(k['usuario_id'], 'HONORARIOS', 'PCT', k['pct'], inicio, cliente_id=cid,
+                                      observacao='Do contrato de prestação nº %s (aprovado no sistema)' % (c.get('numero') or c['id']),
+                                      criado_por=c['criado_por'], aprovado_por=aprovado_por)
+        feitos.append(aid)
+    if feitos:
+        avisos.append('%s entra na carteira de %s com %g%% da mensalidade de %d empresa%s' % ('Comissão' if len(feitos) == 1 else 'Comissões', k['nome'].split(' ')[0], k['pct'], len(feitos), 's' if len(feitos) != 1 else ''))
+    return feitos
+
+
 def _honorario_do_contrato(c, aprovado_por):
     """Na APROVAÇÃO o honorário passa a valer: cria o contrato de honorários (fin_contratos) ATIVO de cada empresa
     que ainda não tem um vigente. Quem já tem fica como está (devolve o aviso). Devolve (criados, avisos)."""
@@ -263,9 +309,20 @@ def _form_ctx(cliente_id=None, fin_contrato_id=None, contrato=None):
         fin = None                     # honorário de empresa fora dos lançamentos/carteira da pessoa: não mostra
     if fin:
         fin['itens'] = FinContrato.itens(fin['id'])
+    pct = (execute_query('SELECT carteira_pct FROM usuarios WHERE id = %s', (current_user.id,), fetch=True, fetch_one=True) or {}).get('carteira_pct')
     return {'emp': emp, 'fin': fin, 'dados': d, 'contrato': contrato, 'AREAS': AREAS, 'SIGN_Q': PrestContrato.signatarios_qualicontax(),
             'contratada': PrestContrato.contratada(),
-            'testemunhas': PrestContrato.testemunhas_disponiveis(), 'hoje': date.today()}
+            'testemunhas': PrestContrato.testemunhas_disponiveis(), 'hoje': date.today(),
+            'carteira_pct': float(pct) if pct else None}
+
+
+@financeiro.route('/financeiro/contratos/socios-iguais')
+@permission_required(MONTAR)
+def contrato_socios_iguais():
+    """Para a tela avisar na hora: as empresas escolhidas têm o mesmo quadro de sócios?"""
+    ids = [x for x in (request.args.get('ids') or '').split(',') if x.isdigit()]
+    iguais, detalhe = PrestContrato.socios_iguais(ids)
+    return jsonify({'iguais': iguais, 'detalhe': detalhe, 'n': len(ids)})
 
 
 # ---------------------------------------------------------------- telas internas
@@ -481,8 +538,12 @@ def contrato_aprovar(cid):
     except ValueError as e:
         flash('Não aprovei: %s' % e, 'danger')
         return redirect(url_for('financeiro.contrato_ver', cid=cid))
+    acordos = _carteira_do_contrato(c, current_user.id, avisos)
     c['dados']['aprovacao'] = {'por': current_user.id, 'nome': getattr(current_user, 'nome', ''), 'em': datetime.now().isoformat(timespec='minutes'),
-                               'honorarios_criados': criados, 'avisos': avisos}
+                               'honorarios_criados': criados, 'avisos': avisos, 'acordos_carteira': acordos}
+    if (c['dados'].get('grupo') or {}).get('autorizacao_necessaria'):
+        c['dados']['autorizacao'] = {'por': current_user.id, 'nome': getattr(current_user, 'nome', ''), 'em': datetime.now().isoformat(timespec='minutes'),
+                                     'texto': 'Contrato em grupo com quadro de sócios diferente autorizado pelo escritório na aprovação'}
     execute_query('UPDATE prest_contratos SET dados = %s, fin_contrato_id = COALESCE(fin_contrato_id, %s) WHERE id = %s',
                   (__import__('json').dumps(c['dados'], ensure_ascii=False), criados[0] if criados else None, cid), fetch=False)
     PrestContrato.mudar_status(cid, 'APROVADO')

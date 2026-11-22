@@ -101,8 +101,41 @@
                     <div><div class="pf-lbl">Celular</div><input type="text" name="rep_celular" id="rep_celular" class="form-control" value="{{ e0.rep_celular if e0 else '' }}" placeholder="(00) 00000-0000"></div>
                 </div>
                 <label class="pf-chk" style="margin-top:8px;"><input type="checkbox" name="guardar_contato" value="1"> Guardar esta pessoa nos contatos da empresa (para puxar da próxima vez)</label>
+                <div id="pf-grupo" class="pf-grupo" hidden></div>
             </div>
         </div>
+
+        {# 22/11/2026 — Anderson: "o Anderson, que não está no cadastro da NH Goiatuba, faz o contrato: cadastro do posto, do sócio do posto + cadastro do Anderson" #}
+        {% set ex = dados.assinante_extra or {} %}
+        <div class="pf-row">
+            <span class="pf-rico"><i class="fas fa-user-plus"></i></span>
+            <label class="pf-rlbl">Mais um assinante pela contratante<small>opcional: quem não é sócio mas assina junto (procurador, autorizado)</small></label>
+            <div class="pf-rval">
+                <div class="pf-g2">
+                    <div><div class="pf-lbl">Nome completo</div><input type="text" name="extra_nome" class="form-control" value="{{ ex.nome or '' }}" placeholder="em branco = ninguém a mais"></div>
+                    <div><div class="pf-lbl">CPF</div><input type="text" name="extra_cpf" class="form-control" value="{{ ex.cpf or '' }}" placeholder="000.000.000-00"></div>
+                    <div><div class="pf-lbl">Documento (como vai no contrato)</div><input type="text" name="extra_documento" class="form-control" value="{{ ex.documento or '' }}" placeholder="ex.: CNH nº ..."></div>
+                    <div><div class="pf-lbl">E-mail (recebe o link)</div><input type="email" name="extra_email" class="form-control" value="{{ ex.email or '' }}"></div>
+                    <div><div class="pf-lbl">Na qualidade de</div><input type="text" name="extra_cargo" class="form-control" value="{{ ex.cargo or 'representante autorizado(a)' }}"></div>
+                    <div><div class="pf-lbl">Celular</div><input type="text" name="extra_celular" class="form-control" value="{{ ex.celular or '' }}"></div>
+                </div>
+            </div>
+        </div>
+
+        {% if carteira_pct %}
+        {# 22/11/2026 — Anderson: "só o Guilherme tem esse combinado, e pode ser que ele cadastre uma empresa que não ganhará os 25%, então tem que ter a opção" #}
+        <div class="pf-row">
+            <span class="pf-rico"><i class="fas fa-building-user"></i></span>
+            <label class="pf-rlbl">Sua comissão de carteira<small>{{ '%g' % carteira_pct }}% da mensalidade, todo mês que o cliente pagar</small></label>
+            <div class="pf-rval">
+                <div class="pf-chk">
+                    <label><input type="radio" name="carteira_para" value="1" {{ 'checked' if (dados.carteira) or not contrato }}> Sim: esta empresa entra na minha carteira ({{ '%g' % carteira_pct }}%)</label>
+                    <label><input type="radio" name="carteira_para" value="0" {{ 'checked' if contrato and not dados.carteira }}> Não: sem comissão de carteira neste contrato</label>
+                </div>
+                <small class="ho-num" style="display:block; margin-top:4px;">Aprovado o contrato, a comissão nasce sozinha em Serviços › Quem recebe comissão.</small>
+            </div>
+        </div>
+        {% endif %}
 
         <div class="pf-row">
             <span class="pf-rico"><i class="fas fa-list-check"></i></span>
@@ -195,6 +228,10 @@
 {% endblock %}
 
 {% block extra_js %}
+<style>
+.pf-grupo { margin-top:10px; padding:9px 12px; border-radius:10px; font-size:12.5px; line-height:1.45; }
+.pf-grupo.ok { background:#f0fdf4; border:1px solid #bbf7d0; color:#166534; } .pf-grupo.aut { background:#fff7ed; border:1px solid #fed7aa; color:#9a3412; }
+</style>
 <script src="{{ url_for('static', filename='js/dinheiro.js') }}"></script>
 <script>
 function pfSocio(nome, cpf, email, cel, doc) { document.getElementById('rep_nome').value = nome; if (cpf) document.getElementById('rep_cpf').value = cpf; if (email) document.getElementById('rep_email').value = email; if (cel) document.getElementById('rep_celular').value = cel; if (doc) document.querySelector('[name=rep_documento]').value = doc; }
@@ -253,7 +290,19 @@ function pfPrevia() {
 }
 document.getElementById('pf-form').addEventListener('input', pfPrevia);
 document.getElementById('pf-form').addEventListener('change', pfPrevia);
-var _pfSub = pfSub; pfSub = function () { _pfSub(); pfPrevia(); };
+var _pfSub = pfSub; pfSub = function () { _pfSub(); pfPrevia(); pfGrupo(); };
+// 22/11/2026 — contrato em grupo: avisa na hora se o quadro de sócios é o mesmo (senão, o escritório autoriza na aprovação)
+function pfGrupo() {
+    var ids = Array.prototype.map.call(document.querySelectorAll('#pf-emps [name=emp_cliente_id]'), function (i) { return i.value; }).filter(Boolean);
+    var box = document.getElementById('pf-grupo');
+    if (ids.length < 2) { box.hidden = true; return; }
+    fetch('/financeiro/contratos/socios-iguais?ids=' + ids.join(',')).then(function (r) { return r.json(); }).then(function (d) {
+        box.hidden = false; box.className = 'pf-grupo ' + (d.iguais ? 'ok' : 'aut');
+        box.innerHTML = d.iguais ? '<i class="fas fa-circle-check"></i> <b>Contrato em grupo:</b> ' + d.detalhe + '. Pode seguir.'
+            : '<i class="fas fa-triangle-exclamation"></i> <b>Contrato em grupo com sócios diferentes:</b> ' + d.detalhe + '. Precisa da <b>autorização do escritório</b>: ao aprovar, o Anderson ou a Alessandra autorizam e fica registrado no contrato. Se quem assina não é sócio de todas, ponha quem responde pelas outras em "Mais um assinante".';
+    }).catch(function () { box.hidden = true; });
+}
+pfGrupo();
 pfPrevia();
 </script>
 {% endblock %}

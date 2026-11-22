@@ -169,6 +169,25 @@ class PrestContrato:
         return c
 
     @staticmethod
+    def socios_iguais(cliente_ids):
+        """Contrato em grupo (22/11/2026 — Anderson: "individual ou em grupo, desde que os sócios sejam os mesmos; se não for,
+        precisamos de autorização"). Compara o quadro de sócios ativos (por CPF) de cada empresa. Devolve (iguais, detalhe)."""
+        ids = [int(c) for c in (cliente_ids or []) if str(c).isdigit()]
+        if len(ids) < 2:
+            return True, ''
+        quadros = {}
+        for cid in ids:
+            rows = execute_query("""SELECT s.nome, s.cpf, c.cpf_cnpj AS pf FROM socios_clientes s LEFT JOIN clientes c ON c.id = s.pf_cliente_id
+                                      WHERE s.cliente_id = %s AND COALESCE(s.ativo, 1) = 1""", (cid,), fetch=True) or []
+            quadros[cid] = {(''.join(ch for ch in str(r.get('pf') or r.get('cpf') or '') if ch.isdigit()) or (r.get('nome') or '').strip().upper()) for r in rows}
+        base = quadros[ids[0]]
+        dif = [cid for cid in ids[1:] if quadros[cid] != base]
+        if not dif:
+            return True, 'os mesmos sócios em todas as empresas'
+        nomes = {r['id']: r['nome_razao_social'] for r in execute_query('SELECT id, nome_razao_social FROM clientes WHERE id IN (%s)' % ','.join(str(i) for i in ids), fetch=True) or []}
+        return False, 'quadro de sócios diferente em: ' + ', '.join(nomes.get(c, str(c)) for c in dif)
+
+    @staticmethod
     def testemunhas_disponiveis():
         return execute_query("""SELECT id, nome, cpf, email FROM usuarios WHERE classe_conta = 'FUNCIONARIO' AND situacao = 'ATIVO'
                                  ORDER BY nome""", fetch=True) or []
@@ -408,6 +427,10 @@ class PrestContrato:
             partes.append('%s; neste ato representadas por seu %s, %s, portador(a) %s e CPF nº %s, ora e doravante denominadas em conjunto de %s.'
                           % (lista, e.get('rep_cargo') or 'sócio administrador', e['rep_nome'], e.get('rep_documento') or 'de documento de identidade',
                              e.get('rep_cpf') or '', apelido))
+        ex = dados.get('assinante_extra')
+        if ex and ex.get('nome'):
+            partes[-1] = partes[-1].rstrip('.') + ', e ainda por %s, %s, portador(a) %s e CPF nº %s, devidamente autorizado(a) a assinar o presente instrumento.' % (
+                ex['nome'], ex.get('cargo') or 'representante autorizado(a)', ex.get('documento') or 'de documento de identidade', ex.get('cpf') or '')
         qc = dados.get('contratada') or PrestContrato.contratada()
         q = dados.get('assina') or PrestContrato.signatarios_qualicontax().get(str(dados.get('assina_qualicontax'))) or SIGNATARIOS_QUALICONTAX['albert']
         partes.append('%s, estabelecida à %s, devidamente inscrita no CNPJ nº %s%s, neste ato representada por seu %s, %s, portador(a) %s e CPF nº %s, '

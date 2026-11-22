@@ -1884,6 +1884,9 @@ def _render_usuario_form(**kw):
         pf['qtd_telas'] = sum(1 for t in telas if set(t['cod']) & set(pf['perms']))
     kw.setdefault('excecoes_reservadas', [])
     kw.setdefault('agora', datetime.now())
+    _u = kw.get('usuario')
+    _uid = getattr(_u, 'id', None) if _u is not None and not isinstance(_u, dict) else (_u or {}).get('id')
+    kw['carteira_pct'] = (execute_query('SELECT carteira_pct FROM usuarios WHERE id = %s', (_uid,), fetch=True, fetch_one=True) or {}).get('carteira_pct') if _uid else None
     return render_template('configuracoes/usuario_form.html', perfis_info=perfis_info,
                            deps_resumo=[{'cor': d['cor'], 'grupo': d['grupo'], 'sigla': d['sigla']}
                                         for d in DEPARTAMENTOS_PERMISSOES],
@@ -2102,6 +2105,21 @@ def usuario_editar(uid):
                 execute_query("""INSERT INTO usuario_dados_bancarios (usuario_id, banco_codigo, banco_nome, agencia, conta, conta_tipo,
                                      titular_nome, titular_cpf, pix_tipo, pix_chave, atualizado_por)
                                  VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""", (uid,) + tuple(bf[k] for k in bf) + (current_user.id,), fetch=False)
+
+        # 22/11/2026 — Anderson: "no cadastro de usuários marcar quem pode ganhar os 25% (da carteira) ou quem não"
+        carteira_mudou = None
+        if request.form.get('carteira_form') == '1':
+            _pode = request.form.get('carteira_pode') == '1'
+            _pct = (request.form.get('carteira_pct') or '25').replace(',', '.').strip()
+            try:
+                _pct = round(float(_pct), 2)
+            except ValueError:
+                _pct = 25.0
+            _novo = _pct if (_pode and 0 < _pct <= 100) else None
+            _antes = (execute_query('SELECT carteira_pct FROM usuarios WHERE id = %s', (uid,), fetch=True, fetch_one=True) or {}).get('carteira_pct')
+            if (float(_antes) if _antes is not None else None) != _novo:
+                execute_query('UPDATE usuarios SET carteira_pct = %s WHERE id = %s', (_novo, uid), fetch=False)
+                carteira_mudou = {'antes': float(_antes) if _antes is not None else None, 'depois': _novo}
 
         # 19/11/2026 — Anderson: "no cadastro de funcionário usuário no Config ter essas configurações em qual parte do
         # DRE ficaria cada coisa de cada funcionário" (salário, ajuda de custo, comissão)

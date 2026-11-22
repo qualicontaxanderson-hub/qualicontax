@@ -155,7 +155,7 @@ def _home_payload():
             cards.append({'tipo': 'lista', 'icone': 'fa-file-contract', 'titulo': 'Contratos de prestação', 'itens': li, 'trend': {'tipo': 'neutro', 'rotulo': 'hoje'}})
         counters['contratos'] = (cm.get('APROVACAO', 0) + cm.get('ENVIADO', 0)) or ''
         if apr:
-            prontas = PrestContrato.prontas()
+            prontas = (PrestContrato.prontas() or {}).get('lista') or []      # prontas() devolve {'lista': [...], ...}
             counters['prontas'] = len(prontas) or ''
             if prontas:
                 cards.append({'icone': 'fa-clipboard-check', 'titulo': 'Prontas para contrato', 'valor': len(prontas), 'apoio': 'cadastro completo, ainda sem contrato de prestação', 'trend': {'tipo': 'neutro', 'rotulo': 'hoje'}})

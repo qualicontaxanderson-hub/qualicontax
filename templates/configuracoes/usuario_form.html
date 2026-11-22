@@ -293,6 +293,24 @@
         </div>
     </section>
 
+    {# 22/11/2026 — Anderson: "no cadastro de usuários marcar quem pode ganhar os 25% ou quem não" #}
+    <section class="mc-sec" id="carteira">
+        <header class="mc-sec-h"><span class="mc-sec-ic"><i class="fas fa-building-user"></i></span>
+            <div class="mc-sec-t"><b>Comissão de carteira</b><small>Pode ganhar um % da mensalidade das empresas que trouxer pelo contrato de prestação?</small></div>
+            {% if carteira_pct %}<span class="mc-chip">{{ '%g' % carteira_pct }}% da carteira</span>{% endif %}</header>
+        <div class="mc-sec-b">
+            <input type="hidden" name="carteira_form" value="1">
+            <div class="us-opcs" style="display:flex; gap:10px; flex-wrap:wrap">
+                <label class="us-opc us-opc-ati"><input type="radio" name="carteira_pode" value="1" {{ 'checked' if carteira_pct }} onchange="document.getElementById('cartPct').hidden = false"><i class="fas fa-check"></i> Pode ganhar</label>
+                <label class="us-opc us-opc-ina"><input type="radio" name="carteira_pode" value="0" {{ 'checked' if not carteira_pct }} onchange="document.getElementById('cartPct').hidden = true"><i class="fas fa-ban"></i> Não ganha</label>
+            </div>
+            <div class="mc-campos c3" id="cartPct" {{ '' if carteira_pct else 'hidden' }} style="margin-top:10px">
+                <label class="mc-campo"><span>% da mensalidade</span><input type="text" name="carteira_pct" value="{{ ('%g' % carteira_pct) if carteira_pct else '25' }}" inputmode="decimal" placeholder="25"></label>
+            </div>
+            <p class="mc-txt"><i class="fas fa-circle-info"></i><span>Com a marca, ao montar um contrato de prestação a pessoa escolhe se a empresa entra na carteira dela ou não. Aprovado o contrato, a comissão nasce sozinha em Serviços › Quem recebe comissão e paga todo mês que o cliente pagar.</span></p>
+        </div>
+    </section>
+
     {# 19/11/2026 — Anderson: "em qual parte do DRE ficaria cada coisa de cada funcionário" #}
     <section class="mc-sec mc-s-dre" id="dre">
         <header class="mc-sec-h"><span class="mc-sec-ic"><i class="fas fa-chart-pie"></i></span>
