@@ -144,10 +144,12 @@ class FinLancamento:
                        u.nome AS lancado_por_nome, ua.nome AS aprovado_por_nome,
                        t.status AS titulo_status, t.vencimento AS titulo_vencimento, t.valor_baixado,
                        f.status AS fechamento_status,
-                       pg.numero_cliente AS pagador_num, pg.nome_razao_social AS pagador_nome
+                       pg.numero_cliente AS pagador_num, pg.nome_razao_social AS pagador_nome,
+                       co.numero AS orcamento_numero
                   FROM fin_lancamentos l
                   JOIN clientes c ON c.id = l.cliente_id
                   LEFT JOIN clientes pg ON pg.id = l.pagador_cliente_id
+                  LEFT JOIN com_orcamentos co ON co.id = l.orcamento_id
                   JOIN nfse_servicos s ON s.id = l.servico_id
                   JOIN usuarios u ON u.id = l.lancado_por
                   LEFT JOIN usuarios ua ON ua.id = l.aprovado_por

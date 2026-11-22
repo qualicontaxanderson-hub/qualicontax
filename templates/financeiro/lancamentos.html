@@ -327,7 +327,7 @@
   {% if adiantavel %}<div class="lm-adi"><i class="fas fa-forward"></i> {{ 'Cliente em atraso.' if fase == 'atr' else 'O cliente ainda não pagou.' }} Marque para pedir a comissão adiantada; se não recebermos, ela é descontada dos próximos pedidos.</div>
   {% elif adiantado %}<div class="lm-adi"><i class="fas fa-forward"></i> Comissão adiantada{% if l.fechamento_id %} no pedido nº {{ l.fechamento_id }}{% endif %}. O cliente ainda não pagou: se a cobrança for perdida, o valor é descontado do próximo pedido.</div>{% endif %}
   {% if l.lancado_pelo_admin %}<div class="lm-adm"><i class="fas fa-user-shield"></i> Lançado pelo administrador</div>{% endif %}
-  {% if l.orcamento_id %}<div class="lm-adm" style="color:#15803d"><i class="fas fa-file-signature"></i> Veio do orçamento <a href="{{ url_for('comercial.orcamentos', abrir=l.orcamento_id) }}" onclick="event.stopPropagation()" style="color:#15803d; font-weight:800">ORC-{{ '%06d' % l.orcamento_id }}</a> · histórico completo lá</div>{% endif %}
+  {% if l.orcamento_id %}<div class="lm-adm" style="color:#15803d"><i class="fas fa-file-signature"></i> Veio do orçamento <a href="{{ url_for('comercial.orcamentos', abrir=l.orcamento_id) }}" onclick="event.stopPropagation()" style="color:#15803d; font-weight:800">{{ l.orcamento_numero or ('ORC-%06d' % l.orcamento_id) }}</a> · histórico completo lá</div>{% endif %}
   {% if aprov and l.lancado_por != eu.id %}{% set pn = (l.lancado_por_nome or '?').split() %}<div class="lm-por lm-quem2" data-pessoa="{{ l.lancado_por_nome or '' }}" title="Quem pediu"><span class="av">{{ pn[0][:1] }}{{ pn[-1][:1] if pn | length > 1 else '' }}</span><span><small>pedido por</small> {{ pn[0] }}{{ ' ' ~ pn[-1] if pn | length > 1 else '' }}</span></div>{% endif %}
   {% if fase == 'apr' %}
     {% set pt = l.comissao_pedida_tipo or 'PADRAO' %}
@@ -720,7 +720,7 @@
     {% for l in grupos.apr %}{{ l.id }}: { cli: {{ l.nome_razao_social | tojson }}, num: {{ (l.numero_cliente or '') | string | tojson }}, serv: {{ (l.descricao or l.servico_nome) | tojson }},
       valor: {{ l.valor_total | float }}, como: {{ l.como | tojson }}, por: {{ l.lancado_por_nome | tojson }}, venc: {{ ((l.vencimento.strftime('%d/%m/%Y')) if l.vencimento else '') | tojson }}, vi: {{ ((l.vencimento.isoformat()) if l.vencimento else '') | tojson }}, pc: {{ l.parcelas or 1 }}, pd: {{ (l.parcelas_datas or '') | tojson }}, cc: {{ ('MENSAL' if l.destino == 'MENSAL' else ('BOLETO_NOTA' if (l.emite_nota and (l.com_nota if l.com_nota is not none else l.emite_nota)) else 'BOLETO')) | tojson }}, nota: {{ 'true' if l.emite_nota else 'false' }}, ci: {{ (l.competencia.isoformat() if l.competencia else '') | tojson }},
       pt: {{ (l.comissao_pedida_tipo or 'PADRAO') | tojson }}, pv: {{ (l.comissao_pedida_valor | float) if l.comissao_pedida_valor else 0 }}, prev: {{ l.com_prev | float }}, trava: {{ 'true' if l.com_trava else 'false' }},
-      orc: {{ l.orcamento_id or 0 }}, obs: {{ (l.observacao or '') | tojson }} }{{ ',' if not loop.last }}{% endfor %}
+      orc: {{ l.orcamento_id or 0 }}, orcn: {{ (l.orcamento_numero or '') | tojson }}, obs: {{ (l.observacao or '') | tojson }} }{{ ',' if not loop.last }}{% endfor %}
   };
   var URL_APROVAR = {{ url_for('financeiro.lancamento_aprovar', lid=999999) | tojson }}, URL_REPROVAR = {{ url_for('financeiro.lancamento_reprovar', lid=999999) | tojson }},
       URL_CANCELAR = {{ url_for('financeiro.lancamento_cancelar', lid=999999) | tojson }},
@@ -858,7 +858,7 @@
     $('apRes').innerHTML = '<div class="ns-h"><i class="fas fa-eye"></i> O que vai sair</div><div><span>Cliente</span><b>' + esc((l.num ? l.num + ' · ' : '') + l.cli) + '</b></div>'
       + '<div><span>Serviço</span><b>' + esc(l.serv) + '</b></div>'
       + (l.obs ? '<div><span>Observação</span><b>' + esc(l.obs) + '</b></div>' : '')
-      + (l.orc ? '<div><span>Orçamento</span><b><a href="/comercial/orcamentos?abrir=' + l.orc + '" target="_blank" style="color:#15803d">ORC-' + String(l.orc).padStart(6, '0') + ' · ver o histórico</a></b></div>' : '')
+      + (l.orc ? '<div><span>Orçamento</span><b><a href="/comercial/orcamentos?abrir=' + l.orc + '" target="_blank" style="color:#15803d">' + esc(l.orcn || ('ORC-' + String(l.orc).padStart(6, '0'))) + ' · ver o histórico</a></b></div>' : '')
       + '<div class="big"><span>Valor</span><b>' + brl(l.valor) + '</b></div>';
     $('apAviso').innerHTML = /Mensalidade/.test(l.como) ? '<i class="fas fa-calendar"></i><span>Entra no boleto da mensalidade: sai junto com o lote do mês.</span>'
                                                         : '<i class="fas fa-bolt"></i><span>Ao aprovar, ' + (/nota/.test(l.como) ? 'a nota e o boleto são emitidos' : 'o boleto é emitido') + ' agora e vão por e-mail ao cliente.</span>';

@@ -125,7 +125,9 @@
             </form>
           </div>
         {% elif o.status == 'COBRANCA' %}
-          <div class="tj-aviso"><i class="fas fa-hourglass-half"></i> A cobrança está em Financeiro › Lançamentos esperando aprovação. Quando aprovarem, a nota e o boleto saem e este orçamento fica concluído.</div>
+          <div class="tj-aviso" style="margin:0 0 10px"><i class="fas fa-hourglass-half"></i> A cobrança está em Financeiro › Lançamentos esperando aprovação. Quando aprovarem, a nota e o boleto saem e este orçamento fica concluído.</div>
+          {% if texto_fin %}<div class="tj-acao-bl"><div class="tj-acao-t"><i class="fab fa-whatsapp"></i> Avisar o Financeiro <small>texto pronto</small></div>
+            <button type="button" class="tj-acao prim" style="margin:0" data-texto="{{ texto_fin }}" onclick="if (window.qcxCopiar) qcxCopiar.copiar(this.dataset.texto)"><i class="fab fa-whatsapp"></i><span><b>Copiar aviso para o Financeiro</b><small>cola no WhatsApp de quem aprova: diz o que foi feito, o valor, o aceite e o link do lançamento</small></span></button></div>{% endif %}
         {% elif o.status == 'CONCLUIDO' %}
           <div class="tj-aviso" style="background:#f5f3ff; border-color:#ddd6fe; color:#5b21b6"><i class="fas fa-flag-checkered"></i> Concluído: a cobrança foi aprovada no Financeiro. A comissão libera quando o cliente pagar.</div>
         {% elif o.status == 'CANCELADO' %}

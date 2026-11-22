@@ -84,6 +84,29 @@ def _texto_whatsapp(o, itens, link):
     return '\n'.join(linhas)
 
 
+def _texto_financeiro(o, itens, lanc):
+    """Aviso pronto para quem monta o orçamento mandar ao Financeiro aprovar a cobrança (22/11/2026 — Anderson: "temos que ter um
+    texto para facilitar a vida deles lá... quanto mais fácil for para eles e para nós")."""
+    quem = (o.get('criado_por_nome') or '').split(' ')[0].title()
+    linhas = ['Oi! %s aqui. 🙂' % quem if quem else 'Oi!', '',
+              'Serviço feito, pode aprovar a cobrança? 🙏', '',
+              '🏢 *%s*' % o['cliente_nome'], '📄 Orçamento *%s*%s' % (o['numero'], (' — ' + o['titulo']) if o.get('titulo') else '')]
+    for i in itens:
+        linhas.append('📌 %s – R$ %s' % (i['descricao'], _brl(i['valor_total'])))
+    linhas.append('💰 *Total: R$ %s*' % _brl(o['total']))
+    if o.get('aceito_em'):
+        linhas.append('✅ Aceito pelo cliente: %s em %s' % (o.get('aceito_nome') or '', o['aceito_em'].strftime('%d/%m/%Y %H:%M')))
+    elif o.get('interno'):
+        linhas.append('🔒 Controle interno (sem aceite do cliente)')
+    como = COMO.get(lanc.get('como') or o.get('como') or '', '')
+    venc = lanc.get('vencimento')
+    linhas.append('💳 %s%s' % (como or 'cobrança', (' · vence %s' % venc.strftime('%d/%m/%Y')) if venc else ''))
+    linhas += ['', '👉 Lançamento nº %s em Financeiro › Lançamentos › Para aprovar:' % lanc['id'],
+               url_for('financeiro.lancamentos', aba='apr', _external=True) + '#l%s' % lanc['id'], '',
+               '🔎 Histórico completo no orçamento:', url_for('comercial.orcamentos', abrir=o['id'], _external=True)]
+    return '\n'.join(linhas)
+
+
 def _wa_link(fone, texto):
     from urllib.parse import quote
     d = ''.join(ch for ch in str(fone or '') if ch.isdigit())
@@ -212,7 +235,8 @@ def orcamento_janela(oid):
     datas_venc = [((hoje + timedelta(days=d)).isoformat(), 'em %d dias' % d, (hoje + timedelta(days=d)).strftime('%d/%m'), d == 7) for d in (3, 7, 10, 15, 30)]
     link = url_for('proposta.ver', token=o['token'], _external=True) if not o.get('interno') else None
     texto_wa = _texto_whatsapp(o, itens, link) if link else None
-    return render_template('comercial/_orcamento_janela.html', o=o, itens=itens, eventos=eventos, lanc=lanc, dest=dest, hoje=hoje, datas_venc=datas_venc, link=link,
+    texto_fin = _texto_financeiro(o, itens, lanc) if (o['status'] == 'COBRANCA' and lanc) else None
+    return render_template('comercial/_orcamento_janela.html', texto_fin=texto_fin, o=o, itens=itens, eventos=eventos, lanc=lanc, dest=dest, hoje=hoje, datas_venc=datas_venc, link=link,
                            texto_wa=texto_wa, wa_link=_wa_link(o.get('solicitante_fone'), texto_wa) if texto_wa else None,
                            aprovador=_aprovador(), dono=o['criado_por'] == current_user.id, STATUS=STATUS, COMO=COMO, COMISSAO=COMISSAO,
                            vencido=Orcamento.vencido(o), n_nota=sum(1 for i in itens if i['emite_nota']),
@@ -275,7 +299,7 @@ def _pedir(oid):
     if _aprovador():
         # quem aprova e monta ao mesmo tempo: já nasce aprovado (como em Lançamentos, o administrador não pede para si)
         Orcamento.mudar(oid, 'APROVADO', current_user, 'aprovado', 'Aprovado por %s ao montar (quem aprova não precisa pedir)' % current_user.nome,
-                        aprovado_por=current_user.id, aprovado_em=datetime.now(), motivo=None)
+                        aprovado_por=current_user.id, aprovado_em='NOW()', motivo=None)
         flash(('Orçamento %s aprovado. É controle interno: agora é fazer o serviço e, feito, mandar para a cobrança.' if o.get('interno') else 'Orçamento %s aprovado. Agora é mandar ao cliente aceitar.') % o['numero'], 'success')
     else:
         Orcamento.mudar(oid, 'APROVACAO', current_user, 'aprovacao', 'Mandado para aprovação por %s' % current_user.nome, motivo=None)
@@ -301,7 +325,7 @@ def orcamento_aprovar(oid):
     if not o or o['status'] != 'APROVACAO':
         flash('Este orçamento não está aguardando aprovação.', 'info')
         return _volta(oid)
-    Orcamento.mudar(oid, 'APROVADO', current_user, 'aprovado', 'Aprovado por %s' % current_user.nome, aprovado_por=current_user.id, aprovado_em=datetime.now(), motivo=None)
+    Orcamento.mudar(oid, 'APROVADO', current_user, 'aprovado', 'Aprovado por %s' % current_user.nome, aprovado_por=current_user.id, aprovado_em='NOW()', motivo=None)
     registrar('escrita.aprovou_orcamento', 'comercial', tabela='com_orcamentos', registro_id=oid, depois={'total': str(o['total'])})
     _avisar_dono(o, 'Orçamento %s aprovado' % o['numero'], 'O orçamento %s (%s, R$ %s) foi aprovado por %s. Agora é mandar ao cliente e, feito o serviço, mandar para a cobrança.'
                  % (o['numero'], o['cliente_nome'], _brl(o['total']), current_user.nome))
@@ -338,7 +362,7 @@ def orcamento_cancelar(oid):
     if o['status'] in ('COBRANCA', 'CONCLUIDO', 'CANCELADO'):
         flash('Orçamento já em cobrança, concluído ou cancelado não se cancela aqui.', 'info')
         return _volta(oid)
-    Orcamento.mudar(oid, 'CANCELADO', current_user, 'cancelado', 'Cancelado por %s%s' % (current_user.nome, (': ' + motivo) if motivo else ''), motivo=motivo or None, cancelado_em=datetime.now())
+    Orcamento.mudar(oid, 'CANCELADO', current_user, 'cancelado', 'Cancelado por %s%s' % (current_user.nome, (': ' + motivo) if motivo else ''), motivo=motivo or None, cancelado_em='NOW()')
     registrar('escrita.cancelou_orcamento', 'comercial', tabela='com_orcamentos', registro_id=oid, depois={'motivo': motivo})
     flash('Orçamento %s cancelado.' % o['numero'], 'success')
     return _volta(oid)
@@ -484,7 +508,7 @@ def orcamento_cobrar(oid):
     execute_query('UPDATE fin_lancamentos SET orcamento_id = %s WHERE id = %s', (oid, lid), fetch=False)
     Orcamento.mudar(oid, 'COBRANCA', current_user, 'cobranca', 'Serviço feito: mandado para a cobrança por %s (%s%s). Aguardando aprovação em Financeiro › Lançamentos.'
                     % (current_user.nome, COMO[como], (' · vence %s' % venc.strftime('%d/%m/%Y')) if venc else ''),
-                    feito_em=datetime.now(), lancamento_id=lid, como=como)
+                    feito_em='NOW()', lancamento_id=lid, como=como)
     registrar('escrita.orcamento_para_cobranca', 'comercial', tabela='com_orcamentos', registro_id=oid, depois={'lancamento_id': lid, 'como': como, 'total': str(total)})
     flash('Orçamento %s mandado para a cobrança: lançamento nº %s aguardando aprovação em Financeiro › Lançamentos.' % (o['numero'], lid), 'success')
     return _volta(oid)

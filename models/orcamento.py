@@ -203,6 +203,8 @@ class Orcamento:
         """Troca o status gravando os campos extras (aprovado_por, motivo...) e o evento da linha do tempo."""
         sets, vals = ['status = %s'], [status]
         for k, v in campos.items():
+            if v == 'NOW()':                     # hora do banco (o app roda em UTC: datetime.now() daria 3 h a mais)
+                sets.append('%s = NOW()' % k); continue
             sets.append('%s = %%s' % k); vals.append(v)
         vals.append(oid)
         execute_query('UPDATE com_orcamentos SET %s WHERE id = %%s' % ', '.join(sets), tuple(vals), fetch=False)
