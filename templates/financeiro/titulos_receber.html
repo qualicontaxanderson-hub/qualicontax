@@ -24,7 +24,7 @@
 .tx-a-abe { --cor:#2563eb; --fundo:#eff4ff; }
 .tx-a-atr { --cor:#d97706; --fundo:#fff7ec; }
 .tx-a-ina { --cor:#dc2626; --fundo:#fef1f1; }
-.tx-a-perd { --cor:#64748b; --fundo:#f1f5f9; }
+.tx-a-perd { --cor:#64748b; --fundo:#f1f5f9; } .tx-a-canc { --cor:#7c3aed; --fundo:#f5f3ff; }
 
 .tx-emp { position:relative; }
 .tx-emp-menu { display:none; position:absolute; right:0; top:calc(100% + 6px); z-index:20; background:#fff; border:1px solid var(--linha);
@@ -137,7 +137,8 @@ a.tx-c { text-decoration:none; color:inherit; }
 .tx-a-abe  { --cor:#2563eb; --cor-e:#1e40af; }
 .tx-a-atr  { --cor:#f97316; --cor-e:#c2410c; }
 .tx-a-ina  { --cor:#dc2626; --cor-e:#991b1b; }
-.tx-a-perd { --cor:#475569; --cor-e:#1e293b; }
+.tx-a-perd { --cor:#475569; --cor-e:#1e293b; } .tx-a-canc { --cor:#7c3aed; --cor-e:#5b21b6; }
+.tx-abas { grid-template-columns:repeat(6, minmax(0,1fr)); }
 .tx-aba { background:linear-gradient(135deg, var(--cor) 0%, var(--cor-e) 100%); border:0; box-shadow:0 10px 24px rgba(15,23,42,.14); }
 .tx-aba::after { display:none; }
 .tx-aba .tx-aba-lbl, .tx-aba .tx-aba-val { color:#fff; }
@@ -150,6 +151,8 @@ a.tx-c { text-decoration:none; color:inherit; }
 .tx-painel[data-p="atr"], .tx-refino[data-p="atr"], .tx-ref-pop[data-p="atr"]  { --sec:#f97316; --sec-e:#c2410c; --sec-f:#fff4ec; --sec-b:#fed7b5; }
 .tx-painel[data-p="ina"], .tx-refino[data-p="ina"], .tx-ref-pop[data-p="ina"]  { --sec:#dc2626; --sec-e:#991b1b; --sec-f:#fef1f1; --sec-b:#fecaca; }
 .tx-painel[data-p="perd"], .tx-refino[data-p="perd"], .tx-ref-pop[data-p="perd"] { --sec:#475569; --sec-e:#1e293b; --sec-f:#f1f5f9; --sec-b:#e2e8f0; }
+.tx-painel[data-p="canc"], .tx-refino[data-p="canc"], .tx-ref-pop[data-p="canc"] { --sec:#7c3aed; --sec-e:#5b21b6; --sec-f:#f5f3ff; --sec-b:#ddd6fe; }
+.tx-c.tx-canc { --cor:#7c3aed; --cor-e:#5b21b6; --cor-f:#f5f3ff; --cor-b:#e2dafd; }
 .tx-painel .tx-f.on { background:var(--sec); border-color:var(--sec); }
 .tx-painel .tx-f.on b { color:#fff; opacity:.85; }
 .tx-painel .tx-busca input:focus { outline:none; border-color:var(--sec); box-shadow:0 0 0 3px var(--sec-f); }
@@ -561,7 +564,7 @@ a.tx-c { text-decoration:none; color:inherit; }
 }
 @media (max-width:900px) {
   .tx-abas { grid-template-columns:1fr 1fr; gap:6px; margin-top:-26px; }
-  .tx-aba.tx-a-perd { grid-column:span 2; }
+  .tx-aba.tx-a-perd { grid-column:span 1; } .tx-aba.tx-a-canc { grid-column:span 1; }
   .tx-aba { flex-direction:column; align-items:flex-start; gap:6px; padding:10px 10px 12px; border-radius:14px; }
   .tx-aba-ico, .tx-aba-n, .tx-aba-sub { display:none; }
   .tx-aba-lbl { font-size:10px; letter-spacing:.3px; }
@@ -646,6 +649,8 @@ a.tx-c { text-decoration:none; color:inherit; }
       <span class="tx-aba-txt"><span class="tx-aba-lbl">Inadimplentes</span><span class="tx-aba-val">{{ m.ina_tot }}</span><span class="tx-aba-sub">2 ou mais vencidos</span></span><span class="tx-aba-n">{{ m.ina_cli }}</span></button>
     <button type="button" class="tx-aba tx-a-perd{{ ' on' if aba == 'perd' }}" data-p="perd"><span class="tx-aba-ico"><i class="fas fa-box-archive"></i></span>
       <span class="tx-aba-txt"><span class="tx-aba-lbl">Perdidos</span><span class="tx-aba-val">{{ m.perd_tot }}</span><span class="tx-aba-sub">não vão pagar · registro</span></span><span class="tx-aba-n">{{ m.perd_n }}</span></button>
+    <button type="button" class="tx-aba tx-a-canc{{ ' on' if aba == 'canc' }}" data-p="canc"><span class="tx-aba-ico"><i class="fas fa-ban"></i></span>
+      <span class="tx-aba-txt"><span class="tx-aba-lbl">Cancelados</span><span class="tx-aba-val">{{ m.canc_tot }}</span><span class="tx-aba-sub">boleto cancelado · registro</span></span><span class="tx-aba-n">{{ m.canc_n }}</span></button>
   </div>
 
   {% if m.esp_n %}
@@ -793,6 +798,30 @@ a.tx-c { text-decoration:none; color:inherit; }
     <div class="tx-vazio" data-nada style="display:none;"><i class="fas fa-magnifying-glass"></i>Nada encontrado com esse filtro.</div>
     {% else %}
     <div class="tx-vazio"><i class="fas fa-box-archive"></i>Nenhum título marcado como perdido.</div>
+    {% endif %}
+  </div>
+
+  {# ── CANCELADOS (22/11/2026 — Anderson: "ainda não temos como consultar os cancelados e isso é importante para controlar") ── #}
+  <div class="tx-painel{{ ' on' if aba == 'canc' }}" data-p="canc">
+    <div class="tx-faixa">
+      <div class="tx-filtros"><span style="font-size:12.5px; color:var(--mudo);"><i class="fas fa-circle-info"></i> Boleto cancelado no banco e título cancelado junto (ou título cancelado à mão). Não é dívida: ficam aqui só para o registro de quem cancelou e quando.</span></div>
+      <div class="tx-busca"><i class="fas fa-magnifying-glass"></i><input type="search" placeholder="Cliente, número ou CNPJ"></div>
+    </div>
+    {% if m.canc %}
+    <div class="tx-grade">
+      {% for t in m.canc %}
+      <div class="tx-c tx-canc" data-busca="{{ t.num }} {{ t.nome_full }} {{ t.doc }}" title="Clique para ver a cobrança" data-tid="{{ t.id }}"
+           data-g="{{ t.grupos | join('|') }}" data-s="{{ t.serv }}" data-k="{{ t.comp }}" data-b="{{ t.bol }}" data-v="{{ '%.2f'|format(t.v) }}">
+        <div class="tx-c-top"><span class="tx-c-num">{{ t.num }}</span><span class="tx-c-nome" title="{{ t.nome_full }}">{{ t.nome }}</span></div>
+        <div class="tx-c-meio"><div><div class="tx-c-val">{{ t.valor }}</div><div class="tx-c-desc">{{ t.desc }} · vencia {{ t.venc }}</div></div><span class="tx-c-st"><i class="fas fa-ban"></i> cancelado</span></div>
+        <div class="tx-motivo"><i class="fas fa-quote-left"></i>{{ t.motivo }}</div>
+        <div class="tx-quem">{% if t.quando %}cancelado em {{ t.quando }}{% if t.por %} por {{ t.por }}{% endif %}{% else %}sem registro de quem cancelou{% endif %}{% if t.orcamento_id %} · <a href="{{ url_for('comercial.orcamentos', abrir=t.orcamento_id) }}" onclick="event.stopPropagation()" style="color:#6d28d9; font-weight:700">ver o orçamento</a>{% endif %}</div>
+      </div>
+      {% endfor %}
+    </div>
+    <div class="tx-vazio" data-nada style="display:none;"><i class="fas fa-magnifying-glass"></i>Nada encontrado com esse filtro.</div>
+    {% else %}
+    <div class="tx-vazio"><i class="fas fa-ban"></i>Nenhum título cancelado.</div>
     {% endif %}
   </div>
 </div>

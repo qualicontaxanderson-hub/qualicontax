@@ -227,7 +227,7 @@ def _titulos_receber(emps, sel):
             mes = date(int(raw[:4]), int(raw[5:]), 1)
         except ValueError:
             mes = None
-    aba = request.args.get('aba') if request.args.get('aba') in ('rec', 'abe', 'atr', 'ina', 'perd') else 'abe'
+    aba = request.args.get('aba') if request.args.get('aba') in ('rec', 'abe', 'atr', 'ina', 'perd', 'canc') else 'abe'
     # Período (17/11/2026): per=mes|ant|ano|datas (+ de/ate). Vale a baixa no Recebido e o vencimento nas outras.
     per_raw = request.args.get('per') if request.args.get('per') in ('mes', 'ant', 'ano', 'datas') else ''
     def _d(k):

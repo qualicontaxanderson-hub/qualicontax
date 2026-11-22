@@ -173,22 +173,36 @@ class Orcamento:
         Orcamento.evento(oid, 'criado', 'Orçamento montado: %d serviço%s, total R$ %s' % (len(itens), 's' if len(itens) != 1 else '', _brl(total)), usuario)
         return oid
 
+    EDITAVEIS = ('RASCUNHO', 'REPROVADO', 'APROVADO', 'ACEITO', 'COBRANCA')
+
     @staticmethod
     def atualizar(oid, f, usuario):
+        """Alterar valores, incluir serviços... (22/11/2026 — Anderson: "editar: alterar valores, incluir serviços e assim vai").
+        Vale em qualquer fase antes de a cobrança sair. Depois de aprovado/aceito, o orçamento volta para RASCUNHO: passa de
+        novo pela aprovação e, se já tinha ido ao cliente, ele aceita de novo (o aceite antigo era de outro documento)."""
         o = Orcamento.get(oid)
-        if not o or o['status'] not in ('RASCUNHO', 'REPROVADO'):
-            raise ValueError('Só rascunho ou reprovado pode ser alterado.')
+        if not o or o['status'] not in Orcamento.EDITAVEIS:
+            raise ValueError('Este orçamento não pode mais ser alterado: cancele-o e monte outro.')
         d = Orcamento._dados_do_form(f)
         itens = Orcamento._itens_do_form(f)
         total = sum((i['valor_total'] for i in itens), Decimal('0'))
         execute_query("""UPDATE com_orcamentos SET cliente_id = %s, titulo = %s, validade = %s, como = %s, parcelas = %s, comissao_tipo = %s,
                              comissao_valor = %s, total = %s, observacao = %s, nota_interna = %s, status = 'RASCUNHO', motivo = NULL,
-                             solicitante_nome = %s, solicitante_email = %s, solicitante_fone = %s, interno = %s WHERE id = %s""",
+                             solicitante_nome = %s, solicitante_email = %s, solicitante_fone = %s, interno = %s,
+                             aprovado_por = NULL, aprovado_em = NULL, enviado_em = NULL, enviado_para = NULL, pdf_sha256 = NULL,
+                             codigo_hash = NULL, codigo_enviado_em = NULL, codigo_para = NULL, codigo_tentativas = 0,
+                             aceito_em = NULL, aceito_nome = NULL, aceito_cpf = NULL, aceito_email = NULL, aceito_ip = NULL, aceito_agente = NULL, aceito_hash = NULL,
+                             feito_em = NULL, lancamento_id = NULL WHERE id = %s""",
                       (d['cliente_id'], d['titulo'], d['validade'], d['como'], d['parcelas'], d['comissao_tipo'], d['comissao_valor'], total,
                        d['observacao'], d['nota_interna'], d['solicitante_nome'], d['solicitante_email'], d['solicitante_fone'], d['interno'], oid), fetch=False)
         execute_query('DELETE FROM com_orcamento_itens WHERE orcamento_id = %s', (oid,), fetch=False)
         Orcamento._gravar_itens(oid, itens)
-        Orcamento.evento(oid, 'editado', 'Orçamento alterado: %d serviço%s, total R$ %s' % (len(itens), 's' if len(itens) != 1 else '', _brl(total)), usuario)
+        extra = ''
+        if o.get('aceito_em'):
+            extra = ' · o aceite de %s (%s) não vale mais: o cliente precisa aceitar o orçamento novo' % (o.get('aceito_nome') or 'cliente', o['aceito_em'].strftime('%d/%m/%Y'))
+        elif o['status'] in ('APROVADO', 'ACEITO', 'COBRANCA'):
+            extra = ' · volta para rascunho e passa de novo pela aprovação'
+        Orcamento.evento(oid, 'editado', 'Orçamento alterado: %d serviço%s, total R$ %s (antes R$ %s)%s' % (len(itens), 's' if len(itens) != 1 else '', _brl(total), _brl(o['total']), extra), usuario)
         return oid
 
     @staticmethod

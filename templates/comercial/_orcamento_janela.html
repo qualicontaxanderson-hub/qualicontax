@@ -68,7 +68,7 @@
         <div class="tj-bts" style="margin-top:12px">
           <a href="{{ url_for('comercial.orcamento_pdf', oid=o.id) }}" target="_blank"><i class="fas fa-eye"></i> Ver PDF</a>
           <a href="{{ url_for('comercial.orcamento_pdf', oid=o.id, baixar=1) }}"><i class="fas fa-download"></i> Baixar PDF</a>
-          {% if o.status in ('RASCUNHO', 'REPROVADO') and (dono or aprovador) %}<button type="button" onclick="ocEditar({{ o.id }})"><i class="fas fa-pen"></i> Alterar</button>{% endif %}
+          {% if editavel %}<button type="button" onclick="ocEditar({{ o.id }})"><i class="fas fa-pen"></i> Alterar</button>{% endif %}
         </div>
       </section>
       {% if lanc %}
@@ -99,6 +99,7 @@
         {% elif o.status in ('APROVADO', 'ACEITO') %}
           {% if o.aceito_em %}<div class="tj-aviso" style="background:#f0fdf4; border:1px solid #bbf7d0; color:#166534; margin:0 0 10px"><i class="fas fa-file-signature"></i> <b>Aceito por {{ o.aceito_nome }}</b>{% if o.aceito_cpf %} (CPF {{ o.aceito_cpf }}){% endif %} em {{ o.aceito_em.strftime('%d/%m/%Y às %H:%M') }}, pelo link, com código enviado a {{ o.aceito_email }}. O registro está na última página do PDF.</div>
           {% elif o.enviado_em and link %}<div class="tj-aviso" style="margin:0 0 10px"><i class="fas fa-link"></i> Enviado em {{ o.enviado_em.strftime('%d/%m %H:%M') }} para {{ o.enviado_para }}. Link da proposta: <code data-copiar data-copiar-rotulo="Link da proposta" title="Clique para copiar" style="cursor:pointer; background:#fff; border:1px solid #e2e8f0; border-radius:6px; padding:2px 6px; font-size:11px">{{ link }}</code></div>{% endif %}
+          {% if editavel %}<button type="button" class="tj-acao" style="margin-bottom:10px" onclick="ocEditar({{ o.id }})"><i class="fas fa-pen"></i><span><b>Alterar o orçamento</b><small>valores, serviços, condições · volta para aprovação{% if o.aceito_em %} e o cliente aceita de novo{% endif %}</small></span></button>{% endif %}
           {% if not o.interno and not o.aceito_em %}<div class="tj-acao-bl" data-foco="enviar">
             <div class="tj-acao-t"><i class="fas fa-envelope"></i> Mandar ao cliente <small>PDF por e-mail</small></div>
             <form method="POST" action="{{ url_for('comercial.orcamento_enviar', oid=o.id) }}" class="tj-env">
@@ -124,8 +125,14 @@
               <button type="submit" class="tj-acao prim" style="margin-top:8px"><i class="fas fa-barcode"></i><span><b>Mandar para a cobrança</b><small>vai para Financeiro › Lançamentos aprovar</small></span></button>
             </form>
           </div>
+        {% elif o.status == 'COBRANCA' and sem_cobranca %}
+          <div class="tj-aviso" style="background:#fff7ed; border:1px solid #fed7aa; color:#9a3412; margin:0 0 10px"><i class="fas fa-triangle-exclamation"></i> <b>A cobrança foi cancelada</b> (boleto cancelado). O serviço continua feito{% if o.aceito_em %} e aceito{% endif %}; só a cobrança precisa sair de novo. Escolha abaixo o que fazer.</div>
+          {% if aprovador %}<form method="POST" action="{{ url_for('financeiro.lancamento_cobrar', lid=lanc.id) }}"><button type="submit" class="tj-acao prim"><i class="fas fa-barcode"></i><span><b>Cobrar de novo</b><small>emite a cobrança do lançamento nº {{ lanc.id }} do mesmo jeito</small></span></button></form>
+          {% else %}<div class="tj-aviso" style="margin:0 0 8px"><i class="fas fa-user-shield"></i> Quem aprova cobra de novo em Financeiro › Lançamentos › Cobrados (botão Cobrar de novo). Se os valores mudaram, altere aqui antes.</div>{% endif %}
+          {% if editavel %}<button type="button" class="tj-acao" onclick="ocEditar({{ o.id }})"><i class="fas fa-pen"></i><span><b>Alterar o orçamento</b><small>valores, serviços, condições; volta para aprovação{% if o.aceito_em %} e o cliente aceita de novo{% endif %}</small></span></button>{% endif %}
         {% elif o.status == 'COBRANCA' %}
           <div class="tj-aviso" style="margin:0 0 10px"><i class="fas fa-hourglass-half"></i> A cobrança está em Financeiro › Lançamentos esperando aprovação. Quando aprovarem, a nota e o boleto saem e este orçamento fica concluído.</div>
+          {% if editavel %}<button type="button" class="tj-acao" onclick="ocEditar({{ o.id }})"><i class="fas fa-pen"></i><span><b>Alterar o orçamento</b><small>cancela o lançamento que espera aprovação; volta para rascunho</small></span></button>{% endif %}
           {% if texto_fin %}<div class="tj-acao-bl"><div class="tj-acao-t"><i class="fab fa-whatsapp"></i> Avisar o Financeiro <small>texto pronto</small></div>
             <button type="button" class="tj-acao prim" style="margin:0" data-texto="{{ texto_fin }}" onclick="if (window.qcxCopiar) qcxCopiar.copiar(this.dataset.texto)"><i class="fab fa-whatsapp"></i><span><b>Copiar aviso para o Financeiro</b><small>cola no WhatsApp de quem aprova: diz o que foi feito, o valor, o aceite e o link do lançamento</small></span></button></div>{% endif %}
         {% elif o.status == 'CONCLUIDO' %}
@@ -133,8 +140,9 @@
         {% elif o.status == 'CANCELADO' %}
           <div class="tj-aviso"><i class="fas fa-ban"></i> Cancelado{% if o.cancelado_em %} em {{ o.cancelado_em.strftime('%d/%m/%Y') }}{% endif %}.</div>
         {% endif %}
-        {% if o.status in ('RASCUNHO', 'REPROVADO', 'APROVACAO', 'APROVADO', 'ACEITO') and (dono or aprovador) %}
-        <button type="button" class="tj-acao" style="margin-top:10px" onclick="ocPergunta({ titulo: 'Cancelar o orçamento {{ o.numero }}?', texto: 'Ele sai do caminho e fica guardado como cancelado. Dá para montar outro depois.', motivo: 'motivo (opcional)', cor: 'pk-rubro', icone: 'fa-ban', ok: 'Cancelar o orçamento', okIcone: 'fa-ban', voltar: 'Deixar como está', onOk: function (m) { ocPost('{{ url_for('comercial.orcamento_cancelar', oid=o.id) }}', { motivo: m }); } })"><i class="fas fa-ban"></i><span><b>Cancelar orçamento</b><small>não apaga: fica no histórico</small></span></button>
+        {% if o.status != 'CANCELADO' and (dono or aprovador) %}
+        {% if bloqueio and o.status in ('COBRANCA', 'CONCLUIDO') %}<div class="tj-aviso" style="margin-top:10px"><i class="fas fa-lock"></i> {{ bloqueio }}</div>
+        {% else %}<button type="button" class="tj-acao" style="margin-top:10px" onclick="ocPergunta({ titulo: 'Cancelar o orçamento {{ o.numero }}?', texto: 'Ele sai do caminho e fica guardado como cancelado, com o motivo.{% if lanc and lanc.status in ('LANCADO', 'APROVADO') %} O lançamento nº {{ lanc.id }} em Financeiro › Lançamentos é cancelado junto.{% endif %} Dá para montar outro depois.', motivo: 'escreva o motivo (obrigatório)', exigeMotivo: true, opcoes: ['Cliente desistiu', 'Serviço não será feito', 'Valores errados: vou montar outro', 'Orçamento duplicado', 'Cliente não respondeu'], cor: 'pk-rubro', icone: 'fa-ban', ok: 'Cancelar o orçamento', okIcone: 'fa-ban', voltar: 'Deixar como está', onOk: function (m) { ocPost('{{ url_for('comercial.orcamento_cancelar', oid=o.id) }}', { motivo: m }); } })"><i class="fas fa-ban"></i><span><b>Cancelar orçamento</b><small>com o motivo · não apaga: fica no histórico</small></span></button>{% endif %}
         {% endif %}
       </section>
     </div>

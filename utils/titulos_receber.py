@@ -413,6 +413,10 @@ def montar(empresa_ids=None, mes=None, per=None):
     perd = perdidos(ec, ep, hoje, per=per)
     for x in perd:
         cat.add(x)
+    # Cancelados (22/11/2026 — Anderson: "ainda não temos como consultar os cancelados"): boleto/título cancelado, não perdido
+    canc = cancelados(ec, ep, hoje, per=per)
+    for x in canc:
+        cat.add(x)
 
     # Pagamentos da Efí que entraram e não acharam dono (valor igual ao de outros clientes)
     esp = q("""SELECT COUNT(*) n, COALESCE(SUM(l.valor), 0) v FROM extrato_lancamentos l
@@ -434,10 +438,53 @@ def montar(empresa_ids=None, mes=None, per=None):
         atr=atr_g, atr_f=atr_f, atr_tot=brl(sum(float(i['saldo']) for i in atr_i)), atr_n=len(atr_i),
         ina=ina, ina_tot=brl(sum(x['v'] for x in ina)), ina_cli=len(ina),
         perd=perd, perd_tot=brl(sum(x['v'] for x in perd)), perd_n=len(perd),
+        canc=canc, canc_tot=brl(sum(x['v'] for x in canc)), canc_n=len(canc),
         ina_tit=sum(x['qtd'] for x in ina),
         regua_ini=_comp(date(*comps[0], 1)), regua_fim=_comp(date(*comps[-1], 1)),
         filtros=cat.saida(),
         esp_n=esp['n'], esp_tot=brl(esp['v']), esp_desde=CORTE_EFI)
+
+
+def cancelados(ec='', ep=(), hoje=None, per=None):
+    """Títulos a receber cancelados que NÃO são perdidos (o boleto foi cancelado e o título junto, ou o título foi cancelado
+    à mão). Diz quem cancelou e quando (pelo registro do boleto em logs_sistema). ``per`` = (de, ate, ...) pelo vencimento."""
+    rows = q(f"""SELECT t.id, t.cliente_id, t.contraparte_nome, t.contraparte_doc, t.descricao, t.competencia,
+                        t.vencimento, t.valor AS v, t.criado_em, c.numero_cliente, cat.nome AS categoria_nome,
+                        (SELECT b.id FROM fin_boletos b WHERE b.titulo_id = t.id ORDER BY b.id DESC LIMIT 1) AS boleto_id,
+                        (SELECT b.atualizado_em FROM fin_boletos b WHERE b.titulo_id = t.id ORDER BY b.id DESC LIMIT 1) AS boleto_em,
+                        (SELECT l.orcamento_id FROM fin_lancamentos l WHERE l.titulo_id = t.id OR (l.boleto_id IS NOT NULL AND l.boleto_id = (SELECT b2.id FROM fin_boletos b2 WHERE b2.titulo_id = t.id ORDER BY b2.id DESC LIMIT 1)) LIMIT 1) AS orcamento_id
+                   FROM fin_titulos t LEFT JOIN clientes c ON c.id = t.cliente_id
+                   LEFT JOIN fin_categorias cat ON cat.id = t.categoria_id
+                  WHERE t.tipo = 'R' AND t.status = 'cancelado' AND t.perdido_em IS NULL{ec}
+                  ORDER BY t.id DESC""", tuple(ep), fetch=True) or []
+    if not rows:
+        return []
+    bids = [r['boleto_id'] for r in rows if r['boleto_id']]
+    quem = {}
+    if bids:
+        for lg in q("""SELECT registro_id, usuario_nome, data_hora FROM logs_sistema WHERE acao = 'escrita.cancelou_boleto' AND tabela_afetada = 'fin_boletos'
+                         AND registro_id IN (%s) ORDER BY id""" % ','.join(str(b) for b in bids), fetch=True) or []:
+            quem[int(lg['registro_id'])] = lg
+    out = []
+    grupos = _grupos_dos_clientes([t['cliente_id'] for t in rows])
+    bols = _boletos_dos_titulos([t['id'] for t in rows])
+    for t in rows:
+        if per:
+            v = t['vencimento']
+            v = date.fromisoformat(str(v)[:10]) if not isinstance(v, date) else v
+            if not (per[0] <= v <= per[1]):
+                continue
+        lg = quem.get(int(t['boleto_id'])) if t['boleto_id'] else None
+        quando = (lg['data_hora'] if lg else t['boleto_em'])
+        out.append({'id': t['id'], **_marcas(t, grupos, bols),
+                    'num': t['numero_cliente'] or '—', 'nome': _nome(t['contraparte_nome']),
+                    'nome_full': t['contraparte_nome'] or '', 'doc': _digitos(t['contraparte_doc']),
+                    'cliente_id': t['cliente_id'], 'v': float(t['v']), 'valor': brl(t['v']), 'desc': _desc(t),
+                    'venc': t['vencimento'].strftime('%d/%m/%Y'),
+                    'motivo': ('Boleto nº %s cancelado no banco; o título a receber foi cancelado junto.' % t['boleto_id']) if t['boleto_id'] else 'Título cancelado.',
+                    'quando': quando.strftime('%d/%m/%Y %H:%M') if quando else '', 'por': ((lg or {}).get('usuario_nome') or '').split(' ')[0],
+                    'orcamento_id': t['orcamento_id']})
+    return out
 
 
 def _tem_colunas_perdido():

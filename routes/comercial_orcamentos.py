@@ -235,18 +235,47 @@ def orcamento_janela(oid):
     datas_venc = [((hoje + timedelta(days=d)).isoformat(), 'em %d dias' % d, (hoje + timedelta(days=d)).strftime('%d/%m'), d == 7) for d in (3, 7, 10, 15, 30)]
     link = url_for('proposta.ver', token=o['token'], _external=True) if not o.get('interno') else None
     texto_wa = _texto_whatsapp(o, itens, link) if link else None
-    texto_fin = _texto_financeiro(o, itens, lanc) if (o['status'] == 'COBRANCA' and lanc) else None
-    return render_template('comercial/_orcamento_janela.html', texto_fin=texto_fin, o=o, itens=itens, eventos=eventos, lanc=lanc, dest=dest, hoje=hoje, datas_venc=datas_venc, link=link,
+    texto_fin = _texto_financeiro(o, itens, lanc) if (o['status'] == 'COBRANCA' and lanc and lanc['status'] == 'LANCADO') else None
+    # boleto cancelado: o lançamento voltou para "aprovado sem cobrança" (22/11/2026 — Anderson: "mostra que cancelou o boleto, e agora?")
+    sem_cobranca = bool(lanc and lanc['status'] == 'APROVADO' and not lanc.get('titulo_id') and o['status'] == 'COBRANCA')
+    _, bloqueio = _lancamento_vivo(o)
+    editavel = o['status'] in Orcamento.EDITAVEIS and not bloqueio and (o['criado_por'] == current_user.id or _aprovador())
+    return render_template('comercial/_orcamento_janela.html', texto_fin=texto_fin, sem_cobranca=sem_cobranca, bloqueio=bloqueio, editavel=editavel, o=o, itens=itens, eventos=eventos, lanc=lanc, dest=dest, hoje=hoje, datas_venc=datas_venc, link=link,
                            texto_wa=texto_wa, wa_link=_wa_link(o.get('solicitante_fone'), texto_wa) if texto_wa else None,
                            aprovador=_aprovador(), dono=o['criado_por'] == current_user.id, STATUS=STATUS, COMO=COMO, COMISSAO=COMISSAO,
                            vencido=Orcamento.vencido(o), n_nota=sum(1 for i in itens if i['emite_nota']),
                            total_nota=sum((Decimal(str(i['valor_total'])) for i in itens if i['emite_nota']), Decimal('0')))
 
 
+def _lancamento_vivo(o):
+    """O lançamento deste orçamento que ainda não virou cobrança (LANCADO ou APROVADO sem título): pode ser cancelado junto
+    com o orçamento ou ao alterá-lo. Devolve (lancamento, bloqueio): bloqueio = texto quando há cobrança viva (boleto/título)."""
+    if not o.get('lancamento_id'):
+        return None, None
+    l = FinLancamento.get(o['lancamento_id'])
+    if not l or l['status'] in ('CANCELADO', 'REPROVADO'):
+        return None, None
+    if l['status'] == 'FATURADO' or l.get('titulo_id'):
+        return l, 'A cobrança deste orçamento já saiu (lançamento nº %s). Cancele o boleto em Cobranças primeiro; o orçamento volta para "Em cobrança" e aí dá para alterar ou cancelar.' % l['id']
+    return l, None
+
+
+def _cancelar_lancamento_junto(o, motivo):
+    l, bloqueio = _lancamento_vivo(o)
+    if bloqueio:
+        raise ValueError(bloqueio)
+    if l:
+        FinLancamento.cancelar(l['id'], motivo)
+        registrar('escrita.cancelou_lancamento', 'financeiro', tabela='fin_lancamentos', registro_id=l['id'],
+                  depois={'empresa': l['nome_razao_social'], 'servico': l['servico_nome'], 'motivo': motivo, 'orcamento': o['numero']})
+        return l['id']
+    return None
+
+
 @comercial.route('/comercial/orcamentos/<int:oid>/dados')
 @permission_required(VER)
 def orcamento_dados(oid):
-    """O orçamento em JSON para a caixa de edição (rascunho/reprovado)."""
+    """O orçamento em JSON para a caixa de edição (qualquer fase antes de a cobrança sair)."""
     o = Orcamento.get(oid)
     if not o or not _dono_ou_aprovador(o):
         abort(404)
@@ -277,7 +306,14 @@ def orcamento_novo():
             o = Orcamento.get(oid)
             if not o or not _dono_ou_aprovador(o):
                 abort(404)
+            if o['status'] not in Orcamento.EDITAVEIS:
+                raise ValueError('Este orçamento não pode mais ser alterado: cancele-o e monte outro.')
+            lid = _cancelar_lancamento_junto(o, 'Orçamento %s alterado: o lançamento vai nascer de novo ao mandar para a cobrança' % o['numero'])
             Orcamento.atualizar(oid, f, current_user)
+            if lid:
+                Orcamento.evento(oid, 'editado', 'Lançamento nº %s cancelado em Financeiro › Lançamentos: ao mandar para a cobrança de novo, nasce outro' % lid, current_user)
+            if o.get('aceito_em') or o.get('enviado_em'):
+                flash('Orçamento alterado: ele volta para rascunho e, depois de aprovado, precisa ir ao cliente de novo (o aceite anterior era de outro documento).', 'info')
             registrar('escrita.alterou_orcamento', 'comercial', tabela='com_orcamentos', registro_id=oid, depois={'total': str(Orcamento.get(oid)['total'])})
         else:
             oid = Orcamento.criar(f, current_user, EMP)
@@ -359,11 +395,20 @@ def orcamento_cancelar(oid):
     motivo = ' '.join((request.form.get('motivo') or '').split())[:400]
     if not o or not _dono_ou_aprovador(o):
         abort(404)
-    if o['status'] in ('COBRANCA', 'CONCLUIDO', 'CANCELADO'):
-        flash('Orçamento já em cobrança, concluído ou cancelado não se cancela aqui.', 'info')
+    if o['status'] == 'CANCELADO':
+        flash('Este orçamento já está cancelado.', 'info')
         return _volta(oid)
-    Orcamento.mudar(oid, 'CANCELADO', current_user, 'cancelado', 'Cancelado por %s%s' % (current_user.nome, (': ' + motivo) if motivo else ''), motivo=motivo or None, cancelado_em='NOW()')
-    registrar('escrita.cancelou_orcamento', 'comercial', tabela='com_orcamentos', registro_id=oid, depois={'motivo': motivo})
+    if not motivo:
+        flash('Diga o motivo do cancelamento: fica no histórico.', 'danger')
+        return _volta(oid)
+    try:
+        lid = _cancelar_lancamento_junto(o, 'Orçamento %s cancelado: %s' % (o['numero'], motivo))
+    except ValueError as e:
+        flash(str(e), 'danger')
+        return _volta(oid)
+    Orcamento.mudar(oid, 'CANCELADO', current_user, 'cancelado', 'Cancelado por %s: %s%s' % (current_user.nome, motivo, (' · lançamento nº %s cancelado junto' % lid) if lid else ''),
+                    motivo=motivo, cancelado_em='NOW()')
+    registrar('escrita.cancelou_orcamento', 'comercial', tabela='com_orcamentos', registro_id=oid, depois={'motivo': motivo, 'lancamento_cancelado': lid})
     flash('Orçamento %s cancelado.' % o['numero'], 'success')
     return _volta(oid)
 

@@ -70,6 +70,7 @@
 .pk.pk-peq { width:min(560px, 96vw); top:18vh; } .pk.pk-peq .pk-quem span { white-space:normal; line-height:1.4; }
 .pk.pk-rubro { --cor:#dc2626; --cor-e:#991b1b; --cor-f:#fef2f2; --cor-b:#fecaca; } .pk.pk-roxo { --cor:#7c3aed; --cor-e:#5b21b6; --cor-f:#f5f3ff; --cor-b:#ddd6fe; } .pk.pk-ambar { --cor:#d97706; --cor-e:#92400e; --cor-f:#fffbeb; --cor-b:#fde68a; }
 .pk-peq .pk-pe .pk-ok.rubro { background:linear-gradient(135deg,#dc2626,#991b1b); }
+.pk-opcoes { display:flex; flex-wrap:wrap; gap:6px; margin:12px 18px 0; } .pk-opc { border:1px solid #e2e8f0; background:#fff; color:#475569; border-radius:99px; padding:7px 12px; font:inherit; font-size:12.5px; font-weight:700; cursor:pointer; } .pk-opc.on { background:#dc2626; border-color:#dc2626; color:#fff; }
 .pk-peq .pk-motivo { width:100%; box-sizing:border-box; border:1px solid #d7e3dc; border-radius:10px; padding:9px 12px; font:inherit; font-size:13.5px; min-height:70px; resize:vertical; margin:12px 18px 0; width:calc(100% - 36px); }
 @media (max-width:900px) { .tx-abas.oc-abas { grid-template-columns:1fr 1fr; } .oc-grade { grid-template-columns:minmax(0,1fr); } .oc-faixa .tx-busca { margin-left:0; width:100%; }
   .oc-it { grid-template-columns:minmax(0,1fr) 34px; } .oc-it .ns-in.qtd, .oc-it .ns-money { grid-column:1 / 2; } .oc-btn-novo { width:100%; } }
@@ -293,6 +294,7 @@
     var f = document.createElement('div'); f.className = 'pk-fundo'; f.style.zIndex = 1400;
     f.innerHTML = '<div class="pk pk-peq ' + (o.cor || 'pk-roxo') + '" role="alertdialog" aria-modal="true"><header class="pk-cab"><span class="pk-av"><i class="fas ' + (o.icone || 'fa-question') + '"></i></span>'
       + '<div class="pk-quem"><b>' + esc(o.titulo) + '</b><span>' + esc(o.texto || '') + '</span></div><button type="button" class="pk-x" title="Fechar (Esc)"><i class="fas fa-xmark"></i></button></header>'
+      + (o.opcoes ? '<div class="pk-opcoes">' + o.opcoes.map(function (x) { return '<button type="button" class="pk-opc">' + esc(x) + '</button>'; }).join('') + '</div>' : '')
       + (o.motivo ? '<textarea class="pk-motivo" placeholder="' + esc(o.motivo) + '" maxlength="400"></textarea>' : '')
       + '<footer class="pk-pe"><div class="pk-pe-info">' + esc(o.info || '') + '</div><button type="button" class="pk-canc">' + esc(o.voltar || 'Voltar') + '</button><button type="button" class="pk-ok' + (o.cor === 'pk-rubro' ? ' rubro' : '') + '"><i class="fas ' + (o.okIcone || 'fa-check') + '"></i> ' + esc(o.ok || 'Confirmar') + '</button></footer></div>';
     document.body.appendChild(f);
@@ -302,6 +304,7 @@
     f.querySelector('.pk-x').addEventListener('click', function () { fechar(false); }); f.querySelector('.pk-canc').addEventListener('click', function () { fechar(false); });
     f.querySelector('.pk-ok').addEventListener('click', function () { fechar(true); }); f.addEventListener('mousedown', function (e) { if (e.target === f) fechar(false); });
     var ta = f.querySelector('.pk-motivo'); if (ta) ta.focus(); else f.querySelector('.pk-ok').focus();
+    f.querySelectorAll('.pk-opc').forEach(function (b) { b.addEventListener('click', function () { f.querySelectorAll('.pk-opc').forEach(function (x) { x.classList.toggle('on', x === b); }); if (ta) { ta.value = b.textContent; ta.focus(); } }); });
   };
 
   // ── caixa Novo orçamento ──
