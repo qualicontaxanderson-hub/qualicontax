@@ -194,6 +194,8 @@ class PrestContrato:
         # quem assina pode ser um terceiro: os CONTATOS da empresa também viram atalho (Anderson, 06/11)
         c['contatos'] = execute_query("""SELECT id, nome, cargo, email, celular FROM contatos_clientes
                                           WHERE cliente_id = %s AND ativo = 1 ORDER BY principal DESC, nome""", (cliente_id,), fetch=True) or []
+        nomes_socios = {(s.get('nome') or '').strip().upper() for s in c['socios']}
+        c['contatos'] = [k for k in c['contatos'] if (k.get('nome') or '').strip().upper() not in nomes_socios]   # quem já é sócio não repete como contato
         return c
 
     @staticmethod
@@ -241,7 +243,7 @@ class PrestContrato:
     @staticmethod
     def testemunhas_disponiveis():
         return execute_query("""SELECT id, nome, cpf, email FROM usuarios WHERE classe_conta = 'FUNCIONARIO' AND situacao = 'ATIVO'
-                                 ORDER BY nome""", fetch=True) or []
+                                   AND login <> 'admin' ORDER BY nome""", fetch=True) or []      # a conta Administrador não é pessoa
 
     # ---------------- gravação ----------------
     @staticmethod
