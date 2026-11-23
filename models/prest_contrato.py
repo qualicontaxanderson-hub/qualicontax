@@ -90,6 +90,28 @@ def _doc_texto(docs):
     return ' e '.join(partes)
 
 
+def _celular_da_pessoa(pf_cliente_id, cpf=None):
+    """Celular de quem assina: o do cadastro PF (celular, senão telefone); se é alguém do escritório, o do usuário."""
+    if pf_cliente_id:
+        c = execute_query('SELECT celular, telefone FROM clientes WHERE id = %s', (pf_cliente_id,), fetch=True, fetch_one=True) or {}
+        if (c.get('celular') or c.get('telefone') or '').strip():
+            return (c.get('celular') or c.get('telefone')).strip()
+    dig = ''.join(ch for ch in (cpf or '') if ch.isdigit())
+    if dig:
+        u = execute_query('SELECT celular FROM usuarios WHERE cpf = %s AND situacao = %s', (dig, 'ATIVO'), fetch=True, fetch_one=True) or {}
+        if (u.get('celular') or '').strip():
+            return u['celular'].strip()
+    return ''
+
+
+def _cargo_do_socio(s):
+    """'sócio administrador', 'sócia administradora', 'diretor'... a partir da qualificação do quadro (ou do responsável)."""
+    q = (s.get('qualificacao') or '').strip().lower().replace('-', ' ').replace('  ', ' ')
+    if q in ('', 'socio', 'sócio', 'socio administrador', 'sócio administrador', 'administrador'):
+        return 'sócio administrador' if (s.get('responsavel') or q.endswith('administrador')) else 'sócio'
+    return q
+
+
 def _email_da_pessoa(pf_cliente_id, cpf):
     """E-mail de quem assina: o do USUÁRIO (se é alguém do escritório, pelo CPF), senão o do cadastro PF."""
     dig = ''.join(ch for ch in (cpf or '') if ch.isdigit())
@@ -121,6 +143,7 @@ class PrestContrato:
         linha2 = ' – '.join(x for x in [nome_proprio(end.get('bairro') or ''), nome_proprio(end.get('cidade') or ''), end.get('estado') or '', end.get('cep') or ''] if x)
         return {'cliente_id': e['id'], 'razao': e['nome_razao_social'], 'cnpj': e['cpf_cnpj'], 'endereco': e['endereco'], 'crc': (crc or {}).get('valor') or '',
                 'email': e.get('email') or '', 'telefone': e.get('telefone') or '',
+                'cidade': (nome_proprio(end.get('cidade') or '') or 'São Paulo').replace('Sao ', 'São '), 'uf': (end.get('estado') or '').strip() or 'SP',
                 'cabecalho': [x for x in (linha1, linha2, e.get('email') or '', 'www.qualicontax.com.br') if x]}
 
     @staticmethod
@@ -158,15 +181,43 @@ class PrestContrato:
         c['socios'] = execute_query("""SELECT nome, cpf, qualificacao, responsavel, email, pf_cliente_id FROM socios_clientes
                                         WHERE cliente_id = %s AND ativo = 1 ORDER BY responsavel DESC, nome""", (cliente_id,), fetch=True) or []
         from models.pessoa_dados import Documentos
-        for s in c['socios']:                              # documento marcado para contrato e e-mail vêm do cadastro PF do sócio
+        if not c['socios'] and (c.get('tipo_pessoa') == 'PF' or len(''.join(ch for ch in (c.get('cpf_cnpj') or '') if ch.isdigit())) == 11):
+            # pessoa física contratante: quem assina é ela mesma
+            c['socios'] = [{'nome': c['nome_razao_social'], 'cpf': c.get('cpf_cnpj') or '', 'qualificacao': 'titular', 'responsavel': 1, 'email': '', 'pf_cliente_id': c['id']}]
+        for s in c['socios']:                              # documento marcado para contrato, e-mail, celular e cargo vêm do cadastro PF do sócio
             pf = s.get('pf_cliente_id')
             s['documento'] = _doc_texto(Documentos.listar(pf)) if pf else ''
             if not s.get('email'):
                 s['email'] = _email_da_pessoa(pf, s.get('cpf'))[0] or ''
+            s['celular'] = _celular_da_pessoa(pf, s.get('cpf'))
+            s['cargo'] = _cargo_do_socio(s)
         # quem assina pode ser um terceiro: os CONTATOS da empresa também viram atalho (Anderson, 06/11)
         c['contatos'] = execute_query("""SELECT id, nome, cargo, email, celular FROM contatos_clientes
                                           WHERE cliente_id = %s AND ativo = 1 ORDER BY principal DESC, nome""", (cliente_id,), fetch=True) or []
         return c
+
+    @staticmethod
+    def pessoas(termo, limite=8):
+        """Pessoas físicas do cadastro, por nome ou CPF, com documento, e-mail e celular: para puxar quem assina sem digitar
+        (22/11/2026 — Anderson: "os campos quase nada preenchido, e está tudo no cadastro")."""
+        termo = (termo or '').strip()
+        if len(termo) < 2:
+            return []
+        dig = ''.join(ch for ch in termo if ch.isdigit())
+        cond, params = ['c.nome_razao_social LIKE %s'], ['%' + termo + '%']
+        if dig and len(dig) >= 3 and dig == termo.replace('.', '').replace('-', '').replace(' ', ''):
+            cond = ["REPLACE(REPLACE(c.cpf_cnpj, '.', ''), '-', '') LIKE %s"]; params = ['%' + dig + '%']
+        rows = execute_query("""SELECT c.id, c.nome_razao_social AS nome, c.cpf_cnpj AS cpf, c.email, c.celular, c.telefone
+                                   FROM clientes c WHERE c.tipo_pessoa = 'PF' AND (%s)
+                                  ORDER BY c.situacao = 'ATIVO' DESC, c.nome_razao_social LIMIT %%s""" % ' OR '.join(cond),
+                             tuple(params) + (int(limite),), fetch=True) or []
+        from models.pessoa_dados import Documentos
+        out = []
+        for r in rows:
+            email, _ = _email_da_pessoa(r['id'], r.get('cpf'))
+            out.append({'id': r['id'], 'nome': (r['nome'] or '').strip(), 'cpf': r.get('cpf') or '', 'documento': _doc_texto(Documentos.listar(r['id'])),
+                        'email': (email or r.get('email') or '').strip().lower(), 'celular': _celular_da_pessoa(r['id'], r.get('cpf'))})
+        return out
 
     @staticmethod
     def socios_iguais(cliente_ids):
@@ -416,13 +467,24 @@ class PrestContrato:
         apelido = (dados.get('apelido') or (empresas[0].get('apelido') if empresas else '') or 'CONTRATANTE').strip().upper()
         # ---- partes ----
         partes = []
-        if len(empresas) == 1:
+        def _pf(e):
+            return len(''.join(ch for ch in (e.get('cnpj') or '') if ch.isdigit())) == 11
+        if len(empresas) == 1 and _pf(empresas[0]):
+            e = empresas[0]                                 # pessoa física contratante: assina por si
+            if (e.get('rep_nome') or '').strip().upper() == (e['razao'] or '').strip().upper() or (e.get('rep_cargo') or '') == 'titular':
+                partes.append('%s, residente e domiciliado(a) à %s, portador(a) %s e inscrito(a) no CPF nº %s, ora e doravante denominado(a) de %s.'
+                              % (e['razao'], e['endereco'], e.get('rep_documento') or 'de documento de identidade', e['cnpj'], apelido))
+            else:
+                partes.append('%s, residente e domiciliado(a) à %s, inscrito(a) no CPF nº %s, neste ato representado(a) por seu(sua) %s, %s, portador(a) %s e CPF nº %s, '
+                              'ora e doravante denominado(a) de %s.' % (e['razao'], e['endereco'], e['cnpj'], e.get('rep_cargo') or 'procurador(a)',
+                                                                       e['rep_nome'], e.get('rep_documento') or 'de documento de identidade', e.get('rep_cpf') or '', apelido))
+        elif len(empresas) == 1:
             e = empresas[0]
             partes.append('%s, estabelecida à %s, devidamente inscrita no CNPJ nº %s, neste ato representada por seu %s, %s, portador(a) %s e CPF nº %s, '
                           'ora e doravante denominada de %s.' % (e['razao'], e['endereco'], e['cnpj'], e.get('rep_cargo') or 'sócio administrador',
                                                                 e['rep_nome'], e.get('rep_documento') or 'de documento de identidade', e.get('rep_cpf') or '', apelido))
         else:
-            lista = '; '.join('%s, estabelecida à %s, devidamente inscrita no CNPJ nº %s' % (e['razao'], e['endereco'], e['cnpj']) for e in empresas)
+            lista = '; '.join('%s, estabelecida à %s, devidamente inscrita no %s nº %s' % (e['razao'], e['endereco'], 'CPF' if _pf(e) else 'CNPJ', e['cnpj']) for e in empresas)
             e = empresas[0]
             partes.append('%s; neste ato representadas por seu %s, %s, portador(a) %s e CPF nº %s, ora e doravante denominadas em conjunto de %s.'
                           % (lista, e.get('rep_cargo') or 'sócio administrador', e['rep_nome'], e.get('rep_documento') or 'de documento de identidade',

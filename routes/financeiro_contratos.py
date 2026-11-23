@@ -310,8 +310,14 @@ def _form_ctx(cliente_id=None, fin_contrato_id=None, contrato=None):
     if fin:
         fin['itens'] = FinContrato.itens(fin['id'])
     pct = (execute_query('SELECT carteira_pct FROM usuarios WHERE id = %s', (current_user.id,), fetch=True, fetch_one=True) or {}).get('carteira_pct')
+    # contrato novo nasce preenchido com o sócio administrador do cadastro (22/11/2026 — Anderson: "os campos quase nada preenchido, e está tudo no cadastro")
+    rep0 = None
+    if emp and not contrato and emp.get('socios'):
+        s0 = emp['socios'][0]
+        rep0 = {'rep_nome': (s0.get('nome') or '').strip(), 'rep_cpf': s0.get('cpf') or '', 'rep_documento': s0.get('documento') or '',
+                'rep_email': s0.get('email') or '', 'rep_cargo': s0.get('cargo') or 'sócio administrador', 'rep_celular': s0.get('celular') or ''}
     return {'emp': emp, 'fin': fin, 'dados': d, 'contrato': contrato, 'AREAS': AREAS, 'SIGN_Q': PrestContrato.signatarios_qualicontax(),
-            'contratada': PrestContrato.contratada(),
+            'contratada': PrestContrato.contratada(), 'rep0': rep0,
             'testemunhas': PrestContrato.testemunhas_disponiveis(), 'hoje': date.today(),
             'carteira_pct': float(pct) if pct else None}
 
@@ -323,6 +329,13 @@ def contrato_socios_iguais():
     ids = [x for x in (request.args.get('ids') or '').split(',') if x.isdigit()]
     iguais, detalhe = PrestContrato.socios_iguais(ids)
     return jsonify({'iguais': iguais, 'detalhe': detalhe, 'n': len(ids)})
+
+
+@financeiro.route('/financeiro/contratos/pessoas')
+@permission_required(MONTAR)
+def contrato_pessoas():
+    """Pessoas físicas do cadastro (nome ou CPF) para puxar quem assina, com documento, e-mail e celular."""
+    return jsonify(PrestContrato.pessoas(request.args.get('q') or ''))
 
 
 # ---------------------------------------------------------------- telas internas
