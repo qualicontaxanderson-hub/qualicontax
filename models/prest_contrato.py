@@ -98,9 +98,9 @@ def _celular_da_pessoa(pf_cliente_id, cpf=None):
             return (c.get('celular') or c.get('telefone')).strip()
     dig = ''.join(ch for ch in (cpf or '') if ch.isdigit())
     if dig:
-        u = execute_query('SELECT celular FROM usuarios WHERE cpf = %s AND situacao = %s', (dig, 'ATIVO'), fetch=True, fetch_one=True) or {}
-        if (u.get('celular') or '').strip():
-            return u['celular'].strip()
+        u = execute_query('SELECT telefone FROM usuarios WHERE cpf = %s AND situacao = %s', (dig, 'ATIVO'), fetch=True, fetch_one=True) or {}
+        if (u.get('telefone') or '').strip():                    # usuarios não tem coluna celular: o telefone é o celular
+            return u['telefone'].strip()
     return ''
 
 

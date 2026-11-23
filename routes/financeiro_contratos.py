@@ -182,6 +182,102 @@ MONTAR = 'financeiro.contratos.montar'
 APROVAR = 'financeiro.lancamentos.aprovar'
 ROTULO = {'RASCUNHO': 'Rascunho', 'APROVACAO': 'Aguardando aprovação', 'APROVADO': 'Aprovado · pronto para enviar',
           'ENVIADO': 'Aguardando assinatura', 'ASSINADO': 'Assinado', 'CANCELADO': 'Cancelado'}
+# cor e ícone da janela do contrato, no molde da janela da cobrança / do orçamento (23/11/2026)
+STATUS_CLS = {'RASCUNHO': ('tx-perd', 'fa-pen-ruler'), 'APROVACAO': ('tx-venc', 'fa-stamp'), 'APROVADO': ('tx-ok', 'fa-circle-check'),
+              'ENVIADO': ('tx-hoje', 'fa-hourglass-half'), 'ASSINADO': ('tx-fut', 'fa-file-signature'), 'CANCELADO': ('tx-perd', 'fa-ban')}
+# o que cada ato da Auditoria vira na linha do tempo: (cor, ícone, texto)
+_EVENTO = {'escrita.criou_contrato_prestacao': ('', 'fa-pen-ruler', 'Rascunho montado por %s'),
+           'escrita.alterou_contrato_prestacao': ('', 'fa-pen', 'Rascunho alterado por %s'),
+           'escrita.pediu_aprovacao_contrato': ('tj-laranja', 'fa-stamp', '%s mandou para aprovação'),
+           'escrita.aprovou_contrato_prestacao': ('tj-verde', 'fa-circle-check', 'Aprovado por %s'),
+           'escrita.devolveu_contrato_prestacao': ('tj-verm', 'fa-rotate-left', 'Devolvido para acertar por %s'),
+           'escrita.enviou_contrato_prestacao': ('tj-azul', 'fa-envelope', '%s enviou para assinatura'),
+           'escrita.cancelou_contrato_prestacao': ('tj-verm', 'fa-ban', 'Cancelado por %s'),
+           'escrita.concluiu_contrato_prestacao': ('tj-verde', 'fa-flag-checkered', 'Assinado por todos: via final guardada e enviada')}
+
+
+def _agora():
+    """Hora do BANCO (Brasília): o app roda em UTC no Railway e os atos da Auditoria usam NOW() do banco; a nota precisa casar."""
+    r = execute_query('SELECT NOW() AS n', fetch=True, fetch_one=True) or {}
+    return r.get('n') or datetime.now()
+
+
+def _eventos(c, ass):
+    """Linha do tempo do contrato: os atos da Auditoria (logs_sistema), as assinaturas e as anotações da equipe, em ordem."""
+    import json as _json
+    evs = []
+    for lg in execute_query("""SELECT acao, usuario_nome, data_hora, dados_novos FROM logs_sistema
+                                WHERE tabela_afetada = 'prest_contratos' AND registro_id = %s AND acao LIKE 'escrita.%%' ORDER BY id""", (c['id'],), fetch=True) or []:
+        m = _EVENTO.get(lg['acao'])
+        if not m or not lg.get('data_hora'):
+            continue
+        quem = (lg.get('usuario_nome') or '').split(' (')[0] or 'alguém'
+        det = ''
+        try:
+            dn = _json.loads(lg['dados_novos']) if isinstance(lg.get('dados_novos'), str) else (lg.get('dados_novos') or {})
+        except Exception:
+            dn = {}
+        if lg['acao'] == 'escrita.devolveu_contrato_prestacao' and dn.get('motivo'):
+            det = '“%s”' % dn['motivo']
+        elif lg['acao'] == 'escrita.cancelou_contrato_prestacao' and dn.get('motivo'):
+            det = '“%s”' % dn['motivo']
+        elif lg['acao'] == 'escrita.enviou_contrato_prestacao':
+            env = dn.get('enviados') or []
+            det = ('link por e-mail para ' + ', '.join(n.split(' ')[0].title() for n in env)) if env else 'ninguém recebeu o e-mail'
+            if dn.get('falhas'):
+                det += ' · falhou: ' + '; '.join(dn['falhas'])
+        elif lg['acao'] == 'escrita.aprovou_contrato_prestacao' and dn.get('honorarios_criados'):
+            det = 'o honorário passou a valer'
+        evs.append({'cls': m[0], 'ico': m[1], 'texto': m[2] % quem if '%s' in m[2] else m[2], 'det': det, 'quando': lg['data_hora']})
+    for a in ass:
+        if a.get('assinado_em'):
+            evs.append({'cls': 'tj-verde', 'ico': 'fa-signature', 'texto': '%s assinou' % a['nome'], 'det': '%s · IP %s' % ((a['papel'] or '').capitalize(), a.get('assinado_ip') or '?'), 'quando': a['assinado_em']})
+    for n in (c['dados'].get('notas') or []):
+        try:
+            q = datetime.fromisoformat(n['em'])
+        except Exception:
+            continue
+        evs.append({'cls': 'tj-azul', 'ico': 'fa-comment', 'texto': n.get('texto') or '', 'det': n.get('nome') or '', 'quando': q})
+    if not evs:
+        evs.append({'cls': '', 'ico': 'fa-pen-ruler', 'texto': 'Rascunho montado por %s' % (c.get('criado_por_nome') or ''), 'det': '', 'quando': c['criado_em']})
+    evs.sort(key=lambda e: e['quando'])
+    return evs
+
+
+def _wa_link(fone, texto):
+    from urllib.parse import quote
+    d = ''.join(ch for ch in str(fone or '') if ch.isdigit())
+    if len(d) in (10, 11):
+        d = '55' + d
+    if len(d) not in (12, 13):
+        return None
+    return 'https://wa.me/%s?text=%s' % (d, quote(texto))
+
+
+def _fone_do_assinante(a, c):
+    """Celular de quem assina: o que o formulário guardou (contratante e assinante extra) ou o do usuário (Qualicontax e testemunhas)."""
+    d = c['dados']
+    if a['papel'] == 'CONTRATANTE':
+        if a['ordem'] == 1:
+            return (d['empresas'][0].get('rep_celular') or '').strip()
+        return ((d.get('assinante_extra') or {}).get('celular') or '').strip()
+    if a.get('usuario_id'):
+        u = execute_query('SELECT telefone FROM usuarios WHERE id = %s', (a['usuario_id'],), fetch=True, fetch_one=True) or {}
+        return (u.get('telefone') or '').strip()
+    return ''
+
+
+def _texto_whatsapp_assinatura(a, c, link):
+    """Texto pronto para mandar o link de assinatura pelo WhatsApp, no molde da cobrança: curto, com UM link (23/11/2026)."""
+    d = c['dados']
+    emp = d['empresas'][0]['razao']
+    quem = a['nome'].split(' ')[0].title()
+    linhas = ['Olá, %s! Aqui é da *Qualicontax*. 😊' % quem, '',
+              'Está pronto para a sua assinatura o *%s* da *%s*%s.' % (c['titulo'].capitalize(), emp, (' (+ %d empresas)' % (len(d['empresas']) - 1)) if len(d['empresas']) > 1 else ''),
+              '📄 Contrato nº *%s*' % (c.get('numero') or c['id']), '💰 Honorários: R$ %s por mês, dia %s' % (brl(d.get('valor')).replace('R$', '').strip(), d.get('dia_vencimento')), '',
+              '👉 Para ler o contrato inteiro e assinar, é só tocar no link. Lá você pede um código que chega no seu e-mail (%s), confirma o nome e o CPF e pronto. Leva menos de dois minutos.' % (a.get('email') or 'o do cadastro'),
+              link, '', 'Qualquer dúvida é só responder por aqui. Obrigado pela parceria! 🙏']
+    return '\n'.join(linhas)
 
 
 def _aprovador():
@@ -428,8 +524,15 @@ def contrato_ver(cid):
     ass = PrestContrato.assinantes(cid)
     for a in ass:
         a['link'] = url_for('assinatura.assinar', token=a['token'], _external=True)
-    return render_template('financeiro/contrato_ver.html', c=c, assinantes=ass, ROTULO=ROTULO, aprov=_aprovador(),
-                           meu=c.get('criado_por') == current_user.id, montado=PrestContrato.montar(c['dados']), hoje=date.today(), AREAS=AREAS, brl=brl)
+        a['fone'] = _fone_do_assinante(a, c)
+        if c['status'] == 'ENVIADO' and not a['assinado_em']:
+            a['texto_wa'] = _texto_whatsapp_assinatura(a, c, a['link'])
+            a['wa_link'] = _wa_link(a['fone'], a['texto_wa'])
+    cls, ico = STATUS_CLS.get(c['status'], ('tx-perd', 'fa-circle'))
+    return render_template('financeiro/contrato_ver.html', c=c, assinantes=ass, ROTULO=ROTULO, aprov=_aprovador(), cls=cls, ico=ico,
+                           eventos=_eventos(c, ass), n_assinados=sum(1 for a in ass if a['assinado_em']),
+                           meu=c.get('criado_por') == current_user.id, montado=PrestContrato.montar(c['dados']), hoje=date.today(), AREAS=AREAS, brl=brl,
+                           SIGN_Q=SIGNATARIOS_QUALICONTAX)
 
 
 def _pdf_bytes(c):
@@ -512,10 +615,31 @@ def contrato_cancelar(cid):
     if not c or c['status'] == 'ASSINADO':
         flash('Contrato assinado não se cancela aqui: faça um distrato ou adendo.', 'warning')
         return redirect(url_for('financeiro.contrato_ver', cid=cid))
+    motivo = (request.form.get('motivo') or '').strip()[:400]
+    if not motivo:                                    # regra do Anderson (22/11/2026): tudo que cancela precisa de motivo
+        flash('Diga o motivo do cancelamento.', 'warning')
+        return redirect(url_for('financeiro.contrato_ver', cid=cid))
+    c['dados']['cancelado'] = {'por': current_user.id, 'nome': getattr(current_user, 'nome', ''), 'em': _agora().isoformat(timespec='minutes'), 'motivo': motivo}
+    execute_query('UPDATE prest_contratos SET dados = %s WHERE id = %s', (__import__('json').dumps(c['dados'], ensure_ascii=False), cid), fetch=False)
     PrestContrato.mudar_status(cid, 'CANCELADO')
-    registrar('escrita.cancelou_contrato_prestacao', 'financeiro', tabela='prest_contratos', registro_id=cid, antes={'status': c['status']}, depois={'status': 'CANCELADO'})
-    flash('Contrato cancelado.', 'info')
-    return redirect(url_for('financeiro.contratos'))
+    registrar('escrita.cancelou_contrato_prestacao', 'financeiro', tabela='prest_contratos', registro_id=cid, antes={'status': c['status']}, depois={'status': 'CANCELADO', 'motivo': motivo})
+    flash('Contrato cancelado, com o motivo registrado.', 'info')
+    return redirect(url_for('financeiro.contrato_ver', cid=cid))
+
+
+@financeiro.route('/financeiro/contratos/<int:cid>/nota', methods=['POST'])
+@permission_required(MONTAR)
+def contrato_nota(cid):
+    """Anotação da equipe na linha do tempo do contrato (só quem vê o contrato; fica em dados.notas)."""
+    c = PrestContrato.get(cid)
+    if not _ve(c):
+        abort(404)
+    texto = (request.form.get('texto') or '').strip()[:400]
+    if texto:
+        notas = c['dados'].setdefault('notas', [])
+        notas.append({'por': current_user.id, 'nome': getattr(current_user, 'nome', ''), 'em': _agora().isoformat(timespec='seconds'), 'texto': texto})
+        execute_query('UPDATE prest_contratos SET dados = %s WHERE id = %s', (__import__('json').dumps(c['dados'], ensure_ascii=False), cid), fetch=False)
+    return redirect(url_for('financeiro.contrato_ver', cid=cid))
 
 
 @financeiro.route('/financeiro/contratos/<int:cid>/pedir-aprovacao', methods=['POST'])
