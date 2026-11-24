@@ -313,8 +313,10 @@ def _so_meu_ou_aprov(c):
 def _avisar_aprovadores(c):
     try:
         rows = execute_query(
-            """SELECT DISTINCT u.email FROM usuarios u WHERE u.email LIKE '%%@%%' AND (u.tipo_usuario = 'ADMIN'
-                  OR u.id IN (SELECT usuario_id FROM usuario_permissoes_extra WHERE permissao_codigo = %s))""",
+            # 24/11/2026 (Anderson: "acesso sempre por perfil"): quem aprova vem do PERFIL, não mais de usuario_permissoes_extra (zerada)
+            """SELECT DISTINCT u.email FROM usuarios u WHERE u.email LIKE '%%@%%' AND u.situacao = 'ATIVO' AND (u.tipo_usuario = 'ADMIN'
+                  OR u.id IN (SELECT up.usuario_id FROM usuario_perfis up JOIN perfis_acesso pa ON pa.id = up.perfil_id AND pa.situacao = 'ATIVO'
+                               JOIN perfil_permissoes pp ON pp.perfil_id = up.perfil_id WHERE pp.permissao_codigo = %s))""",
             (APROVAR,), fetch=True) or []
         emp = c['dados']['empresas'][0]['razao']
         link = url_for('financeiro.contrato_ver', cid=c['id'], _external=True)

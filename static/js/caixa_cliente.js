@@ -14,7 +14,7 @@
                         onUsar: function (cliente|null) {} })                                                                 */
 (function () {
   var PK_CORES = ['#0f766e', '#4f46e5', '#b45309', '#be123c', '#7c3aed', '#0369a1', '#15803d', '#c2410c'];
-  var LIMITE = 80, LIMITE_FORA = 12;
+  var LIMITE = 80, LIMITE_FORA = 8;
   function esc(s) { var d = document.createElement('div'); d.textContent = s == null ? '' : String(s); return d.innerHTML; }
   function cor(s) { var h = 0; String(s).split('').forEach(function (c) { h = (h * 31 + c.charCodeAt(0)) >>> 0; }); return PK_CORES[h % 8]; }
   function sigla(nome) { var p = String(nome || '').replace(/["'`´]+/g, ' ').trim().split(/\s+/).filter(function (x) { return x.length > 2 && !/\d/.test(x) && !/^(LTDA|EIRELI|ME|EPP|SA|S\/A|DE|DA|DO|DOS|DAS|E)$/i.test(x); }); return (((p[0] || '')[0] || '') + ((p[1] || '')[0] || '')).toUpperCase() || '?'; }
@@ -83,10 +83,10 @@
         + (c.av ? ' · <em>avulso</em>' : '') + (c.mensal ? ' · mensalidade ' + brl(c.mensal) : '') + '</small></div></div></button>';
     }
     function cartaoFora(c) {
-      return '<div class="pk-card pk-serv pk-cli pk-fora" title="' + esc(c.motivo) + '">'
-        + '<div class="pk-card-h"><span class="pk-sig">' + esc(sigla(c.nome)) + '</span>'
-        + '<div><b>' + esc(c.nome) + '</b><small>' + (c.num ? 'nº ' + esc(c.num) + ' · ' : '') + esc(docf(c.doc) || 'sem CNPJ') + (c.av ? ' · <em>avulso</em>' : '') + '</small>'
-        + '<small class="pk-fora-pq"><i class="fas fa-triangle-exclamation"></i> ' + esc(c.motivo || 'não pode ser escolhida') + (c.url ? ' · <a href="' + esc(c.url) + '" target="_blank" rel="noopener">resolver</a>' : '') + '</small></div></div></div>';
+      // uma linha limpa por empresa: só o nome; o que falta abre ao tocar na linha (24/11/2026, Anderson: "só o nome, organizado e elegante")
+      return '<div class="pk-fora-row" data-fid="' + c.id + '"><span class="pk-fora-nome">' + esc(c.nome) + '</span>'
+        + '<small>' + (c.num ? 'nº ' + esc(c.num) : esc(docf(c.doc))) + '</small><span class="pk-fora-tag">a cadastrar</span>'
+        + '<div class="pk-fora-pq" hidden>' + esc(c.motivo || 'não pode ser escolhida') + (c.url ? ' · <a href="' + esc(c.url) + '" target="_blank" rel="noopener">abrir o cadastro</a>' : '') + '</div></div>';
     }
     function desenhar() {
       var q = norm(busca.value.trim()), toks = palavras(q), qd = q.replace(/\D/g, '');
@@ -94,13 +94,14 @@
       var vis = lista.filter(function (x) { return casa(x, toks, qd, soNumero); }).sort(ordem(sel, q));
       var mostra = vis.slice(0, LIMITE);
       var visFora = (q.length >= 2 || soNumero) ? fora.filter(function (x) { return casa(x, toks, qd, soNumero); }).sort(ordem('', q)) : [];
-      grade.innerHTML = mostra.map(cartao).join('') + (!vis.length ? '<div class="pk-carregando">' + (visFora.length ? 'Nenhuma empresa disponível com esse nome. Abaixo, quem bate com a busca mas ainda não pode entrar.' : 'Nenhuma empresa com esse nome.') + '</div>' : '');
+      grade.innerHTML = mostra.map(cartao).join('') + (!vis.length ? '<div class="pk-carregando">' + (visFora.length ? 'Nenhuma empresa disponível com esse nome.' : 'Nenhuma empresa com esse nome.') + '</div>' : '');
       conta.textContent = (vis.length > mostra.length ? 'mostrando ' + mostra.length + ' de ' + vis.length + ' · digite para filtrar' : (vis.length + (vis.length === 1 ? ' empresa' : ' empresas')))
         + (visFora.length ? ' · ' + visFora.length + ' ' + (o.rotulo_fora || 'fora') : '');
       bloco.hidden = !visFora.length;
       if (visFora.length) {
-        titFora.innerHTML = '<i class="fas fa-ban"></i> ' + esc(o.rotulo_fora || 'Não podem ser escolhidas') + (visFora.length > LIMITE_FORA ? ' · mostrando ' + LIMITE_FORA + ' de ' + visFora.length : '');
-        gradeFora.innerHTML = visFora.slice(0, LIMITE_FORA).map(cartaoFora).join('');
+        titFora.textContent = (o.rotulo_fora || 'Não podem ser escolhidas');
+        gradeFora.innerHTML = visFora.slice(0, LIMITE_FORA).map(cartaoFora).join('') + (visFora.length > LIMITE_FORA ? '<div class="pk-fora-mais">e mais ' + (visFora.length - LIMITE_FORA) + ' · digite mais letras</div>' : '');
+        gradeFora.querySelectorAll('.pk-fora-row').forEach(function (r) { r.addEventListener('click', function (e) { if (e.target.tagName === 'A') return; var d = r.querySelector('.pk-fora-pq'); d.hidden = !d.hidden; r.classList.toggle('aberta', !d.hidden); }); });
       }
       grade.querySelectorAll('.pk-card[data-id]').forEach(function (c) {
         c.addEventListener('click', function () { sel = c.dataset.id; desenhar(); cabecalho(); });

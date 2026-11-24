@@ -61,10 +61,17 @@
 .pk-novo-bt { display:flex; gap:8px; justify-content:flex-end; }
 .pk-msg { font-size:12.5px; color:#b91c1c; } .pk-msg:empty { display:none; }
 .pk-carregando { grid-column:1/-1; padding:40px 10px; text-align:center; color:#7d968a; font-size:14px; }
-/* 24/11/2026: empresas que NÃO podem ser escolhidas (ex.: em A CADASTRAR), apagadas, com o motivo e o link para resolver */
-.pk-fora-bloco { margin-top:14px; } .pk-fora-tit { font-size:12px; font-weight:800; color:#b45309; margin:0 0 8px; display:flex; align-items:center; gap:6px; }
-.pk-card.pk-fora { cursor:default; opacity:.78; background:#fffaf3; border-style:dashed; border-color:#fcd9a8; } .pk-card.pk-fora .pk-sig { background:#cbd5e1 !important; }
-.pk-card.pk-fora .pk-fora-pq { display:block; margin-top:4px; color:#b45309; font-weight:700; } .pk-card.pk-fora .pk-fora-pq a { color:#0f3d2e; text-decoration:underline; }
+/* 24/11/2026: empresas que NÃO podem ser escolhidas (ex.: em A CADASTRAR): lista limpa, só o nome; o que falta abre ao tocar */
+.pk-fora-bloco { margin-top:16px; border-top:1px solid #e8efeb; padding-top:10px; }
+.pk-grade-fora { display:block; }
+.pk-fora-tit { font-size:11px; font-weight:800; letter-spacing:.04em; text-transform:uppercase; color:#94a3b8; margin:0 0 4px 4px; }
+.pk-fora-row { display:flex; align-items:center; gap:10px; padding:8px 10px; border-radius:10px; cursor:pointer; flex-wrap:wrap; color:#64748b; }
+.pk-fora-row:hover, .pk-fora-row.aberta { background:#f6f8f7; }
+.pk-fora-row .pk-fora-nome { flex:1; min-width:0; font-size:13px; font-weight:700; color:#475569; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.pk-fora-row small { font-size:11.5px; color:#94a3b8; white-space:nowrap; }
+.pk-fora-row .pk-fora-tag { font-size:10px; font-weight:800; letter-spacing:.03em; text-transform:uppercase; color:#b45309; background:#fff7ed; border:1px solid #fed7aa; border-radius:99px; padding:2px 8px; white-space:nowrap; }
+.pk-fora-row .pk-fora-pq { flex-basis:100%; font-size:12px; color:#b45309; padding:4px 0 2px; line-height:1.4; } .pk-fora-row .pk-fora-pq a { color:#0f3d2e; font-weight:700; text-decoration:underline; }
+.pk-fora-mais { font-size:12px; color:#94a3b8; padding:6px 10px; }
 .pk-pe { flex-shrink:0; display:flex; align-items:center; gap:10px; padding:14px 18px; background:#fff; border-top:1px solid var(--linha); }
 .pk-pe-info { flex:1; min-width:0; display:flex; flex-wrap:wrap; gap:6px; align-items:center; font-size:13px; color:#475569; } .pk-pe-info > i { color:var(--cor); }
 .pk-pe-vazio { color:#94a3b8; }
