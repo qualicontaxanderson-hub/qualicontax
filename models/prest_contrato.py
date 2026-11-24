@@ -603,8 +603,22 @@ class PrestContrato:
                   ('Início', inicio_d.strftime('%d/%m/%Y')), ('13º honorário', decimo_txt),
                   ('Reajuste', {'SALARIO_MINIMO': 'salário mínimo, todo janeiro', 'INDICE': 'índice próprio', 'DATA_PROPRIA': 'data própria', 'SEM': 'de comum acordo', 'ESCALONADO': 'escalonado'}.get(dados.get('reajuste_tipo') or 'SALARIO_MINIMO')),
                   ('Aviso prévio', '%d dias' % aviso), ('Foro', dados.get('foro') or 'São Paulo/SP')]
+        # ficha estruturada para a folha de rosto do PDF (23/11/2026: "PDF elegante como o do orçamento")
+        rt = dados.get('reajuste_tipo') or 'SALARIO_MINIMO'
+        reaj_curto = {'SALARIO_MINIMO': ('salário mínimo', 'todo janeiro'), 'INDICE': ('pelo %s' % (dados.get('reajuste_indice') or 'índice combinado'), 'anual'),
+                      'DATA_PROPRIA': ('em %s' % (dados.get('reajuste_mes') or 'data própria'), dados.get('reajuste_indice') or ''), 'SEM': ('de comum acordo', ''),
+                      'ESCALONADO': ('escalonado', dados.get('reajuste_indice') or '')}.get(rt, ('de comum acordo', ''))
+        decimo_curto = {'COBRADO': ('em 2 parcelas', 'novembro e dezembro'), 'UNICA': ('em dezembro', '1 honorário mensal')}.get(dados.get('decimo'), ('isento', ''))
+        e0 = empresas[0] if empresas else {}
+        ficha = {'valor': valor, 'dia': dia, 'inicio': inicio_d, 'areas': [(AREAS[a][0], list(AREAS[a][1])) for a in areas],
+                 'extras': [x.strip() for x in (dados.get('servicos_extras') or []) if (x or '').strip()],
+                 'reajuste': reaj_curto, 'decimo': decimo_curto, 'aviso': aviso, 'foro': dados.get('foro') or 'São Paulo/SP',
+                 'multa': str(dados.get('multa') or '10').replace('.', ','), 'juros': str(dados.get('juros') or '1').replace('.', ','),
+                 'valores_por_empresa': bool(len(empresas) > 1 and dados.get('valores_por_empresa')),
+                 'representante': {'nome': e0.get('rep_nome') or '', 'cargo': e0.get('rep_cargo') or '', 'cpf': e0.get('rep_cpf') or ''},
+                 'extra': ex if (ex and ex.get('nome')) else None, 'assina': q, 'n_testemunhas': n_test}
         return {'titulo': titulo, 'partes': partes, 'preambulo': preambulo, 'clausulas': clausulas, 'fecho': fecho, 'local_data': local,
-                'assinantes': dados.get('assinantes') or [], 'empresas': empresas, 'apelido': apelido, 'resumo': resumo,
+                'assinantes': dados.get('assinantes') or [], 'empresas': empresas, 'apelido': apelido, 'resumo': resumo, 'ficha': ficha,
                 'contratada': qc, 'cabecalho': qc.get('cabecalho') or QUALICONTAX['cabecalho']}
 
 
