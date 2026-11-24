@@ -48,14 +48,11 @@
 .ct-mais { border:1px dashed #9fc9b3; background:#f6faf7; color:#15803d; font:inherit; font-weight:800; font-size:12.5px; border-radius:10px; padding:8px 13px; cursor:pointer; display:inline-flex; align-items:center; gap:7px; }
 .ct-mais:hover { background:#ecfdf3; }
 /* empresas */
-.ct-emps { display:flex; flex-direction:column; gap:8px; }
 .ct-emp { display:flex; align-items:center; gap:12px; min-height:54px; padding:7px 10px 7px 8px; border:1px solid #d7e3dc; border-radius:13px; background:#fff; }
 .ct-emp .sg { width:40px; height:40px; border-radius:11px; background:linear-gradient(135deg,#16a34a,#0f3d2e); color:#fff; font-weight:900; font-size:12px; display:inline-flex; align-items:center; justify-content:center; flex:0 0 auto; }
 .ct-emp .tx { flex:1; min-width:0; display:flex; flex-direction:column; line-height:1.3; } .ct-emp .tx b { font-size:14.5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:#0f172a; } .ct-emp .tx small { color:#64748b; font-size:12px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .ct-emp .tx small.end { color:#94a3b8; font-size:11.5px; }
-.ct-emps.uma .ct-emp .nome, .ct-emps.uma .ct-emp .tx > small:first-of-type { display:none; } .ct-emps.uma .ct-emp .tx small.end { color:#475569; font-size:13px; }
-.ct-emps.uma .ct-emp .tx small.end::before { content:'Endereço no contrato · '; color:#94a3b8; font-size:11px; font-weight:800; letter-spacing:.05em; text-transform:uppercase; }
-.ct-emps.uma .ct-emp .sg { background:#dcfce7; color:#15803d; } .ct-emp .tx em.ramo { font-style:normal; display:inline-block; background:#fff7ed; color:#b45309; border:1px solid #fde68a; border-radius:99px; padding:1px 8px; font-size:11px; font-weight:700; margin:0 3px 0 0; }
+ .ct-emp .tx em.ramo { font-style:normal; display:inline-block; background:#fff7ed; color:#b45309; border:1px solid #fde68a; border-radius:99px; padding:1px 8px; font-size:11px; font-weight:700; margin:0 3px 0 0; }
 .ct-rede .ns-ops { margin-top:8px; }
 .ct-pessoa .tx small a { color:#15803d; font-weight:700; text-decoration:underline; }
 .ct-link { color:#15803d; font-weight:700; text-decoration:underline; font-size:12.5px; }
@@ -71,6 +68,23 @@
 .ct-grupo.ok { background:#f0fdf4; border:1px solid #bbf7d0; color:#166534; } .ct-grupo.aut { background:#fff7ed; border:1px solid #fed7aa; color:#9a3412; }
 .ct-rede { margin-top:10px; }
 /* cartão da pessoa (leitura) */
+/* partes do contrato: cartões da empresa e de quem assina */
+.ct-partes { display:grid; grid-template-columns:repeat(2, minmax(0,1fr)); gap:12px; }
+.ct-parte { border:1px solid #e3ece7; border-radius:14px; padding:14px 16px; background:#fbfdfc; display:flex; flex-direction:column; gap:10px; min-width:0; }
+.pt-rot { font-size:10.5px; font-weight:800; letter-spacing:.07em; text-transform:uppercase; color:#64748b; display:flex; align-items:center; gap:7px; } .pt-rot i { color:#16a34a; }
+.pt-top { display:flex; align-items:center; gap:12px; min-width:0; }
+.pt-av { width:46px; height:46px; border-radius:13px; background:#ede9fe; color:#6d28d9; font-weight:900; font-size:15px; display:inline-flex; align-items:center; justify-content:center; flex:0 0 auto; }
+.pt-av.emp { background:linear-gradient(135deg,#16a34a,#0f3d2e); color:#fff; font-size:13px; }
+.pt-id { min-width:0; } .pt-id b { display:block; font-size:15.5px; color:#0f172a; line-height:1.2; } .pt-id small { display:block; font-size:12.5px; color:#64748b; margin-top:2px; }
+.pt-id small em { font-style:normal; color:#b45309; font-weight:700; }
+.pt-tags { display:flex; flex-wrap:wrap; gap:5px; } .pt-tags span { background:#fff7ed; color:#b45309; border:1px solid #fde68a; border-radius:99px; padding:2px 9px; font-size:11px; font-weight:700; } .pt-tags span i { font-size:10px; margin-right:3px; }
+.pt-linhas { display:flex; flex-direction:column; gap:5px; font-size:12.5px; color:#475569; } .pt-linhas > div { display:flex; gap:8px; align-items:flex-start; min-width:0; }
+.pt-linhas i { width:16px; text-align:center; color:#94a3b8; font-size:11px; margin-top:3px; flex:0 0 auto; } .pt-linhas span { min-width:0; overflow-wrap:anywhere; } .pt-linhas em { font-style:normal; color:#b45309; font-weight:700; }
+.pt-acoes { display:flex; gap:14px; flex-wrap:wrap; margin-top:auto; padding-top:6px; border-top:1px dashed #e2e8f0; } .pt-acoes a { font-size:12px; font-weight:800; color:#15803d; text-decoration:none; white-space:nowrap; } .pt-acoes a:hover { text-decoration:underline; } .pt-acoes a[hidden] { display:none; } .pt-acoes a i { font-size:11px; margin-right:3px; }
+.ct-parte-mais { border-style:dashed; background:#fff; align-items:center; justify-content:center; text-align:center; cursor:pointer; color:#15803d; gap:4px; min-height:120px; }
+.ct-parte-mais i { font-size:22px; color:#9fc9b3; } .ct-parte-mais b { font-size:14px; } .ct-parte-mais small { color:#64748b; font-size:12px; } .ct-parte-mais:hover { border-color:#16a34a; background:#f0fdf4; }
+.ct-parte[hidden], .ct-escolha[hidden], #ct-extra-ops[hidden] { display:none; }
+.ct-emps { display:none; } .ct-emps.rede { display:flex; flex-direction:column; gap:6px; margin-top:4px; }
 .ct-ops3 { grid-template-columns:repeat(3, minmax(0,1fr)); } .ct-ops3 .ns-op small { display:block; line-height:1.3; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .ct-ops3 .ns-op b { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .ns-op.ct-op-mais { border-style:dashed; background:#f8fafc; } .ns-op.ct-op-mais i { color:#64748b; } .ns-op.ct-op-mais.on { border-style:solid; }
@@ -112,7 +126,7 @@
 .ns-res .ct-falta { color:#b91c1c !important; }
 .oc-passos { display:flex; flex-direction:column; gap:8px; } .oc-passo { display:flex; gap:10px; align-items:flex-start; font-size:12.5px; color:#475569; line-height:1.35; }
 .oc-passo i { width:24px; height:24px; border-radius:8px; background:#ecfdf3; color:#16a34a; display:inline-flex; align-items:center; justify-content:center; font-size:11px; flex-shrink:0; } .oc-passo b { color:#0f172a; }
-@media (max-width:980px) { .cv-page .tj-corpo { grid-template-columns:minmax(0,1fr); padding:10px; } .tj-col3 { position:static; order:2; } .tj-col1 { order:1; } .ns-campos.tres, .ct-ops2, .ct-ops3 { grid-template-columns:minmax(0,1fr); } .ct-pessoa { flex-wrap:wrap; } .ct-pessoa .acoes { flex-basis:100%; padding-left:42px; }
+@media (max-width:980px) { .cv-page .tj-corpo { grid-template-columns:minmax(0,1fr); padding:10px; } .ct-partes { grid-template-columns:minmax(0,1fr); } .tj-col3 { position:static; order:2; } .tj-col1 { order:1; } .ns-campos.tres, .ct-ops2, .ct-ops3 { grid-template-columns:minmax(0,1fr); } .ct-pessoa { flex-wrap:wrap; } .ct-pessoa .acoes { flex-basis:100%; padding-left:42px; }
   .cv-page .tj { border-radius:16px; } .cv-page .tj-cab { flex-wrap:wrap; gap:10px; padding:14px 16px; } .tj-kpis { grid-template-columns:1fr 1fr; } .tj-kpis > div:first-child { grid-column:1 / -1; }
   .tj-sec h4 { flex-wrap:wrap; } .tj-sec h4 small { flex-basis:100%; white-space:normal; order:3; } .tj-sec h4 .ct-alt { margin-left:auto; }
   .ct-linha .ns-campo { flex:1 1 100% !important; } .ns-money.ct-pct { width:100%; } .ct-chips.grande button, .ct-chips.grande label { white-space:normal; text-align:left; }
@@ -146,76 +160,92 @@
 
 <header class="tj-cab">
   <div class="tj-cab-cli">
-    <span class="tj-avatar" id="ct-cab-av">{{ ((emp.nome_razao_social if emp else '?') or '?')[:2] | upper }}</span>
+    <span class="tj-avatar"><i class="fas fa-file-contract"></i></span>
     <div class="tj-quem">
-      <div class="tj-quem-l1"><span class="tj-num">{{ 'rascunho nº ' ~ (contrato.numero or contrato.id) if contrato else 'novo contrato' }}</span><b id="ct-cab-nome">{{ emp.nome_razao_social if emp else 'escolha a empresa' }}</b></div>
-      <div class="tj-quem-l2">
-        {% if emp %}{% if emp.numero_cliente %}<span class="tj-chip">cliente nº {{ emp.numero_cliente }}</span>{% endif %}<code>{{ emp.cpf_cnpj }}</code>
-        {% for r in emp.ramos %}<span class="tj-chip"><i class="fas fa-tag"></i> {{ r.nome }}</span>{% endfor %}
-        {% if emp.endereco_dict and emp.endereco_dict.cidade %}<span><i class="fas fa-location-dot"></i> {{ emp.endereco_dict.cidade | nome_proprio }}{% if emp.endereco_dict.estado %}/{{ emp.endereco_dict.estado }}{% endif %}</span>{% endif %}
-        <a href="{{ url_for('clientes.detalhes', id=emp.id) }}" target="_blank" rel="noopener"><i class="fas fa-up-right-from-square"></i> cadastro</a>{% endif %}
-        <span id="ct-sub" hidden></span>
-      </div>
+      <div class="tj-quem-l1"><span class="tj-num">{{ ('rascunho ' ~ (contrato.numero or contrato.id)) if contrato else 'novo' }}</span><b>{{ 'Alterar o rascunho do contrato' if contrato else 'Montar contrato de prestação de serviços' }}</b></div>
+      <div class="tj-quem-l2"><span><i class="fas fa-file-signature"></i> nasce do cadastro · o escritório aprova · cada parte assina pelo link</span><span id="ct-sub" hidden></span></div>
     </div>
   </div>
-  <div class="tj-cab-val"><span class="tj-tag"><i class="fas fa-pen-ruler"></i> {{ 'Alterar o rascunho' if contrato else 'Montar contrato' }}</span><b id="ct-prev-val">R$ 0,00</b><small id="ct-prev-sub">honorários por mês · vence dia {{ dia }}</small></div>
+  <div class="tj-cab-val"><span class="tj-tag" id="ct-cab-nome">{{ emp.nome_razao_social if emp else 'escolha a empresa' }}</span><b id="ct-prev-val">R$ 0,00</b><small id="ct-prev-sub">honorários por mês · vence dia {{ dia }}</small></div>
   <a class="tj-x" href="{{ url_for('financeiro.contratos') }}" title="Voltar para a lista"><i class="fas fa-xmark"></i></a>
 </header>
 <div class="tj-corpo">
 <div class="tj-col1">
 
-  {# ── 1. contratante ── #}
-  <section class="tj-sec"><h4><i class="fas fa-building"></i> Contratante <small>uma empresa, ou a rede inteira num contrato só</small></h4>
-    <div class="ct-emps" id="pf-emps">
-      {% for e in dados.empresas or ([{'cliente_id': emp.id, 'razao': emp.nome_razao_social, 'numero': emp.numero_cliente, 'cnpj': emp.cpf_cnpj, 'endereco': emp.endereco, 'valor': fin.valor if fin else ''}] if emp else []) %}
-      <div class="ct-emp"><input type="hidden" name="emp_cliente_id" value="{{ e.cliente_id }}"><input type="hidden" name="emp_endereco" value="{{ e.endereco }}">
-        <span class="sg">{{ e.numero or 'PF' }}</span><span class="tx"><b class="nome">{{ e.razao }}</b><small>{{ e.cnpj }}{% if loop.first and emp and emp.ramos %} · {% for r in emp.ramos %}<em class="ramo">{{ r.nome }}</em>{% endfor %}{% endif %}</small>{% if e.endereco %}<small class="end">{{ e.endereco | nome_proprio }}</small>{% endif %}</span>
-        <div class="ns-money fixo" hidden><span>R$</span><input class="ns-in dinheiro" name="emp_valor" value="{{ e.valor or '' }}" placeholder="0,00" title="valor desta empresa (só para rede)"></div>
-        <button type="button" class="rm" title="Tirar esta empresa" onclick="this.closest('.ct-emp').remove(); ctEmps();"><i class="fas fa-xmark"></i></button></div>
-      {% endfor %}
-    </div>
-    <div style="margin-top:10px"><button type="button" class="ct-mais" id="ct-juntar" onclick="ctJuntar()"><i class="fas fa-plus"></i> Juntar outra empresa da rede</button></div>
-    <div class="ct-busca" id="ct-busca-emp" hidden><i class="fas fa-magnifying-glass"></i><input type="text" id="pf-busca" class="ns-in" placeholder="Nome, número ou CNPJ da outra empresa" autocomplete="off"><div id="pf-sug" class="pf-sug" style="display:none;"></div></div>
-    <div id="pf-grupo" class="ct-grupo" hidden></div>
-    <div class="ct-rede" id="ct-rede" hidden>
-      <input type="hidden" name="valores_por_empresa" id="ct-vpe" value="{{ '1' if dados.valores_por_empresa else '' }}">
-      <div class="ns-campo"><label>Como o contrato chama a rede</label><input type="text" name="apelido" class="ns-in ns-up" value="{{ dados.apelido or '' }}" placeholder="ex.: TRANSMASUT (em branco = razão social da primeira)"></div>
-      <div class="ns-ops ct-ops2" id="ct-vpe-ops">
-        <button type="button" class="ns-op {{ '' if dados.valores_por_empresa else 'on' }}" data-v="" onclick="ctVpe(this)"><i class="fas fa-coins"></i><b>Um valor geral para a rede</b><small>os honorários abaixo valem pelo conjunto das empresas</small></button>
-        <button type="button" class="ns-op {{ 'on' if dados.valores_por_empresa else '' }}" data-v="1" onclick="ctVpe(this)"><i class="fas fa-list-ol"></i><b>Um valor por empresa</b><small>cada empresa com a sua mensalidade; o contrato lista uma a uma e o total</small></button>
+  {# ── 1. partes do contrato: cartão da empresa e cartão de quem assina (24/11/2026) ── #}
+  <section class="tj-sec"><h4><i class="fas fa-handshake"></i> Partes do contrato <small>a empresa e quem assina por ela · dados do cadastro</small></h4>
+    <div class="ct-partes">
+      <div class="ct-parte">
+        <div class="pt-rot"><i class="fas fa-building"></i> Contratante</div>
+        <div class="pt-top"><span class="pt-av emp">{{ (emp.numero_cliente or 'PF') if emp else '?' }}</span><div class="pt-id"><b id="pt-emp-nome">{{ emp.nome_razao_social if emp else 'escolha a empresa' }}</b><small>{% if emp %}{% if emp.numero_cliente %}cliente nº {{ emp.numero_cliente }} · {% endif %}{{ emp.cpf_cnpj }}{% endif %}</small></div></div>
+        {% if emp and emp.ramos %}<div class="pt-tags">{% for r in emp.ramos %}<span><i class="fas fa-tag"></i> {{ r.nome }}</span>{% endfor %}</div>{% endif %}
+        <div class="pt-linhas">
+          {% if emp and emp.endereco %}<div><i class="fas fa-location-dot"></i><span>{{ emp.endereco | nome_proprio }}</span></div>{% endif %}
+          {% if emp and emp.email %}<div><i class="fas fa-envelope"></i><span>{{ emp.email }}</span></div>{% endif %}
+        </div>
+        <div class="pt-acoes">{% if emp %}<a href="{{ url_for('clientes.detalhes', id=emp.id) }}" target="_blank" rel="noopener"><i class="fas fa-up-right-from-square"></i> Cadastro</a>{% endif %}<a href="#" id="ct-juntar" onclick="ctJuntar(); return false;"><i class="fas fa-plus"></i> Juntar outra empresa da rede</a></div>
+        <div class="ct-emps" id="pf-emps">
+          {% for e in dados.empresas or ([{'cliente_id': emp.id, 'razao': emp.nome_razao_social, 'numero': emp.numero_cliente, 'cnpj': emp.cpf_cnpj, 'endereco': emp.endereco, 'valor': fin.valor if fin else ''}] if emp else []) %}
+          <div class="ct-emp"><input type="hidden" name="emp_cliente_id" value="{{ e.cliente_id }}"><input type="hidden" name="emp_endereco" value="{{ e.endereco }}">
+            <span class="sg">{{ e.numero or 'PF' }}</span><span class="tx"><b class="nome">{{ e.razao }}</b><small>{{ e.cnpj }}</small></span>
+            <div class="ns-money fixo" hidden><span>R$</span><input class="ns-in dinheiro" name="emp_valor" value="{{ e.valor or '' }}" placeholder="0,00" title="valor desta empresa (só para rede)"></div>
+            <button type="button" class="rm" title="Tirar esta empresa" onclick="this.closest('.ct-emp').remove(); ctEmps();"><i class="fas fa-xmark"></i></button></div>
+          {% endfor %}
+        </div>
+        <div class="ct-busca" id="ct-busca-emp" hidden><i class="fas fa-magnifying-glass"></i><input type="text" id="pf-busca" class="ns-in" placeholder="Nome, número ou CNPJ da outra empresa" autocomplete="off"><div id="pf-sug" class="pf-sug" style="display:none;"></div></div>
+        <div id="pf-grupo" class="ct-grupo" hidden></div>
+        <div class="ct-rede" id="ct-rede" hidden>
+          <input type="hidden" name="valores_por_empresa" id="ct-vpe" value="{{ '1' if dados.valores_por_empresa else '' }}">
+          <div class="ns-campo"><label>Como o contrato chama a rede</label><input type="text" name="apelido" class="ns-in ns-up" value="{{ dados.apelido or '' }}" placeholder="ex.: TRANSMASUT (em branco = razão social da primeira)"></div>
+          <div class="ns-ops ct-ops2" id="ct-vpe-ops">
+            <button type="button" class="ns-op {{ '' if dados.valores_por_empresa else 'on' }}" data-v="" onclick="ctVpe(this)"><i class="fas fa-coins"></i><b>Um valor geral para a rede</b><small>os honorários valem pelo conjunto</small></button>
+            <button type="button" class="ns-op {{ 'on' if dados.valores_por_empresa else '' }}" data-v="1" onclick="ctVpe(this)"><i class="fas fa-list-ol"></i><b>Um valor por empresa</b><small>o contrato lista uma a uma e o total</small></button>
+          </div>
+        </div>
       </div>
-    </div>
-  </section>
 
-  {# ── 2. quem assina pela empresa: só leitura (24/11/2026 — Anderson: "pode aparecer os dados, não pode permitir alterações;
-        se precisar, remete ao cadastro, altera lá e volta com os dados alterados") ── #}
-  <section class="tj-sec"><h4><i class="fas fa-user-pen"></i> Quem assina pela contratante <small>dados do cadastro · para alterar, abra o cadastro e volte</small></h4>
-    <input type="hidden" name="rep_nome" id="rep_nome" value="{{ e0.rep_nome if e0 else '' }}"><input type="hidden" name="rep_cpf" id="rep_cpf" value="{{ e0.rep_cpf if e0 else '' }}">
-    <input type="hidden" name="rep_cargo" id="rep_cargo" value="{{ e0.rep_cargo if e0 else 'sócio administrador' }}"><input type="hidden" name="rep_documento" id="rep_documento" value="{{ e0.rep_documento if e0 else '' }}">
-    <input type="hidden" name="rep_email" id="rep_email" value="{{ e0.rep_email if e0 else '' }}"><input type="hidden" name="rep_celular" id="rep_celular" value="{{ e0.rep_celular if e0 else '' }}">
-    <input type="hidden" id="rep_pf" value="{{ (emp.socios[0].pf_cliente_id if emp and emp.socios and not contrato else '') or '' }}">
-    <div class="ns-ops ct-ops3" id="ct-socios">
-      {% if emp %}{% for s in emp.socios %}<button type="button" class="ns-op {{ 'on' if (rep0 and loop.first and not contrato) or (e0 and e0.rep_cpf and s.cpf and e0.rep_cpf == s.cpf) }}" onclick='pfSocio({{ s.nome | tojson }}, {{ (s.cpf or "") | tojson }}, {{ (s.email or "") | tojson }}, {{ (s.celular or "") | tojson }}, {{ (s.documento or "") | tojson }}, {{ (s.cargo or "") | tojson }}, this, {{ (s.pf_cliente_id or 0) | tojson }})'>{% if not s.documento %}<span class="ns-op-tag" style="background:#fef3c7;color:#b45309">sem documento</span>{% endif %}<i class="fas fa-user-tie"></i><b>{{ s.nome | nome_proprio }}</b><small>{{ s.cargo or ('administrador' if s.responsavel else 'sócio') }}{% if s.cpf %} · CPF {{ s.cpf }}{% endif %}</small></button>{% endfor %}
-      {% for s in emp.contatos %}<button type="button" class="ns-op" onclick='pfSocio({{ s.nome | tojson }}, "", {{ (s.email or "") | tojson }}, {{ (s.celular or "") | tojson }}, "", {{ (s.cargo or "") | tojson }}, this, 0)'><i class="fas fa-address-card"></i><b>{{ s.nome | nome_proprio }}</b><small>{{ s.cargo or 'contato da empresa' }}</small></button>{% endfor %}{% endif %}
-      {# 24/11/2026 — Anderson: "opção de colocar outro para assinar... gerente, procurador... mas tem que ter o cadastro de CLIENTE ou AVULSO" #}
-      <button type="button" class="ns-op ct-op-mais" id="ct-outra-bt" onclick="ctOutra()"><i class="fas fa-user-plus"></i><b>Outra pessoa do cadastro</b><small>procurador, gerente, quem tem poder para assinar</small></button>
-    </div>
-    <div class="ct-busca" id="ct-outra-busca" style="margin-top:10px" hidden><i class="fas fa-magnifying-glass"></i><input type="text" id="pf-rbusca" class="ns-in" placeholder="Buscar no cadastro de pessoas (cliente ou avulso): nome ou CPF" autocomplete="off"><div id="pf-rsug" class="pf-sug" style="display:none;"></div></div>
-    <div class="ct-qual" id="ct-qual" hidden><span class="lbl">Assina como</span><div class="ct-chips" id="ct-qual-chips">{% for qd in ('Procurador(a)', 'Gerente', 'Diretor(a)', 'Administrador(a) não sócio(a)', 'Representante autorizado(a)') %}<button type="button" data-v="{{ qd }}" onclick="ctQualidade(this)">{{ qd }}</button>{% endfor %}</div></div>
-    <div class="ct-pessoa" id="ct-rep-card"><span class="av" id="ct-rep-av">?</span><span class="tx" id="ct-rep-tx"></span>
-      <span class="acoes"><a id="ct-rep-link" href="#" target="_blank" rel="noopener" title="abre o cadastro em outra aba"><i class="fas fa-pen"></i> Alterar no cadastro</a><a href="#" onclick="location.reload(); return false;" title="já alterou no cadastro? recarrega esta tela"><i class="fas fa-rotate"></i> Atualizar</a></span></div>
+      {# quem assina: só leitura (Anderson: "pode aparecer os dados, não pode permitir alterações; se precisar, remete ao cadastro") #}
+      <input type="hidden" name="rep_nome" id="rep_nome" value="{{ e0.rep_nome if e0 else '' }}"><input type="hidden" name="rep_cpf" id="rep_cpf" value="{{ e0.rep_cpf if e0 else '' }}">
+      <input type="hidden" name="rep_cargo" id="rep_cargo" value="{{ e0.rep_cargo if e0 else 'sócio administrador' }}"><input type="hidden" name="rep_documento" id="rep_documento" value="{{ e0.rep_documento if e0 else '' }}">
+      <input type="hidden" name="rep_email" id="rep_email" value="{{ e0.rep_email if e0 else '' }}"><input type="hidden" name="rep_celular" id="rep_celular" value="{{ e0.rep_celular if e0 else '' }}">
+      <input type="hidden" id="rep_pf" value="{{ (emp.socios[0].pf_cliente_id if emp and emp.socios and not contrato else '') or '' }}">
+      <div class="ct-parte" id="ct-rep-card">
+        <div class="pt-rot"><i class="fas fa-user-pen"></i> Quem assina pela contratante</div>
+        <div class="pt-top"><span class="pt-av" id="ct-rep-av">?</span><div class="pt-id"><b id="ct-rep-nome">—</b><small id="ct-rep-cargo"></small></div></div>
+        <div class="pt-linhas" id="ct-rep-tx"></div>
+        <div class="pt-acoes"><a href="#" onclick="ctEscolha(); return false;"><i class="fas fa-arrows-rotate"></i> Trocar</a><a id="ct-rep-link" href="#" target="_blank" rel="noopener"><i class="fas fa-pen"></i> Alterar no cadastro</a><a href="#" onclick="location.reload(); return false;" title="já alterou no cadastro? recarrega esta tela"><i class="fas fa-rotate"></i> Atualizar</a></div>
+      </div>
 
-    {# mais um assinante (22/11/2026 — Anderson: "o Anderson, que não está no cadastro da NH Goiatuba... cadastro do posto, do sócio + cadastro do Anderson") #}
-    <input type="hidden" name="extra_nome" id="extra_nome" value="{{ ex.nome or '' }}"><input type="hidden" name="extra_cpf" id="extra_cpf" value="{{ ex.cpf or '' }}">
-    <input type="hidden" name="extra_cargo" id="extra_cargo" value="{{ ex.cargo or 'representante autorizado(a)' }}"><input type="hidden" name="extra_documento" id="extra_documento" value="{{ ex.documento or '' }}">
-    <input type="hidden" name="extra_email" id="extra_email" value="{{ ex.email or '' }}"><input type="hidden" name="extra_celular" id="extra_celular" value="{{ ex.celular or '' }}"><input type="hidden" id="extra_pf" value="{{ ex.pf_cliente_id or '' }}">
-    <div id="ct-extra-ops"><a href="#" class="ct-link-mais" data-v="1" {{ 'hidden' if ex.nome }} onclick="ctExtraModo(this); return false;"><i class="fas fa-plus"></i> Mais alguém assina pela contratante (procurador, autorizado, quem responde pela outra empresa do grupo)</a>
-      <button type="button" data-v="0" hidden onclick="ctExtraModo(this)"></button></div>
-    <div class="ct-extra" id="ct-extra" {{ '' if ex.nome else 'hidden' }}>
-      <h4 style="margin:4px 0 8px"><i class="fas fa-user-plus"></i> Também assina pela contratante <small>entra nas partes como autorizado(a), assina e recebe o link por e-mail</small><button type="button" class="ct-alt" onclick="ctExtraModo(document.querySelector('#ct-extra-ops [data-v=&quot;0&quot;]'))"><i class="fas fa-xmark"></i> Tirar</button></h4>
-      <div class="ct-busca" id="ct-extra-busca" style="margin-top:0" {{ 'hidden' if ex.nome }}><i class="fas fa-magnifying-glass"></i><input type="text" id="pf-pbusca" class="ns-in" placeholder="Buscar no cadastro de pessoas (cliente ou avulso): nome ou CPF" autocomplete="off"><div id="pf-psug" class="pf-sug" style="display:none;"></div></div>
-      <div class="ct-pessoa" id="ct-extra-card" {{ '' if ex.nome else 'hidden' }}><span class="av" id="ct-extra-av">?</span><span class="tx" id="ct-extra-tx"></span>
-        <span class="acoes"><a id="ct-extra-link" href="#" target="_blank" rel="noopener"><i class="fas fa-pen"></i> Alterar no cadastro</a><a href="#" onclick="pfExtra({}); ctExtraCard(); return false;"><i class="fas fa-rotate"></i> Trocar</a></span></div>
+      {# mais um assinante (22/11/2026 — Anderson: "o Anderson, que não está no cadastro da NH Goiatuba... cadastro do posto, do sócio + cadastro do Anderson") #}
+      <input type="hidden" name="extra_nome" id="extra_nome" value="{{ ex.nome or '' }}"><input type="hidden" name="extra_cpf" id="extra_cpf" value="{{ ex.cpf or '' }}">
+      <input type="hidden" name="extra_cargo" id="extra_cargo" value="{{ ex.cargo or 'representante autorizado(a)' }}"><input type="hidden" name="extra_documento" id="extra_documento" value="{{ ex.documento or '' }}">
+      <input type="hidden" name="extra_email" id="extra_email" value="{{ ex.email or '' }}"><input type="hidden" name="extra_celular" id="extra_celular" value="{{ ex.celular or '' }}"><input type="hidden" id="extra_pf" value="{{ ex.pf_cliente_id or '' }}">
+      <div class="ct-parte ct-parte-mais" id="ct-extra-vazio" {{ 'hidden' if ex.nome }} onclick="ctExtraModo(document.querySelector('#ct-extra-ops [data-v=&quot;1&quot;]'))"><i class="fas fa-user-plus"></i><b>Mais alguém assina?</b><small>procurador, autorizado, quem responde pela outra empresa do grupo</small></div>
+      <div class="ct-parte" id="ct-extra-card" {{ '' if ex.nome else 'hidden' }}>
+        <div class="pt-rot"><i class="fas fa-user-plus"></i> Também assina pela contratante</div>
+        <div class="pt-top"><span class="pt-av" id="ct-extra-av">?</span><div class="pt-id"><b id="ct-extra-nome">—</b><small id="ct-extra-cargo"></small></div></div>
+        <div class="pt-linhas" id="ct-extra-tx"></div>
+        <div class="pt-acoes"><a href="#" onclick="pfExtra({}); ctExtraCard(); return false;"><i class="fas fa-arrows-rotate"></i> Trocar</a><a id="ct-extra-link" href="#" target="_blank" rel="noopener"><i class="fas fa-pen"></i> Alterar no cadastro</a><a href="#" onclick="ctExtraModo(document.querySelector('#ct-extra-ops [data-v=&quot;0&quot;]')); return false;"><i class="fas fa-xmark"></i> Tirar</a></div>
+      </div>
+      <div id="ct-extra-ops" hidden><button type="button" data-v="1" onclick="ctExtraModo(this)"></button><button type="button" data-v="0" onclick="ctExtraModo(this)"></button></div>
+    </div>
+
+    {# escolha de quem assina: abre em "Trocar" #}
+    <div class="ct-escolha" id="ct-escolha" hidden>
+      <div class="pt-rot" style="margin:14px 0 8px"><i class="fas fa-arrows-rotate"></i> Quem assina pela contratante</div>
+      <div class="ns-ops ct-ops3" id="ct-socios">
+        {% if emp %}{% for s in emp.socios %}<button type="button" class="ns-op {{ 'on' if (rep0 and loop.first and not contrato) or (e0 and e0.rep_cpf and s.cpf and e0.rep_cpf == s.cpf) }}" onclick='pfSocio({{ s.nome | tojson }}, {{ (s.cpf or "") | tojson }}, {{ (s.email or "") | tojson }}, {{ (s.celular or "") | tojson }}, {{ (s.documento or "") | tojson }}, {{ (s.cargo or "") | tojson }}, this, {{ (s.pf_cliente_id or 0) | tojson }})'>{% if not s.documento %}<span class="ns-op-tag" style="background:#fef3c7;color:#b45309">sem documento</span>{% endif %}<i class="fas fa-user-tie"></i><b>{{ s.nome | nome_proprio }}</b><small>{{ s.cargo or ('administrador' if s.responsavel else 'sócio') }}{% if s.cpf %} · CPF {{ s.cpf }}{% endif %}</small></button>{% endfor %}
+        {% for s in emp.contatos %}<button type="button" class="ns-op" onclick='pfSocio({{ s.nome | tojson }}, "", {{ (s.email or "") | tojson }}, {{ (s.celular or "") | tojson }}, "", {{ (s.cargo or "") | tojson }}, this, 0)'><i class="fas fa-address-card"></i><b>{{ s.nome | nome_proprio }}</b><small>{{ s.cargo or 'contato da empresa' }}</small></button>{% endfor %}{% endif %}
+        {# 24/11/2026 — Anderson: "opção de colocar outro para assinar... gerente, procurador... mas tem que ter o cadastro de CLIENTE ou AVULSO" #}
+        <button type="button" class="ns-op ct-op-mais" id="ct-outra-bt" onclick="ctOutra()"><i class="fas fa-user-plus"></i><b>Outra pessoa do cadastro</b><small>procurador, gerente, quem tem poder para assinar</small></button>
+      </div>
+      <div class="ct-busca" id="ct-outra-busca" style="margin-top:10px" hidden><i class="fas fa-magnifying-glass"></i><input type="text" id="pf-rbusca" class="ns-in" placeholder="Buscar no cadastro de pessoas (cliente ou avulso): nome ou CPF" autocomplete="off"><div id="pf-rsug" class="pf-sug" style="display:none;"></div></div>
+      <div class="ct-qual" id="ct-qual" hidden><span class="lbl">Assina como</span><div class="ct-chips" id="ct-qual-chips">{% for qd in ('Procurador(a)', 'Gerente', 'Diretor(a)', 'Administrador(a) não sócio(a)', 'Representante autorizado(a)') %}<button type="button" data-v="{{ qd }}" onclick="ctQualidade(this)">{{ qd }}</button>{% endfor %}</div></div>
+    </div>
+    <div class="ct-extra" id="ct-extra" hidden>
+      <div class="pt-rot" style="margin:14px 0 8px"><i class="fas fa-user-plus"></i> Quem mais assina <small style="font-weight:600; text-transform:none; letter-spacing:0">· busque no cadastro de pessoas (cliente ou avulso)</small></div>
+      <div class="ct-busca" id="ct-extra-busca" style="margin-top:0"><i class="fas fa-magnifying-glass"></i><input type="text" id="pf-pbusca" class="ns-in" placeholder="Nome ou CPF" autocomplete="off"><div id="pf-psug" class="pf-sug" style="display:none;"></div></div>
+      <div class="ct-note">Quem não está no cadastro precisa ser cadastrado em Cadastros › Clientes ou Avulsos (pessoa física) antes de entrar no contrato.</div>
     </div>
   </section>
 
@@ -333,39 +363,46 @@ function nomeProprio(s) { s = String(s || ''); if (s !== s.toUpperCase()) return
 function sigla(nome) { var p = String(nome || '').trim().split(/\s+/).filter(function (x) { return x.length > 2 && !/^(DE|DA|DO|DAS|DOS|E)$/i.test(x); }); return (((p[0] || '')[0] || '') + ((p[1] || '')[0] || '')).toUpperCase() || '?'; }
 // ---- seções que abrem em "Alterar" ----
 function ctToggle(id, bt) { var b = $(id); b.hidden = !b.hidden; if (bt) bt.innerHTML = b.hidden ? '<i class="fas fa-pen"></i> Alterar' : '<i class="fas fa-chevron-up"></i> Fechar'; if (!b.hidden) { var f = b.querySelector('input:not([type=hidden]), button'); if (f && f.tagName === 'INPUT') f.focus(); } }
-function ctJuntar() { $('ct-busca-emp').hidden = false; $('ct-juntar').hidden = true; $('pf-busca').focus(); }
+function ctJuntar() { $('ct-busca-emp').hidden = false; $('pf-busca').focus(); }
 // ---- quem assina: cartão de leitura; quem altera é o cadastro ----
 function cardPessoa(pref, linkId, nomeVazio) {
     var g = function (k) { return ($(pref + k) || {}).value || ''; };
     var nome = g('nome').trim(), cargo = g('cargo').trim(), cpf = g('cpf').trim(), doc = g('documento').trim(), email = g('email').trim(), cel = g('celular').trim(), pf = g('pf').trim();
-    var card = $(pref === 'rep_' ? 'ct-rep-card' : 'ct-extra-card'), tx = $(pref === 'rep_' ? 'ct-rep-tx' : 'ct-extra-tx'), av = $(pref === 'rep_' ? 'ct-rep-av' : 'ct-extra-av'), link = $(linkId);
-    card.classList.toggle('vazio', !nome); av.hidden = true;
+    var id = pref === 'rep_' ? 'ct-rep-' : 'ct-extra-';
+    var card = $(id + 'card'), tx = $(id + 'tx'), av = $(id + 'av'), link = $(linkId);
+    av.textContent = nome ? sigla(nome) : '?';
     var empId = (document.querySelector('#pf-emps [name=emp_cliente_id]') || {}).value || '';
     link.href = pf ? '/clientes/' + pf : (empId ? '/clientes/' + empId : '#'); link.hidden = !nome;
     link.title = pf ? 'abre o cadastro da pessoa em outra aba' : 'esta pessoa não tem cadastro próprio: abre o cadastro da empresa (sócios e contatos)';
-    if (!nome) { tx.innerHTML = '<b>' + nomeVazio + '</b><small>toque num cartão acima</small>'; return; }
-    var partes = [cargo ? esc(cargo) : (pref === 'rep_' ? '<em>escolha acima como assina</em>' : ''), cpf ? 'CPF ' + esc(cpf) : '<em>sem CPF</em>', doc ? esc(doc) : '<em>sem documento para o contrato</em>',
-                  email ? '<i class="fas fa-envelope"></i>' + esc(email) : '<em>sem e-mail: não recebe o link</em>', cel ? '<i class="fas fa-mobile-screen"></i>' + esc(cel) : ''].filter(Boolean);
-    tx.innerHTML = '<b>No cadastro</b>' + partes.map(function (x) { return '<small>' + x + '</small>'; }).join('');
+    $(id + 'nome').textContent = nome ? nomeProprio(nome) : nomeVazio;
+    $(id + 'cargo').innerHTML = nome ? (cargo ? esc(cargo) : '<em>escolha abaixo como assina</em>') : 'toque em Trocar e escolha no cadastro';
+    if (!nome) { tx.innerHTML = ''; return; }
+    tx.innerHTML = '<div><i class="fas fa-id-card"></i><span>' + (cpf ? 'CPF ' + esc(cpf) : '<em>sem CPF no cadastro</em>') + (doc ? ' · ' + esc(doc) : ' · <em>sem documento para o contrato</em>') + '</span></div>'
+        + '<div><i class="fas fa-envelope"></i><span>' + (email ? esc(email) : '<em>sem e-mail: não recebe o link para assinar</em>') + '</span></div>'
+        + (cel ? '<div><i class="fas fa-mobile-screen"></i><span>' + esc(cel) + '</span></div>' : '');
 }
 function ctPessoaCard() { cardPessoa('rep_', 'ct-rep-link', 'Quem assina pela contratante?'); }
-function ctExtraCard() { cardPessoa('extra_', 'ct-extra-link', 'Quem mais assina?'); var tem = !!$('extra_nome').value.trim(); $('ct-extra-card').hidden = !tem; $('ct-extra-busca').hidden = tem; }
+function ctExtraCard() { cardPessoa('extra_', 'ct-extra-link', 'Quem mais assina?'); var tem = !!$('extra_nome').value.trim(); $('ct-extra-card').hidden = !tem; $('ct-extra-vazio').hidden = tem || !$('ct-extra').hidden; $('ct-extra').hidden = tem || $('ct-extra').hidden; }
+function ctEscolha() { var e = $('ct-escolha'); e.hidden = !e.hidden; if (!e.hidden) e.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); }
 function pfSocio(nome, cpf, email, cel, doc, cargo, el, pf) {
     $('rep_nome').value = nome; $('rep_cpf').value = cpf || ''; $('rep_email').value = email || ''; $('rep_celular').value = cel || ''; $('rep_documento').value = doc || ''; $('rep_pf').value = pf || '';
     if (cargo) $('rep_cargo').value = cargo;
-    if (el && el.id !== 'ct-outra-bt') { $('ct-outra-busca').hidden = true; $('ct-qual').hidden = true; }
+    if (el && el.id !== 'ct-outra-bt') { $('ct-outra-busca').hidden = true; $('ct-qual').hidden = true; $('ct-escolha').hidden = true; }
     document.querySelectorAll('#ct-socios button').forEach(function (x) { x.classList.toggle('on', x === el); });
     ctPessoaCard(); ctResumo();
 }
 function pfExtra(d) {
     $('extra_nome').value = d.nome || ''; $('extra_cpf').value = d.cpf || ''; $('extra_documento').value = d.documento || ''; $('extra_email').value = d.email || ''; $('extra_celular').value = d.celular || ''; $('extra_pf').value = d.id || '';
     $('extra_cargo').value = d.cargo || 'representante autorizado(a)';
-    $('pf-pbusca').value = ''; $('pf-psug').style.display = 'none'; ctExtraCard(); ctResumo();
+    $('pf-pbusca').value = ''; $('pf-psug').style.display = 'none';
+    var tem = !!(d.nome || '').trim(); $('ct-extra').hidden = true; $('ct-extra-card').hidden = !tem; $('ct-extra-vazio').hidden = tem;
+    if (tem) cardPessoa('extra_', 'ct-extra-link', 'Quem mais assina?');
+    ctResumo();
 }
 function ctExtraModo(bt) {
-    var on = bt.dataset.v === '1'; $('ct-extra').hidden = !on;
-    document.querySelector('#ct-extra-ops [data-v="1"]').hidden = on;
-    if (!on) pfExtra({}); else { ctExtraCard(); if (!$('extra_nome').value) $('pf-pbusca').focus(); }
+    var on = bt.dataset.v === '1';
+    if (!on) { pfExtra({}); $('ct-extra').hidden = true; $('ct-extra-card').hidden = true; $('ct-extra-vazio').hidden = false; }
+    else { $('ct-extra').hidden = false; $('ct-extra-vazio').hidden = true; $('ct-extra-card').hidden = true; $('pf-pbusca').focus(); }
     ctResumo();
 }
 // ---- outra pessoa do cadastro assina (procurador, gerente...) ----
@@ -428,12 +465,12 @@ function ctIniMarca() {
 // ---- empresas: busca e rede ----
 function ctEmps() {
     var emps = document.querySelectorAll('#pf-emps .ct-emp'); var n = emps.length; var rede = n > 1;
-    $('ct-rede').hidden = !rede; $('pf-emps').classList.toggle('uma', n === 1);
+    $('ct-rede').hidden = !rede; $('pf-emps').classList.toggle('rede', rede);
     var porEmp = rede && $('ct-vpe').value === '1';
     emps.forEach(function (e) { e.querySelector('.ns-money').hidden = !porEmp; });
     var p = document.querySelector('#pf-emps .ct-emp .sg'); var nm = document.querySelector('#pf-emps .ct-emp .nome');
     $('ct-cab-nome').textContent = n ? (nm.textContent + (n > 1 ? ' + ' + (n - 1) + (n > 2 ? ' empresas' : ' empresa') : '')) : 'escolha a empresa';
-    $('ct-cab-av').textContent = n ? sigla(nm.textContent) : '?';
+    $('pt-emp-nome').textContent = n ? (nm.textContent + (n > 1 ? ' + ' + (n - 1) + (n > 2 ? ' empresas da rede' : ' empresa da rede') : '')) : 'escolha a empresa';
     ctGrupo(); ctResumo();
 }
 function ctGrupo() {
@@ -556,7 +593,7 @@ window.Dinheiro.ligar();
 ctTest.init = true; $('ct-tests').innerHTML = Array.prototype.map.call(document.querySelectorAll('#ct-testes button.on'), function (b) { return '<input type="hidden" name="testemunha_id" value="' + esc(b.dataset.v) + '">'; }).join('');
 if (!$('ct-assq').value) { var f = document.querySelector('#ct-assq-ops .ns-op.on'); if (f) $('ct-assq').value = f.dataset.v; }
 ctIniMarca(); ctEmps();
-ctExtraCard();
+if ($('extra_nome').value.trim()) { cardPessoa('extra_', 'ct-extra-link', 'Quem mais assina?'); }
 if ($('ct-sug') && !$('ct-valor').value.trim()) { var s0 = document.querySelector('#ct-sug input'); if (s0) ctSug(s0); }
 </script>
 {% endblock %}
