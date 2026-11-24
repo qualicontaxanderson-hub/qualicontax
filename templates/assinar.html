@@ -6,32 +6,26 @@
 <title>Assinatura eletrônica · Qualicontax</title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 <style>
+{# Página de quem assina o contrato: mesmo molde da página do orçamento (proposta.html). Mudou lá? Mude aqui. #}
 :root { --verde:#15803d; --escuro:#0f3d2e; }
 * { box-sizing:border-box; }
 body { margin:0; font-family:'Segoe UI', system-ui, -apple-system, sans-serif; background:#f4f8f5; color:#0f172a; font-size:14px; }
 .as-top { background:linear-gradient(150deg,#0b3b2b,#147a4b); color:#fff; padding:14px 20px; }
 .as-top-in { max-width:1120px; margin:0 auto; display:flex; align-items:center; gap:14px; }
-.as-logo { background:#fff; border-radius:12px; padding:6px 10px; display:flex; align-items:center; }
-.as-logo img { height:34px; display:block; }
+.as-logo { background:#fff; border-radius:12px; padding:6px 10px; display:flex; align-items:center; } .as-logo img { height:34px; display:block; }
 .as-top h1 { margin:0; font-size:15px; } .as-top p { margin:2px 0 0; font-size:12px; color:#bfe8cf; }
 .as-top .sel { margin-left:auto; font-size:11.5px; font-weight:700; background:rgba(255,255,255,.16); padding:5px 12px; border-radius:99px; white-space:nowrap; }
 .as-wrap { max-width:1120px; margin:16px auto; padding:0 12px; display:grid; grid-template-columns:minmax(0,1fr) 380px; gap:16px; align-items:start; }
 .as-card { background:#fff; border:1px solid #e3ece7; border-radius:15px; overflow:hidden; }
 .as-res { padding:14px 18px; display:grid; grid-template-columns:repeat(auto-fit, minmax(150px, 1fr)); gap:10px 16px; border-bottom:1px solid #eef2f0; }
-.as-res .l { font-size:10.5px; color:#7d968a; text-transform:uppercase; letter-spacing:.5px; }
-.as-res .v { font-size:14px; font-weight:800; color:var(--escuro); }
-.as-res .v small { font-weight:600; color:#475569; font-size:12px; }
+.as-res .l { font-size:10.5px; color:#7d968a; text-transform:uppercase; letter-spacing:.5px; } .as-res .v { font-size:14px; font-weight:800; color:var(--escuro); } .as-res .v small { font-weight:600; color:#475569; font-size:12px; }
 .as-frame { width:100%; height:72vh; border:0; background:#f1f5f9; display:block; }
-.as-abrir { display:flex; align-items:center; gap:10px; padding:10px 18px; background:#f8fbf9; border-top:1px solid #eef2f0; font-size:12.5px; color:#475569; }
-.as-abrir a { margin-left:auto; }
+.as-abrir { display:flex; align-items:center; gap:10px; padding:10px 18px; background:#f8fbf9; border-top:1px solid #eef2f0; font-size:12.5px; color:#475569; } .as-abrir a { margin-left:auto; }
 .as-body { padding:16px 18px; }
-.as-passo { display:flex; gap:12px; align-items:flex-start; padding:12px 0; border-bottom:1px solid #eef2f0; }
-.as-passo:last-child { border-bottom:0; }
-.as-n { width:28px; height:28px; border-radius:50%; background:#e8f5ed; color:var(--verde); font-weight:800; font-size:12px; display:flex; align-items:center; justify-content:center; flex:none; }
-.as-n.ok { background:var(--verde); color:#fff; }
+.as-passo { display:flex; gap:12px; align-items:flex-start; padding:12px 0; border-bottom:1px solid #eef2f0; } .as-passo:last-child { border-bottom:0; }
+.as-n { width:28px; height:28px; border-radius:50%; background:#e8f5ed; color:var(--verde); font-weight:800; font-size:12px; display:flex; align-items:center; justify-content:center; flex:none; } .as-n.ok { background:var(--verde); color:#fff; }
 .as-lbl { font-size:11px; font-weight:700; color:#64748b; text-transform:uppercase; letter-spacing:.5px; margin:10px 0 4px; }
-input.c { width:100%; height:44px; border:1px solid #dbe7df; border-radius:11px; padding:0 12px; font-size:14px; font-weight:600; }
-input.c:focus { outline:none; border-color:var(--verde); box-shadow:0 0 0 3px rgba(21,128,61,.14); }
+input.c { width:100%; height:44px; border:1px solid #dbe7df; border-radius:11px; padding:0 12px; font-size:14px; font-weight:600; } input.c:focus { outline:none; border-color:var(--verde); box-shadow:0 0 0 3px rgba(21,128,61,.14); }
 input.cod { letter-spacing:8px; font-size:22px; text-align:center; font-family:monospace; }
 .btn { display:inline-flex; align-items:center; justify-content:center; gap:8px; border-radius:11px; padding:11px 16px; font-weight:700; font-size:14px; border:1px solid transparent; cursor:pointer; width:100%; text-decoration:none; }
 .btn-p { background:var(--verde); color:#fff; } .btn-p:disabled { background:#cbd5e1; cursor:not-allowed; }
@@ -39,41 +33,41 @@ input.cod { letter-spacing:8px; font-size:22px; text-align:center; font-family:m
 .as-msg { font-size:12.5px; color:#64748b; line-height:1.5; }
 .as-ok { background:#f0fdf4; border:1px solid #bbf7d0; color:#166534; border-radius:12px; padding:14px; font-size:14px; line-height:1.5; }
 .as-erro { background:#fff1f2; border:1px solid #fecdd3; color:#9f1239; border-radius:12px; padding:12px; font-size:13px; margin-bottom:10px; }
-.as-lista { list-style:none; margin:0; padding:0; font-size:12.5px; }
-.as-lista li { display:flex; gap:8px; align-items:center; padding:5px 0; color:#334155; }
-.as-lista i { width:16px; text-align:center; }
-.as-ace { display:flex; gap:9px; align-items:flex-start; font-size:13px; margin:12px 0; line-height:1.45; }
-.as-ace input { width:18px; height:18px; margin-top:1px; accent-color:var(--verde); flex:none; }
-.as-flash { max-width:1120px; margin:12px auto 0; padding:0 12px; }
-.as-flash div { border-radius:12px; padding:10px 14px; font-size:13px; margin-bottom:8px; }
+.as-lista { list-style:none; margin:0; padding:0; font-size:12.5px; } .as-lista li { display:flex; gap:8px; align-items:center; padding:5px 0; color:#334155; } .as-lista i { width:16px; text-align:center; }
+.as-ace { display:flex; gap:9px; align-items:flex-start; font-size:13px; margin:12px 0; line-height:1.45; } .as-ace input { width:18px; height:18px; margin-top:1px; accent-color:var(--verde); flex:none; }
+.as-flash { max-width:1120px; margin:12px auto 0; padding:0 12px; } .as-flash div { border-radius:12px; padding:10px 14px; font-size:13px; margin-bottom:8px; }
 .as-flash .success { background:#f0fdf4; color:#166534; border:1px solid #bbf7d0; } .as-flash .danger { background:#fff1f2; color:#9f1239; border:1px solid #fecdd3; } .as-flash .warning { background:#fff7ed; color:#9a3412; border:1px solid #fed7aa; }
+#f-ass.esperando { opacity:.45; pointer-events:none; }
 .as-rodape { text-align:center; font-size:11.5px; color:#94a3b8; padding:18px; }
-@media (max-width:900px) { .as-wrap { grid-template-columns:1fr; } .as-frame { height:52vh; } .as-top .sel { display:none; } }
+.so-cel { display:none; }
+@media (max-width:900px) { .as-wrap { grid-template-columns:1fr; } .as-top .sel { display:none; }
+  .as-frame { display:none; } .so-pc { display:none; } .so-cel { display:inline; }
+  .as-abrir { flex-direction:column; align-items:stretch; gap:8px; padding:14px 18px; font-size:13.5px; } .as-abrir a { margin-left:0; width:100%; padding:13px; font-size:15px; background:var(--verde); color:#fff; border-color:var(--verde); } }
 </style>
 </head>
 <body>
 <div class="as-top"><div class="as-top-in">
     <span class="as-logo"><img src="{{ url_for('static', filename='images/logo.png') }}" alt="Qualicontax"></span>
-    <div><h1>Assinatura eletrônica</h1><p>{% if c %}{{ c.titulo | title }} nº {{ c.numero or c.id }} · {{ c.dados.empresas[0].razao }}{% else %}documento{% endif %}</p></div>
+    <div><h1>Assinatura eletrônica</h1><p>{% if c %}{{ c.titulo | capitalize }} nº {{ c.numero or c.id }} · {{ c.dados.empresas[0].razao }}{% else %}Qualicontax{% endif %}</p></div>
     {% if a %}<span class="sel"><i class="fas fa-user"></i> {{ a.nome }} · {{ a.papel | capitalize }}</span>{% endif %}
 </div></div>
 {% with msgs = get_flashed_messages(with_categories=true) %}{% if msgs %}<div class="as-flash">{% for cat, m in msgs %}<div class="{{ cat }}">{{ m }}</div>{% endfor %}</div>{% endif %}{% endwith %}
 
 {% if not a %}
-<div class="as-wrap" style="grid-template-columns:1fr; max-width:560px;"><div class="as-card"><div class="as-body"><div class="as-erro">{{ erro }}</div><p class="as-msg">Se você recebeu este link da Qualicontax, responda o e-mail avisando que ele não abre.</p></div></div></div>
+<div class="as-wrap" style="grid-template-columns:1fr; max-width:560px;"><div class="as-card"><div class="as-body"><div class="as-erro">{{ erro }}</div><p class="as-msg">Se você recebeu este link da Qualicontax, responda o e-mail avisando que ele não abriu.</p></div></div></div>
 {% else %}
 {% set d = c.dados %}
 <div class="as-wrap">
     <div class="as-card">
         <div class="as-res">
-            <div><div class="l">Contratante</div><div class="v">{{ d.empresas[0].razao }}{% if d.empresas | length > 1 %} <small>+ {{ d.empresas | length - 1 }} empresas</small>{% endif %}</div></div>
+            <div><div class="l">Contratante</div><div class="v">{{ d.empresas[0].razao }}{% if d.empresas | length > 1 %} <small>+ {{ d.empresas | length - 1 }} empresa{{ 's' if d.empresas | length > 2 }}</small>{% endif %}</div></div>
             <div><div class="l">Serviços</div><div class="v"><small>{% for k in d.areas %}{{ AREAS[k][0] | capitalize }}{% if not loop.last %}, {% endif %}{% endfor %}{% if d.servicos_extras %}{% if d.areas %}, {% endif %}{{ d.servicos_extras | length }} específico{{ 's' if d.servicos_extras | length > 1 }}{% endif %}</small></div></div>
             <div><div class="l">Honorários</div><div class="v">{{ brl(d.valor) }} <small>/ mês, dia {{ d.dia_vencimento }}</small></div></div>
             <div><div class="l">Início</div><div class="v">{{ d.inicio[8:10] }}/{{ d.inicio[5:7] }}/{{ d.inicio[:4] }}</div></div>
             <div><div class="l">13º honorário</div><div class="v"><small>{{ {'COBRADO': 'novembro e dezembro', 'UNICA': 'dezembro, parcela única', 'ISENTO': 'isento'}.get(d.decimo, d.decimo) }}</small></div></div>
         </div>
         <iframe class="as-frame" src="{{ url_for('assinatura.assinar_pdf', token=a.token) }}#toolbar=1" title="Contrato"></iframe>
-        <div class="as-abrir"><i class="fas fa-file-pdf" style="color:#15803d;"></i> O contrato completo está acima. Não aparece? <a class="btn btn-o sm" href="{{ url_for('assinatura.assinar_pdf', token=a.token) }}" target="_blank"><i class="fas fa-up-right-from-square"></i> Abrir o PDF</a></div>
+        <div class="as-abrir"><span><i class="fas fa-file-pdf" style="color:#15803d;"></i> <span class="so-pc">O contrato completo está acima. Não aparece?</span><span class="so-cel">Leia o contrato completo, com todas as cláusulas, em PDF.</span></span> <a class="btn btn-o sm" href="{{ url_for('assinatura.assinar_pdf', token=a.token) }}" target="_blank"><i class="fas fa-file-pdf"></i> <span class="so-pc">Abrir o PDF</span><span class="so-cel">Abrir o contrato em PDF</span></a></div>
     </div>
     <div>
         <div class="as-card" style="margin-bottom:12px;"><div class="as-body">
@@ -82,15 +76,18 @@ input.cod { letter-spacing:8px; font-size:22px; text-align:center; font-family:m
             <div class="as-ok"><i class="fas fa-circle-check"></i> <b>Você assinou</b> em {{ a.assinado_em.strftime('%d/%m/%Y às %H:%M') }}.<br>
                 {% if c.status == 'ASSINADO' %}Todas as partes assinaram: a via com o registro das assinaturas foi enviada ao seu e-mail.{% else %}Quando todos assinarem, a via final vai para o seu e-mail.{% endif %}</div>
             {% else %}
-            <div class="as-passo"><span class="as-n">1</span><div style="flex:1;"><b>Leia o contrato</b> ao lado.</div></div>
-            <div class="as-passo"><span class="as-n {{ 'ok' if codigo_pedido }}" id="n2">2</span><div style="flex:1;"><b>Receba o código</b> no e-mail <b>{{ a.email }}</b>.
-                <div style="margin-top:8px;"><button type="button" class="btn btn-o" id="bt-cod" onclick="pedirCodigo()"><i class="fas fa-envelope"></i> {{ 'Enviar outro código' if codigo_pedido else 'Enviar código por e-mail' }}</button></div>
-                <div class="as-msg" id="cod-msg" style="margin-top:6px;">{% if codigo_pedido %}Um código já foi enviado. Não chegou? Olhe o spam ou peça outro.{% endif %}</div></div></div>
-            <form method="POST" action="{{ url_for('assinatura.assinar_confirmar', token=a.token) }}" id="f-ass">
-            <div class="as-passo"><span class="as-n" id="n3">3</span><div style="flex:1;"><b>Confirme e assine</b>
-                <div class="as-lbl">Código recebido</div><input class="c cod" name="codigo" id="codigo" maxlength="6" inputmode="numeric" autocomplete="one-time-code" placeholder="000000" required>
-                <div class="as-lbl">Seu nome completo</div><input class="c" name="nome" value="{{ a.nome }}" required>
-                <div class="as-lbl">Seu CPF</div><input class="c" name="cpf" value="{{ a.cpf or '' }}" placeholder="000.000.000-00" inputmode="numeric">
+            <div class="as-passo"><span class="as-n">1</span><div style="flex:1;"><b>Leia o contrato</b> <span class="so-pc">ao lado</span><span class="so-cel">acima (o PDF completo)</span>.</div></div>
+            <div class="as-passo"><span class="as-n {{ 'ok' if codigo_pedido }}" id="n2">2</span><div style="flex:1;"><b>Confirme quem você é</b>
+                <div class="as-lbl">Seu nome completo</div><input class="c" name="nome" form="f-ass" value="{{ a.nome }}" required autocomplete="name">
+                {% if desafio %}<div class="as-lbl">{{ 'Os 3 primeiros dígitos do seu CPF' if desafio == 'ini' else 'Os 2 últimos dígitos do seu CPF' }}</div>
+                <input class="c cod" id="cpf-parte" maxlength="{{ 3 if desafio == 'ini' else 2 }}" inputmode="numeric" placeholder="{{ '000' if desafio == 'ini' else '00' }}" autocomplete="off" style="max-width:160px; letter-spacing:12px;">
+                <div class="as-msg" style="margin-top:4px">Conferimos com o CPF de quem assina. Nunca pedimos o CPF inteiro.</div>{% endif %}
+                <div class="as-msg" style="margin-top:8px">O código vai para <b>{{ email_mascarado }}</b>.</div>
+                <div style="margin-top:10px;"><button type="button" class="btn btn-p" id="bt-cod" onclick="pedirCodigo()"><i class="fas fa-envelope"></i> {{ 'Enviar outro código' if codigo_pedido else 'Confirmar e receber o código' }}</button>
+                <div class="as-msg" id="cod-msg" style="margin-top:6px;">{% if codigo_pedido %}Um código já foi enviado. Não chegou? Olhe o spam ou peça outro.{% endif %}</div></div></div></div>
+            <form method="POST" action="{{ url_for('assinatura.assinar_confirmar', token=a.token) }}" id="f-ass" class="{{ '' if codigo_pedido else 'esperando' }}">
+            <div class="as-passo"><span class="as-n" id="n3">3</span><div style="flex:1;"><b>Digite o código e assine</b>
+                <div class="as-lbl">Código recebido por e-mail</div><input class="c cod" name="codigo" id="codigo" maxlength="6" inputmode="numeric" autocomplete="one-time-code" placeholder="000000" required>
                 <label class="as-ace"><input type="checkbox" name="aceito" value="1" required> Li o contrato e aceito seus termos. Esta assinatura eletrônica tem validade jurídica (MP 2.200-2/2001 e Lei 14.063/2020).</label>
                 <button type="submit" class="btn btn-p"><i class="fas fa-pen-nib"></i> Assinar o contrato</button>
             </div></div>
@@ -99,8 +96,8 @@ input.cod { letter-spacing:8px; font-size:22px; text-align:center; font-family:m
         </div></div>
         <div class="as-card"><div class="as-body">
             <div class="as-lbl" style="margin-top:0;">Quem assina</div>
-            <ul class="as-lista">{% for x in todos %}<li><i class="fas {{ 'fa-circle-check' if x.assinado_em else 'fa-circle' }}" style="color:{{ '#15803d' if x.assinado_em else '#cbd5e1' }};"></i> {{ x.nome }} <span style="color:#94a3b8;">· {{ x.papel | capitalize }}</span></li>{% endfor %}</ul>
-            <p class="as-msg" style="margin:10px 0 0;">Ficam registrados data, hora, e-mail, endereço IP e a impressão digital (SHA-256) do documento que você aceitou. O registro vai na última página da via assinada.</p>
+            <ul class="as-lista">{% for x in todos %}<li><i class="fas {{ 'fa-circle-check' if x.assinado_em else 'fa-circle' }}" style="color:{{ '#15803d' if x.assinado_em else '#cbd5e1' }};"></i> {{ x.nome }} <span style="color:#94a3b8;">· {{ x.papel | capitalize }}{% if x.id == a.id %} · você{% endif %}</span></li>{% endfor %}</ul>
+            <p class="as-msg" style="margin:10px 0 0;">Ficam registrados data, hora, e-mail, endereço IP e a impressão digital (SHA-256) do documento que você aceitou. O registro vai na última página da via assinada, que chega por e-mail quando todos assinam.</p>
         </div></div>
     </div>
 </div>
@@ -109,9 +106,11 @@ input.cod { letter-spacing:8px; font-size:22px; text-align:center; font-family:m
 <script>
 function pedirCodigo() {
     var b = document.getElementById('bt-cod'), m = document.getElementById('cod-msg'); b.disabled = true; m.textContent = 'Enviando…';
-    fetch(location.pathname.replace(/\/$/, '') + '/codigo', { method: 'POST' }).then(function (r) { return r.json(); }).then(function (d) {
+    var cp = document.getElementById('cpf-parte');
+    if (cp && cp.value.replace(/\D/g, '').length < parseInt(cp.maxLength, 10)) { b.disabled = false; m.textContent = 'Digite os ' + cp.maxLength + ' dígitos do CPF.'; cp.focus(); return; }
+    fetch(location.pathname.replace(/\/$/, '') + '/codigo', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ cpf_parte: cp ? cp.value : '' }) }).then(function (x) { return x.json(); }).then(function (d) {
         b.disabled = false;
-        if (d.ok) { m.textContent = 'Código enviado para ' + d.email + '. Vale 30 minutos.'; document.getElementById('n2').classList.add('ok'); document.getElementById('codigo').focus(); }
+        if (d.ok) { m.textContent = 'Código enviado para ' + d.email + '. Vale 30 minutos.'; document.getElementById('n2').classList.add('ok'); document.getElementById('f-ass').classList.remove('esperando'); document.getElementById('codigo').focus(); }
         else m.textContent = d.erro || 'Não deu certo. Tente de novo.';
     }).catch(function () { b.disabled = false; m.textContent = 'Sem conexão. Tente de novo.'; });
 }

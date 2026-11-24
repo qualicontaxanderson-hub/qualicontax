@@ -10,7 +10,7 @@ enviado ao e-mail dele. Ninguém assina sem e-mail.
 import logging
 from datetime import date, datetime
 
-from flask import Blueprint, Response, abort, flash, jsonify, redirect, render_template, request, url_for
+from flask import Blueprint, Response, abort, flash, jsonify, redirect, render_template, request, session, url_for
 from flask_login import current_user
 
 from models.fin_contrato import FinContrato
@@ -726,8 +726,35 @@ def assinar(token):
     if erro and not a:
         return render_template('assinar.html', erro=erro), 404
     todos = PrestContrato.assinantes(c['id'])
+    desafio = _desafio(a) if not erro else None
+    cod_ok = bool(a.get('codigo_enviado_em')) and not a.get('assinado_em') and (not desafio or bool(session.get('ac_%s' % a['id'])))
     return render_template('assinar.html', a=a, c=c, erro=erro, todos=todos, montado=PrestContrato.montar(c['dados']), AREAS=AREAS, brl=brl,
-                           codigo_pedido=bool(a.get('codigo_enviado_em')) and not a.get('assinado_em'))
+                           codigo_pedido=cod_ok, desafio=desafio, email_mascarado=_mascara(a.get('email')))
+
+
+def _cpf_digitos(a):
+    return ''.join(ch for ch in str(a.get('cpf') or '') if ch.isdigit())
+
+
+def _desafio(a):
+    """Que parte do CPF pedir a quem assina: 'ini' (3 primeiros) ou 'fim' (2 últimos), sorteada por visita e guardada na sessão
+    (mesmo molde da página do orçamento, 23/11/2026). None = assinante sem CPF no contrato (não dá para conferir: fica só o e-mail)."""
+    if len(_cpf_digitos(a)) != 11:
+        return None
+    k = 'ad_%s' % a['id']
+    if session.get(k) not in ('ini', 'fim'):
+        import secrets
+        session[k] = secrets.choice(('ini', 'fim'))
+    return session[k]
+
+
+def _confere_cpf(a, parte):
+    """A parte digitada bate com o CPF de quem assina? Devolve o CPF inteiro (só dígitos) ou None."""
+    parte = ''.join(ch for ch in str(parte or '') if ch.isdigit())
+    tipo, cpf = _desafio(a), _cpf_digitos(a)
+    if (tipo == 'ini' and len(parte) == 3 and cpf.startswith(parte)) or (tipo == 'fim' and len(parte) == 2 and cpf.endswith(parte)):
+        return cpf
+    return None
 
 
 @assinatura.route('/assinar/<token>/pdf')
@@ -744,11 +771,17 @@ def assinar_codigo(token):
     if not a or erro or a['assinado_em']:
         return jsonify({'ok': False, 'erro': erro or 'já assinado'}), 400
     _s = (execute_query('SELECT TIMESTAMPDIFF(SECOND, codigo_enviado_em, NOW()) AS s FROM prest_assinantes WHERE id = %s', (a['id'],), fetch=True, fetch_one=True) or {}).get('s')
+    dados = request.get_json(silent=True) or {}
+    if _desafio(a):
+        cpf = _confere_cpf(a, dados.get('cpf_parte') or request.form.get('cpf_parte'))
+        if not cpf:
+            return jsonify({'ok': False, 'erro': 'Os dígitos não conferem com o CPF de quem assina. Confira e tente de novo, ou fale com a Qualicontax.'}), 400
+        session['ac_%s' % a['id']] = cpf
     if _s is not None and _s < 60:      # relógio do banco (app em UTC)
         return jsonify({'ok': False, 'erro': 'Código enviado há menos de um minuto. Confira a caixa de entrada e o spam.'}), 429
     codigo = PrestContrato.gerar_codigo(a['id'])
-    html = ('<p>Seu código para assinar <b>%s</b>:</p><p style="font-size:28px;letter-spacing:6px;font-weight:800;">%s</p>'
-            '<p>Vale por 30 minutos. Se não foi você, ignore.</p>' % (c['titulo'].title(), codigo))
+    html = ('<p>Seu código para assinar o <b>%s nº %s</b>:</p><p style="font-size:28px;letter-spacing:6px;font-weight:800;">%s</p>'
+            '<p>Vale por 30 minutos. Se não foi você, ignore.</p>' % (c['titulo'].capitalize(), c.get('numero') or c['id'], codigo))
     ok, err = _enviar([a['email']], 'Código de assinatura: %s' % codigo, html, 'Seu código para assinar: %s (vale 30 minutos).' % codigo)
     if not ok:
         return jsonify({'ok': False, 'erro': 'Não consegui enviar o e-mail: %s' % err}), 500
@@ -769,7 +802,13 @@ def assinar_confirmar(token):
     if a['assinado_em']:
         return redirect(url_for('assinatura.assinar', token=token))
     f = request.form
-    nome, cpf, codigo = (f.get('nome') or '').strip(), (f.get('cpf') or '').strip(), (f.get('codigo') or '').strip()
+    nome, codigo = (f.get('nome') or '').strip(), (f.get('codigo') or '').strip()
+    cpf = session.get('ac_%s' % a['id']) or ''                 # o CPF conferido no passo 2 (quem assina não digita o CPF inteiro)
+    if cpf:
+        cpf = '%s.%s.%s-%s' % (cpf[:3], cpf[3:6], cpf[6:9], cpf[9:])
+    elif _desafio(a):
+        flash('Confirme primeiro os dígitos do CPF e peça o código.', 'danger')
+        return redirect(url_for('assinatura.assinar', token=token))
     if not f.get('aceito') or not nome or len(nome.split()) < 2:
         flash('Digite seu nome completo e marque "li e aceito".', 'danger')
         return redirect(url_for('assinatura.assinar', token=token))
@@ -785,6 +824,7 @@ def assinar_confirmar(token):
     PrestContrato.registrar_assinatura(a['id'], nome, cpf, ip, request.headers.get('User-Agent', ''), pdf_hash)
     registrar('escrita.assinou_contrato_prestacao', 'financeiro', tabela='prest_assinantes', registro_id=a['id'],
               depois={'contrato_id': c['id'], 'papel': a['papel'], 'nome': nome, 'cpf': cpf, 'ip': ip, 'sha256': pdf_hash})
+    session.pop('ac_%s' % a['id'], None); session.pop('ad_%s' % a['id'], None)
     if PrestContrato.todos_assinaram(c['id']):
         _concluir(c)
     flash('Assinatura registrada. Obrigado!', 'success')
