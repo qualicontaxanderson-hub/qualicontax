@@ -12,6 +12,7 @@ todos assinam, o PDF final ganha a página "Registro de assinaturas" e vai para 
 """
 import hashlib
 import json
+import re
 import secrets
 from datetime import date, datetime
 from decimal import Decimal
@@ -21,9 +22,9 @@ from utils.extenso import reais_extenso
 
 QUALICONTAX = {
     'razao': 'QUALICONTAX ASSESSORIA CONTÁBIL LTDA – EPP',
-    'endereco': 'Estrada de Mogi das Cruzes, 221, 1º Andar, Jardim Soraia, na cidade São Paulo, no Estado de SP, 03890-100',
+    'endereco': 'Estrada de Mogi das Cruzes, 221 – Antigo 33 – 1º Andar, Jardim Soraia, na cidade São Paulo, no Estado de SP, 03890-100',
     'cnpj': '11.158.475/0001-27', 'crc': '2SP025.952/O-7',
-    'cabecalho': ['Estrada de Mogi das Cruzes, 221 – 1º Andar', 'Jardim Soraia – São Paulo – SP – 03890-100',
+    'cabecalho': ['Estrada de Mogi das Cruzes, 221 – Antigo 33 – 1º Andar', 'Jardim Soraia – São Paulo – SP – 03890-100',
                   'faleconosco@qualicontax.com.br', 'www.qualicontax.com.br'],
 }
 # quem assina pela Qualicontax ("pode escolher quem, Anderson ou Albert")
@@ -139,11 +140,15 @@ class PrestContrato:
                             (QUALICONTAX_CLIENTE_ID,), fetch=True, fetch_one=True)
         end = e.get('endereco_dict') or {}
         from utils.texto import nome_proprio
-        linha1 = ' '.join(x for x in [nome_proprio(end.get('logradouro') or ''), (end.get('numero') or '')] if x) + ((' – ' + nome_proprio(end['complemento'])) if end.get('complemento') else '')
-        linha2 = ' – '.join(x for x in [nome_proprio(end.get('bairro') or ''), nome_proprio(end.get('cidade') or ''), end.get('estado') or '', end.get('cep') or ''] if x)
+        cidade = (nome_proprio(end.get('cidade') or '') or 'São Paulo').replace('Sao ', 'São ')
+        linha1 = ', '.join(x for x in [nome_proprio(end.get('logradouro') or ''), (end.get('numero') or '')] if x)
+        if end.get('complemento'):
+            # "ANDAR 1" (peça do cadastro) vira "1º Andar" no papel
+            linha1 += ' – ' + re.sub(r'\bAndar (\d+)\b', r'\1º Andar', nome_proprio(end['complemento']).replace(' - ', ' – '))
+        linha2 = ' – '.join(x for x in [nome_proprio(end.get('bairro') or ''), cidade, end.get('estado') or '', end.get('cep') or ''] if x)
         return {'cliente_id': e['id'], 'razao': e['nome_razao_social'], 'cnpj': e['cpf_cnpj'], 'endereco': e['endereco'], 'crc': (crc or {}).get('valor') or '',
                 'email': e.get('email') or '', 'telefone': e.get('telefone') or '',
-                'cidade': (nome_proprio(end.get('cidade') or '') or 'São Paulo').replace('Sao ', 'São '), 'uf': (end.get('estado') or '').strip() or 'SP',
+                'cidade': cidade, 'uf': (end.get('estado') or '').strip() or 'SP',
                 'cabecalho': [x for x in (linha1, linha2, e.get('email') or '', 'www.qualicontax.com.br') if x]}
 
     @staticmethod

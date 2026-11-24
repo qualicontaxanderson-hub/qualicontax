@@ -79,10 +79,10 @@ def _pdf(o, com_link=True):
 def ver(token):
     o, erro = _orc(token)
     if not o:
-        return render_template('proposta.html', erro=erro), 404
+        return render_template('proposta.html', erro=erro, qc=_qc()), 404
     vencido = bool(o.get('validade') and o['status'] == 'APROVADO' and o['validade'] < datetime.now().date())
     cod_ok = bool(o.get('codigo_enviado_em')) and not o.get('aceito_em') and session.get('pc_%s' % o['id'])
-    return render_template('proposta.html', o=o, erro=erro, itens=Orcamento.itens(o['id']), COMO=COMO, vencido=vencido,
+    return render_template('proposta.html', o=o, erro=erro, itens=Orcamento.itens(o['id']), COMO=COMO, vencido=vencido, qc=_qc(),
                            emails=[(e, _mascara(e)) for e in _emails_permitidos(o)], codigo_pedido=cod_ok, desafio=_desafio(o) if not erro else None)
 
 
@@ -187,3 +187,12 @@ def _confirmar(o):
             a, h, t = orcamento_email.aceite(o, itens, para_equipe=True); enviar(copia, a, h, t, anexos=anexo, servico='orcamento')
     except Exception:
         logger.exception('[proposta] confirmação do aceite %s', o['id'])
+
+
+def _qc():
+    """Razão, CNPJ, endereço e e-mail da Qualicontax para o rodapé, do cadastro (24/11/2026)."""
+    from models.prest_contrato import PrestContrato, QUALICONTAX
+    try:
+        return PrestContrato.contratada()
+    except Exception:
+        return dict(QUALICONTAX, email='faleconosco@qualicontax.com.br')

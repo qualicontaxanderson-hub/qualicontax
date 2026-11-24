@@ -105,12 +105,13 @@ def _pagina(numero, data_doc):
         except Exception:
             canvas.setFont('Helvetica-Bold', 13); canvas.setFillColor(VERDE); canvas.drawString(ML, topo - 0.9 * cm, 'QUALICONTAX')
         canvas.setFont('Helvetica', 7.6); canvas.setFillColor(CINZA)
-        for i, linha in enumerate(QUALICONTAX['cabecalho']):
+        for i, linha in enumerate(getattr(doc, 'cabecalho', None) or QUALICONTAX['cabecalho']):
             canvas.drawRightString(W - MR, topo - 0.32 * cm - i * 9.2, linha)
         canvas.setStrokeColor(VERDE3); canvas.setLineWidth(1.4); canvas.line(ML, topo - 1.65 * cm, W - MR, topo - 1.65 * cm)
         canvas.setStrokeColor(LINHA); canvas.setLineWidth(0.5); canvas.line(ML, 1.45 * cm, W - MR, 1.45 * cm)
         canvas.setFont('Helvetica', 7); canvas.setFillColor(CINZA)
-        canvas.drawString(ML, 1.0 * cm, 'Orçamento %s · %s · %s · CNPJ %s' % (numero, data_doc.strftime('%d/%m/%Y'), QUALICONTAX['razao'], QUALICONTAX['cnpj']))
+        qc = getattr(doc, 'qc', None) or QUALICONTAX
+        canvas.drawString(ML, 1.0 * cm, 'Orçamento %s · %s · %s · CNPJ %s' % (numero, data_doc.strftime('%d/%m/%Y'), qc['razao'], qc['cnpj']))
         canvas.drawRightString(W - MR, 1.0 * cm, 'página %d' % doc.page)
         canvas.restoreState()
     return _f
@@ -129,9 +130,12 @@ def gerar_pdf(o, itens, link=None, data_doc=None):
     ``data_doc`` = data impressa no rodapé (a do envio, para a impressão digital não mudar de um dia para o outro)."""
     st = _st()
     data_doc = data_doc or date.today()
+    from models.prest_contrato import PrestContrato
+    qc = PrestContrato.contratada()        # 24/11/2026: razão, CNPJ, CRC e endereço vêm do cadastro da Qualicontax (nº 1), como no contrato
     buf = io.BytesIO()
     doc = SimpleDocTemplate(buf, pagesize=A4, leftMargin=ML, rightMargin=MR, topMargin=2.6 * cm, bottomMargin=1.9 * cm,
-                            title='Orçamento %s' % o['numero'], author=QUALICONTAX['razao'], invariant=1)   # sem data de criação: a impressão digital não muda
+                            title='Orçamento %s' % o['numero'], author=qc['razao'], invariant=1)   # sem data de criação: a impressão digital não muda
+    doc.qc = qc; doc.cabecalho = qc.get('cabecalho') or QUALICONTAX['cabecalho']
     el = []
     validade = o['validade'].strftime('%d/%m/%Y') if o.get('validade') else None
     interno = bool(o.get('interno'))
@@ -253,8 +257,8 @@ def gerar_pdf(o, itens, link=None, data_doc=None):
         el += [Spacer(1, 10), KeepTogether(bloco)]
 
     el += [Spacer(1, 14), Paragraph('Atenciosamente,', st['b']), Spacer(1, 10),
-           Paragraph('<b>%s</b>' % _esc(o.get('criado_por_nome') or QUALICONTAX['razao']), st['b']),
-           Paragraph(_esc(QUALICONTAX['razao']) + ' · CNPJ %s · CRC %s' % (QUALICONTAX['cnpj'], QUALICONTAX['crc']), st['mi'])]
+           Paragraph('<b>%s</b>' % _esc(o.get('criado_por_nome') or qc['razao']), st['b']),
+           Paragraph(_esc(qc['razao']) + ' · CNPJ %s · CRC %s' % (qc['cnpj'], qc.get('crc') or QUALICONTAX['crc']), st['mi'])]
 
     # ── registro de aceite ──
     if aceito:

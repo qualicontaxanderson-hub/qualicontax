@@ -109,7 +109,7 @@ input.cod { letter-spacing:8px; font-size:22px; text-align:center; font-family:m
     </div>
 </div>
 {% endif %}
-<div class="as-rodape">Qualicontax Assessoria Contábil Ltda · CNPJ 11.158.475/0001-27 · Estrada de Mogi das Cruzes, 221, 1º andar · São Paulo/SP · faleconosco@qualicontax.com.br</div>
+<div class="as-rodape">{{ (qc.razao or 'Qualicontax Assessoria Contábil Ltda') | nome_proprio }} · CNPJ {{ qc.cnpj }}{% for l in (qc.cabecalho or [])[:2] %} · {{ l }}{% endfor %}{% if qc.email %} · {{ qc.email }}{% endif %}</div>
 <script>
 function pedirCodigo() {
     var b = document.getElementById('bt-cod'), m = document.getElementById('cod-msg'); b.disabled = true; m.textContent = 'Enviando…';

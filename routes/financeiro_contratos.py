@@ -740,11 +740,11 @@ def _assinante(token):
 def assinar(token):
     a, c, erro = _assinante(token)
     if erro and not a:
-        return render_template('assinar.html', erro=erro), 404
+        return render_template('assinar.html', erro=erro, qc=PrestContrato.contratada()), 404
     todos = PrestContrato.assinantes(c['id'])
     desafio = _desafio(a) if not erro else None
     cod_ok = bool(a.get('codigo_enviado_em')) and not a.get('assinado_em') and (not desafio or bool(session.get('ac_%s' % a['id'])))
-    return render_template('assinar.html', a=a, c=c, erro=erro, todos=todos, montado=PrestContrato.montar(c['dados']), AREAS=AREAS, brl=brl,
+    return render_template('assinar.html', qc=PrestContrato.contratada(), a=a, c=c, erro=erro, todos=todos, montado=PrestContrato.montar(c['dados']), AREAS=AREAS, brl=brl,
                            codigo_pedido=cod_ok, desafio=desafio, email_mascarado=_mascara(a.get('email')))
 
 
