@@ -218,7 +218,7 @@ class PrestContrato:
         cond, params = ['c.nome_razao_social LIKE %s'], ['%' + termo + '%']
         if dig and len(dig) >= 3 and dig == termo.replace('.', '').replace('-', '').replace(' ', ''):
             cond = ["REPLACE(REPLACE(c.cpf_cnpj, '.', ''), '-', '') LIKE %s"]; params = ['%' + dig + '%']
-        rows = execute_query("""SELECT c.id, c.nome_razao_social AS nome, c.cpf_cnpj AS cpf, c.email, c.celular, c.telefone
+        rows = execute_query("""SELECT c.id, c.nome_razao_social AS nome, c.cpf_cnpj AS cpf, c.email, c.celular, c.telefone, COALESCE(c.avulso, 0) AS avulso
                                    FROM clientes c WHERE c.tipo_pessoa = 'PF' AND (%s)
                                   ORDER BY c.situacao = 'ATIVO' DESC, c.nome_razao_social LIMIT %%s""" % ' OR '.join(cond),
                              tuple(params) + (int(limite),), fetch=True) or []
@@ -226,7 +226,7 @@ class PrestContrato:
         out = []
         for r in rows:
             email, _ = _email_da_pessoa(r['id'], r.get('cpf'))
-            out.append({'id': r['id'], 'nome': (r['nome'] or '').strip(), 'cpf': r.get('cpf') or '', 'documento': _doc_texto(Documentos.listar(r['id'])),
+            out.append({'id': r['id'], 'nome': (r['nome'] or '').strip(), 'cpf': r.get('cpf') or '', 'avulso': bool(r.get('avulso')), 'documento': _doc_texto(Documentos.listar(r['id'])),
                         'email': (email or r.get('email') or '').strip().lower(), 'celular': _celular_da_pessoa(r['id'], r.get('cpf'))})
         return out
 

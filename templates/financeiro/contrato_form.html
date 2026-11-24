@@ -163,9 +163,16 @@
     <input type="hidden" id="rep_pf" value="{{ (emp.socios[0].pf_cliente_id if emp and emp.socios and not contrato else '') or '' }}">
     {% if emp and (emp.socios or emp.contatos) %}
     <div class="ct-chips grande" id="ct-socios" style="margin-bottom:12px">
-      {% for s in emp.socios %}<button type="button" class="{{ 'on' if (rep0 and loop.first and not contrato) or (e0 and e0.rep_cpf and s.cpf and e0.rep_cpf == s.cpf) }}" onclick="pfSocio({{ s.nome | tojson }}, {{ (s.cpf or '') | tojson }}, {{ (s.email or '') | tojson }}, {{ (s.celular or '') | tojson }}, {{ (s.documento or '') | tojson }}, {{ (s.cargo or '') | tojson }}, this, {{ (s.pf_cliente_id or '') | tojson }})" title="{{ s.documento or 'sem documento marcado para contrato no cadastro da pessoa' }}"><i class="fas fa-user-tie"></i> {{ s.nome | nome_proprio }} <span style="opacity:.75; font-weight:600">· {{ s.cargo or ('administrador' if s.responsavel else 'sócio') }}</span>{% if not s.documento %} <i class="fas fa-triangle-exclamation falta" title="sem documento no cadastro"></i>{% endif %}</button>{% endfor %}
-      {% for s in emp.contatos %}<button type="button" class="av" onclick="pfSocio({{ s.nome | tojson }}, '', {{ (s.email or '') | tojson }}, {{ (s.celular or '') | tojson }}, '', {{ (s.cargo or '') | tojson }}, this, '')"><i class="fas fa-address-card"></i> {{ s.nome | nome_proprio }}{% if s.cargo %} <span style="opacity:.75; font-weight:600">· {{ s.cargo }}</span>{% endif %}</button>{% endfor %}
-    </div>{% endif %}
+      {% for s in emp.socios %}<button type="button" class="{{ 'on' if (rep0 and loop.first and not contrato) or (e0 and e0.rep_cpf and s.cpf and e0.rep_cpf == s.cpf) }}" onclick='pfSocio({{ s.nome | tojson }}, {{ (s.cpf or "") | tojson }}, {{ (s.email or "") | tojson }}, {{ (s.celular or "") | tojson }}, {{ (s.documento or "") | tojson }}, {{ (s.cargo or "") | tojson }}, this, {{ (s.pf_cliente_id or 0) | tojson }})' title="{{ s.documento or 'sem documento marcado para contrato no cadastro da pessoa' }}"><i class="fas fa-user-tie"></i> {{ s.nome | nome_proprio }} <span style="opacity:.75; font-weight:600">· {{ s.cargo or ('administrador' if s.responsavel else 'sócio') }}</span>{% if not s.documento %} <i class="fas fa-triangle-exclamation falta" title="sem documento no cadastro"></i>{% endif %}</button>{% endfor %}
+      {% for s in emp.contatos %}<button type="button" class="av" onclick='pfSocio({{ s.nome | tojson }}, '', {{ (s.email or '') | tojson }}, {{ (s.celular or '') | tojson }}, '', {{ (s.cargo or '') | tojson }}, this, '')'><i class="fas fa-address-card"></i> {{ s.nome | nome_proprio }}{% if s.cargo %} <span style="opacity:.75; font-weight:600">· {{ s.cargo }}</span>{% endif %}</button>{% endfor %}
+      <button type="button" class="av" id="ct-outra-bt" onclick="ctOutra()"><i class="fas fa-user-plus"></i> Outra pessoa do cadastro <span style="opacity:.75; font-weight:600">· procurador, gerente, quem tem poder para assinar</span></button>
+    </div>{% else %}
+    <div class="ct-chips grande" id="ct-socios" style="margin-bottom:12px"><button type="button" class="av" id="ct-outra-bt" onclick="ctOutra()"><i class="fas fa-user-plus"></i> Escolher quem assina no cadastro de pessoas</button></div>{% endif %}
+    {# 24/11/2026 — Anderson: "opção de colocar outro para assinar... Gabriel tem o poder de assinar mesmo não estando no contrato, sendo gerente, procurador...
+       mas tem que ter o cadastro de CLIENTE ou AVULSO" #}
+    <div class="ct-busca" id="ct-outra-busca" style="margin:0 0 12px" hidden><i class="fas fa-magnifying-glass"></i><input type="text" id="pf-rbusca" class="ns-in" placeholder="Buscar no cadastro de pessoas (cliente ou avulso): nome ou CPF" autocomplete="off"><div id="pf-rsug" class="pf-sug" style="display:none;"></div></div>
+    <div id="ct-qual" style="margin:0 0 12px" hidden><div class="ns-h" style="margin-bottom:6px"><i class="fas fa-id-badge"></i> Na qualidade de <em>como essa pessoa assina pela empresa</em></div>
+      <div class="ct-chips" id="ct-qual-chips">{% for qd in ('Procurador(a)', 'Gerente', 'Diretor(a)', 'Administrador(a) não sócio(a)', 'Representante autorizado(a)') %}<button type="button" data-v="{{ qd }}" onclick="ctQualidade(this)"><i class="fas fa-user-tag"></i> {{ qd }}</button>{% endfor %}</div></div>
     <div class="ct-pessoa" id="ct-rep-card"><span class="av" id="ct-rep-av">?</span><span class="tx" id="ct-rep-tx"></span>
       <a class="ct-alt" id="ct-rep-link" href="#" target="_blank" rel="noopener"><i class="fas fa-pen"></i> Alterar no cadastro</a></div>
     <div class="ct-note" id="ct-rep-nota">Os dados vêm do cadastro e não se alteram aqui. Alterou lá? <a class="ct-link" href="#" onclick="location.reload(); return false;">Atualizar esta tela</a>.</div>
@@ -307,7 +314,7 @@ function cardPessoa(pref, linkId, nomeVazio) {
     link.href = pf ? '/clientes/' + pf : (empId ? '/clientes/' + empId : '#'); link.hidden = !nome;
     link.title = pf ? 'abre o cadastro da pessoa em outra aba' : 'esta pessoa não tem cadastro próprio: abre o cadastro da empresa (sócios e contatos)';
     if (!nome) { tx.innerHTML = '<b>' + nomeVazio + '</b><small>toque num nome acima</small>'; return; }
-    var l1 = [cargo, cpf ? 'CPF ' + cpf : '<em>sem CPF</em>', doc ? doc : '<em>sem documento para o contrato</em>'].filter(Boolean).join(' · ');
+    var l1 = [cargo || (pref === 'rep_' ? '<em>escolha abaixo em que qualidade assina</em>' : ''), cpf ? 'CPF ' + cpf : '<em>sem CPF</em>', doc ? doc : '<em>sem documento para o contrato</em>'].filter(Boolean).join(' · ');
     var l2 = [email ? '<i class="fas fa-envelope"></i>' + esc(email) : '<em>sem e-mail: não recebe o link para assinar</em>', cel ? '<i class="fas fa-mobile-screen"></i>' + esc(cel) : ''].filter(Boolean).join('   ');
     tx.innerHTML = '<b>' + esc(nomeProprio(nome)) + '</b><small>' + l1 + '</small><small>' + l2 + '</small>';
 }
@@ -316,6 +323,7 @@ function ctExtraCard() { cardPessoa('extra_', 'ct-extra-link', 'Quem mais assina
 function pfSocio(nome, cpf, email, cel, doc, cargo, el, pf) {
     $('rep_nome').value = nome; $('rep_cpf').value = cpf || ''; $('rep_email').value = email || ''; $('rep_celular').value = cel || ''; $('rep_documento').value = doc || ''; $('rep_pf').value = pf || '';
     if (cargo) $('rep_cargo').value = cargo;
+    if (el && el.id !== 'ct-outra-bt') { $('ct-outra-busca').hidden = true; $('ct-qual').hidden = true; }
     document.querySelectorAll('#ct-socios button').forEach(function (x) { x.classList.toggle('on', x === el); });
     ctPessoaCard(); ctResumo();
 }
@@ -330,6 +338,18 @@ function ctExtraModo(bt) {
     if (!on) pfExtra({}); else { ctExtraCard(); if (!$('extra_nome').value) $('pf-pbusca').focus(); }
     ctResumo();
 }
+// ---- outra pessoa do cadastro assina (procurador, gerente...) ----
+function ctOutra() {
+    var bx = $('ct-outra-busca'); bx.hidden = false; $('pf-rbusca').focus();
+    document.querySelectorAll('#ct-socios button').forEach(function (x) { x.classList.toggle('on', x.id === 'ct-outra-bt'); });
+}
+function pfOutra(d) {
+    pfSocio(d.nome || '', d.cpf || '', d.email || '', d.celular || '', d.documento || '', '', $('ct-outra-bt'), d.id || '');
+    $('rep_cargo').value = ''; $('pf-rbusca').value = ''; $('pf-rsug').style.display = 'none'; $('ct-outra-busca').hidden = true;
+    $('ct-qual').hidden = false; document.querySelectorAll('#ct-qual-chips button').forEach(function (x) { x.classList.remove('on'); });
+    ctPessoaCard(); ctResumo();
+}
+function ctQualidade(bt) { bt.parentNode.querySelectorAll('button').forEach(function (x) { x.classList.toggle('on', x === bt); }); $('rep_cargo').value = bt.dataset.v; ctPessoaCard(); ctResumo(); }
 function ctVpe(bt) { document.querySelectorAll('#ct-vpe-ops .ns-op').forEach(function (x) { x.classList.toggle('on', x === bt); }); $('ct-vpe').value = bt.dataset.v; ctEmps(); }
 // ---- sugestão de mensalidade pelos ramos: a soma dos marcados vira o valor ----
 function ctSug(inp) {
@@ -418,6 +438,26 @@ function ctGrupo() {
     });
     document.addEventListener('click', function (e) { if (!sug.contains(e.target) && e.target !== q) sug.style.display = 'none'; });
 })();
+(function () {   // busca de pessoas do cadastro para "Outra pessoa assina" (quem assina pela contratante)
+    var q = $('pf-rbusca'), sug = $('pf-rsug'), t;
+    q.addEventListener('input', function () {
+        clearTimeout(t); var v = q.value.trim(); if (v.length < 2) { sug.style.display = 'none'; return; }
+        t = setTimeout(function () {
+            fetch('/comercial/contratos/pessoas?q=' + encodeURIComponent(v)).then(function (r) { return r.json(); }).then(function (lista) {
+                sug.innerHTML = '';
+                (lista || []).forEach(function (p) {
+                    var d = document.createElement('div');
+                    d.innerHTML = '<strong>' + esc(p.nome) + '</strong> <span class="ho-num">' + esc(p.cpf || '') + (p.avulso ? ' · avulso' : '') + (p.documento ? ' · ' + esc(p.documento) : ' · <span style="color:#b45309;">sem documento para contrato</span>') + (p.email ? ' · ' + esc(p.email) : ' · <span style="color:#b45309;">sem e-mail</span>') + '</span>';
+                    d.onclick = function () { pfOutra(p); };
+                    sug.appendChild(d);
+                });
+                if (!sug.children.length) { var n = document.createElement('div'); n.className = 'vazio'; n.textContent = 'Ninguém com esse nome no cadastro de pessoas. Cadastre em Cadastros › Clientes ou Avulsos (pessoa física) e volte.'; sug.appendChild(n); }
+                sug.style.display = 'block';
+            });
+        }, 250);
+    });
+    document.addEventListener('click', function (e) { if (!sug.contains(e.target) && e.target !== q) sug.style.display = 'none'; });
+})();
 (function () {   // busca de pessoas do cadastro para "Mais alguém assina"
     var q = $('pf-pbusca'), sug = $('pf-psug'), t;
     q.addEventListener('input', function () {
@@ -455,7 +495,7 @@ function ctResumo() {
     var titulo = val('titulo') || (areas.indexOf('Contabilidade') >= 0 ? 'Contrato de prestação de serviços contábeis' : (areas.length === 1 ? 'Contrato de prestação de serviços de ' + areas[0].toLowerCase() : 'Contrato de prestação de serviços'));
     var reaj = segTx('ct-reajs') + (val('reajuste_indice') ? ' · ' + val('reajuste_indice') : '') + (val('reajuste_mes') ? ' · ' + val('reajuste_mes') : '');
     var faltas = [];
-    if (!emps.length) faltas.push('a empresa'); if (!rep || !repEmail) faltas.push('quem assina e o e-mail'); if (extra && !val('extra_email')) faltas.push('o e-mail do outro assinante');
+    if (!emps.length) faltas.push('a empresa'); if (!rep || !repEmail) faltas.push('quem assina e o e-mail'); if (rep && !val('rep_cargo')) faltas.push('em que qualidade assina'); if (extra && !val('extra_email')) faltas.push('o e-mail do outro assinante');
     if (!areas.length && !extras) faltas.push('os serviços'); if (!v) faltas.push('o valor'); if (!ini) faltas.push('a data de início');
     // frases de leitura (condições e cláusulas)
     $('ct-cond-sum').innerHTML = F('Reajuste', reaj.toLowerCase()) + F('13º', segTx('ct-decs').toLowerCase()) + F('Multa', val('multa') + '%') + F('Juros', val('juros') + '% ao mês');
