@@ -495,28 +495,23 @@ def liberar(cid):
     c = _chamado_ou_404(cid)
     if c['tipo'] != 'acesso':
         return jsonify({'ok': False, 'erro': 'Este chamado não é pedido de acesso.'}), 400
-    from utils.permissions import normalizar_selecao, get_flat_catalog
+    from utils.permissions import normalizar_selecao
     codigos = sorted(normalizar_selecao(json.loads(c['acesso_codigos'] or '[]')))
     if not codigos:
         return jsonify({'ok': False, 'erro': 'O pedido não tem tela válida do catálogo.'}), 400
-    modo = request.form.get('modo', 'extra')
-    if modo == 'perfil':
-        pid = request.form.get('perfil_id', '')
-        perfil = _q("SELECT id, nome FROM perfis_acesso WHERE id = %s AND situacao = 'ATIVO'",
-                    (pid,), one=True) if str(pid).isdigit() else None
-        if not perfil:
-            return jsonify({'ok': False, 'erro': 'Escolha um perfil.'}), 400
-        _w("INSERT IGNORE INTO usuario_perfis (usuario_id, perfil_id) VALUES (%s, %s)",
-           (c['usuario_id'], perfil['id']))
-        como = f'pelo perfil {perfil["nome"]}'
-        depois = {'perfil': perfil['nome']}
-    else:
-        for cod in codigos:
-            _w("""INSERT IGNORE INTO usuario_permissoes_extra (usuario_id, permissao_codigo, concedido_por, chamado_id)
-                  VALUES (%s, %s, %s, %s)""", (c['usuario_id'], cod, current_user.id, cid))
-        como = f'só para {_nome_curto(c["usuario_nome"])} (extra)'
-        rot = get_flat_catalog()
-        depois = {'extras': [rot.get(x, x) for x in codigos]}
+    # 24/11/2026 — Anderson: "deixar sempre por perfis". Liberação só para a pessoa (usuario_permissoes_extra)
+    # não se grava mais: o acesso entra por um perfil, que se vê e se mexe em Configurações › Perfis.
+    if request.form.get('modo') != 'perfil':
+        return jsonify({'ok': False, 'erro': 'O acesso é liberado sempre por um perfil. Escolha o perfil.'}), 400
+    pid = request.form.get('perfil_id', '')
+    perfil = _q("SELECT id, nome FROM perfis_acesso WHERE id = %s AND situacao = 'ATIVO'",
+                (pid,), one=True) if str(pid).isdigit() else None
+    if not perfil:
+        return jsonify({'ok': False, 'erro': 'Escolha um perfil.'}), 400
+    _w("INSERT IGNORE INTO usuario_perfis (usuario_id, perfil_id) VALUES (%s, %s)",
+       (c['usuario_id'], perfil['id']))
+    como = f'pelo perfil {perfil["nome"]}'
+    depois = {'perfil': perfil['nome']}
     texto = (request.form.get('texto') or '').strip()
     _mensagem(cid, 'suporte', texto or f'Acesso liberado: {c["acesso_rotulo"]}. Já aparece no seu menu.',
               0, None, None, current_user.id)

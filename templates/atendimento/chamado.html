@@ -86,13 +86,17 @@
         <h3><i class="fas fa-key"></i> Liberar o acesso</h3>
         <p style="margin:0 0 10px;font-size:13px;color:#0c4a6e">Pediu: <b>{{ c.acesso_rotulo }}</b></p>
         {% if not liberar.falta %}<p style="margin:0 0 10px;font-size:12.5px;color:#15803d"><i class="fas fa-circle-check"></i> {{ nome_curto(c.usuario_nome) }} já tem esse acesso hoje.</p>{% endif %}
-        <label class="at-opc"><input type="radio" name="lib" value="extra" checked>
-          <span><b>Só para {{ nome_curto(c.usuario_nome) }}</b> (extra)<small>Ganha só esta tela. O perfil não muda. Fica em Atendimento › Acessos extras, de onde se tira.</small></span></label>
+        {#- 24/11/2026 — Anderson: "vamos retirar essa gravação liberação individual e deixar sempre por perfis".
+            Saiu o "Só para a pessoa (extra)": o acesso entra sempre por um perfil. -#}
+        {% if not liberar.perfis %}
+        <p style="margin:0 0 10px;font-size:12.5px;color:#b45309"><i class="fas fa-triangle-exclamation"></i> Nenhum perfil dá esta tela ainda. Ponha a tela num perfil (novo ou um que já existe) em
+          <a href="{{ url_for('configuracoes.perfis') }}" target="_blank">Configurações › Perfis</a> e recarregue esta página.</p>
+        {% endif %}
         {% for p in liberar.perfis %}
-        <label class="at-opc"><input type="radio" name="lib" value="perfil" data-perfil="{{ p.id }}">
+        <label class="at-opc"><input type="radio" name="lib" value="perfil" data-perfil="{{ p.id }}"{{ ' checked' if loop.first }}>
           <span><b>Pelo perfil {{ p.nome }}</b><small>{% if p.traz %}Ganha também: {{ p.traz[:6]|join('; ') }}{% if p.traz|length > 6 %} e mais {{ p.traz|length - 6 }}{% endif %}.{% else %}O perfil dá exatamente isso.{% endif %}</small></span></label>
         {% endfor %}
-        <button type="button" class="at-bt at-bt-pri" id="atLiberar" style="width:100%;justify-content:center;margin-top:4px"><i class="fas fa-check"></i> Liberar e concluir</button>
+        <button type="button" class="at-bt at-bt-pri" id="atLiberar" style="width:100%;justify-content:center;margin-top:4px"{{ ' disabled' if not liberar.perfis }}><i class="fas fa-check"></i> Liberar e concluir</button>
         <p style="margin:8px 0 0;font-size:11.5px;color:#475569">A tela aparece no menu de {{ nome_curto(c.usuario_nome) }} na próxima página que abrir. Fica na Auditoria.</p>
       </div>
       {% endif %}
@@ -192,6 +196,7 @@
       post("{{ url_for('atendimento.avaliar', cid=c.id) }}", f3, a); return; }
     if (e.target.closest('#atLiberar')) {
       var r = document.querySelector('input[name=lib]:checked'), f4 = new FormData();
+      if (!r) return;
       f4.append('modo', r.value); if (r.dataset.perfil) f4.append('perfil_id', r.dataset.perfil);
       f4.append('texto', ta.value);
       post("{{ url_for('atendimento.liberar', cid=c.id) }}", f4, e.target.closest('#atLiberar'));

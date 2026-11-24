@@ -5,7 +5,7 @@
 <nav class="nav-fiscal" aria-label="Atendimento"><div class="nav-fiscal-track">
   <a class="nff-tab {{ 'active' if ver == 'painel' }}" href="{{ url_for('atendimento.index') }}">PAINEL</a>
   <a class="nff-tab {{ 'active' if ver == 'concluidos' }}" href="{{ url_for('atendimento.index', ver='concluidos') }}">CONCLUÍDOS</a>
-  <a class="nff-tab {{ 'active' if ver == 'extras' }}" href="{{ url_for('atendimento.index', ver='extras') }}">ACESSOS EXTRAS</a>
+  {#- ACESSOS EXTRAS saiu da barra em 24/11/2026: acesso é sempre por perfil (a página ?ver=extras continua de pé) -#}
 </div></nav>
 <div class="ef-hero"><div class="ef-hero-inner ef-hero-head">
   <div><h1 class="ef-hero-title">Atendimento</h1>

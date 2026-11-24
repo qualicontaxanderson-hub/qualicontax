@@ -583,7 +583,11 @@ def _avisar_dono(o, assunto, texto):
 
 def _avisar_aprovadores(o):
     rows = execute_query("""SELECT DISTINCT u.email FROM usuarios u WHERE u.email LIKE '%%@%%' AND u.situacao = 'ATIVO'
-                              AND (u.tipo_usuario = 'ADMIN' OR u.id IN (SELECT usuario_id FROM usuario_permissoes_extra WHERE permissao_codigo = %s))""",
+                              AND (u.tipo_usuario = 'ADMIN' OR u.id IN (
+                                     SELECT up.usuario_id FROM usuario_perfis up
+                                       JOIN perfis_acesso pa ON pa.id = up.perfil_id AND pa.situacao = 'ATIVO'
+                                       JOIN perfil_permissoes pp ON pp.perfil_id = up.perfil_id
+                                      WHERE pp.permissao_codigo = %s))""",   # pelo PERFIL (24/11/2026)
                          (APROVAR,), fetch=True) or []
     _avisar([r['email'] for r in rows], 'Orçamento %s para aprovar' % o['numero'],
             '%s mandou o orçamento %s (%s, R$ %s) para aprovação.\n\nAbra Comercial › Orçamentos › Para aprovar.' % (current_user.nome, o['numero'], o['cliente_nome'], _brl(o['total'])))
