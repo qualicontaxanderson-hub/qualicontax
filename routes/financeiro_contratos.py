@@ -471,10 +471,21 @@ def contratos():
     pr = PrestContrato.prontas()
     cli = []
     for s in pr['lista']:
-        cli.append({'id': s['id'], 'num': str(s['numero_cliente'] or ''), 'nome': s['nome_razao_social'], 'doc': s['cpf_cnpj'] or '',
-                    'av': bool(s['avulso']), 'mensal': float(s['valor'] or 0) if (aprov or s['id'] in escopo) else 0.0})
+        cli.append({'id': s['id'], 'num': str(s['numero_cliente'] or ''), 'nome': s['nome_razao_social'], 'doc': s['cpf_cnpj'] or '', 'fant': s.get('nome_fantasia') or '',
+                    'cid': s.get('cidade') or '', 'av': bool(s['avulso']), 'mensal': float(s['valor'] or 0) if (aprov or s['id'] in escopo) else 0.0})
+    # quem está em A CADASTRAR vai junto, apagado, com o que falta: a caixa responde "por que a empresa não aparece?" (24/11/2026)
+    from utils import a_cadastrar as AC
+    rot_e = {k: r for k, r, _c, _t in AC.PENDENCIAS_EMPRESA}
+    rot_a = {k: r for k, r, _c, _t in AC.PENDENCIAS_AVULSO}
+    fora = []
+    for s, rot in ((AC.empresas_pendentes(), rot_e), (AC.avulsos_pendentes(), rot_a)):
+        for c in s:
+            faltas = [rot.get(k, k) for k in (c.get('pendencias') or [])]
+            fora.append({'id': c['id'], 'num': str(c.get('numero_cliente') or ''), 'nome': c['nome_razao_social'], 'doc': c.get('cpf_cnpj') or '', 'fant': c.get('nome_fantasia') or '',
+                         'cid': c.get('cidade') or '', 'av': rot is rot_a, 'motivo': 'em A CADASTRAR: falta ' + ', '.join(faltas) if faltas else 'em A CADASTRAR',
+                         'url': url_for('clientes.detalhes', id=c['id'])})
     return render_template('financeiro/contratos.html', aba=aba, lista=lista, cont=cont, pessoas=pessoas, ROTULO=ROTULO, aprov=aprov,
-                           clientes_json=json.dumps(cli, ensure_ascii=False), n_prontas=len(cli),
+                           clientes_json=json.dumps(cli, ensure_ascii=False), fora_json=json.dumps(fora, ensure_ascii=False), n_prontas=len(cli),
                            pend_empresas=pr['pendentes_empresas'], pend_avulsos=pr['pendentes_avulsos'], hoje=date.today())
 
 

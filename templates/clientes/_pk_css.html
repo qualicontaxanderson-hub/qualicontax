@@ -61,6 +61,10 @@
 .pk-novo-bt { display:flex; gap:8px; justify-content:flex-end; }
 .pk-msg { font-size:12.5px; color:#b91c1c; } .pk-msg:empty { display:none; }
 .pk-carregando { grid-column:1/-1; padding:40px 10px; text-align:center; color:#7d968a; font-size:14px; }
+/* 24/11/2026: empresas que NÃO podem ser escolhidas (ex.: em A CADASTRAR), apagadas, com o motivo e o link para resolver */
+.pk-fora-bloco { margin-top:14px; } .pk-fora-tit { font-size:12px; font-weight:800; color:#b45309; margin:0 0 8px; display:flex; align-items:center; gap:6px; }
+.pk-card.pk-fora { cursor:default; opacity:.78; background:#fffaf3; border-style:dashed; border-color:#fcd9a8; } .pk-card.pk-fora .pk-sig { background:#cbd5e1 !important; }
+.pk-card.pk-fora .pk-fora-pq { display:block; margin-top:4px; color:#b45309; font-weight:700; } .pk-card.pk-fora .pk-fora-pq a { color:#0f3d2e; text-decoration:underline; }
 .pk-pe { flex-shrink:0; display:flex; align-items:center; gap:10px; padding:14px 18px; background:#fff; border-top:1px solid var(--linha); }
 .pk-pe-info { flex:1; min-width:0; display:flex; flex-wrap:wrap; gap:6px; align-items:center; font-size:13px; color:#475569; } .pk-pe-info > i { color:var(--cor); }
 .pk-pe-vazio { color:#94a3b8; }
