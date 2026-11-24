@@ -24,7 +24,7 @@
   function palavras(s) { return norm(s).split(/[^a-z0-9]+/).filter(Boolean); }
   function prep(c) {
     return { id: String(c.id), num: String(c.num || ''), nome: c.nome || '', doc: String(c.doc || ''), av: !!c.av, mensal: Number(c.mensal || 0),
-      motivo: c.motivo || '', url: c.url || '', nomeN: norm(c.nome || ''), digitos: String(c.num || '') + ' ' + String(c.doc || '').replace(/\D/g, ''),
+      motivo: c.motivo || '', url: c.url || '', nomeN: norm(c.nome || ''), fantN: norm(c.fant || ''), digitos: String(c.num || '') + ' ' + String(c.doc || '').replace(/\D/g, ''),
       pal: palavras((c.num || '') + ' ' + (c.nome || '') + ' ' + (c.fant || '') + ' ' + (c.cid || '') + ' ' + (c.doc || '')) };
   }
   // cada palavra digitada começa alguma palavra da empresa; só números casam em qualquer posição do número/documento
@@ -33,6 +33,17 @@
     if (!toks.length) return true;
     if (qd.length >= 3 && x.digitos.indexOf(qd) >= 0) return true;
     return toks.every(function (t) { return x.pal.some(function (p) { return p.indexOf(t) === 0; }); });
+  }
+  // Anderson (24/11/2026, "o que o Infinity aparece aqui?"): "AR" tem que achar quem COMEÇA com AR, não quem tem ARAGARÇAS no meio.
+  // Primeiro a palavra digitada tem que começar o nome (ou a fantasia); só se ninguém começar assim é que vale o começo de qualquer palavra.
+  function casaInicio(x, toks, qd, soNumero) {
+    if (soNumero || !toks.length) return casa(x, toks, qd, soNumero);
+    var t0 = toks[0];
+    if (x.nomeN.indexOf(t0) !== 0 && (!x.fantN || x.fantN.indexOf(t0) !== 0)) return false;
+    return toks.slice(1).every(function (t) { return x.pal.some(function (p) { return p.indexOf(t) === 0; }); });
+  }
+  function filtrar(lista, toks, qd, soNumero, estrito) {
+    return lista.filter(function (x) { return estrito ? casaInicio(x, toks, qd, soNumero) : casa(x, toks, qd, soNumero); });
   }
   function ordem(sel, q) {
     return function (a, b) {
@@ -54,7 +65,7 @@
       + '<div class="pk-val"><span class="pk-tag">escolhida</span><b class="pk-val-b"></b><small class="pk-val-s"></small></div>'
       + '<button type="button" class="pk-x" title="Fechar (Esc)"><i class="fas fa-xmark"></i></button></header>'
       + '<div class="pk-barra"><div class="pk-busca"><i class="fas fa-search"></i><input type="search" name="q" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" inputmode="search" enterkeyhint="search" placeholder="Buscar pelo nome, fantasia, cidade, número ou CNPJ/CPF…"></div><div class="pk-conta"></div></div>'
-      + '<div class="pk-corpo"><div class="pk-grade pk-lista"></div><div class="pk-fora-bloco" hidden><div class="pk-fora-tit"></div><div class="pk-grade pk-grade-fora"></div></div></div>'
+      + '<div class="pk-corpo"><div class="pk-grade pk-emp-grade"></div><div class="pk-fora-bloco" hidden><div class="pk-fora-tit"></div><div class="pk-grade pk-grade-fora"></div></div></div>'
       + '<footer class="pk-pe"><div class="pk-pe-info"></div><button type="button" class="pk-canc">Cancelar</button>'
       + (o.permite_vazio ? '<button type="button" class="pk-sem"><i class="fas fa-ban"></i> ' + esc(o.rotulo_vazio || 'Sem empresa') + '</button>' : '')
       + '<button type="button" class="pk-ok"><i class="fas fa-check"></i> Usar esta empresa</button></footer></div>';
@@ -75,36 +86,38 @@
       $q('.pk-pe-info').innerHTML = c && c.id === orig ? '<i class="fas fa-check"></i> Já é a empresa escolhida.' : '';
     }
     function cartao(c) {
-      // uma linha por empresa (24/11/2026, Anderson: "só o nome da empresa, organizado e elegante"): sigla, nome inteiro numa linha, dados à direita
+      // cartão enxuto (24/11/2026, Anderson: "CARDs que mostre o Nome e abaixo o CNPJ ou CPF")
       var on = sel === c.id;
-      return '<button type="button" class="pk-row' + (on ? ' on' : '') + '" data-id="' + c.id + '">'
-        + '<span class="pk-sig" style="background:' + cor(c.nome) + '">' + esc(sigla(c.nome)) + '</span>'
-        + '<span class="pk-row-nome">' + esc(c.nome) + '</span>'
-        + '<small>' + (c.num ? 'nº ' + esc(c.num) + ' · ' : '') + esc(docf(c.doc) || 'sem CNPJ') + (c.av ? ' · <em>avulso</em>' : '') + (c.mensal ? ' · ' + brl(c.mensal) + '/mês' : '') + '</small>'
-        + '<span class="pk-ck"><i class="fas fa-check"></i></span></button>';
+      return '<button type="button" class="pk-card pk-emp' + (on ? ' on' : '') + '" data-id="' + c.id + '">'
+        + '<span class="pk-ck"><i class="fas fa-check"></i></span><span class="pk-sig" style="background:' + cor(c.nome) + '">' + esc(sigla(c.nome)) + '</span>'
+        + '<span class="pk-emp-tx"><b>' + esc(c.nome) + '</b><small>' + esc(docf(c.doc) || 'sem CNPJ') + (c.av ? ' · <em>avulso</em>' : '') + '</small></span></button>';
     }
     function cartaoFora(c) {
-      // uma linha limpa por empresa: só o nome; o que falta abre ao tocar na linha (24/11/2026, Anderson: "só o nome, organizado e elegante")
-      return '<div class="pk-fora-row" data-fid="' + c.id + '"><span class="pk-fora-nome">' + esc(c.nome) + '</span>'
-        + '<small>' + (c.num ? 'nº ' + esc(c.num) : esc(docf(c.doc))) + '</small><span class="pk-fora-tag">a cadastrar</span>'
+      // mesmo cartão, apagado, com a etiqueta A CADASTRAR; o que falta abre ao tocar
+      return '<div class="pk-card pk-emp pk-fora" data-fid="' + c.id + '">'
+        + '<span class="pk-sig">' + esc(sigla(c.nome)) + '</span>'
+        + '<span class="pk-emp-tx"><b>' + esc(c.nome) + '</b><small>' + esc(docf(c.doc) || 'sem CNPJ') + (c.num ? ' · nº ' + esc(c.num) : '') + '</small><span class="pk-fora-tag">a cadastrar</span></span>'
         + '<div class="pk-fora-pq" hidden>' + esc(c.motivo || 'não pode ser escolhida') + (c.url ? ' · <a href="' + esc(c.url) + '" target="_blank" rel="noopener">abrir o cadastro</a>' : '') + '</div></div>';
     }
     function desenhar() {
       var q = norm(busca.value.trim()), toks = palavras(q), qd = q.replace(/\D/g, '');
       var soNumero = qd.length >= 3 && qd === q.replace(/[.\-\/\s]/g, '');      // digitou só número: casa pelo documento/número
-      var vis = lista.filter(function (x) { return casa(x, toks, qd, soNumero); }).sort(ordem(sel, q));
+      // o modo estrito vale para as duas listas juntas: se ALGUÉM começa pelo digitado, só quem começa aparece (nas duas)
+      var estrito = lista.some(function (x) { return casaInicio(x, toks, qd, soNumero); }) || fora.some(function (x) { return casaInicio(x, toks, qd, soNumero); });
+      var vis = filtrar(lista, toks, qd, soNumero, estrito).sort(ordem(sel, q));
       var mostra = vis.slice(0, LIMITE);
-      var visFora = (q.length >= 2 || soNumero) ? fora.filter(function (x) { return casa(x, toks, qd, soNumero); }).sort(ordem('', q)) : [];
+      var visFora = (q.length >= 2 || soNumero) ? filtrar(fora, toks, qd, soNumero, estrito).sort(ordem('', q)) : [];
       grade.innerHTML = mostra.map(cartao).join('') + (!vis.length ? '<div class="pk-carregando">' + (visFora.length ? 'Nenhuma empresa disponível com esse nome.' : 'Nenhuma empresa com esse nome.') + '</div>' : '');
       conta.textContent = (vis.length > mostra.length ? 'mostrando ' + mostra.length + ' de ' + vis.length + ' · digite para filtrar' : (vis.length + (vis.length === 1 ? ' empresa' : ' empresas')))
         + (visFora.length ? ' · ' + visFora.length + ' ' + (o.rotulo_fora || 'fora') : '');
       bloco.hidden = !visFora.length;
+      if (!visFora.length) gradeFora.innerHTML = '';
       if (visFora.length) {
         titFora.textContent = (o.rotulo_fora || 'Não podem ser escolhidas');
         gradeFora.innerHTML = visFora.slice(0, LIMITE_FORA).map(cartaoFora).join('') + (visFora.length > LIMITE_FORA ? '<div class="pk-fora-mais">e mais ' + (visFora.length - LIMITE_FORA) + ' · digite mais letras</div>' : '');
-        gradeFora.querySelectorAll('.pk-fora-row').forEach(function (r) { r.addEventListener('click', function (e) { if (e.target.tagName === 'A') return; var d = r.querySelector('.pk-fora-pq'); d.hidden = !d.hidden; r.classList.toggle('aberta', !d.hidden); }); });
+        gradeFora.querySelectorAll('.pk-fora').forEach(function (r) { r.addEventListener('click', function (e) { if (e.target.tagName === 'A') return; var d = r.querySelector('.pk-fora-pq'); d.hidden = !d.hidden; r.classList.toggle('aberta', !d.hidden); }); });
       }
-      grade.querySelectorAll('.pk-row[data-id]').forEach(function (c) {
+      grade.querySelectorAll('.pk-card[data-id]').forEach(function (c) {
         c.addEventListener('click', function () { sel = c.dataset.id; desenhar(); cabecalho(); });
         c.addEventListener('dblclick', function () { sel = c.dataset.id; usar(sel); });
       });
@@ -112,7 +125,7 @@
     busca.addEventListener('input', desenhar);
     busca.addEventListener('keydown', function (e) {
       if (e.key !== 'Enter') return; e.preventDefault();
-      var p = grade.querySelectorAll('.pk-row[data-id]'); if (p.length === 1) { sel = p[0].dataset.id; usar(sel); }
+      var p = grade.querySelectorAll('.pk-card[data-id]'); if (p.length === 1) { sel = p[0].dataset.id; usar(sel); }
     });
     $q('.pk-x').addEventListener('click', fechar);
     $q('.pk-canc').addEventListener('click', fechar);
