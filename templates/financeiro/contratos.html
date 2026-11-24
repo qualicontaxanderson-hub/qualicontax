@@ -119,14 +119,13 @@
 </div>
 </div>
 <script id="ctCliJ" type="application/json">{{ clientes_json | safe }}</script>
-<script id="ctForaJ" type="application/json">{{ fora_json | safe }}</script>
 {% endblock %}
 
 {% block extra_js %}
 <script src="{{ url_for('static', filename='js/caixa_cliente.js') }}"></script>
 <script>
 (function () {
-  var CLI = JSON.parse(document.getElementById('ctCliJ').textContent), FORA = JSON.parse(document.getElementById('ctForaJ').textContent);
+  var CLI = JSON.parse(document.getElementById('ctCliJ').textContent);
   var $ = function (id) { return document.getElementById(id); };
   function semAc(s) { return String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase(); }
 
@@ -157,11 +156,10 @@
   $('ctBusca').addEventListener('input', function () { q = semAc(this.value); aplicar(); });
   if (st) aplicar();
 
-  // ── Novo contrato: a caixa da empresa (só cadastro completo em Clientes ou Avulsos, sem contrato vivo) ──
+  // ── Novo contrato: a caixa da empresa (clientes ativos e avulsos sem contrato vivo) ──
   window.ctNovo = function () {
     if (!window.CaixaCliente) return;
-    CaixaCliente.abrir({ clientes: CLI, fora: FORA, rotulo_fora: 'em A CADASTRAR: não entram até completar o cadastro',
-      titulo: 'Empresa do contrato', sub: {{ ('%d com cadastro completo e sem contrato · quem está em A CADASTRAR aparece apagado, com o que falta' % n_prontas) | tojson }},
+    CaixaCliente.abrir({ clientes: CLI, titulo: 'Empresa do contrato', sub: {{ ('%d empresas e avulsos sem contrato · o que faltar no cadastro você completa no contrato' % n_prontas) | tojson }},
       onUsar: function (c) { if (c) location.href = '/comercial/contratos/novo?cliente_id=' + c.id; } });
   };
   {% if request.args.get('novo') %}setTimeout(function () { ctNovo(); }, 150);{% endif %}

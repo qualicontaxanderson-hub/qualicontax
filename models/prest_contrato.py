@@ -315,14 +315,10 @@ class PrestContrato:
 
     @staticmethod
     def prontas():
-        """Empresas que PODEM receber contrato (Anderson, 06/11/2026): "aqui tem que aparecer só quem está completo no
-        AVULSO ou no CLIENTES, se tiver no A CADASTRAR esquece". Nunca se digita um contrato: ele nasce de um cadastro
-        completo. Lista Clientes (avulso = 0, com número, ATIVO) e Avulsos (avulso = 1) sem nenhuma pendência de
-        utils/a_cadastrar.py e sem contrato ENVIADO/ASSINADO; cada um diz se tem honorários (fin_contratos ATIVO)."""
-        from utils import a_cadastrar as AC
-        pend_e = {c['id'] for c in AC.empresas_pendentes()}
-        pend_a = {c['id'] for c in AC.avulsos_pendentes()}
-        pendentes = pend_e | pend_a
+        """Empresas que PODEM receber contrato. Era "só cadastro completo" (06/11/2026); em 24/11/2026 o Anderson, vendo
+        só 9 de 600 na caixa ("não estou entendendo por que está aparecendo só algumas sugestões"), mandou abrir: todo
+        cliente ATIVO com número e todo avulso, sem contrato ENVIADO/ASSINADO. O que faltar no cadastro (sócio, endereço)
+        a pessoa completa no próprio formulário do contrato. Cada um diz se tem honorários (fin_contratos ATIVO)."""
         rows = execute_query(
             """SELECT c.id, c.numero_cliente, c.nome_razao_social, c.nome_fantasia, c.cpf_cnpj, c.tipo_pessoa, c.avulso, c.regime_tributario,
                       (SELECT MAX(e.cidade) FROM enderecos_clientes e WHERE e.cliente_id = c.id) AS cidade,
@@ -339,13 +335,12 @@ class PrestContrato:
                   AND NOT EXISTS (SELECT 1 FROM prest_contratos p WHERE p.status IN ('ENVIADO', 'ASSINADO')
                                      AND (p.cliente_id = c.id OR p.id IN (SELECT contrato_id FROM prest_contrato_empresas e WHERE e.cliente_id = c.id)))
                 ORDER BY c.avulso, CAST(c.numero_cliente AS UNSIGNED), c.nome_razao_social""", fetch=True) or []
-        return {'lista': [r for r in rows if r['id'] not in pendentes], 'pendentes_empresas': len(pend_e), 'pendentes_avulsos': len(pend_a)}
+        return {'lista': rows, 'pendentes_empresas': 0, 'pendentes_avulsos': 0}
 
     @staticmethod
     def impedimentos(ids):
-        """{cliente_id: 'motivo'} do que impede montar contrato: cadastro inexistente/inativo ou pendência em A CADASTRAR.
-        Quem não está no dicionário pode receber contrato."""
-        from utils import a_cadastrar as AC
+        """{cliente_id: 'motivo'} do que impede montar contrato: só cadastro inexistente ou inativo (24/11/2026: a pendência
+        em A CADASTRAR deixou de barrar). Quem não está no dicionário pode receber contrato."""
         ids = [int(i) for i in ids]
         out = {}
         if not ids:
@@ -359,8 +354,6 @@ class PrestContrato:
                 out[i] = 'cadastro não encontrado'
             elif not r['avulso'] and (r['numero_cliente'] is None or r['situacao'] != 'ATIVO'):
                 out[i] = 'cadastro sem número de cliente ou inativo'
-        for i, p in AC.pendencias_de([i for i in ids if i not in out]).items():
-            out[i] = 'pendência em A CADASTRAR: ' + ', '.join(p)
         return out
 
     @staticmethod
