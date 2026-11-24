@@ -140,6 +140,8 @@ def _ler_form(f):
     dados = {
         'empresas': empresas, 'apelido': (f.get('apelido') or '').strip().upper() or None, 'areas': areas, 'servicos_extras': extras,
         'valor': valor, 'valores_por_empresa': bool(f.get('valores_por_empresa')), 'dia_vencimento': int(f.get('dia_vencimento') or 10),
+        # ramos cuja mensalidade sugerida a pessoa trouxe para o valor (24/11/2026): fica registrado como o valor foi composto
+        'sugestoes': [{'ramo_id': int(x.split('|')[0]), 'nome': x.split('|')[1][:60], 'valor': x.split('|')[2]} for x in f.getlist('sugestao_ramo') if x.count('|') == 2 and x.split('|')[0].isdigit()],
         'reajuste_tipo': f.get('reajuste_tipo') or 'SALARIO_MINIMO', 'reajuste_indice': (f.get('reajuste_indice') or '').strip() or None,
         'reajuste_mes': (f.get('reajuste_mes') or '').strip() or None,
         'decimo': f.get('decimo') if f.get('decimo') in ('COBRADO', 'UNICA', 'ISENTO') else 'COBRADO',

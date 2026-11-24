@@ -180,6 +180,19 @@
 .rg-c [hidden], .sv-c [hidden] { display:none !important; }
 .tx-painel[data-p="pessoas"] { --sec:#7c3aed; --sec-e:#5b21b6; --sec-f:#f5f3ff; --sec-b:#ddd6fe; }
 .tx-painel[data-p="servicos"] { --sec:#0f766e; --sec-e:#115e59; --sec-f:#f0fdfa; --sec-b:#99f6e4; }
+.tx-painel[data-p="ramos"] { --sec:#b45309; --sec-e:#92400e; --sec-f:#fffbeb; --sec-b:#fde68a; }
+.rg-abas { grid-template-columns:repeat(3, minmax(0,1fr)) !important; }
+.tx-a-ram { --cor:#d97706; --cor-e:#92400e; --fundo:#fff7ec; }
+/* mensalidade sugerida por ramo (24/11/2026): um cartão por ramo, valor editável no próprio cartão */
+.rm-grade { display:grid; grid-template-columns:repeat(auto-fill, minmax(300px, 1fr)); gap:12px; }
+.rm-c { background:#fff; border:1px solid #e6eeea; border-radius:16px; padding:14px 16px; display:flex; flex-direction:column; gap:10px; box-shadow:0 6px 16px rgba(15,23,42,.05); }
+.rm-c.com { border-color:#fde68a; box-shadow:0 0 0 3px #fffbeb, 0 6px 16px rgba(15,23,42,.05); }
+.rm-top { display:flex; align-items:center; gap:11px; } .rm-top .rg-av { width:38px; height:38px; font-size:12px; } .rm-c.com .rg-av { background:linear-gradient(135deg,#f59e0b,#b45309); color:#fff; }
+.rm-top > div { flex:1; min-width:0; } .rm-top b { display:block; font-size:14.5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; } .rm-top small { color:#64748b; font-size:12px; }
+.rm-val { font-size:22px; font-weight:800; color:#92400e; font-variant-numeric:tabular-nums; } .rm-val.sem { font-size:13px; font-weight:700; color:#94a3b8; }
+.rm-form { display:flex; align-items:center; gap:8px; } .rm-form .rg-rs { flex:1; } .rm-form .rg-in { width:100%; }
+.rm-form .rg-ok { background:#b45309; }
+.rm-sec { grid-column:1/-1; font-size:11px; font-weight:800; letter-spacing:.06em; text-transform:uppercase; color:#94a3b8; margin:6px 0 -4px 2px; }
 .tx-painel .tx-f.on { background:var(--sec); border-color:var(--sec); color:#fff; }
 /* pergunta (caixa nossa, no molde pk-*) */
 .pk.pk-peq { width:min(560px, 96vw); top:18vh; } .pk.pk-peq .pk-quem span { white-space:normal; line-height:1.4; }
@@ -205,6 +218,32 @@
     <button type="button" class="tx-aba tx-a-pes{{ ' on' if aba == 'pessoas' }}" data-p="pessoas"><span class="tx-aba-ico"><i class="fas fa-users"></i></span>
       <span class="tx-aba-txt"><span class="tx-aba-lbl">Quem recebe comissão</span><span class="tx-aba-val">{{ n_recebem }} de {{ pessoas|length }} pessoas</span>
       <span class="tx-aba-sub">recebem comissão de serviço · {{ n_carteira }} empresa{{ 's' if n_carteira != 1 }} em carteira de mensalidade</span></span></button>
+    <button type="button" class="tx-aba tx-a-ram{{ ' on' if aba == 'ramos' }}" data-p="ramos"><span class="tx-aba-ico"><i class="fas fa-tags"></i></span>
+      <span class="tx-aba-txt"><span class="tx-aba-lbl">Mensalidade por ramo</span><span class="tx-aba-val">{{ n_ramos_com }} de {{ ramos|length }} ramos</span>
+      <span class="tx-aba-sub">com valor sugerido · o contrato de prestação oferece a soma dos ramos da empresa</span></span></button>
+  </div>
+
+  {# ── MENSALIDADE POR RAMO (24/11/2026 — Anderson: "sugestões de mensalidades para as atividades... será aqui o parâmetro") ── #}
+  <div class="tx-painel{{ ' on' if aba == 'ramos' }}" data-p="ramos">
+    <div class="rg-faixa"><span class="rg-muted">Cada ramo de atividade pode ter uma mensalidade sugerida. Ao montar o contrato de prestação, os ramos da empresa aparecem com o valor e a pessoa escolhe quais trazer: a soma vira os honorários.</span>
+      <div class="tx-busca"><i class="fas fa-magnifying-glass"></i><input type="search" placeholder="Buscar ramo" data-busca="ramos"></div></div>
+    <div class="rm-grade">
+    {% set SEG = {'COMERCIO': 'Comércio', 'SERVICOS': 'Prestação de serviços', 'INDUSTRIA': 'Indústria', 'LOCACAO': 'Locação'} %}
+    {% for seg in ['COMERCIO', 'SERVICOS', 'LOCACAO', 'INDUSTRIA', ''] %}
+      {% set lista = ramos | selectattr('segmento', 'equalto', seg) | list if seg else ramos | rejectattr('segmento', 'in', ['COMERCIO', 'SERVICOS', 'LOCACAO', 'INDUSTRIA']) | list %}
+      {% if lista %}<div class="rm-sec">{{ SEG.get(seg, 'Outros') }}</div>{% endif %}
+      {% for r in lista | sort(attribute='nome') %}
+      <form class="rm-c rg-c{{ ' com' if r.sugestao }}" id="r{{ r.id }}" method="POST" action="{{ url_for('financeiro.ramo_mensalidade') }}" data-b="{{ r.nome }} {{ SEG.get(r.segmento, '') }}">
+        <input type="hidden" name="ramo_id" value="{{ r.id }}">
+        <div class="rm-top"><span class="rg-av"><i class="fas {{ 'fa-store' if r.segmento == 'COMERCIO' else ('fa-industry' if r.segmento == 'INDUSTRIA' else ('fa-key' if r.segmento == 'LOCACAO' else 'fa-briefcase')) }}"></i></span>
+          <div><b>{{ r.nome }}</b><small>{{ SEG.get(r.segmento, 'outros') }} · {{ r.n_empresas }} empresa{{ 's' if r.n_empresas != 1 }}</small></div></div>
+        <div class="rm-val{{ '' if r.sugestao else ' sem' }}">{{ (r.sugestao | format_currency) if r.sugestao else 'sem mensalidade sugerida' }}</div>
+        <div class="rm-form"><span class="rg-rs"><i class="pre">R$</i><input class="rg-in" name="valor" inputmode="decimal" placeholder="0,00" value="{{ ('%.2f' % r.sugestao).replace('.', ',') if r.sugestao else '' }}" title="mensalidade sugerida por mês"></span>
+          <button class="rg-ok"><i class="fas fa-check"></i> Salvar</button></div>
+      </form>
+      {% endfor %}
+    {% endfor %}
+    </div>
   </div>
 
   {# ── QUEM RECEBE ── #}

@@ -3,6 +3,7 @@ import time
 import threading
 from utils.db_helper import execute_query
 from utils.acesso import filtrar_lista
+from utils.texto import nome_ramo
 
 # Segmento: o nível acima do ramo (10/10/2026, pedido do Anderson). Todo ramo
 # de empresa pertence a um; a empresa é "de Comércio" porque um ramo dela é —
@@ -60,7 +61,7 @@ class RamoAtividade:
         global _cache_ativos, _cache_ativos_ts
 
         query = """
-            SELECT id, nome, tipo_pessoa, segmento, descricao, situacao
+            SELECT id, nome, tipo_pessoa, segmento, descricao, situacao, mensalidade_sugerida
             FROM ramos_atividade
         """
         params = []
@@ -92,7 +93,7 @@ class RamoAtividade:
             dict: Dados do ramo ou None
         """
         query = """
-            SELECT id, nome, tipo_pessoa, segmento, descricao, situacao
+            SELECT id, nome, tipo_pessoa, segmento, descricao, situacao, mensalidade_sugerida
             FROM ramos_atividade
             WHERE id = %s
         """
@@ -116,6 +117,7 @@ class RamoAtividade:
             VALUES (%s, %s, %s, %s, %s)
         """
         segmento = None if tipo_pessoa == 'PF' else segmento
+        nome = nome_ramo(nome)          # 'transportadora petroleo' -> 'Transportadora Petróleo' (24/11/2026)
         result = execute_query(query, (nome, tipo_pessoa, segmento, descricao, situacao))
         if result is not None:
             _invalidate_cache()
@@ -142,6 +144,7 @@ class RamoAtividade:
                 descricao = %s, situacao = %s
             WHERE id = %s
         """
+        nome = nome_ramo(nome)
         result = execute_query(query, (nome, tipo_pessoa, tipo_pessoa, segmento, descricao, situacao, ramo_id),
                                fetch=False)
         if result is not None:
@@ -231,6 +234,12 @@ class RamoAtividade:
         return filtrar_lista(execute_query(query, (ramo_id,), fetch=True) or [])
     
     @staticmethod
+    def set_mensalidade(ramo_id, valor):
+        """Mensalidade sugerida do ramo (24/11/2026, Anderson: "sugestões de mensalidades para as atividades"). None = sem sugestão."""
+        execute_query("UPDATE ramos_atividade SET mensalidade_sugerida = %s WHERE id = %s", (valor, ramo_id), fetch=False)
+        _invalidate_cache()
+
+    @staticmethod
     def get_by_cliente(cliente_id):
         """
         Retorna ramos de atividade do cliente.
@@ -242,7 +251,7 @@ class RamoAtividade:
             list: Lista de ramos de atividade
         """
         query = """
-            SELECT ra.id, ra.nome, ra.tipo_pessoa, ra.segmento, ra.descricao, ra.situacao
+            SELECT ra.id, ra.nome, ra.tipo_pessoa, ra.segmento, ra.descricao, ra.situacao, ra.mensalidade_sugerida
             FROM ramos_atividade ra
             INNER JOIN cliente_ramo_atividade_relacao crar ON ra.id = crar.ramo_atividade_id
             WHERE crar.cliente_id = %s

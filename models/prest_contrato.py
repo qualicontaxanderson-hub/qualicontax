@@ -197,6 +197,10 @@ class PrestContrato:
             s['celular'] = _celular_da_pessoa(pf, s.get('cpf'))
             s['cargo'] = _cargo_do_socio(s)
         # quem assina pode ser um terceiro: os CONTATOS da empresa também viram atalho (Anderson, 06/11)
+        # ramos de atividade da empresa, com a mensalidade sugerida de cada um (24/11/2026): o formulário do contrato oferece como sugestão de honorários
+        from models.ramo_atividade import RamoAtividade
+        c['ramos'] = [{'id': r['id'], 'nome': r['nome'], 'segmento': r.get('segmento') or '', 'sugestao': float(r['mensalidade_sugerida']) if r.get('mensalidade_sugerida') else 0.0}
+                      for r in RamoAtividade.get_by_cliente(c['id'])]
         c['contatos'] = execute_query("""SELECT id, nome, cargo, email, celular FROM contatos_clientes
                                           WHERE cliente_id = %s AND ativo = 1 ORDER BY principal DESC, nome""", (cliente_id,), fetch=True) or []
         nomes_socios = {(s.get('nome') or '').strip().upper() for s in c['socios']}

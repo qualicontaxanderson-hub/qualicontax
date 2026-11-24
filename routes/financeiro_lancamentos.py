@@ -472,8 +472,15 @@ def servicos():
                                     (SELECT SUM(k.valor) FROM fin_contratos k WHERE k.cliente_id = c.id AND k.ativo = 1) AS mensal
                                FROM clientes c WHERE COALESCE(c.situacao, 'ATIVO') <> 'INATIVO' AND COALESCE(c.avulso, 0) = 0
                               ORDER BY c.nome_razao_social""", fetch=True) or []
-    return render_template('financeiro/comissao_regras.html', pessoas=pessoas, servicos=servicos, hoje=date.today(),
-                           aba=request.args.get('aba') if request.args.get('aba') in ('pessoas', 'servicos') else 'servicos',
+    # 24/11/2026 — Anderson: "sugestões de mensalidades para as atividades... será aqui o parâmetro": cada ramo com a mensalidade sugerida
+    from models.ramo_atividade import RamoAtividade
+    n_emp = {r['ramo_atividade_id']: int(r['n']) for r in execute_query(
+        "SELECT ramo_atividade_id, COUNT(DISTINCT cliente_id) n FROM cliente_ramo_atividade_relacao GROUP BY ramo_atividade_id", fetch=True) or []}
+    ramos = [dict(r, n_empresas=n_emp.get(r['id'], 0), sugestao=float(r['mensalidade_sugerida']) if r.get('mensalidade_sugerida') else 0.0)
+             for r in RamoAtividade.get_all('ATIVO')]
+    return render_template('financeiro/comissao_regras.html', pessoas=pessoas, servicos=servicos, hoje=date.today(), ramos=ramos,
+                           n_ramos_com=sum(1 for r in ramos if r['sugestao']),
+                           aba=request.args.get('aba') if request.args.get('aba') in ('pessoas', 'servicos', 'ramos') else 'servicos',
                            n_recebem=sum(1 for p in pessoas if p['geral']), n_carteira=sum(len(p['carteira']) for p in pessoas),
                            n_serv_regra=sum(1 for s in servicos if s.get('comissao_tipo')),
                            n_serv_sem=sum(1 for s in servicos if s.get('comissao_tipo') == 'SEM'),
@@ -579,6 +586,35 @@ def servico_comissao():
     if request.form.get('volta') == 'regras':
         return redirect(url_for('financeiro.servicos', aba='servicos') + '#s%d' % sid)
     return redirect(url_for('financeiro.lancamentos', aba='com') + '#servicos-comissao')
+
+
+@financeiro.route('/financeiro/servicos/ramo-mensalidade', methods=['POST'])
+@permission_required(PERM)
+def ramo_mensalidade():
+    """Mensalidade sugerida de um ramo de atividade (só o administrador). 24/11/2026 — Anderson: "Posto de Combustíveis
+    sugestão 2400,00, Loja de Conveniência 1200,00..."; vazio = sem sugestão. O contrato de prestação soma as sugestões
+    dos ramos da empresa que a pessoa escolher trazer."""
+    if not _admin():
+        abort(403)
+    from models.ramo_atividade import RamoAtividade
+    rid = request.form.get('ramo_id', type=int)
+    r = RamoAtividade.get_by_id(rid) if rid else None
+    if not r:
+        abort(400)
+    try:
+        vp = (request.form.get('valor') or '').strip()
+        valor = _dec(vp) if vp else None
+        if valor is not None and valor <= 0:
+            valor = None
+    except (ValueError, InvalidOperation):
+        flash('Valor inválido para %s.' % r['nome'], 'danger')
+        return redirect(url_for('financeiro.servicos', aba='ramos') + '#r%d' % rid)
+    RamoAtividade.set_mensalidade(rid, valor)
+    registrar('escrita.alterou_mensalidade_ramo', 'financeiro', tabela='ramos_atividade', registro_id=rid,
+              antes={'ramo': r['nome'], 'mensalidade_sugerida': str(r.get('mensalidade_sugerida') or '')},
+              depois={'ramo': r['nome'], 'mensalidade_sugerida': str(valor or '')})
+    flash(('%s: mensalidade sugerida de R$ %s.' % (r['nome'], ('{:,.2f}'.format(valor)).replace(',', 'X').replace('.', ',').replace('X', '.'))) if valor else ('%s: sem mensalidade sugerida.' % r['nome']), 'success')
+    return redirect(url_for('financeiro.servicos', aba='ramos') + '#r%d' % rid)
 
 
 @financeiro.route('/financeiro/servicos/novo', methods=['POST'])

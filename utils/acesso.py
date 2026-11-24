@@ -275,7 +275,8 @@ MAPA = {
     'financeiro.comissao_pedido_arquivo':  'financeiro.lancamentos',          # o mesmo pedido em PDF ou imagem (18/11/2026)
     'financeiro.carteira_cobranca':        'financeiro.lancamentos',          # boleto da mensalidade da carteira (a rota confere)
     'financeiro.fechamento_cancelar':      'financeiro.lancamentos',          # o próprio pedido, até ser pago (a rota confere)
-    'financeiro.servico_comissao':         'financeiro.lancamentos.aprovar',  # e a rota só deixa o admin
+    'financeiro.servico_comissao':         'financeiro.lancamentos.aprovar',
+    'financeiro.ramo_mensalidade':          'financeiro.lancamentos.aprovar',   # mensalidade sugerida por ramo (24/11/2026)  # e a rota só deixa o admin
     'financeiro.comissao_regras':          'financeiro.lancamentos.aprovar',  # endereço antigo: redireciona para SERVIÇOS
     'financeiro.servicos':                 'financeiro.lancamentos.aprovar',  # aba SERVIÇOS (20/11/2026): a rota só deixa o admin
     'financeiro.servico_novo':             'financeiro.lancamentos.aprovar',  # serviço novo pela aba SERVIÇOS; a rota só deixa o admin

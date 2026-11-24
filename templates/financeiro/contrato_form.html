@@ -5,55 +5,97 @@
 {% block extra_css %}
 {% include 'financeiro/_ns_css.html' %}
 <style>
-/* Montar contrato no molde da Nova cobrança / Novo orçamento (22/11/2026 — Anderson: "está feio ainda, preciso melhorar"):
-   caixa ns-* fixa na página, seções com título, escolhas em cartões e chips, resumo vivo à direita */
+/* Montar contrato no molde da Nova cobrança / Novo orçamento. 24/11/2026 — Anderson: "Melhorar e muito, está bem amador".
+   Regra desta tela: o que já veio do cadastro aparece como LEITURA (cartão da pessoa, frase das condições); os campos
+   só abrem em "Alterar" ou quando falta algo. Poucas decisões à vista: empresa, quem assina, serviços e honorários. */
 .ct-page { padding:14px 0 30px; }
-.ct-page .ns { position:static; transform:none; width:100%; max-width:none; max-height:none; border:1px solid #e3ece7; box-shadow:0 10px 30px rgba(15,61,46,.08); }
-.ct-page .ns-g { grid-template-columns:minmax(0,1fr) 360px; }
+.ct-page .ns { position:static; transform:none; width:auto; max-width:none; box-sizing:border-box; max-height:none; border:1px solid #e3ece7; box-shadow:0 10px 30px rgba(15,61,46,.08); }
+.ct-page .ns-g { grid-template-columns:minmax(0,1fr) 380px; }
 .ct-page .ns-f, .ct-page .ns-r { overflow:visible; }
 .ct-page .ns-r { align-self:start; position:sticky; top:0; }
+.ct-page .ns-f { gap:14px; }
+.ct-page .ns-b { padding:16px 18px; }
+.ct-page .ns-h { margin-bottom:12px; }
+.ct-page .ns-campo label { font-size:11px; color:#64748b; letter-spacing:.04em; }
+/* cabeçalho de seção com o botão Alterar */
+.ct-alt { margin-left:auto; border:1px solid #d7e3dc; background:#fff; color:#0f3d2e; border-radius:99px; padding:5px 12px; font:inherit; font-size:12px; font-weight:800; cursor:pointer; display:inline-flex; align-items:center; gap:6px; letter-spacing:0; text-transform:none; }
+.ct-alt:hover { border-color:#16a34a; color:#15803d; } .ct-alt i { color:#16a34a; font-size:11px; }
+.ns-h .ct-alt { margin-left:10px; } .ns-h em + .ct-alt { margin-left:10px; }
+.ct-det[hidden], .ct-body[hidden], .ct-extra[hidden], .ns-campo[hidden], .ct-rede[hidden], .ct-busca[hidden], .ct-grupo[hidden] { display:none; }
+.ct-body { margin-top:12px; padding-top:12px; border-top:1px dashed #e2e8f0; }
+/* chips */
 .ct-chips { display:flex; flex-wrap:wrap; gap:6px; }
-.ct-chips button, .ct-chips label { border:1px solid #e2e8f0; background:#fff; color:#475569; border-radius:99px; padding:7px 12px; font:inherit; font-size:12.5px; font-weight:700; cursor:pointer; display:inline-flex; align-items:center; gap:6px; margin:0; }
+.ct-chips button, .ct-chips label { border:1px solid #e2e8f0; background:#fff; color:#475569; border-radius:99px; padding:7px 13px; font:inherit; font-size:12.5px; font-weight:700; cursor:pointer; display:inline-flex; align-items:center; gap:6px; margin:0; }
 .ct-chips button.on, .ct-chips label.on { background:#16a34a; border-color:#16a34a; color:#fff; }
 .ct-chips label input { display:none; }
 .ct-chips button i, .ct-chips label i { font-size:11px; }
 .ct-chips button.av { border-style:dashed; }
 .ct-chips button .falta { color:#f59e0b; } .ct-chips button.on .falta { color:#fde68a; }
+.ct-chips.grande button, .ct-chips.grande label { padding:9px 15px; font-size:13px; }
+.ct-mais { border:1px dashed #9fc9b3; background:#f6faf7; color:#15803d; font:inherit; font-weight:800; font-size:12.5px; border-radius:10px; padding:8px 13px; cursor:pointer; display:inline-flex; align-items:center; gap:7px; }
+.ct-mais:hover { background:#ecfdf3; }
+/* empresas */
 .ct-emps { display:flex; flex-direction:column; gap:8px; }
-.ct-emp { display:flex; align-items:center; gap:10px; min-height:50px; padding:5px 10px 5px 6px; border:1px solid #d7e3dc; border-radius:12px; background:#fff; }
-.ct-emp .sg { width:36px; height:36px; border-radius:10px; background:#dcfce7; color:#15803d; font-weight:900; font-size:12px; display:inline-flex; align-items:center; justify-content:center; flex:0 0 auto; }
-.ct-emp .tx { flex:1; min-width:0; display:flex; flex-direction:column; line-height:1.2; } .ct-emp .tx b { font-size:14px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; } .ct-emp .tx small { color:#64748b; font-size:11.5px; }
+.ct-emp { display:flex; align-items:center; gap:12px; min-height:54px; padding:7px 10px 7px 8px; border:1px solid #d7e3dc; border-radius:13px; background:#fff; }
+.ct-emp .sg { width:40px; height:40px; border-radius:11px; background:linear-gradient(135deg,#16a34a,#0f3d2e); color:#fff; font-weight:900; font-size:12px; display:inline-flex; align-items:center; justify-content:center; flex:0 0 auto; }
+.ct-emp .tx { flex:1; min-width:0; display:flex; flex-direction:column; line-height:1.3; } .ct-emp .tx b { font-size:14.5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:#0f172a; } .ct-emp .tx small { color:#64748b; font-size:12px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.ct-emp .tx small.end { color:#94a3b8; font-size:11.5px; } .ct-emp .tx em.ramo { font-style:normal; display:inline-block; background:#fff7ed; color:#b45309; border:1px solid #fde68a; border-radius:99px; padding:1px 8px; font-size:11px; font-weight:700; margin:0 3px 0 0; }
+.ct-rede .ns-ops { margin-top:8px; }
+.ct-pessoa .tx small a { color:#15803d; font-weight:700; text-decoration:underline; }
+.ct-link { color:#15803d; font-weight:700; text-decoration:underline; font-size:12.5px; }
+.ct-sug { display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; }
+.ct-sug label { border:1px dashed #fde68a; background:#fffbeb; color:#92400e; border-radius:12px; padding:8px 13px; font:inherit; font-size:12.5px; font-weight:700; cursor:pointer; display:inline-flex; align-items:center; gap:8px; margin:0; }
+.ct-sug label.on { background:#b45309; border-color:#b45309; color:#fff; border-style:solid; } .ct-sug label input { display:none; } .ct-sug label b { font-weight:800; }
 .ct-emp .ns-money { width:150px; height:40px; } .ct-emp .ns-money[hidden] { display:none; }
-.ct-emp .rm { width:34px; height:40px; border:1px solid #e2e8f0; border-radius:10px; background:#fff; color:#b91c1c; cursor:pointer; }
-.ct-busca { position:relative; margin-top:8px; } .ct-busca .ns-in { padding-left:36px; } .ct-busca > i { position:absolute; left:13px; top:13px; color:#94a3b8; }
+.ct-emp .rm { width:34px; height:36px; border:1px solid #e2e8f0; border-radius:10px; background:#fff; color:#94a3b8; cursor:pointer; } .ct-emp .rm:hover { color:#b91c1c; border-color:#fecaca; }
+.ct-busca { position:relative; margin-top:10px; } .ct-busca .ns-in { padding-left:36px; } .ct-busca > i { position:absolute; left:13px; top:13px; color:#94a3b8; }
 .pf-sug { position:absolute; z-index:30; left:0; right:0; top:44px; background:#fff; border:1px solid #dbe7df; border-radius:10px; box-shadow:0 10px 24px rgba(0,0,0,.12); max-height:260px; overflow:auto; }
 .pf-sug div { padding:8px 12px; cursor:pointer; font-size:13px; } .pf-sug div:hover { background:#f0f7f3; } .pf-sug div.vazio { cursor:default; color:#64748b; }
 .ct-grupo { margin-top:10px; padding:9px 12px; border-radius:10px; font-size:12.5px; line-height:1.45; }
-.ct-grupo.ok { background:#f0fdf4; border:1px solid #bbf7d0; color:#166534; } .ct-grupo.aut { background:#fff7ed; border:1px solid #fed7aa; color:#9a3412; } .ct-grupo[hidden] { display:none; }
-.ct-rede { margin-top:10px; } .ct-rede[hidden] { display:none; }
+.ct-grupo.ok { background:#f0fdf4; border:1px solid #bbf7d0; color:#166534; } .ct-grupo.aut { background:#fff7ed; border:1px solid #fed7aa; color:#9a3412; }
+.ct-rede { margin-top:10px; }
+/* cartão da pessoa (leitura) */
+.ct-pessoa { display:flex; align-items:center; gap:14px; padding:12px 14px; border:1px solid #d7e3dc; border-radius:14px; background:#fbfdfc; }
+.ct-pessoa .av { width:46px; height:46px; border-radius:13px; background:#ede9fe; color:#6d28d9; font-weight:900; font-size:15px; display:inline-flex; align-items:center; justify-content:center; flex:0 0 auto; }
+.ct-pessoa .tx { flex:1; min-width:0; line-height:1.3; } .ct-pessoa .tx b { display:block; font-size:15px; color:#0f172a; }
+.ct-pessoa .tx small { display:block; font-size:12.5px; color:#64748b; } .ct-pessoa .tx small em { font-style:normal; color:#b45309; font-weight:700; }
+.ct-pessoa .tx small i { font-size:11px; color:#94a3b8; margin:0 5px 0 0; }
+.ct-pessoa.vazio { border-style:dashed; background:#fff; } .ct-pessoa.vazio .av { background:#f1f5f9; color:#94a3b8; }
+.ct-pessoa .ct-alt { margin-left:0; flex:0 0 auto; }
+.ct-extra { margin-top:12px; }
 .ns-campos.tres { grid-template-columns:repeat(3, minmax(0,1fr)); }
 .ns-campo .ns-in.ns-up { text-transform:uppercase; } .ns-campo .ns-in.ns-up::placeholder { text-transform:none; }
-.ct-linha { display:flex; gap:14px; flex-wrap:wrap; align-items:flex-start; } .ct-linha > * { min-width:0; }
+.ct-linha { display:flex; gap:16px; flex-wrap:wrap; align-items:flex-start; } .ct-linha > * { min-width:0; }
 .ct-linha .ns-campo { flex:1 1 180px; }
 .ct-ops2 { grid-template-columns:repeat(2, minmax(0,1fr)); }
 .ct-ops2 .ns-op small { display:block; line-height:1.3; }
-.ct-extra[hidden], .ct-det[hidden], .ns-campo[hidden] { display:none; }
-.ct-extra { margin-top:10px; }
 .ct-serv { display:flex; flex-direction:column; gap:6px; margin-top:10px; } .ct-serv .ns-in { text-transform:none; }
-.oc-add { align-self:flex-start; border:1px dashed #9fc9b3; background:#f6faf7; color:#15803d; font:inherit; font-weight:800; font-size:12.5px; border-radius:10px; padding:8px 12px; cursor:pointer; margin-top:8px; }
 .ns-money.ct-pct { width:150px; } .ns-money.ct-pct > input.ns-in { font-size:15px; }
 .ct-dia .ns-in { width:84px; text-align:center; font-weight:800; }
-.ct-note { font-size:12px; color:#64748b; margin-top:6px; line-height:1.4; }
-.ct-note.ok { color:#15803d; }
+.ct-valor .ns-money { height:52px; } .ct-valor .ns-money > input.ns-in { font-size:22px; }
+/* frase de leitura das condições / cláusulas */
+.ct-frase { display:flex; flex-wrap:wrap; gap:6px 0; font-size:13px; color:#334155; line-height:1.5; }
+.ct-frase span { display:inline-flex; align-items:center; } .ct-frase span + span::before { content:'·'; color:#cbd5e1; margin:0 9px; }
+.ct-frase b { color:#0f172a; margin-left:4px; }
+.ct-note { font-size:12px; color:#64748b; margin-top:6px; line-height:1.4; } .ct-note.ok { color:#15803d; }
+/* resumo à direita: ficha */
+.ct-ficha-tit { font-size:13px; font-weight:800; color:#0f3d2e; line-height:1.3; margin-bottom:10px; }
+.ct-kpis { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:10px; }
+.ct-kpi { background:#f6faf7; border:1px solid #e3ece7; border-radius:12px; padding:9px 11px; min-width:0; }
+.ct-kpi small { display:block; font-size:10px; font-weight:800; letter-spacing:.06em; text-transform:uppercase; color:#64748b; }
+.ct-kpi b { display:block; font-size:15px; color:#0f3d2e; line-height:1.25; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; } .ct-kpi b.falta { color:#b91c1c; }
+.ct-kpi span { font-size:11px; color:#64748b; }
 .ns-res div.ct-ok { border:0; padding-top:10px; color:#15803d; font-weight:700; justify-content:flex-start; gap:7px; }
-.ns-res div.ct-ok.erro { color:#b91c1c; }
-.ns-res div.ct-ok b { color:inherit; }
+.ns-res div.ct-ok.erro { color:#b91c1c; } .ns-res div.ct-ok b { color:inherit; }
 .ns-res .ct-falta { color:#b91c1c !important; }
 .oc-passos { display:flex; flex-direction:column; gap:8px; } .oc-passo { display:flex; gap:10px; align-items:flex-start; font-size:12.5px; color:#475569; line-height:1.35; }
 .oc-passo i { width:24px; height:24px; border-radius:8px; background:#ecfdf3; color:#16a34a; display:inline-flex; align-items:center; justify-content:center; font-size:11px; flex-shrink:0; } .oc-passo b { color:#0f172a; }
 .ns-pe a.ns-bt { text-decoration:none; }
 .ns-pe-info.ok { color:#15803d; font-weight:700; }
-@media (max-width:980px) { .ct-page .ns-g { grid-template-columns:minmax(0,1fr); } .ct-page .ns-r { position:static; } .ns-campos.tres, .ct-ops2 { grid-template-columns:minmax(0,1fr); } .ct-page .ns { border-radius:16px; height:auto; } }
+@media (max-width:980px) { .ct-page .ns-g { grid-template-columns:minmax(0,1fr); } .ct-page .ns-r { position:static; } .ns-campos.tres, .ct-ops2 { grid-template-columns:minmax(0,1fr); } .ct-page .ns { border-radius:16px; height:auto; width:auto !important; min-width:0 !important; max-width:100% !important; left:auto !important; } .ct-pessoa { flex-wrap:wrap; }
+  .ct-page .ns-h { flex-wrap:wrap; } .ct-page .ns-h em { flex-basis:100%; margin-left:0; order:3; } .ct-page .ns-h .ct-alt { margin-left:auto; }
+  .ct-linha .ns-campo { flex:1 1 100% !important; } .ns-money.ct-pct { width:100%; } .ct-chips.grande button, .ct-chips.grande label { white-space:normal; text-align:left; }
+  .ct-mais { white-space:normal; text-align:left; } .ct-emp .tx small { white-space:normal; } .ct-page .ns-f, .ct-page .ns-r { padding:12px; } .ct-page .ns-b { padding:13px 14px; } }
 </style>
 {% endblock %}
 
@@ -82,7 +124,7 @@
 <div id="ct-tests"></div>
 
 <header class="ns-cab"><span class="ns-logo"><img src="{{ url_for('static', filename='images/logo.png') }}" alt="Qualicontax"></span>
-  <div class="ns-tit"><b>{{ 'Editar rascunho do contrato' if contrato else 'Montar contrato de prestação de serviços' }}</b><span id="ct-sub">{% if emp %}{{ emp.numero_cliente or 'PF' }} · {{ emp.nome_razao_social }}{% else %}escolha a empresa{% endif %}</span></div>
+  <div class="ns-tit"><b>{{ 'Alterar o rascunho do contrato' if contrato else 'Montar contrato de prestação de serviços' }}</b><span id="ct-sub">{% if emp %}{{ emp.numero_cliente or 'PF' }} · {{ emp.nome_razao_social }}{% else %}escolha a empresa{% endif %}</span></div>
   <div class="ns-prev"><small>honorários por mês</small><b id="ct-prev-val">R$ 0,00</b><span id="ct-prev-sub">vence dia {{ dia }}</span></div>
   <a class="ns-x" href="{{ url_for('financeiro.contratos') }}" title="Voltar para a lista" style="display:inline-flex; align-items:center; justify-content:center; text-decoration:none;"><i class="fas fa-xmark"></i></a></header>
 
@@ -94,61 +136,59 @@
     <div class="ct-emps" id="pf-emps">
       {% for e in dados.empresas or ([{'cliente_id': emp.id, 'razao': emp.nome_razao_social, 'numero': emp.numero_cliente, 'cnpj': emp.cpf_cnpj, 'endereco': emp.endereco, 'valor': fin.valor if fin else ''}] if emp else []) %}
       <div class="ct-emp"><input type="hidden" name="emp_cliente_id" value="{{ e.cliente_id }}"><input type="hidden" name="emp_endereco" value="{{ e.endereco }}">
-        <span class="sg">{{ e.numero or 'PF' }}</span><span class="tx"><b class="nome">{{ e.razao }}</b><small>{{ e.cnpj }}{% if e.endereco %} · {{ e.endereco }}{% endif %}</small></span>
+        <span class="sg">{{ e.numero or 'PF' }}</span><span class="tx"><b class="nome">{{ e.razao }}</b><small>{{ e.cnpj }}{% if loop.first and emp and emp.ramos %} · {% for r in emp.ramos %}<em class="ramo">{{ r.nome }}</em>{% endfor %}{% endif %}</small>{% if e.endereco %}<small class="end">{{ e.endereco | nome_proprio }}</small>{% endif %}</span>
         <div class="ns-money fixo" hidden><span>R$</span><input class="ns-in dinheiro" name="emp_valor" value="{{ e.valor or '' }}" placeholder="0,00" title="valor desta empresa (só para rede)"></div>
         <button type="button" class="rm" title="Tirar esta empresa" onclick="this.closest('.ct-emp').remove(); ctEmps();"><i class="fas fa-xmark"></i></button></div>
       {% endfor %}
     </div>
-    <div class="ct-busca"><i class="fas fa-magnifying-glass"></i><input type="text" id="pf-busca" class="ns-in" placeholder="Juntar outra empresa da rede: nome, número ou CNPJ" autocomplete="off"><div id="pf-sug" class="pf-sug" style="display:none;"></div></div>
+    <div style="margin-top:10px"><button type="button" class="ct-mais" id="ct-juntar" onclick="ctJuntar()"><i class="fas fa-plus"></i> Juntar outra empresa da rede</button></div>
+    <div class="ct-busca" id="ct-busca-emp" hidden><i class="fas fa-magnifying-glass"></i><input type="text" id="pf-busca" class="ns-in" placeholder="Nome, número ou CNPJ da outra empresa" autocomplete="off"><div id="pf-sug" class="pf-sug" style="display:none;"></div></div>
     <div id="pf-grupo" class="ct-grupo" hidden></div>
     <div class="ct-rede" id="ct-rede" hidden>
-      <div class="ns-campos">
-        <div class="ns-campo"><label>Como o contrato chama a rede</label><input type="text" name="apelido" class="ns-in ns-up" value="{{ dados.apelido or '' }}" placeholder="ex.: TRANSMASUT (em branco = razão social da primeira)"></div>
-        <div class="ns-campo"><label>Valores</label><div class="ct-chips"><label id="ct-vpe-chip" class="{{ 'on' if dados.valores_por_empresa }}"><input type="checkbox" name="valores_por_empresa" {% if dados.valores_por_empresa %}checked{% endif %} onchange="this.parentNode.classList.toggle('on', this.checked); ctEmps();"><i class="fas fa-list-ol"></i> Listar o valor de cada empresa no contrato</label></div></div>
+      <input type="hidden" name="valores_por_empresa" id="ct-vpe" value="{{ '1' if dados.valores_por_empresa else '' }}">
+      <div class="ns-campo"><label>Como o contrato chama a rede</label><input type="text" name="apelido" class="ns-in ns-up" value="{{ dados.apelido or '' }}" placeholder="ex.: TRANSMASUT (em branco = razão social da primeira)"></div>
+      <div class="ns-ops ct-ops2" id="ct-vpe-ops">
+        <button type="button" class="ns-op {{ '' if dados.valores_por_empresa else 'on' }}" data-v="" onclick="ctVpe(this)"><i class="fas fa-coins"></i><b>Um valor geral para a rede</b><small>os honorários abaixo valem pelo conjunto das empresas</small></button>
+        <button type="button" class="ns-op {{ 'on' if dados.valores_por_empresa else '' }}" data-v="1" onclick="ctVpe(this)"><i class="fas fa-list-ol"></i><b>Um valor por empresa</b><small>cada empresa com a sua mensalidade; o contrato lista uma a uma e o total</small></button>
       </div>
     </div>
   </section>
 
-  {# ── 2. quem assina pela empresa ── #}
-  <section class="ns-b"><div class="ns-h"><i class="fas fa-user-pen"></i> Quem assina pela contratante <em>{{ 'já veio o sócio administrador do cadastro · clique para trocar' if rep0 and not contrato else 'a assinatura vai por e-mail' }}</em></div>
+  {# ── 2. quem assina pela empresa: só leitura (24/11/2026 — Anderson: "pode aparecer os dados, não pode permitir alterações;
+        se precisar, remete ao cadastro, altera lá e volta com os dados alterados") ── #}
+  <section class="ns-b"><div class="ns-h"><i class="fas fa-user-pen"></i> Quem assina pela contratante <em>{{ 'veio do cadastro · toque em outro nome para trocar' if (emp and emp.socios) else 'a assinatura vai por e-mail' }}</em></div>
+    <input type="hidden" name="rep_nome" id="rep_nome" value="{{ e0.rep_nome if e0 else '' }}"><input type="hidden" name="rep_cpf" id="rep_cpf" value="{{ e0.rep_cpf if e0 else '' }}">
+    <input type="hidden" name="rep_cargo" id="rep_cargo" value="{{ e0.rep_cargo if e0 else 'sócio administrador' }}"><input type="hidden" name="rep_documento" id="rep_documento" value="{{ e0.rep_documento if e0 else '' }}">
+    <input type="hidden" name="rep_email" id="rep_email" value="{{ e0.rep_email if e0 else '' }}"><input type="hidden" name="rep_celular" id="rep_celular" value="{{ e0.rep_celular if e0 else '' }}">
+    <input type="hidden" id="rep_pf" value="{{ (emp.socios[0].pf_cliente_id if emp and emp.socios and not contrato else '') or '' }}">
     {% if emp and (emp.socios or emp.contatos) %}
-    <div class="ct-chips" id="ct-socios" style="margin-bottom:10px">
-      {% for s in emp.socios %}<button type="button" class="{{ 'on' if (rep0 and loop.first and not contrato) or (e0 and e0.rep_cpf and s.cpf and e0.rep_cpf == s.cpf) }}" onclick="pfSocio({{ s.nome | tojson }}, {{ (s.cpf or '') | tojson }}, {{ (s.email or '') | tojson }}, {{ (s.celular or '') | tojson }}, {{ (s.documento or '') | tojson }}, {{ (s.cargo or '') | tojson }}, this)" title="{{ s.documento or 'sem documento marcado para contrato no cadastro da pessoa' }}"><i class="fas fa-user-tie"></i> {{ s.nome }} · {{ s.cargo or ('administrador' if s.responsavel else 'sócio') }}{% if not s.documento %} <i class="fas fa-triangle-exclamation falta" title="sem documento no cadastro"></i>{% endif %}</button>{% endfor %}
-      {% for s in emp.contatos %}<button type="button" class="av" onclick="pfSocio({{ s.nome | tojson }}, '', {{ (s.email or '') | tojson }}, {{ (s.celular or '') | tojson }}, '', {{ (s.cargo or '') | tojson }}, this)"><i class="fas fa-address-card"></i> {{ s.nome }}{% if s.cargo %} · {{ s.cargo }}{% endif %}</button>{% endfor %}
+    <div class="ct-chips grande" id="ct-socios" style="margin-bottom:12px">
+      {% for s in emp.socios %}<button type="button" class="{{ 'on' if (rep0 and loop.first and not contrato) or (e0 and e0.rep_cpf and s.cpf and e0.rep_cpf == s.cpf) }}" onclick="pfSocio({{ s.nome | tojson }}, {{ (s.cpf or '') | tojson }}, {{ (s.email or '') | tojson }}, {{ (s.celular or '') | tojson }}, {{ (s.documento or '') | tojson }}, {{ (s.cargo or '') | tojson }}, this, {{ (s.pf_cliente_id or '') | tojson }})" title="{{ s.documento or 'sem documento marcado para contrato no cadastro da pessoa' }}"><i class="fas fa-user-tie"></i> {{ s.nome | nome_proprio }} <span style="opacity:.75; font-weight:600">· {{ s.cargo or ('administrador' if s.responsavel else 'sócio') }}</span>{% if not s.documento %} <i class="fas fa-triangle-exclamation falta" title="sem documento no cadastro"></i>{% endif %}</button>{% endfor %}
+      {% for s in emp.contatos %}<button type="button" class="av" onclick="pfSocio({{ s.nome | tojson }}, '', {{ (s.email or '') | tojson }}, {{ (s.celular or '') | tojson }}, '', {{ (s.cargo or '') | tojson }}, this, '')"><i class="fas fa-address-card"></i> {{ s.nome | nome_proprio }}{% if s.cargo %} <span style="opacity:.75; font-weight:600">· {{ s.cargo }}</span>{% endif %}</button>{% endfor %}
     </div>{% endif %}
-    <div class="ns-campos tres">
-      <div class="ns-campo"><label>Nome completo</label><input type="text" name="rep_nome" id="rep_nome" class="ns-in ns-up" value="{{ e0.rep_nome if e0 else '' }}" required></div>
-      <div class="ns-campo"><label>CPF</label><input type="text" name="rep_cpf" id="rep_cpf" class="ns-in" value="{{ e0.rep_cpf if e0 else '' }}" placeholder="000.000.000-00" inputmode="numeric"></div>
-      <div class="ns-campo"><label>Cargo</label><input type="text" name="rep_cargo" id="rep_cargo" class="ns-in" value="{{ e0.rep_cargo if e0 else 'sócio administrador' }}"></div>
-      <div class="ns-campo"><label>Documento (como vai no contrato)</label><input type="text" name="rep_documento" id="rep_documento" class="ns-in" value="{{ e0.rep_documento if e0 else '' }}" placeholder="ex.: CNH nº 02521989143 DETRAN/GO"></div>
-      <div class="ns-campo"><label>E-mail (recebe o link para assinar)</label><input type="email" name="rep_email" id="rep_email" class="ns-in" value="{{ e0.rep_email if e0 else '' }}" required></div>
-      <div class="ns-campo"><label>Celular</label><input type="text" name="rep_celular" id="rep_celular" class="ns-in" value="{{ e0.rep_celular if e0 else '' }}" placeholder="(00) 00000-0000" inputmode="tel"></div>
-    </div>
-    <div class="ct-chips" style="margin-top:10px"><label id="ct-guardar"><input type="checkbox" name="guardar_contato" value="1" onchange="this.parentNode.classList.toggle('on', this.checked)"><i class="fas fa-address-book"></i> Guardar esta pessoa nos contatos da empresa</label></div>
-  </section>
+    <div class="ct-pessoa" id="ct-rep-card"><span class="av" id="ct-rep-av">?</span><span class="tx" id="ct-rep-tx"></span>
+      <a class="ct-alt" id="ct-rep-link" href="#" target="_blank" rel="noopener"><i class="fas fa-pen"></i> Alterar no cadastro</a></div>
+    <div class="ct-note" id="ct-rep-nota">Os dados vêm do cadastro e não se alteram aqui. Alterou lá? <a class="ct-link" href="#" onclick="location.reload(); return false;">Atualizar esta tela</a>.</div>
 
-  {# ── 3. mais um assinante (22/11/2026 — Anderson: "o Anderson, que não está no cadastro da NH Goiatuba... cadastro do posto, do sócio + cadastro do Anderson") ── #}
-  <section class="ns-b"><div class="ns-h"><i class="fas fa-user-plus"></i> Mais alguém assina pela contratante? <em>procurador, autorizado, quem responde pela outra empresa do grupo</em></div>
-    <div class="ns-ops ct-ops2" id="ct-extra-ops">
-      <button type="button" class="ns-op {{ '' if ex.nome else 'on' }}" data-v="0" onclick="ctExtraModo(this)"><i class="fas fa-user-check"></i><b>Não, só quem está acima</b><small>o sócio administrador assina sozinho pela contratante</small></button>
-      <button type="button" class="ns-op {{ 'on' if ex.nome else '' }}" data-v="1" onclick="ctExtraModo(this)"><i class="fas fa-user-plus"></i><b>Sim, mais um assinante</b><small>entra nas partes do contrato como autorizado(a), assina e recebe o link por e-mail</small></button>
+    {# mais um assinante (22/11/2026 — Anderson: "o Anderson, que não está no cadastro da NH Goiatuba... cadastro do posto, do sócio + cadastro do Anderson") #}
+    <input type="hidden" name="extra_nome" id="extra_nome" value="{{ ex.nome or '' }}"><input type="hidden" name="extra_cpf" id="extra_cpf" value="{{ ex.cpf or '' }}">
+    <input type="hidden" name="extra_cargo" id="extra_cargo" value="{{ ex.cargo or 'representante autorizado(a)' }}"><input type="hidden" name="extra_documento" id="extra_documento" value="{{ ex.documento or '' }}">
+    <input type="hidden" name="extra_email" id="extra_email" value="{{ ex.email or '' }}"><input type="hidden" name="extra_celular" id="extra_celular" value="{{ ex.celular or '' }}"><input type="hidden" id="extra_pf" value="{{ ex.pf_cliente_id or '' }}">
+    <div id="ct-extra-ops" style="margin-top:12px">
+      <button type="button" class="ct-mais" data-v="1" {{ 'hidden' if ex.nome }} onclick="ctExtraModo(this)"><i class="fas fa-user-plus"></i> Mais alguém assina pela contratante? <span style="font-weight:600; opacity:.8">procurador, autorizado, quem responde pela outra empresa do grupo</span></button>
+      <button type="button" data-v="0" hidden onclick="ctExtraModo(this)"></button>
     </div>
     <div class="ct-extra" id="ct-extra" {{ '' if ex.nome else 'hidden' }}>
-      <div class="ct-busca" style="margin-top:0"><i class="fas fa-magnifying-glass"></i><input type="text" id="pf-pbusca" class="ns-in" placeholder="Puxar do cadastro de pessoas: nome ou CPF" autocomplete="off"><div id="pf-psug" class="pf-sug" style="display:none;"></div></div>
-      {% if emp and emp.contatos %}<div class="ct-chips" style="margin-top:8px">{% for s in emp.contatos %}<button type="button" class="av" onclick="pfExtra({{ {'nome': s.nome, 'cpf': '', 'documento': '', 'email': s.email or '', 'celular': s.celular or '', 'cargo': s.cargo or ''} | tojson }})"><i class="fas fa-address-card"></i> {{ s.nome }}{% if s.cargo %} · {{ s.cargo }}{% endif %}</button>{% endfor %}</div>{% endif %}
-      <div class="ns-campos tres" style="margin-top:10px">
-        <div class="ns-campo"><label>Nome completo</label><input type="text" name="extra_nome" id="extra_nome" class="ns-in ns-up" value="{{ ex.nome or '' }}"></div>
-        <div class="ns-campo"><label>CPF</label><input type="text" name="extra_cpf" id="extra_cpf" class="ns-in" value="{{ ex.cpf or '' }}" placeholder="000.000.000-00" inputmode="numeric"></div>
-        <div class="ns-campo"><label>Na qualidade de</label><input type="text" name="extra_cargo" id="extra_cargo" class="ns-in" value="{{ ex.cargo or 'representante autorizado(a)' }}"></div>
-        <div class="ns-campo"><label>Documento (como vai no contrato)</label><input type="text" name="extra_documento" id="extra_documento" class="ns-in" value="{{ ex.documento or '' }}" placeholder="ex.: CNH nº ..."></div>
-        <div class="ns-campo"><label>E-mail (recebe o link para assinar)</label><input type="email" name="extra_email" id="extra_email" class="ns-in" value="{{ ex.email or '' }}"></div>
-        <div class="ns-campo"><label>Celular</label><input type="text" name="extra_celular" id="extra_celular" class="ns-in" value="{{ ex.celular or '' }}" inputmode="tel"></div>
-      </div>
+      <div class="ns-h" style="margin:4px 0 10px"><i class="fas fa-user-plus"></i> Também assina pela contratante <em>entra nas partes como autorizado(a), assina e recebe o link por e-mail</em><button type="button" class="ct-alt" onclick="ctExtraModo(document.querySelector('#ct-extra-ops [data-v=&quot;0&quot;]'))"><i class="fas fa-xmark"></i> Tirar</button></div>
+      <div class="ct-busca" id="ct-extra-busca" style="margin-top:0" {{ 'hidden' if ex.nome }}><i class="fas fa-magnifying-glass"></i><input type="text" id="pf-pbusca" class="ns-in" placeholder="Buscar no cadastro de pessoas: nome ou CPF" autocomplete="off"><div id="pf-psug" class="pf-sug" style="display:none;"></div></div>
+      <div class="ct-pessoa" id="ct-extra-card" style="margin-top:10px" {{ '' if ex.nome else 'hidden' }}><span class="av" id="ct-extra-av">?</span><span class="tx" id="ct-extra-tx"></span>
+        <a class="ct-alt" id="ct-extra-link" href="#" target="_blank" rel="noopener"><i class="fas fa-pen"></i> Alterar no cadastro</a><button type="button" class="ct-alt" onclick="pfExtra({}); ctExtraCard();"><i class="fas fa-rotate"></i> Trocar</button></div>
+      <div class="ct-note">Quem não está no cadastro de pessoas precisa ser cadastrado em Cadastros › Clientes (pessoa física) antes de entrar no contrato.</div>
     </div>
   </section>
 
   {% if carteira_pct %}
-  {# ── 4. carteira (22/11/2026 — Anderson: "pode ser que ele cadastre uma empresa que não ganhará os 25%, então tem que ter a opção") ── #}
+  {# ── carteira (22/11/2026 — Anderson: "pode ser que ele cadastre uma empresa que não ganhará os 25%, então tem que ter a opção") ── #}
   <section class="ns-b"><div class="ns-h"><i class="fas fa-building-user"></i> Sua comissão de carteira <em>{{ '%g' % carteira_pct }}% da mensalidade, todo mês que o cliente pagar</em></div>
     <div class="ns-ops ct-ops2" id="ct-cart-ops">
       <button type="button" class="ns-op {{ 'on' if (dados.carteira) or not contrato }}" data-v="1" onclick="ctCart(this)"><i class="fas fa-hand-holding-dollar"></i><b>Sim, entra na minha carteira</b><small>aprovado o contrato, a comissão nasce sozinha em Serviços › Quem recebe comissão</small></button>
@@ -157,65 +197,77 @@
   </section>
   {% endif %}
 
-  {# ── 5. serviços ── #}
+  {# ── 3. serviços ── #}
   <section class="ns-b"><div class="ns-h"><i class="fas fa-list-check"></i> Serviços <em>só fiscal, só DP ou tudo; mais os específicos</em></div>
-    <div class="ct-chips" id="ct-areas">
+    <div class="ct-chips grande" id="ct-areas">
       {% for k, v in AREAS.items() %}{% set on = (dados.areas and k in dados.areas) or (not dados and not contrato) %}<label class="{{ 'on' if on }}"><input type="checkbox" name="areas" value="{{ k }}" {% if on %}checked{% endif %} onchange="this.parentNode.classList.toggle('on', this.checked); ctResumo();"><i class="fas fa-check"></i> {{ v[0] | capitalize }}</label>{% endfor %}
     </div>
     <div class="ct-serv" id="pf-extras">{% for s in dados.servicos_extras or [] %}<input type="text" name="servico_extra" class="ns-in" value="{{ s }}" placeholder="serviço específico">{% endfor %}</div>
-    <button type="button" class="oc-add" onclick="ctServExtra()"><i class="fas fa-plus"></i> Serviço específico (ex.: emissão de notas em nome da contratante)</button>
+    <div style="margin-top:10px"><button type="button" class="ct-mais" onclick="ctServExtra()"><i class="fas fa-plus"></i> Serviço específico <span style="font-weight:600; opacity:.8">ex.: emissão de notas em nome da contratante</span></button></div>
   </section>
 
-  {# ── 6. honorários ── #}
+  {# ── 4. honorários: valor, dia e início à vista; reajuste, 13º, multa e juros como frase, abrem em Alterar ── #}
   <section class="ns-b"><div class="ns-h"><i class="fas fa-coins"></i> Honorários <em>{% if fin %}vindos do contrato de honorários já cadastrado{% else %}sem honorários cadastrados: digite{% endif %}</em></div>
-    <div class="ct-linha">
-      <div class="ns-campo" style="flex:0 0 200px"><label>Valor mensal</label><div class="ns-money fixo"><span>R$</span><input class="ns-in dinheiro" name="valor" id="ct-valor" value="{{ dados.valor or (fin.valor if fin else '') }}" placeholder="0,00" required></div></div>
+    {% set sug = (emp.ramos if emp else []) | selectattr('sugestao') | list %}
+    {% if sug %}
+    {% set usadas = (dados.sugestoes or []) | map(attribute='ramo_id') | list %}
+    <div class="ct-note" style="margin:0 0 4px"><i class="fas fa-lightbulb" style="color:#d97706"></i> Mensalidade sugerida pelos ramos da empresa: toque para trazer para o valor (pode trazer todos, alguns ou nenhum).</div>
+    <div class="ct-sug" id="ct-sug">
+      {% for r in sug %}<label class="{{ 'on' if (r.id in usadas) or (not dados and not contrato) }}"><input type="checkbox" name="sugestao_ramo" value="{{ r.id }}|{{ r.nome }}|{{ '%.2f' % r.sugestao }}" data-v="{{ r.sugestao }}" {% if (r.id in usadas) or (not dados and not contrato) %}checked{% endif %} onchange="ctSug(this)"><i class="fas fa-tag"></i> {{ r.nome }} <b>{{ r.sugestao | format_currency }}</b></label>{% endfor %}
+    </div>
+    {% endif %}
+    <div class="ct-linha" style="{{ 'margin-top:12px' if sug }}">
+      <div class="ns-campo ct-valor" style="flex:0 0 220px"><label>Valor mensal</label><div class="ns-money fixo"><span>R$</span><input class="ns-in dinheiro" name="valor" id="ct-valor" value="{{ dados.valor or (fin.valor if fin else '') }}" placeholder="0,00" required></div></div>
       <div class="ns-campo"><label>Vence no dia</label><div class="ct-chips ct-dia" id="ct-dias">{% for d in (5, 10, 15, 20, 25, 30) %}<button type="button" data-v="{{ d }}" class="{{ 'on' if dia|int == d }}" onclick="ctDia(this)">{{ d }}</button>{% endfor %}<input type="text" class="ns-in" id="ct-dia-outro" placeholder="outro" inputmode="numeric" maxlength="2" value="{{ dia if dia|int not in (5, 10, 15, 20, 25, 30) else '' }}" oninput="ctDiaOutro(this)"></div></div>
       <div class="ns-campo"><label>Início do contrato</label><div class="ct-chips" id="ct-inis"><button type="button" data-v="hoje" onclick="ctIni(this)">hoje</button><button type="button" data-v="mes" onclick="ctIni(this)">1º deste mês</button><button type="button" data-v="prox" onclick="ctIni(this)">1º do mês que vem</button><input type="text" class="ns-in" id="ct-ini-txt" placeholder="dd/mm/aaaa" inputmode="numeric" maxlength="10" style="width:120px" value="{{ ini[8:10] ~ '/' ~ ini[5:7] ~ '/' ~ ini[0:4] if ini and ini|length == 10 else '' }}" oninput="ctIniTxt(this)"></div></div>
     </div>
-    <div class="ct-linha" style="margin-top:12px">
-      <div class="ns-campo"><label>Reajuste</label><div class="ns-seg" id="ct-reajs">{% for k, v in (('SALARIO_MINIMO', 'Salário mínimo, todo janeiro'), ('INDICE', 'Índice próprio'), ('DATA_PROPRIA', 'Data própria'), ('ESCALONADO', 'Escalonado'), ('SEM', 'De comum acordo')) %}<button type="button" data-v="{{ k }}" class="{{ 'on' if reaj == k }}" onclick="ctReaj(this)">{{ v }}</button>{% endfor %}</div>
-        <div class="ns-campos" style="margin-top:8px">
-          <div class="ns-campo ct-det" data-para="INDICE ESCALONADO" {{ '' if reaj in ('INDICE', 'ESCALONADO') else 'hidden' }}><label id="ct-det-lbl">{{ 'Como escalona' if reaj == 'ESCALONADO' else 'Qual índice' }}</label><input type="text" name="reajuste_indice" class="ns-in" value="{{ dados.reajuste_indice or (fin.reajuste_obs if fin else '') or '' }}" placeholder="ex.: IPCA · ou 3.000 → 5.000 em jun/27"></div>
-          <div class="ns-campo ct-det" data-para="DATA_PROPRIA" {{ '' if reaj == 'DATA_PROPRIA' else 'hidden' }}><label>Em que mês</label><input type="text" name="reajuste_mes" class="ns-in" value="{{ dados.reajuste_mes or '' }}" placeholder="ex.: julho"></div>
-        </div></div>
-    </div>
-    <div class="ct-linha" style="margin-top:12px">
-      <div class="ns-campo"><label>13º honorário</label><div class="ns-seg" id="ct-decs">{% for k, v in (('COBRADO', 'Em novembro e dezembro'), ('UNICA', 'Em dezembro, parcela única'), ('ISENTO', 'Isento')) %}<button type="button" data-v="{{ k }}" class="{{ 'on' if dec == k }}" onclick="ctSeg(this, 'ct-dec')">{{ v }}</button>{% endfor %}</div></div>
-      <div class="ns-campo" style="flex:0 0 150px"><label>Multa por atraso</label><div class="ns-money pct ct-pct"><span>%</span><input class="ns-in" name="multa" value="{{ dados.multa or '10' }}" inputmode="decimal"></div></div>
-      <div class="ns-campo" style="flex:0 0 150px"><label>Juros ao mês</label><div class="ns-money pct ct-pct"><span>%</span><input class="ns-in" name="juros" value="{{ dados.juros or '1' }}" inputmode="decimal"></div></div>
-    </div>
-  </section>
-
-  {# ── 7. cláusulas ── #}
-  <section class="ns-b"><div class="ns-h"><i class="fas fa-scale-balanced"></i> Cláusulas <em>aviso prévio, LGPD, foro e título</em></div>
-    <div class="ct-linha">
-      <div class="ns-campo"><label>Aviso prévio para encerrar</label><div class="ns-seg" id="ct-avisos">{% for d in (30, 60, 90) %}<button type="button" data-v="{{ d }}" class="{{ 'on' if (dados.aviso_previo or 30)|int == d }}" onclick="ctSeg(this, 'ct-aviso')">{{ d }} dias</button>{% endfor %}</div></div>
-      <div class="ns-campo"><label>Cláusula LGPD</label><div class="ns-seg" id="ct-lgpds"><button type="button" data-v="1" class="{{ 'on' if dados.lgpd or not contrato }}" onclick="ctSeg(this, 'ct-lgpd')">Com a cláusula</button><button type="button" data-v="" class="{{ 'on' if contrato and not dados.lgpd }}" onclick="ctSeg(this, 'ct-lgpd')">Sem</button></div></div>
-    </div>
-    <div class="ns-campos tres" style="margin-top:12px">
-      <div class="ns-campo"><label>Foro</label><input type="text" name="foro" class="ns-in" value="{{ dados.foro or (contratada.cidade ~ '/' ~ contratada.uf) }}"></div>
-      <div class="ns-campo"><label>Local da assinatura</label><input type="text" name="local" class="ns-in" value="{{ dados.local or contratada.cidade }}"></div>
-      <div class="ns-campo"><label>Título do contrato</label><input type="text" name="titulo" class="ns-in ns-up" value="{{ dados.titulo or '' }}" placeholder="em branco = pelos serviços escolhidos"></div>
+    <div class="ns-h" style="margin:16px 0 8px"><i class="fas fa-sliders"></i> Condições <em>reajuste, 13º, multa e juros</em><button type="button" class="ct-alt" onclick="ctToggle('ct-cond-body', this)"><i class="fas fa-pen"></i> Alterar</button></div>
+    <div class="ct-frase" id="ct-cond-sum"></div>
+    <div class="ct-body" id="ct-cond-body" hidden>
+      <div class="ct-linha">
+        <div class="ns-campo"><label>Reajuste</label><div class="ns-seg" id="ct-reajs">{% for k, v in (('SALARIO_MINIMO', 'Salário mínimo, todo janeiro'), ('INDICE', 'Índice próprio'), ('DATA_PROPRIA', 'Data própria'), ('ESCALONADO', 'Escalonado'), ('SEM', 'De comum acordo')) %}<button type="button" data-v="{{ k }}" class="{{ 'on' if reaj == k }}" onclick="ctReaj(this)">{{ v }}</button>{% endfor %}</div>
+          <div class="ns-campos" style="margin-top:8px">
+            <div class="ns-campo ct-det" data-para="INDICE ESCALONADO" {{ '' if reaj in ('INDICE', 'ESCALONADO') else 'hidden' }}><label id="ct-det-lbl">{{ 'Como escalona' if reaj == 'ESCALONADO' else 'Qual índice' }}</label><input type="text" name="reajuste_indice" class="ns-in" value="{{ dados.reajuste_indice or (fin.reajuste_obs if fin else '') or '' }}" placeholder="ex.: IPCA · ou 3.000 → 5.000 em jun/27"></div>
+            <div class="ns-campo ct-det" data-para="DATA_PROPRIA" {{ '' if reaj == 'DATA_PROPRIA' else 'hidden' }}><label>Em que mês</label><input type="text" name="reajuste_mes" class="ns-in" value="{{ dados.reajuste_mes or '' }}" placeholder="ex.: julho"></div>
+          </div></div>
+      </div>
+      <div class="ct-linha" style="margin-top:12px">
+        <div class="ns-campo"><label>13º honorário</label><div class="ns-seg" id="ct-decs">{% for k, v in (('COBRADO', 'Em novembro e dezembro'), ('UNICA', 'Em dezembro, parcela única'), ('ISENTO', 'Isento')) %}<button type="button" data-v="{{ k }}" class="{{ 'on' if dec == k }}" onclick="ctSeg(this, 'ct-dec')">{{ v }}</button>{% endfor %}</div></div>
+        <div class="ns-campo" style="flex:0 0 150px"><label>Multa por atraso</label><div class="ns-money pct ct-pct"><span>%</span><input class="ns-in" name="multa" value="{{ dados.multa or '10' }}" inputmode="decimal"></div></div>
+        <div class="ns-campo" style="flex:0 0 150px"><label>Juros ao mês</label><div class="ns-money pct ct-pct"><span>%</span><input class="ns-in" name="juros" value="{{ dados.juros or '1' }}" inputmode="decimal"></div></div>
+      </div>
     </div>
   </section>
 
-  {# ── 8. assinaturas ── #}
-  <section class="ns-b"><div class="ns-h"><i class="fas fa-pen-nib"></i> Pela Qualicontax <em>{{ contratada.razao }} · CNPJ {{ contratada.cnpj }}{% if contratada.crc %} · CRC {{ contratada.crc }}{% endif %}</em></div>
-    <div class="ns-ops ct-ops2" id="ct-assq-ops">
-      {% for k, q in SIGN_Q.items() %}<button type="button" class="ns-op {{ 'on' if assina_q == k or (not assina_q and loop.first) }}" data-v="{{ k }}" onclick="ctAssQ(this)">{% if q.docs_faltam or not q.email %}<span class="ns-op-tag" style="background:#fef3c7;color:#b45309">{{ 'sem documento' if q.docs_faltam else 'sem e-mail' }}</span>{% endif %}<i class="fas fa-user-tie"></i><b>{{ q.nome }}</b><small>{{ q.cargo }}{% if q.documento %} · {{ q.documento }}{% endif %}{% if q.email %} · {{ q.email }}{% endif %}</small></button>{% endfor %}
-    </div>
+  {# ── 5. cláusulas e assinatura pela Qualicontax: frase de leitura, abre em Alterar ── #}
+  <section class="ns-b"><div class="ns-h"><i class="fas fa-scale-balanced"></i> Cláusulas e assinatura <em>{{ contratada.razao | nome_proprio }} · CNPJ {{ contratada.cnpj }}{% if contratada.crc %} · CRC {{ contratada.crc }}{% endif %}</em><button type="button" class="ct-alt" onclick="ctToggle('ct-cla-body', this)"><i class="fas fa-pen"></i> Alterar</button></div>
+    <div class="ct-frase" id="ct-cla-sum"></div>
     {% if not contratada.crc %}<div class="ct-note" style="color:#b45309"><i class="fas fa-triangle-exclamation"></i> A Qualicontax está sem CRC no cadastro (cliente nº 1).</div>{% endif %}
-    <div class="ns-h" style="margin-top:14px"><i class="fas fa-people-group"></i> Testemunhas <em>até duas, da equipe</em></div>
-    <div class="ct-chips" id="ct-testes">
-      {% for t in testemunhas %}{% set on = (tests | selectattr('usuario_id', 'equalto', t.id) | list | length > 0) or (not contrato and t.id == current_user.id) %}<button type="button" data-v="{{ t.id }}" class="{{ 'on' if on }}{{ ' av' if not t.email or not t.cpf }}" onclick="ctTest(this)" title="{{ 'sem e-mail no cadastro de usuários' if not t.email else ('sem CPF no cadastro de usuários: sai sem CPF no contrato' if not t.cpf else '') }}"><i class="fas fa-user"></i> {{ t.nome.split(' ')[0] }} {{ t.nome.split(' ')[-1] if ' ' in t.nome else '' }}{% if not t.email or not t.cpf %} <i class="fas fa-triangle-exclamation falta"></i>{% endif %}</button>{% endfor %}
+    <div class="ct-body" id="ct-cla-body" hidden>
+      <div class="ct-linha">
+        <div class="ns-campo"><label>Aviso prévio para encerrar</label><div class="ns-seg" id="ct-avisos">{% for d in (30, 60, 90) %}<button type="button" data-v="{{ d }}" class="{{ 'on' if (dados.aviso_previo or 30)|int == d }}" onclick="ctSeg(this, 'ct-aviso')">{{ d }} dias</button>{% endfor %}</div></div>
+        <div class="ns-campo"><label>Cláusula LGPD</label><div class="ns-seg" id="ct-lgpds"><button type="button" data-v="1" class="{{ 'on' if dados.lgpd or not contrato }}" onclick="ctSeg(this, 'ct-lgpd')">Com a cláusula</button><button type="button" data-v="" class="{{ 'on' if contrato and not dados.lgpd }}" onclick="ctSeg(this, 'ct-lgpd')">Sem</button></div></div>
+      </div>
+      <div class="ns-campos tres" style="margin-top:12px">
+        <div class="ns-campo"><label>Foro</label><input type="text" name="foro" class="ns-in" value="{{ dados.foro or (contratada.cidade ~ '/' ~ contratada.uf) }}"></div>
+        <div class="ns-campo"><label>Local da assinatura</label><input type="text" name="local" class="ns-in" value="{{ dados.local or contratada.cidade }}"></div>
+        <div class="ns-campo"><label>Título do contrato</label><input type="text" name="titulo" class="ns-in ns-up" value="{{ dados.titulo or '' }}" placeholder="em branco = pelos serviços escolhidos"></div>
+      </div>
+      <div class="ns-h" style="margin:16px 0 8px"><i class="fas fa-pen-nib"></i> Quem assina pela Qualicontax</div>
+      <div class="ns-ops ct-ops2" id="ct-assq-ops">
+        {% for k, q in SIGN_Q.items() %}<button type="button" class="ns-op {{ 'on' if assina_q == k or (not assina_q and loop.first) }}" data-v="{{ k }}" onclick="ctAssQ(this)">{% if q.docs_faltam or not q.email %}<span class="ns-op-tag" style="background:#fef3c7;color:#b45309">{{ 'sem documento' if q.docs_faltam else 'sem e-mail' }}</span>{% endif %}<i class="fas fa-user-tie"></i><b>{{ q.nome }}</b><small>{{ q.cargo }}{% if q.documento %} · {{ q.documento }}{% endif %}{% if q.email %} · {{ q.email }}{% endif %}</small></button>{% endfor %}
+      </div>
+      <div class="ns-h" style="margin:16px 0 8px"><i class="fas fa-people-group"></i> Testemunhas <em>até duas, da equipe</em></div>
+      <div class="ct-chips" id="ct-testes">
+        {% for t in testemunhas %}{% set on = (tests | selectattr('usuario_id', 'equalto', t.id) | list | length > 0) or (not contrato and t.id == current_user.id) %}<button type="button" data-v="{{ t.id }}" class="{{ 'on' if on }}{{ ' av' if not t.email or not t.cpf }}" onclick="ctTest(this)" title="{{ 'sem e-mail no cadastro de usuários' if not t.email else ('sem CPF no cadastro de usuários: sai sem CPF no contrato' if not t.cpf else '') }}"><i class="fas fa-user"></i> {{ t.nome.split(' ')[0] }} {{ t.nome.split(' ')[-1] if ' ' in t.nome else '' }}{% if not t.email or not t.cpf %} <i class="fas fa-triangle-exclamation falta"></i>{% endif %}</button>{% endfor %}
+      </div>
     </div>
   </section>
 </div>
 
 <aside class="ns-r">
   <div class="ns-h"><i class="fas fa-eye"></i> Como fica o contrato</div>
-  <div class="ns-b ns-res" id="ct-res"></div>
+  <div class="ns-b" style="padding:14px 16px"><div class="ct-ficha-tit" id="ct-ficha-tit"></div><div class="ct-kpis" id="ct-kpis"></div><div class="ns-res" id="ct-res"></div></div>
   <div class="ns-h" style="margin-top:4px"><i class="fas fa-route"></i> O que acontece depois</div>
   <div class="oc-passos">
     <div class="oc-passo"><i class="fas fa-file-pdf"></i><span><b>Rascunho.</b> Salva e você confere o PDF antes de qualquer envio.</span></div>
@@ -240,22 +292,50 @@ var $ = function (id) { return document.getElementById(id); };
 var esc = function (s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); };
 var SIGNQ = {{ SIGN_Q | tojson }};
 var TESTES = {{ testemunhas | tojson }};
-// ---- quem assina ----
-function pfSocio(nome, cpf, email, cel, doc, cargo, el) {
-    $('rep_nome').value = nome; $('rep_cpf').value = cpf || ''; $('rep_email').value = email || ''; $('rep_celular').value = cel || ''; $('rep_documento').value = doc || '';
+function nomeProprio(s) { s = String(s || ''); if (s !== s.toUpperCase()) return s; return s.toLowerCase().replace(/(^|\s)(\S)/g, function (m, a, b) { return a + b.toUpperCase(); }).replace(/\b(De|Da|Do|Das|Dos|E)\b/g, function (m) { return m.toLowerCase(); }); }
+function sigla(nome) { var p = String(nome || '').trim().split(/\s+/).filter(function (x) { return x.length > 2 && !/^(DE|DA|DO|DAS|DOS|E)$/i.test(x); }); return (((p[0] || '')[0] || '') + ((p[1] || '')[0] || '')).toUpperCase() || '?'; }
+// ---- seções que abrem em "Alterar" ----
+function ctToggle(id, bt) { var b = $(id); b.hidden = !b.hidden; if (bt) bt.innerHTML = b.hidden ? '<i class="fas fa-pen"></i> Alterar' : '<i class="fas fa-chevron-up"></i> Fechar'; if (!b.hidden) { var f = b.querySelector('input:not([type=hidden]), button'); if (f && f.tagName === 'INPUT') f.focus(); } }
+function ctJuntar() { $('ct-busca-emp').hidden = false; $('ct-juntar').hidden = true; $('pf-busca').focus(); }
+// ---- quem assina: cartão de leitura; quem altera é o cadastro ----
+function cardPessoa(pref, linkId, nomeVazio) {
+    var g = function (k) { return ($(pref + k) || {}).value || ''; };
+    var nome = g('nome').trim(), cargo = g('cargo').trim(), cpf = g('cpf').trim(), doc = g('documento').trim(), email = g('email').trim(), cel = g('celular').trim(), pf = g('pf').trim();
+    var card = $(pref === 'rep_' ? 'ct-rep-card' : 'ct-extra-card'), tx = $(pref === 'rep_' ? 'ct-rep-tx' : 'ct-extra-tx'), av = $(pref === 'rep_' ? 'ct-rep-av' : 'ct-extra-av'), link = $(linkId);
+    card.classList.toggle('vazio', !nome); av.textContent = nome ? sigla(nome) : '?';
+    var empId = (document.querySelector('#pf-emps [name=emp_cliente_id]') || {}).value || '';
+    link.href = pf ? '/clientes/' + pf : (empId ? '/clientes/' + empId : '#'); link.hidden = !nome;
+    link.title = pf ? 'abre o cadastro da pessoa em outra aba' : 'esta pessoa não tem cadastro próprio: abre o cadastro da empresa (sócios e contatos)';
+    if (!nome) { tx.innerHTML = '<b>' + nomeVazio + '</b><small>toque num nome acima</small>'; return; }
+    var l1 = [cargo, cpf ? 'CPF ' + cpf : '<em>sem CPF</em>', doc ? doc : '<em>sem documento para o contrato</em>'].filter(Boolean).join(' · ');
+    var l2 = [email ? '<i class="fas fa-envelope"></i>' + esc(email) : '<em>sem e-mail: não recebe o link para assinar</em>', cel ? '<i class="fas fa-mobile-screen"></i>' + esc(cel) : ''].filter(Boolean).join('   ');
+    tx.innerHTML = '<b>' + esc(nomeProprio(nome)) + '</b><small>' + l1 + '</small><small>' + l2 + '</small>';
+}
+function ctPessoaCard() { cardPessoa('rep_', 'ct-rep-link', 'Quem assina pela contratante?'); }
+function ctExtraCard() { cardPessoa('extra_', 'ct-extra-link', 'Quem mais assina?'); var tem = !!$('extra_nome').value.trim(); $('ct-extra-card').hidden = !tem; $('ct-extra-busca').hidden = tem; }
+function pfSocio(nome, cpf, email, cel, doc, cargo, el, pf) {
+    $('rep_nome').value = nome; $('rep_cpf').value = cpf || ''; $('rep_email').value = email || ''; $('rep_celular').value = cel || ''; $('rep_documento').value = doc || ''; $('rep_pf').value = pf || '';
     if (cargo) $('rep_cargo').value = cargo;
     document.querySelectorAll('#ct-socios button').forEach(function (x) { x.classList.toggle('on', x === el); });
-    ctResumo();
+    ctPessoaCard(); ctResumo();
 }
 function pfExtra(d) {
-    $('extra_nome').value = d.nome || ''; $('extra_cpf').value = d.cpf || ''; $('extra_documento').value = d.documento || ''; $('extra_email').value = d.email || ''; $('extra_celular').value = d.celular || '';
+    $('extra_nome').value = d.nome || ''; $('extra_cpf').value = d.cpf || ''; $('extra_documento').value = d.documento || ''; $('extra_email').value = d.email || ''; $('extra_celular').value = d.celular || ''; $('extra_pf').value = d.id || '';
     $('extra_cargo').value = d.cargo || 'representante autorizado(a)';
-    $('pf-pbusca').value = ''; $('pf-psug').style.display = 'none'; ctResumo();
+    $('pf-pbusca').value = ''; $('pf-psug').style.display = 'none'; ctExtraCard(); ctResumo();
 }
 function ctExtraModo(bt) {
-    document.querySelectorAll('#ct-extra-ops .ns-op').forEach(function (x) { x.classList.toggle('on', x === bt); });
     var on = bt.dataset.v === '1'; $('ct-extra').hidden = !on;
-    if (!on) pfExtra({}); else $('pf-pbusca').focus();
+    document.querySelector('#ct-extra-ops [data-v="1"]').hidden = on;
+    if (!on) pfExtra({}); else { ctExtraCard(); if (!$('extra_nome').value) $('pf-pbusca').focus(); }
+    ctResumo();
+}
+function ctVpe(bt) { document.querySelectorAll('#ct-vpe-ops .ns-op').forEach(function (x) { x.classList.toggle('on', x === bt); }); $('ct-vpe').value = bt.dataset.v; ctEmps(); }
+// ---- sugestão de mensalidade pelos ramos: a soma dos marcados vira o valor ----
+function ctSug(inp) {
+    inp.parentNode.classList.toggle('on', inp.checked);
+    var tot = 0; document.querySelectorAll('#ct-sug input:checked').forEach(function (i) { tot += parseFloat(i.dataset.v) || 0; });
+    var v = $('ct-valor'); v.value = tot ? tot.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '';
     ctResumo();
 }
 function ctCart(bt) { document.querySelectorAll('#ct-cart-ops .ns-op').forEach(function (x) { x.classList.toggle('on', x === bt); }); $('ct-cart').value = bt.dataset.v; ctResumo(); }
@@ -299,7 +379,7 @@ function ctIniMarca() {
 function ctEmps() {
     var emps = document.querySelectorAll('#pf-emps .ct-emp'); var n = emps.length; var rede = n > 1;
     $('ct-rede').hidden = !rede;
-    var porEmp = rede && $('ct-vpe-chip').classList.contains('on');
+    var porEmp = rede && $('ct-vpe').value === '1';
     emps.forEach(function (e) { e.querySelector('.ns-money').hidden = !porEmp; });
     var p = document.querySelector('#pf-emps .ct-emp .sg'); var nm = document.querySelector('#pf-emps .ct-emp .nome');
     $('ct-sub').textContent = n ? (p.textContent + ' · ' + nm.textContent + (n > 1 ? ' + ' + (n - 1) + (n > 2 ? ' empresas' : ' empresa') : '')) : 'escolha a empresa';
@@ -351,7 +431,7 @@ function ctGrupo() {
                     d.onclick = function () { pfExtra(p); };
                     sug.appendChild(d);
                 });
-                if (!sug.children.length) { var n = document.createElement('div'); n.className = 'vazio'; n.textContent = 'Ninguém com esse nome no cadastro de pessoas. Cadastre em Clientes, ou digite abaixo.'; sug.appendChild(n); }
+                if (!sug.children.length) { var n = document.createElement('div'); n.className = 'vazio'; n.textContent = 'Ninguém com esse nome no cadastro de pessoas. Cadastre em Cadastros › Clientes (pessoa física) e volte.'; sug.appendChild(n); }
                 sug.style.display = 'block';
             });
         }, 250);
@@ -363,6 +443,7 @@ function num(s) { s = String(s || '').trim(); if (!s) return 0; if (s.indexOf(',
 function brl(v) { return 'R$ ' + (v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
 function val(n) { var e = document.querySelector('[name=' + n + ']'); return e ? e.value : ''; }
 function segTx(id) { var b = document.querySelector('#' + id + ' button.on'); return b ? b.textContent.trim() : ''; }
+function F(k, v) { return '<span>' + k + '<b>' + esc(v) + '</b></span>'; }
 function ctResumo() {
     var emps = Array.prototype.map.call(document.querySelectorAll('#pf-emps .ct-emp .nome'), function (x) { return x.textContent; });
     var apelido = val('apelido'), rep = val('rep_nome'), repEmail = val('rep_email'), extra = val('extra_nome');
@@ -372,20 +453,25 @@ function ctResumo() {
     var q = SIGNQ[$('ct-assq').value] || SIGNQ[Object.keys(SIGNQ)[0]] || {};
     var tests = Array.prototype.map.call(document.querySelectorAll('#ct-testes button.on'), function (b) { return b.textContent.trim().split(' ')[0]; });
     var titulo = val('titulo') || (areas.indexOf('Contabilidade') >= 0 ? 'Contrato de prestação de serviços contábeis' : (areas.length === 1 ? 'Contrato de prestação de serviços de ' + areas[0].toLowerCase() : 'Contrato de prestação de serviços'));
+    var reaj = segTx('ct-reajs') + (val('reajuste_indice') ? ' · ' + val('reajuste_indice') : '') + (val('reajuste_mes') ? ' · ' + val('reajuste_mes') : '');
     var faltas = [];
     if (!emps.length) faltas.push('a empresa'); if (!rep || !repEmail) faltas.push('quem assina e o e-mail'); if (extra && !val('extra_email')) faltas.push('o e-mail do outro assinante');
     if (!areas.length && !extras) faltas.push('os serviços'); if (!v) faltas.push('o valor'); if (!ini) faltas.push('a data de início');
+    // frases de leitura (condições e cláusulas)
+    $('ct-cond-sum').innerHTML = F('Reajuste', reaj.toLowerCase()) + F('13º', segTx('ct-decs').toLowerCase()) + F('Multa', val('multa') + '%') + F('Juros', val('juros') + '% ao mês');
+    $('ct-cla-sum').innerHTML = F('Aviso prévio', $('ct-aviso').value + ' dias') + F('LGPD', $('ct-lgpd').value ? 'com a cláusula' : 'sem') + F('Foro', val('foro')) + F('Assinado em', val('local'))
+        + F('Pela Qualicontax', q.nome || '') + F('Testemunha' + (tests.length > 1 ? 's' : ''), tests.length ? tests.join(' e ') : 'nenhuma');
+    // ficha à direita
+    var K = function (k, x, sub, falta) { return '<div class="ct-kpi"><small>' + k + '</small><b' + (falta ? ' class="falta"' : '') + '>' + esc(x) + '</b>' + (sub ? '<span>' + esc(sub) + '</span>' : '') + '</div>'; };
+    $('ct-ficha-tit').textContent = titulo.toUpperCase();
+    $('ct-kpis').innerHTML = K('Honorários', v ? brl(v) : 'a informar', 'por mês', !v) + K('Vencimento', dia ? 'dia ' + dia : '—', 'de cada mês')
+        + K('Início', ini ? ini.split('-').reverse().join('/') : 'a informar', '', !ini) + K('Reajuste', segTx('ct-reajs').split(',')[0], val('reajuste_indice') || val('reajuste_mes') || '');
     var L = function (k, x, falta) { return '<div><span>' + k + '</span><b' + (falta ? ' class="ct-falta"' : '') + '>' + esc(x || '—') + '</b></div>'; };
-    var html = L('Título', titulo.toUpperCase())
-        + L('Contratante', emps.length ? (emps[0] + (emps.length > 1 ? ' + ' + (emps.length - 1) : '')) + (apelido ? ' (' + apelido.toUpperCase() + ')' : '') : 'escolha a empresa', !emps.length)
-        + L('Assina', rep ? rep.toUpperCase() + (repEmail ? '' : ' (sem e-mail)') : 'quem assina pela empresa', !rep || !repEmail)
-        + (extra ? L('Também assina', extra.toUpperCase() + ' · ' + (val('extra_cargo') || 'autorizado(a)'), !val('extra_email')) : '')
+    var html = L('Contratante', emps.length ? (emps[0] + (emps.length > 1 ? ' + ' + (emps.length - 1) : '')) + (apelido ? ' (' + apelido.toUpperCase() + ')' : '') : 'escolha a empresa', !emps.length)
+        + L('Assina', rep ? nomeProprio(rep) + (repEmail ? '' : ' (sem e-mail)') : 'quem assina pela empresa', !rep || !repEmail)
+        + (extra ? L('Também assina', nomeProprio(extra) + ' · ' + (val('extra_cargo') || 'autorizado(a)'), !val('extra_email')) : '')
         + L('Serviços', areas.join(', ') + (extras ? (areas.length ? ' + ' : '') + extras + ' específico' + (extras > 1 ? 's' : '') : ''), !areas.length && !extras)
-        + L('Honorários', v ? brl(v) + ' por mês' : 'informe o valor', !v)
-        + L('Vencimento', dia ? 'dia ' + dia : '')
-        + L('Início', ini ? ini.split('-').reverse().join('/') : 'informe', !ini)
-        + L('13º', segTx('ct-decs')) + L('Reajuste', segTx('ct-reajs') + (val('reajuste_indice') ? ' · ' + val('reajuste_indice') : '') + (val('reajuste_mes') ? ' · ' + val('reajuste_mes') : ''))
-        + L('Multa / juros', val('multa') + '% · ' + val('juros') + '% ao mês') + L('Aviso prévio', $('ct-aviso').value + ' dias') + L('LGPD', $('ct-lgpd').value ? 'com a cláusula' : 'sem')
+        + L('13º', segTx('ct-decs')) + L('Multa / juros', val('multa') + '% · ' + val('juros') + '% ao mês') + L('Aviso prévio', $('ct-aviso').value + ' dias') + L('LGPD', $('ct-lgpd').value ? 'com a cláusula' : 'sem')
         + L('Foro', val('foro')) + L('Pela Qualicontax', q.nome || '') + L('Testemunhas', tests.length ? tests.join(' e ') : 'nenhuma')
         + ($('ct-cart') ? L('Carteira', $('ct-cart').value === '1' ? 'sim, {{ "%g" % carteira_pct if carteira_pct else "" }}%' : 'não') : '')
         + '<div class="ct-ok' + (faltas.length ? ' erro' : '') + '"><i class="fas ' + (faltas.length ? 'fa-circle-exclamation' : 'fa-circle-check') + '"></i><b>' + (faltas.length ? 'Falta: ' + faltas.join(', ') : 'Pronto para salvar o rascunho') + '</b></div>';
@@ -393,6 +479,7 @@ function ctResumo() {
     $('ct-prev-val').textContent = brl(v); $('ct-prev-sub').textContent = (dia ? 'vence dia ' + dia : '') + (ini ? ' · desde ' + ini.split('-').reverse().join('/') : '');
     $('ct-msg').textContent = faltas.length ? 'Falta ' + faltas.join(', ') + '.' : 'Tudo preenchido. Salva como rascunho: você confere o PDF antes de mandar para aprovação.';
     $('ct-msg').className = 'ns-pe-info' + (faltas.length ? '' : ' ok');
+    ctPessoaCard();
 }
 $('pf-form').addEventListener('input', ctResumo); $('pf-form').addEventListener('change', ctResumo);
 $('pf-form').addEventListener('submit', function (e) { if (!$('ct-inicio').value) { e.preventDefault(); $('ct-ini-txt').focus(); } });
@@ -400,5 +487,7 @@ window.Dinheiro.ligar();
 ctTest.init = true; $('ct-tests').innerHTML = Array.prototype.map.call(document.querySelectorAll('#ct-testes button.on'), function (b) { return '<input type="hidden" name="testemunha_id" value="' + esc(b.dataset.v) + '">'; }).join('');
 if (!$('ct-assq').value) { var f = document.querySelector('#ct-assq-ops .ns-op.on'); if (f) $('ct-assq').value = f.dataset.v; }
 ctIniMarca(); ctEmps();
+ctExtraCard();
+if ($('ct-sug') && !$('ct-valor').value.trim()) { var s0 = document.querySelector('#ct-sug input'); if (s0) ctSug(s0); }
 </script>
 {% endblock %}
