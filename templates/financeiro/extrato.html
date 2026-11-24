@@ -1542,6 +1542,13 @@ function exWizFechar() {
 }
 
 function exTermos() {
+  // Sugestao escolhida (sem "Montar a mao") manda os TERMOS DELA (24/11/2026).
+  // Antes a tela remontava os termos pelos pedacos (palavras separadas por
+  // espaco), e "APLIC.AUTOM.INVESTFACIL*" e UM pedaco so: a sugestao
+  // ['APLIC','AUTOM'] nao ligava pedaco nenhum, a previa ia sem termo, dava 0
+  // e o Continuar ficava apagado. Anderson: "por que nao esta avancando?".
+  var sg = (!W.manual && W.sugEscolhida !== null && W.sugestoes) ? W.sugestoes[W.sugEscolhida] : null;
+  if (sg && sg.termos && sg.termos.length) return sg.termos.slice();
   // Pedacos ligados e colados viram UM trecho. Trechos separados por um
   // pedaco desligado viram trechos diferentes, e TODOS precisam aparecer —
   // e assim que "o numero do meio muda" deixa de atrapalhar.

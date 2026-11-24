@@ -941,6 +941,8 @@ class RegraExtrato:
         'DES', 'REM', 'TRANSF', 'TRANSFERENCIA', 'CONTAS', 'CONTA', 'TED', 'DOC',
         'ELET', 'DISP', 'LIQUIDACAO', 'BOLETO', 'TARIFA', 'BANCARIA', 'DEBITO',
         'CREDITO', 'COBRANCA', 'PARA', 'DEB', 'CRED', 'SALDO', 'RENDIMENTO',
+        # aplicação/resgate automático ("APLIC.AUTOM.INVESTFACIL*" virava "a pessoa APLIC AUTOM")
+        'APLIC', 'APLICACAO', 'AUTOM', 'AUTOMATICA', 'AUTOMATICO', 'RESG', 'RESGATE',
         # nome de banco
         'SICREDI', 'BRADESCO', 'CORA', 'NUBANK', 'SANTANDER', 'ITAU', 'CAIXA', 'BANCO',
         # o que toda empresa tem no nome
