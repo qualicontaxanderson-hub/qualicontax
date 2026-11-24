@@ -121,3 +121,28 @@ def depois(conta, ult):
     rows = [r for r in rows if conta_normalizada(r['conta']) == alvo]
     return {'valor': sum((Decimal(str(r['valor'] or 0)) for r in rows), Decimal('0')), 'n': len(rows),
             'ate': max((r['data'] for r in rows), default=None)}
+
+
+def _e_invest_facil(desc):
+    """Aplicação ou resgate do Invest Fácil do Bradesco ("APLIC.AUTOM.INVESTFACIL*", "APLIC.INVEST FACIL",
+    "RESG.AUTOM.INVEST FACIL*"). O rendimento (RENTAB.INVEST FACIL) não: ele já cai na conta."""
+    d = (desc or '').upper().replace(' ', '')
+    return 'INVESTFACIL' in d and d.startswith(('APLIC', 'RESG'))
+
+
+def invest_facil(conta):
+    """Quanto está no Invest Fácil desta conta, pelas aplicações e resgates do extrato (24/11/2026).
+
+    Anderson: "saldos errados" — o app do Bradesco mostra "Conta-Corrente com Invest Fácil" 8.949,68 e o
+    sistema mostrava só a conta corrente (−152,14 com o dia 23 pela metade, R$ 1,00 com ele inteiro): o banco
+    tira para o Invest Fácil o que sobra e resgata sozinho quando falta. A aplicação é saída do extrato e o
+    resgate é entrada, então o que está aplicado = −(soma dessas linhas). Devolve Decimal (0 sem nenhuma)."""
+    from utils.db_helper import execute_query
+    from utils.extrato_ingest import conta_normalizada
+    rows = execute_query(
+        """SELECT conta, descricao, valor FROM extrato_lancamentos
+            WHERE empresa_id = %s AND descricao LIKE %s""",
+        (conta['empresa_id'], '%INVEST%'), fetch=True) or []
+    alvo = conta_normalizada(conta['conta'])
+    return -sum((Decimal(str(r['valor'] or 0)) for r in rows
+                 if conta_normalizada(r['conta']) == alvo and _e_invest_facil(r['descricao'])), Decimal('0'))

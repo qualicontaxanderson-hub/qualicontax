@@ -1662,6 +1662,7 @@ def _contas_ctx():
     }
     # 21/11/2026: saldo do banco de cada conta (gravado a cada extrato) e a conferência com os lançamentos
     from utils.conta_saldo import ultimos as _ult_saldo, conferir as _conferir_saldo, depois as _depois_saldo
+    from utils.conta_saldo import invest_facil as _invest_facil
     _us = _ult_saldo([c['id'] for c in contas])
     _por_id = {c['id']: c for c in contas}
     for c in dados['contas']:
@@ -1675,6 +1676,15 @@ def _contas_ctx():
         except Exception:
             dp = None
         c['saldo']['hoje'] = float(u['valor'] + (dp['valor'] if dp else 0))
+        # 24/11/2026: o Bradesco guarda a sobra no Invest Fácil e o app dele mostra conta + Invest Fácil
+        try:
+            inv = float(_invest_facil(_por_id[c['id']]))
+        except Exception:
+            inv = 0.0
+        if abs(inv) >= 0.005:
+            c['saldo']['conta_hoje'] = c['saldo']['hoje']
+            c['saldo']['invest'] = inv
+            c['saldo']['hoje'] = round(c['saldo']['hoje'] + inv, 2)
         c['saldo']['n_depois'] = dp['n'] if dp else 0
         c['saldo']['ate'] = _d(dp['ate']) if dp and dp['ate'] else _d(u['data'])
         try:
