@@ -1,7 +1,7 @@
 """Rotas de Contratos — módulo antigo (nunca funcionou; tabela ``contratos`` com 0 linhas).
 
 Desde 06/11/2026 o contrato de prestação de serviços é feito em Financeiro > CONTRATOS (routes/financeiro_contratos.py):
-montado do cadastro, com número QC-XXXXXX gerado pelo sistema e assinatura eletrônica. Estas rotas só levam para lá,
+montado do cadastro, com número CTR-XXXXXX gerado pelo sistema e assinatura eletrônica. Estas rotas só levam para lá,
 para os links antigos (Comercial, ficha do cliente) continuarem valendo.
 """
 from flask import Blueprint, redirect, request, url_for

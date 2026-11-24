@@ -257,10 +257,11 @@ class PrestContrato:
     # ---------------- gravação ----------------
     @staticmethod
     def gerar_numero():
-        """QC-XXXXXX: seis caracteres aleatórios sem letras ambíguas (0/O, 1/I), único na tabela."""
+        """CTR-XXXXXX, no mesmo molde do orçamento (ORC-XXXXXX): seis caracteres aleatórios sem letras ambíguas (0/O, 1/I),
+        único na tabela. Era QC-, que confundia com o número dos boletos (24/11/2026, Anderson: "numeração igual aos orçamentos")."""
         alfabeto = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
         for _ in range(20):
-            n = 'QC-' + ''.join(secrets.choice(alfabeto) for _ in range(6))
+            n = 'CTR-' + ''.join(secrets.choice(alfabeto) for _ in range(6))
             if not execute_query('SELECT 1 FROM prest_contratos WHERE numero = %s', (n,), fetch=True):
                 return n
         raise RuntimeError('não consegui um número livre')
