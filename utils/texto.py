@@ -78,3 +78,101 @@ def titulo_servico(nome):
             j += 1
         saida.append(p[:j] + p[j:j + 1].upper() + p[j + 1:])
     return ' '.join(saida)
+
+
+# ---------------------------------------------------------------------------
+# Nome de ramo de atividade (24/11/2026 — Anderson: "transportadora petroleo não, e sim
+# Transportadora Petróleo"). Cada palavra com a inicial maiúscula, palavrinhas de ligação em
+# minúsculas, e o acento devolvido às palavras comuns de ramo digitadas sem ele.
+# ---------------------------------------------------------------------------
+_ACENTOS_RAMO = {
+    'acai': 'açaí', 'acessorios': 'acessórios', 'aco': 'aço', 'acougue': 'açougue', 'acucar': 'açúcar',
+    'administracao': 'administração', 'aereo': 'aéreo', 'aerea': 'aérea', 'agencia': 'agência', 'agricola': 'agrícola',
+    'agricolas': 'agrícolas', 'agropecuaria': 'agropecuária', 'agropecuario': 'agropecuário', 'agroquimicos': 'agroquímicos',
+    'agrotoxicos': 'agrotóxicos', 'agua': 'água', 'aguas': 'águas', 'alcool': 'álcool', 'alimenticio': 'alimentício',
+    'alimenticios': 'alimentícios', 'aluminio': 'alumínio', 'ambulancia': 'ambulância', 'analises': 'análises',
+    'animacao': 'animação', 'armazem': 'armazém', 'artistica': 'artística', 'artistico': 'artístico',
+    'assistencia': 'assistência', 'audio': 'áudio', 'automacao': 'automação', 'automoveis': 'automóveis',
+    'autonoma': 'autônoma', 'autonomo': 'autônomo', 'autopecas': 'autopeças', 'avaliacao': 'avaliação',
+    'bancario': 'bancário', 'cafe': 'café', 'caes': 'cães', 'calcados': 'calçados', 'camarao': 'camarão',
+    'cambio': 'câmbio', 'cameras': 'câmeras', 'capacitacao': 'capacitação', 'cartorio': 'cartório',
+    'cartorario': 'cartorário', 'ceramica': 'cerâmica', 'cinematografica': 'cinematográfica', 'climatizacao': 'climatização',
+    'clinica': 'clínica', 'clinicas': 'clínicas', 'clinicos': 'clínicos', 'cobranca': 'cobrança', 'cobrancas': 'cobranças',
+    'colchoes': 'colchões', 'combustivel': 'combustível', 'combustiveis': 'combustíveis', 'comercio': 'comércio',
+    'condominio': 'condomínio', 'condominios': 'condomínios', 'confeccao': 'confecção', 'confeccoes': 'confecções',
+    'conservacao': 'conservação', 'consorcio': 'consórcio', 'construcao': 'construção', 'construcoes': 'construções',
+    'contabil': 'contábil', 'conteudo': 'conteúdo', 'conveniencia': 'conveniência', 'copias': 'cópias',
+    'cosmeticos': 'cosméticos', 'credito': 'crédito', 'criacao': 'criação', 'danca': 'dança', 'decoracao': 'decoração',
+    'decoracoes': 'decorações', 'dedetizacao': 'dedetização', 'demolicao': 'demolição', 'deposito': 'depósito',
+    'diagnostico': 'diagnóstico', 'digitalizacao': 'digitalização', 'distribuicao': 'distribuição',
+    'documentacao': 'documentação', 'domestica': 'doméstica', 'domesticas': 'domésticas', 'domestico': 'doméstico',
+    'educacao': 'educação', 'eletrica': 'elétrica', 'eletricas': 'elétricas', 'eletrico': 'elétrico', 'eletricos': 'elétricos',
+    'eletrodomesticos': 'eletrodomésticos', 'eletronica': 'eletrônica', 'eletronicos': 'eletrônicos', 'eolica': 'eólica',
+    'escavacao': 'escavação', 'escritorio': 'escritório', 'estetica': 'estética', 'exaustao': 'exaustão',
+    'exportacao': 'exportação', 'extracao': 'extração', 'extrusao': 'extrusão', 'fabrica': 'fábrica',
+    'fabricacao': 'fabricação', 'farmacia': 'farmácia', 'ferroviario': 'ferroviário', 'fotografico': 'fotográfico',
+    'frigorifico': 'frigorífico', 'fundicao': 'fundição', 'funeraria': 'funerária', 'gas': 'gás', 'generos': 'gêneros',
+    'gestao': 'gestão', 'ginastica': 'ginástica', 'grafica': 'gráfica', 'graficos': 'gráficos', 'graos': 'grãos',
+    'hidraulica': 'hidráulica', 'hidraulico': 'hidráulico', 'hidrica': 'hídrica', 'higienizacao': 'higienização',
+    'iluminacao': 'iluminação', 'imobiliaria': 'imobiliária', 'imobiliario': 'imobiliário', 'imovel': 'imóvel',
+    'imoveis': 'imóveis', 'impermeabilizacao': 'impermeabilização', 'importacao': 'importação', 'impressao': 'impressão',
+    'incendio': 'incêndio', 'incorporacao': 'incorporação', 'industria': 'indústria', 'industrias': 'indústrias',
+    'informatica': 'informática', 'injecao': 'injeção', 'instalacao': 'instalação', 'instalacoes': 'instalações',
+    'inteligencia': 'inteligência', 'interprete': 'intérprete', 'intima': 'íntima', 'irrigacao': 'irrigação',
+    'juridica': 'jurídica', 'juridico': 'jurídico', 'la': 'lã', 'laboratorio': 'laboratório', 'laticinio': 'laticínio',
+    'laticinios': 'laticínios', 'leilao': 'leilão', 'leiloes': 'leilões', 'locacao': 'locação', 'locacoes': 'locações',
+    'locucao': 'locução', 'logistica': 'logística', 'manutencao': 'manutenção', 'mao': 'mão', 'maquinas': 'máquinas',
+    'maritimo': 'marítimo', 'marmores': 'mármores', 'mecanica': 'mecânica', 'medica': 'médica', 'medico': 'médico',
+    'medicos': 'médicos', 'metalurgica': 'metalúrgica', 'midia': 'mídia', 'midias': 'mídias', 'mineracao': 'mineração',
+    'moveis': 'móveis', 'mudancas': 'mudanças', 'musica': 'música', 'nutricao': 'nutrição', 'odontologico': 'odontológico',
+    'optica': 'óptica', 'organica': 'orgânica', 'organicos': 'orgânicos', 'organizacao': 'organização', 'otica': 'ótica',
+    'otico': 'ótico', 'panificacao': 'panificação', 'papelao': 'papelão', 'participacoes': 'participações',
+    'pavimentacao': 'pavimentação', 'pecas': 'peças', 'pecuaria': 'pecuária', 'pericia': 'perícia', 'petroleo': 'petróleo',
+    'plastico': 'plástico', 'plasticos': 'plásticos', 'pneumaticos': 'pneumáticos', 'portoes': 'portões',
+    'previdencia': 'previdência', 'producao': 'produção', 'producoes': 'produções', 'programacao': 'programação',
+    'proprio': 'próprio', 'proprios': 'próprios', 'protese': 'prótese', 'publicacoes': 'publicações', 'quimica': 'química',
+    'quimicos': 'químicos', 'racao': 'ração', 'racoes': 'rações', 'radio': 'rádio', 'radiodifusao': 'radiodifusão',
+    'rapido': 'rápido', 'reciclaveis': 'recicláveis', 'refrigeracao': 'refrigeração', 'representacao': 'representação',
+    'representacoes': 'representações', 'residuos': 'resíduos', 'retifica': 'retífica', 'robotica': 'robótica',
+    'rodoviario': 'rodoviário', 'rodoviaria': 'rodoviária', 'salao': 'salão', 'satelite': 'satélite', 'saude': 'saúde',
+    'seguranca': 'segurança', 'selecao': 'seleção', 'servico': 'serviço', 'servicos': 'serviços', 'siderurgica': 'siderúrgica',
+    'suino': 'suíno', 'suinos': 'suínos', 'tapecaria': 'tapeçaria', 'taxi': 'táxi', 'tecnica': 'técnica', 'tecnico': 'técnico',
+    'tecnicos': 'técnicos', 'telecomunicacoes': 'telecomunicações', 'telefonica': 'telefônica', 'televisao': 'televisão',
+    'temporario': 'temporário', 'terceirizacao': 'terceirização', 'textil': 'têxtil', 'traducao': 'tradução',
+    'transito': 'trânsito', 'tributaria': 'tributária', 'turistico': 'turístico', 'veiculo': 'veículo',
+    'veiculos': 'veículos', 'ventilacao': 'ventilação', 'vestuario': 'vestuário', 'veterinaria': 'veterinária',
+    'veterinario': 'veterinário', 'veterinarios': 'veterinários', 'video': 'vídeo', 'vidracaria': 'vidraçaria',
+    'vigilancia': 'vigilância',
+}
+# siglas que ficam como são (TI, ANP...); qualquer palavra de até 3 letras toda em maiúsculas também fica
+_SIGLAS_RAMO = {'TI', 'ANP', 'ANTT', 'GLP', 'GNV', 'EPI', 'EPIs', 'UTI', 'MEI', 'ONG', 'OSC', 'TV', 'FM', 'AM',
+                'PVC', 'LED', 'RH', 'CNH', 'CFTV'}
+
+
+def _sem_acento(txt):
+    import unicodedata
+    return ''.join(c for c in unicodedata.normalize('NFD', txt or '') if unicodedata.category(c) != 'Mn')
+
+
+def nome_ramo(nome):
+    """'transportadora petroleo' -> 'Transportadora Petróleo'; 'LAVA RAPIDO' -> 'Lava Rápido';
+    'Serviços em geral' -> 'Serviços em Geral'; 'TI' e outras siglas curtas ficam como estão."""
+    nome = ' '.join((nome or '').split())
+    partes = nome.split(' ')
+    saida = []
+
+    def _pedaco(m):
+        w = m.group(0)
+        base = _ACENTOS_RAMO.get(_sem_acento(w).lower(), w.lower())
+        return base[:1].upper() + base[1:]
+
+    for i, p in enumerate(partes):
+        if not p or not any(c.isalpha() for c in p):
+            saida.append(p); continue
+        if p.lower() in _MIUDAS and i > 0 and partes[i - 1] not in ('—', '–', '-', '/'):
+            saida.append(p.lower()); continue
+        if p in _SIGLAS_RAMO or p.upper() in _SIGLAS_RAMO or (p.isupper() and len(p) <= 3):
+            saida.append(p if p in _SIGLAS_RAMO else p.upper()); continue
+        # cada pedaço ligado por hífen ou barra ganha inicial maiúscula e o acento, se faltar
+        saida.append(re.sub(r"[^\s\-/]+", _pedaco, p))
+    return ' '.join(saida)

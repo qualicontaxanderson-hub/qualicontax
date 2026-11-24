@@ -4133,10 +4133,12 @@ def qualif_rapida():
 @login_required
 def ramo_rapido():
     """"Novo ramo" no formulário do cliente (07/10/2026), como o grupo rápido.
-    O nome fica como foi digitado (os ramos usam maiúscula e minúscula);
+    O nome sai padronizado (24/11/2026 — Anderson: "transportadora petroleo não, e sim
+    Transportadora Petróleo"): iniciais maiúsculas e acentos de volta, pelo nome_ramo;
     nome igual, sem diferenciar maiúscula, devolve o ramo que já existe."""
+    from utils.texto import nome_ramo
     dados = request.get_json(silent=True) or {}
-    nome = re.sub(r'\s+', ' ', (dados.get('nome') or '')).strip()
+    nome = nome_ramo(dados.get('nome'))
     tipo = 'PF' if dados.get('tipo_pessoa') == 'PF' else 'PJ'   # ramo nasce no tipo da tela (10/10/2026)
     # Ramo de empresa nasce dentro do segmento em que foi pedido (10/10/2026).
     seg = None if tipo == 'PF' else (dados.get('segmento') or '').upper()
