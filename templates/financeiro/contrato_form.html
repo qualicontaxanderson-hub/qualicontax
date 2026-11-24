@@ -19,6 +19,41 @@
 .cv-page .tj-x:hover { background:rgba(255,255,255,.3); }
 .tj-sec h4 .ct-alt { margin-left:auto; } .tj-sec h4 small { flex:1; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .tj-sec h4 small:last-child { flex:none; }
+/* ── vida e cores (24/11/2026) ── */
+.tj-sec.c-verde { --cor:#16a34a; --cor-e:#166534; --cor-f:#ecfdf3; } .tj-sec.c-agua { --cor:#0d9488; --cor-e:#115e59; --cor-f:#f0fdfa; }
+.tj-sec.c-ambar { --cor:#d97706; --cor-e:#92400e; --cor-f:#fffbeb; } .tj-sec.c-azul { --cor:#2563eb; --cor-e:#1e40af; --cor-f:#eff6ff; } .tj-sec.c-roxo { --cor:#7c3aed; --cor-e:#5b21b6; --cor-f:#f5f3ff; }
+.tj-sec h4 { color:var(--cor-e); } .tj-sec h4 > i { background:var(--cor-f); color:var(--cor); }
+.tj-sec h4 .ct-alt { border-color:var(--cor-b, #e2e8f0); color:var(--cor-e); } .tj-sec h4 .ct-alt i { color:var(--cor); }
+/* cartões das partes: faixa colorida no topo, como os cartões de Honorários */
+.ct-parte { padding:0; overflow:hidden; background:#fff; gap:0; --pc:#16a34a; --pc-e:#0f3d2e; }
+.ct-parte.p-pessoa { --pc:#7c3aed; --pc-e:#4c1d95; } .ct-parte.p-extra { --pc:#d97706; --pc-e:#92400e; }
+.ct-parte .pt-rot { background:linear-gradient(135deg, var(--pc), var(--pc-e)); color:#fff; padding:9px 14px; letter-spacing:.08em; } .ct-parte .pt-rot i { color:rgba(255,255,255,.85); }
+.ct-parte .pt-top { padding:14px 16px 6px; } .ct-parte .pt-tags, .ct-parte .pt-linhas { padding:0 16px; margin-top:8px; } .ct-parte .pt-acoes { margin:12px 16px 0; padding:10px 0 12px; }
+.pt-av { background:var(--pc); color:#fff; box-shadow:0 6px 14px rgba(0,0,0,.12); } .pt-av.emp { background:linear-gradient(135deg, var(--pc), var(--pc-e)); }
+.pt-id small em { color:#b45309; }
+.pt-linhas i { color:var(--pc); }
+.pt-acoes a { color:var(--pc-e); }
+.ct-parte-mais { background:#fff; border:1.5px dashed #fcd34d; color:#92400e; padding:18px 16px; } .ct-parte-mais i { color:#f59e0b; } .ct-parte-mais:hover { background:#fffbeb; border-color:#f59e0b; }
+.ct-parte.ct-parte-mais .pt-rot { display:none; }
+/* serviços: verde-água */
+.tj-sec.c-agua .ct-chips.grande label.on { background:linear-gradient(135deg,#14b8a6,#0f766e); border-color:#0f766e; }
+.tj-sec.c-agua .ct-mais { border-color:#99f6e4; background:#f0fdfa; color:#0f766e; }
+/* honorários: valor e dia em âmbar, sugestões por ramo com a cor do ramo */
+.tj-sec.c-ambar .ns-money.fixo { border-color:#fcd34d; } .tj-sec.c-ambar .ns-money.fixo > span { background:#fef3c7; color:#92400e; border-color:#fde68a; } .tj-sec.c-ambar .ns-money.fixo > input.ns-in { color:#92400e; }
+.tj-sec.c-ambar .ct-chips button.on { background:#d97706; border-color:#d97706; }
+.ct-sug label { border-color:#fcd34d; background:#fffbeb; color:#92400e; } .ct-sug label.on { background:linear-gradient(135deg,#f59e0b,#b45309); border-color:#b45309; color:#fff; }
+/* condições e cláusulas: frases com destaque colorido */
+.ct-frase b { color:var(--cor-e, #0f172a); }
+/* resumo à direita: quatro cores, como os cartões do topo de Honorários */
+.ct-kpi { border:0; color:#fff; } .ct-kpi small { color:#fff !important; opacity:.95; font-size:10.5px; } .ct-kpi span { color:#fff !important; opacity:.85; } .ct-kpi b { color:#fff !important; font-size:16px; } .ct-kpi b.falta { color:#fde68a !important; }
+.ct-kpi:nth-child(1) { background:linear-gradient(135deg,#16a34a,#166534); } .ct-kpi:nth-child(2) { background:linear-gradient(135deg,#2563eb,#1e40af); }
+.ct-kpi:nth-child(3) { background:linear-gradient(135deg,#f97316,#c2410c); } .ct-kpi:nth-child(4) { background:linear-gradient(135deg,#7c3aed,#5b21b6); }
+.ns-res div.ct-ok { background:#ecfdf3; border-radius:10px; padding:9px 11px; margin-top:8px; } .ns-res div.ct-ok.erro { background:#fef2f2; }
+/* O que fazer: o secundário com ícone azul */
+.tj-acao:not(.prim) > i { background:#eff6ff; color:#2563eb; }
+/* o que acontece depois: ícones coloridos */
+.oc-passo:nth-child(1) i { background:#fff7ed; color:#ea580c; } .oc-passo:nth-child(2) i { background:#eff6ff; color:#2563eb; } .oc-passo:nth-child(3) i { background:#f5f3ff; color:#7c3aed; }
+
 /* ações (iguais às da janela do contrato) */
 .tj-acao { display:flex; align-items:center; gap:12px; width:100%; text-align:left; border:1px solid #e2e8f0; background:#fff; border-radius:14px; padding:10px 12px; font:inherit; cursor:pointer; margin-bottom:8px; color:inherit; text-decoration:none; }
 .tj-acao > i { width:36px; height:36px; border-radius:11px; background:#f1f5f4; color:#475569; display:inline-flex; align-items:center; justify-content:center; font-size:14px; flex-shrink:0; }
@@ -173,7 +208,7 @@
 <div class="tj-col1">
 
   {# ── 1. partes do contrato: cartão da empresa e cartão de quem assina (24/11/2026) ── #}
-  <section class="tj-sec"><h4><i class="fas fa-handshake"></i> Partes do contrato <small>a empresa e quem assina por ela · dados do cadastro</small></h4>
+  <section class="tj-sec c-verde"><h4><i class="fas fa-handshake"></i> Partes do contrato <small>a empresa e quem assina por ela · dados do cadastro</small></h4>
     <div class="ct-partes">
       <div class="ct-parte">
         <div class="pt-rot"><i class="fas fa-building"></i> Contratante</div>
@@ -209,7 +244,7 @@
       <input type="hidden" name="rep_cargo" id="rep_cargo" value="{{ e0.rep_cargo if e0 else 'sócio administrador' }}"><input type="hidden" name="rep_documento" id="rep_documento" value="{{ e0.rep_documento if e0 else '' }}">
       <input type="hidden" name="rep_email" id="rep_email" value="{{ e0.rep_email if e0 else '' }}"><input type="hidden" name="rep_celular" id="rep_celular" value="{{ e0.rep_celular if e0 else '' }}">
       <input type="hidden" id="rep_pf" value="{{ (emp.socios[0].pf_cliente_id if emp and emp.socios and not contrato else '') or '' }}">
-      <div class="ct-parte" id="ct-rep-card">
+      <div class="ct-parte p-pessoa" id="ct-rep-card">
         <div class="pt-rot"><i class="fas fa-user-pen"></i> Quem assina pela contratante</div>
         <div class="pt-top"><span class="pt-av" id="ct-rep-av">?</span><div class="pt-id"><b id="ct-rep-nome">—</b><small id="ct-rep-cargo"></small></div></div>
         <div class="pt-linhas" id="ct-rep-tx"></div>
@@ -221,7 +256,7 @@
       <input type="hidden" name="extra_cargo" id="extra_cargo" value="{{ ex.cargo or 'representante autorizado(a)' }}"><input type="hidden" name="extra_documento" id="extra_documento" value="{{ ex.documento or '' }}">
       <input type="hidden" name="extra_email" id="extra_email" value="{{ ex.email or '' }}"><input type="hidden" name="extra_celular" id="extra_celular" value="{{ ex.celular or '' }}"><input type="hidden" id="extra_pf" value="{{ ex.pf_cliente_id or '' }}">
       <div class="ct-parte ct-parte-mais" id="ct-extra-vazio" {{ 'hidden' if ex.nome }} onclick="ctExtraModo(document.querySelector('#ct-extra-ops [data-v=&quot;1&quot;]'))"><i class="fas fa-user-plus"></i><b>Mais alguém assina?</b><small>procurador, autorizado, quem responde pela outra empresa do grupo</small></div>
-      <div class="ct-parte" id="ct-extra-card" {{ '' if ex.nome else 'hidden' }}>
+      <div class="ct-parte p-extra" id="ct-extra-card" {{ '' if ex.nome else 'hidden' }}>
         <div class="pt-rot"><i class="fas fa-user-plus"></i> Também assina pela contratante</div>
         <div class="pt-top"><span class="pt-av" id="ct-extra-av">?</span><div class="pt-id"><b id="ct-extra-nome">—</b><small id="ct-extra-cargo"></small></div></div>
         <div class="pt-linhas" id="ct-extra-tx"></div>
@@ -251,7 +286,7 @@
 
   {% if carteira_pct %}
   {# ── carteira (22/11/2026 — Anderson: "pode ser que ele cadastre uma empresa que não ganhará os 25%, então tem que ter a opção") ── #}
-  <section class="tj-sec"><h4><i class="fas fa-building-user"></i> Sua comissão de carteira <small>{{ '%g' % carteira_pct }}% da mensalidade, todo mês que o cliente pagar</small></h4>
+  <section class="tj-sec c-azul"><h4><i class="fas fa-building-user"></i> Sua comissão de carteira <small>{{ '%g' % carteira_pct }}% da mensalidade, todo mês que o cliente pagar</small></h4>
     <div class="ns-ops ct-ops2" id="ct-cart-ops">
       <button type="button" class="ns-op {{ 'on' if (dados.carteira) or not contrato }}" data-v="1" onclick="ctCart(this)"><i class="fas fa-hand-holding-dollar"></i><b>Sim, entra na minha carteira</b><small>aprovado o contrato, a comissão nasce sozinha em Serviços › Quem recebe comissão</small></button>
       <button type="button" class="ns-op {{ 'on' if contrato and not dados.carteira }}" data-v="0" onclick="ctCart(this)"><i class="fas fa-ban"></i><b>Não, sem comissão neste contrato</b><small>a empresa fica fora da sua carteira</small></button>
@@ -260,7 +295,7 @@
   {% endif %}
 
   {# ── 3. serviços ── #}
-  <section class="tj-sec"><h4><i class="fas fa-list-check"></i> Serviços <small>só fiscal, só DP ou tudo; mais os específicos</small></h4>
+  <section class="tj-sec c-agua"><h4><i class="fas fa-list-check"></i> Serviços <small>só fiscal, só DP ou tudo; mais os específicos</small></h4>
     <div class="ct-chips grande" id="ct-areas">
       {% for k, v in AREAS.items() %}{% set on = (dados.areas and k in dados.areas) or (not dados and not contrato) %}<label class="{{ 'on' if on }}"><input type="checkbox" name="areas" value="{{ k }}" {% if on %}checked{% endif %} onchange="this.parentNode.classList.toggle('on', this.checked); ctResumo();"><i class="fas fa-check"></i> {{ v[0] | capitalize }}</label>{% endfor %}
     </div>
@@ -269,7 +304,7 @@
   </section>
 
   {# ── 4. honorários: valor, dia e início à vista; reajuste, 13º, multa e juros como frase, abrem em Alterar ── #}
-  <section class="tj-sec"><h4><i class="fas fa-coins"></i> Honorários <small>{% if fin %}vindos do contrato de honorários já cadastrado{% else %}sem honorários cadastrados: digite{% endif %}</small></h4>
+  <section class="tj-sec c-ambar"><h4><i class="fas fa-coins"></i> Honorários <small>{% if fin %}vindos do contrato de honorários já cadastrado{% else %}sem honorários cadastrados: digite{% endif %}</small></h4>
     {% set sug = (emp.ramos if emp else []) | selectattr('sugestao') | list %}
     {% if sug %}
     {% set usadas = (dados.sugestoes or []) | map(attribute='ramo_id') | list %}
@@ -283,7 +318,7 @@
       <div class="ns-campo"><label>Vence no dia</label><div class="ct-chips ct-dia" id="ct-dias">{% for d in (5, 10, 15, 20, 25, 30) %}<button type="button" data-v="{{ d }}" class="{{ 'on' if dia|int == d }}" onclick="ctDia(this)">{{ d }}</button>{% endfor %}<input type="text" class="ns-in" id="ct-dia-outro" placeholder="outro" inputmode="numeric" maxlength="2" value="{{ dia if dia|int not in (5, 10, 15, 20, 25, 30) else '' }}" oninput="ctDiaOutro(this)"></div></div>
       <div class="ns-campo"><label>Início do contrato</label><div class="ct-chips" id="ct-inis"><button type="button" data-v="hoje" onclick="ctIni(this)">hoje</button><button type="button" data-v="mes" onclick="ctIni(this)">1º deste mês</button><button type="button" data-v="prox" onclick="ctIni(this)">1º do mês que vem</button><input type="text" class="ns-in" id="ct-ini-txt" placeholder="dd/mm/aaaa" inputmode="numeric" maxlength="10" style="width:120px" value="{{ ini[8:10] ~ '/' ~ ini[5:7] ~ '/' ~ ini[0:4] if ini and ini|length == 10 else '' }}" oninput="ctIniTxt(this)"></div></div>
     </div>
-    <h4 style="margin:16px 0 8px"><i class="fas fa-sliders"></i> Condições <small>reajuste, 13º, multa e juros</small><button type="button" class="ct-alt" onclick="ctToggle('ct-cond-body', this)"><i class="fas fa-pen"></i> Alterar</button></h4>
+    <h4 style="margin:16px 0 8px; --cor:#2563eb; --cor-e:#1e40af; --cor-f:#eff6ff"><i class="fas fa-sliders"></i> Condições <small>reajuste, 13º, multa e juros</small><button type="button" class="ct-alt" onclick="ctToggle('ct-cond-body', this)"><i class="fas fa-pen"></i> Alterar</button></h4>
     <div class="ct-frase" id="ct-cond-sum"></div>
     <div class="ct-body" id="ct-cond-body" hidden>
       <div class="ct-linha">
@@ -302,7 +337,7 @@
   </section>
 
   {# ── 5. cláusulas e assinatura pela Qualicontax: frase de leitura, abre em Alterar ── #}
-  <section class="tj-sec"><h4><i class="fas fa-scale-balanced"></i> Cláusulas e assinatura <small>{{ contratada.razao | nome_proprio }} · CNPJ {{ contratada.cnpj }}{% if contratada.crc %} · CRC {{ contratada.crc }}{% endif %}</small><button type="button" class="ct-alt" onclick="ctToggle('ct-cla-body', this)"><i class="fas fa-pen"></i> Alterar</button></h4>
+  <section class="tj-sec c-roxo"><h4><i class="fas fa-scale-balanced"></i> Cláusulas e assinatura <small>{{ contratada.razao | nome_proprio }} · CNPJ {{ contratada.cnpj }}{% if contratada.crc %} · CRC {{ contratada.crc }}{% endif %}</small><button type="button" class="ct-alt" onclick="ctToggle('ct-cla-body', this)"><i class="fas fa-pen"></i> Alterar</button></h4>
     <div class="ct-frase" id="ct-cla-sum"></div>
     {% if not contratada.crc %}<div class="ct-note" style="color:#b45309"><i class="fas fa-triangle-exclamation"></i> A Qualicontax está sem CRC no cadastro (cliente nº 1).</div>{% endif %}
     <div class="ct-body" id="ct-cla-body" hidden>
@@ -328,17 +363,17 @@
 </div>
 
 <div class="tj-col3">
-  <section class="tj-sec">
+  <section class="tj-sec c-verde">
     <h4><i class="fas fa-bolt"></i> O que fazer</h4>
     <button type="submit" class="tj-acao prim" id="ct-salvar"><i class="fas fa-floppy-disk"></i><span><b>Salvar rascunho e ver o PDF</b><small>você confere o PDF antes de qualquer envio</small></span></button>
     <a class="tj-acao" href="{{ url_for('financeiro.contratos') }}"><i class="fas fa-arrow-left"></i><span><b>Voltar sem salvar</b><small>nada é gravado</small></span></a>
     <div class="ct-msg" id="ct-msg"></div>
   </section>
-  <section class="tj-sec">
+  <section class="tj-sec c-azul">
     <h4><i class="fas fa-eye"></i> Como fica o contrato</h4>
     <div class="ct-ficha-tit" id="ct-ficha-tit"></div><div class="ct-kpis" id="ct-kpis"></div><div class="ns-res" id="ct-res"></div>
   </section>
-  <section class="tj-sec">
+  <section class="tj-sec c-roxo">
     <h4><i class="fas fa-route"></i> O que acontece depois</h4>
     <div class="oc-passos">
       <div class="oc-passo"><i class="fas fa-stamp"></i><span><b>Aprovação.</b> Anderson ou Alessandra aprovam; o honorário passa a valer{% if carteira_pct %} e a comissão de carteira nasce{% endif %}.</span></div>
