@@ -79,7 +79,7 @@ _AREAS = [('dashboard.index', 'Início'), ('clientes.index', 'Cadastros'), ('mod
           ('relatorios.index', 'Relatórios'), ('atendimento.index', 'Atendimento'), ('novidades.index', 'Novidades'),
           ('configuracoes.index', 'Config.')]
 _FIN = [('financeiro.index', 'Início'), ('financeiro.titulos', 'Cobranças'), ('financeiro.honorarios', 'Honorários'),
-        ('financeiro.servicos', 'Serviços'), ('financeiro.lancamentos', 'Lançamentos'), ('financeiro.contratos', 'Contratos'),
+        ('financeiro.servicos', 'Serviços'), ('financeiro.lancamentos', 'Lançamentos'),
         ('financeiro.extrato', 'Extrato'), ('financeiro.contas', 'Contas'), ('financeiro.programacoes', 'Programações'),
         ('financeiro.fluxo', 'Fluxo de caixa'), ('financeiro.dre', 'DRE'), ('financeiro.categorias', 'Categorias'),
         ('financeiro.empresas', 'Empresas'), ('financeiro.cobrancas', 'Notas e boletos')]

@@ -305,6 +305,7 @@ MAPA = {
     'financeiro.contrato_salvar':                  'financeiro.contratos.montar',
     'financeiro.contrato_ver':                     'financeiro.contratos.montar',
     'financeiro.contrato_pdf':                     'financeiro.contratos.montar',
+    'financeiro.contratos_antigo':                 'LOGIN',   # /financeiro/contratos... -> /comercial/contratos... (24/11/2026)
     'financeiro.contrato_enviar':                  'financeiro.contratos.montar',
     'financeiro.contrato_cancelar':                'financeiro.contratos.montar',
     'financeiro.contrato_pedir_aprovacao':          'financeiro.contratos.montar',     # 18/11/2026: equipe monta, vai para aprovação

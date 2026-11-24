@@ -3,7 +3,7 @@
    KPIs, três colunas: linha do tempo | o contrato e o PDF | assinaturas e o que fazer. É uma PÁGINA (não gaveta): a caixa fica no fluxo
    e a página rola. Nada de confirm()/prompt(): as perguntas vão na caixa nossa (pk-peq). #}
 
-{% block title %}Contrato {{ c.numero or c.id }} - Financeiro - Qualicontax{% endblock %}
+{% block title %}Contrato {{ c.numero or c.id }} - Comercial - Qualicontax{% endblock %}
 
 {% block extra_css %}
 {% include 'financeiro/_tj_css.html' %}
@@ -64,7 +64,7 @@
 {% endblock %}
 
 {% block content %}
-{% include 'financeiro/_nav_financeiro.html' %}
+{% include 'comercial/_nav_comercial.html' %}
 {% set d = c.dados %}{% set emp = d.empresas[0] %}
 {% set doc = (emp.cnpj or '') | replace('.', '') | replace('/', '') | replace('-', '') %}
 {% macro dh(s) %}{% if s %}{{ s[8:10] }}/{{ s[5:7] }}/{{ s[2:4] }} {{ s[11:16] }}{% endif %}{% endmacro %}

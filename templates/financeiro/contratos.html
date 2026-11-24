@@ -1,209 +1,168 @@
 {% extends "base.html" %}
-
-{% block title %}Contratos de prestação - Financeiro - Qualicontax{% endblock %}
+{% block title %}Contratos de prestação - Comercial - Qualicontax{% endblock %}
 
 {% block extra_css %}
-<style>
-/* barra de abas + busca dos contratos */
-.pc-barra { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin:14px 0 12px; }
-.pc-barra .pc-abas { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
-.pc-busca { margin-left:auto; display:flex; align-items:center; gap:8px; background:#fff; border:1px solid #d9e6de; border-radius:11px; height:40px; padding:0 12px; min-width:320px; }
-.pc-busca i { color:#7d968a; font-size:13px; }
-.pc-busca input { border:0; outline:0; background:transparent; font-size:13.5px; flex:1; min-width:0; color:#0f172a; }
-.pc-busca input::placeholder { color:#94a3b8; }
-.gc-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(340px, 1fr)); gap:14px; }
-.gc-card { background:#fff; border:1px solid #e3ece7; border-radius:15px; padding:16px 18px 14px; display:flex; flex-direction:column; gap:10px; min-width:0; cursor:pointer; transition:border-color .15s, box-shadow .15s; }
-.gc-card:hover { border-color:#bfe3cc; box-shadow:0 8px 22px rgba(16,120,70,.08); }
-.gc-head { display:flex; align-items:center; gap:12px; }
-.gc-ava { width:44px; height:44px; border-radius:12px; background:linear-gradient(135deg,#16a34a,#0f3d2e); color:#fff; display:flex; align-items:center; justify-content:center; font-weight:800; font-size:15px; flex-shrink:0; }
-.gc-ava.pf { background:linear-gradient(135deg,#8b5cf6,#4c1d95); font-size:12px; }
-.gc-tit { flex:1; min-width:0; }
-.gc-tit h3 { margin:0; font-size:14.5px; font-weight:800; color:#0f172a; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-.gc-tit small { display:block; font-size:11.5px; color:#7d968a; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-.pc-st { font-size:11.5px; font-weight:700; padding:3px 10px; border-radius:99px; flex-shrink:0; }
-.pc-st.RASCUNHO { background:#f1f5f9; color:#64748b; } .pc-st.ENVIADO { background:#fef3c7; color:#b45309; } .pc-st.ASSINADO { background:#dcfce7; color:#166534; } .pc-st.CANCELADO { background:#fee2e2; color:#b91c1c; }
-.pc-pe { display:flex; justify-content:space-between; font-size:12px; color:#7d968a; }
-.pc-pe b { color:#0f3d2e; }
-.pc-prog { height:6px; background:#f1f5f9; border-radius:99px; overflow:hidden; }
-.pc-prog i { display:block; height:100%; background:#22c55e; }
-/* vazio: um cartão que explica e aponta a lista das prontas */
-.pc-vazio { background:#fff; border:1px dashed #cfe5d8; border-radius:16px; padding:30px 20px; text-align:center; }
-.pc-vazio .ico { width:56px; height:56px; border-radius:16px; background:#e8f5ed; color:#15803d; display:inline-flex; align-items:center; justify-content:center; font-size:22px; margin-bottom:10px; }
-.pc-vazio h3 { margin:0 0 4px; font-size:16px; color:#0f3d2e; } .pc-vazio p { margin:0 0 14px; color:#7d968a; font-size:13px; }
-.pc-nada { padding:18px; text-align:center; color:#7d968a; font-size:13px; display:none; }
-
-/* PRONTAS PARA CONTRATO: cadastro completo (Clientes ou Avulsos), sem contrato ainda */
-.pc-sem { background:#fff; border:1px solid #e3ece7; border-radius:16px; overflow:hidden; margin-top:18px; scroll-margin-top:90px; }
-.pc-sem-h { display:flex; align-items:center; gap:14px; padding:14px 18px; background:linear-gradient(150deg,#0b3b2b,#147a4b); color:#fff; flex-wrap:wrap; }
-.pc-sem-h .ico { width:38px; height:38px; border-radius:11px; background:rgba(255,255,255,.14); display:flex; align-items:center; justify-content:center; font-size:16px; }
-.pc-sem-h h2 { margin:0; font-size:15px; color:#fff; } .pc-sem-h p { margin:2px 0 0; font-size:12px; color:#bfe8cf; }
-.pc-sem-h p a { color:#fff; text-decoration:underline; }
-.pc-sem-h .pc-busca { margin-left:auto; background:rgba(255,255,255,.12); border-color:rgba(255,255,255,.35); }
-.pc-sem-h .pc-busca i { color:#bfe8cf; } .pc-sem-h .pc-busca input { color:#fff; } .pc-sem-h .pc-busca input::placeholder { color:#bfe8cf; }
-/* filtros: pílulas por tipo e situação + grupo */
-.pc-filtros { display:flex; align-items:center; gap:8px; flex-wrap:wrap; padding:10px 14px; background:#f4f8f5; border-bottom:1px solid #e3ece7; }
-.pc-filtros .fc { border:1px solid #d9e6de; background:#fff; border-radius:99px; padding:5px 12px; font-size:12px; font-weight:700; color:#476a58; cursor:pointer; white-space:nowrap; }
-.pc-filtros .fc b { font-weight:800; color:#0f3d2e; margin-left:3px; }
-.pc-filtros .fc.ativo { background:#0f3d2e; border-color:#0f3d2e; color:#fff; } .pc-filtros .fc.ativo b { color:#bfe8cf; }
-.pc-filtros select { margin-left:auto; height:34px; border-radius:9px; border:1px solid #d9e6de; background:#fff; font-size:12.5px; padding:0 10px; color:#0f3d2e; max-width:260px; }
-.pc-filtros .lim { font-size:12px; color:#7d968a; cursor:pointer; text-decoration:underline; }
-/* cada empresa é um card (mesmo cartão de Clientes/Grupos), clicável para montar */
-.pc-sem-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(300px, 1fr)); gap:12px; padding:14px; background:#f4f8f5; }
-.pc-item { background:#fff; border:1px solid #e3ece7; border-radius:14px; padding:12px 14px; display:flex; flex-direction:column; gap:8px; min-width:0; cursor:pointer; transition:border-color .15s, box-shadow .15s; }
-.pc-item:hover { border-color:#bfe3cc; box-shadow:0 8px 22px rgba(16,120,70,.08); }
-.pc-item .h { display:flex; align-items:center; gap:10px; }
-.pc-item .n { width:40px; height:40px; border-radius:11px; background:linear-gradient(135deg,#16a34a,#0f3d2e); color:#fff; font-weight:800; font-size:13px; display:flex; align-items:center; justify-content:center; flex:none; font-variant-numeric:tabular-nums; }
-.pc-item .n.pf { background:linear-gradient(135deg,#8b5cf6,#4c1d95); font-size:11px; }
-.pc-item .n.av { background:linear-gradient(135deg,#f59e0b,#b45309); font-size:11px; }
-.pc-item .t { flex:1; min-width:0; } .pc-item .t b { display:block; font-size:13.5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; color:#0f172a; } .pc-item .t small { display:block; color:#7d968a; font-size:11.5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-.pc-item .pe { display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap; }
-.pc-item .val { font-size:14px; font-weight:800; color:#0f3d2e; font-variant-numeric:tabular-nums; } .pc-item .val small { font-weight:600; color:#7d968a; font-size:11px; }
-.pc-item .val.sem { font-size:12px; color:#b45309; font-weight:700; }
-.pc-item .pills { display:flex; gap:6px; flex-wrap:wrap; }
-.pc-item .gr { font-size:11px; font-weight:700; border-radius:6px; padding:2px 8px; background:#eef6f1; color:#15803d; } .pc-item .gr.sem { background:#f1f5f9; color:#94a3b8; }
-.pc-item .gr.ra { background:#fef3c7; color:#b45309; } .pc-item .gr.tp { background:#ede9fe; color:#6d28d9; }
-.pc-sem-pe { padding:8px 18px 12px; font-size:12px; color:#7d968a; display:flex; justify-content:space-between; gap:10px; flex-wrap:wrap; }
-.pc-sem-pe a { color:#15803d; }
-@media (max-width:900px) { .gc-grid, .pc-sem-grid { grid-template-columns:1fr; } .pc-busca, .pc-sem-h .pc-busca { margin-left:0; width:100%; min-width:0; } .pc-filtros select { margin-left:0; width:100%; max-width:none; } }
-.pc-st.APROVACAO { background:#fef3c7 !important; color:#b45309 !important; } .pc-st.APROVADO { background:#dcfce7 !important; color:#15803d !important; }
+{# 24/11/2026 — Anderson: "está horrível e não tem que aparecer nenhum cadastro" e "os contratos é para aparecer somente no
+   COMERCIAL". Mesmo molde da lista de Orçamentos (comercial/orcamentos.html): abas KPI, cartões tx-c, busca; a empresa é
+   escolhida na caixa (CaixaCliente) ao clicar em Novo contrato — nunca numa lista solta de cadastros. Mudou lá? Mude aqui. #}
+{% include 'financeiro/_lanc_tx_css.html' %}
+<style>{% include 'clientes/_pk_css.html' %}
+.oc-btn-novo { display:inline-flex; align-items:center; gap:12px; padding:8px 20px 8px 8px; border-radius:16px; border:0; background:#fff; color:#0f3d2e; font:inherit; cursor:pointer;
+  box-shadow:0 12px 28px rgba(0,0,0,.22); transition:transform .15s ease, box-shadow .15s ease; text-align:left; }
+.oc-btn-novo:hover { transform:translateY(-1px); box-shadow:0 16px 32px rgba(0,0,0,.26); }
+.oc-btn-novo .mais { width:40px; height:40px; border-radius:12px; background:linear-gradient(135deg,#22c55e,#15803d); color:#fff; display:inline-flex; align-items:center; justify-content:center; font-size:16px; flex-shrink:0; }
+.oc-btn-novo .tx { display:flex; flex-direction:column; line-height:1.15; } .oc-btn-novo .tx b { font-size:15px; font-weight:800; } .oc-btn-novo .tx small { font-size:11.5px; color:#64748b; font-weight:600; }
+.tx-a-perd { --cor:#475569; --cor-e:#1e293b; --fundo:#f5f7fa; } .tx-a-fut { --cor:#7c3aed; --cor-e:#5b21b6; --fundo:#f5f3ff; } .tx-a-tod { --cor:#0f3d2e; --cor-e:#0b2b20; --fundo:#eef6f1; }
+.tx-abas.oc-abas { grid-template-columns:repeat(6, minmax(0,1fr)); }
+.oc-faixa { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:14px; } .oc-faixa .tx-busca { margin-left:auto; }
+.oc-grade { display:grid; grid-template-columns:repeat(auto-fill, minmax(330px, 1fr)); gap:12px; margin-bottom:22px; }
+.oc-c { padding-bottom:12px; cursor:pointer; }
+.oc-c .tx-c-top { margin:-12px -14px 0 -16px; padding:9px 14px 9px 16px; background:linear-gradient(135deg, var(--cor) 0%, var(--cor-e) 100%); border-radius:13px 13px 0 0; }
+.oc-c .tx-c-nome { color:#fff; white-space:normal; line-height:1.25; font-size:13px; } .oc-c .tx-c-num { background:#fff; color:var(--cor-e); }
+.oc-c .tx-c-meio { margin-top:10px; align-items:flex-start; }
+.oc-c .tx-c-val { color:var(--cor-e); font-size:19px; } .oc-c .tx-c-val small { font-size:11.5px; font-weight:700; color:#64748b; } .oc-c .tx-c-desc { font-size:11.5px; color:#64748b; font-weight:600; }
+.oc-c .tx-c-st { background:var(--cor-f); border:1px solid var(--cor-b); color:var(--cor-e); border-radius:99px; padding:3px 9px; font-size:11px; font-weight:800; white-space:nowrap; display:inline-flex; align-items:center; gap:5px; }
+.oc-c .tx-c-st i { font-size:10px; }
+.oc-c .hp-itens { margin-top:9px; display:flex; flex-direction:column; gap:3px; }
+.oc-c .hp-it { display:flex; justify-content:space-between; gap:10px; font-size:12px; color:#475569; } .oc-c .hp-it span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0; }
+.oc-c .hp-it b { font-weight:700; color:#334155; font-variant-numeric:tabular-nums; white-space:nowrap; }
+.oc-c .hp-linha { display:flex; align-items:center; gap:6px; flex-wrap:wrap; margin-top:10px; padding-top:10px; border-top:1px dashed #e2e8f0; }
+.oc-chip { display:inline-flex; align-items:center; gap:5px; font-size:11px; font-weight:700; color:#64748b; background:#f1f5f4; border-radius:99px; padding:3px 9px; white-space:nowrap; }
+.oc-chip.quem { background:#f5f3ff; color:#6d28d9; } .oc-chip.venc { background:#fef2f2; color:#b91c1c; } .oc-chip.ok { background:#dcfce7; color:#166534; } .oc-chip.azul { background:#eff6ff; color:#1d4ed8; } .oc-chip.amb { background:#fef3c7; color:#b45309; }
+.oc-c .ct-ass { margin-top:10px; } .oc-c .ct-ass .b { height:6px; background:#f1f5f9; border-radius:99px; overflow:hidden; } .oc-c .ct-ass .b i { display:block; height:100%; background:var(--cor); }
+.oc-c .ct-ass small { display:flex; justify-content:space-between; font-size:11.5px; color:#64748b; margin-top:4px; font-weight:600; } .oc-c .ct-ass small b { color:#334155; }
+.oc-c .hp-ac { display:flex; gap:6px; margin-top:10px; }
+.oc-c .hp-ac a { flex:1; height:32px; border-radius:9px; font:inherit; font-size:12px; font-weight:800; border:1px solid #e2e8f0; background:#fff; color:#475569; display:inline-flex; align-items:center; justify-content:center; gap:6px; cursor:pointer; text-decoration:none; }
+.oc-c .hp-ac .prim { background:var(--cor); border-color:var(--cor); color:#fff; }
+.oc-vazio { background:#fff; border:1px dashed #cbd5e1; border-radius:18px; padding:40px 20px; text-align:center; color:#475569; }
+.oc-vazio .ic { width:62px; height:62px; border-radius:18px; background:#ecfdf3; color:#16a34a; display:inline-flex; align-items:center; justify-content:center; font-size:24px; margin-bottom:12px; }
+.oc-vazio b { display:block; font-size:16px; color:#0f172a; margin-bottom:4px; }
+.oc-vazio.nada { display:none; padding:26px 20px; }
+@media (max-width:900px) { .tx-abas.oc-abas { grid-template-columns:1fr 1fr; } .oc-grade { grid-template-columns:minmax(0,1fr); } .oc-faixa .tx-busca { margin-left:0; width:100%; } .oc-btn-novo { width:100%; } }
 </style>
 {% endblock %}
 
 {% block content %}
-{% include 'financeiro/_nav_financeiro.html' %}
-<div class="page-header">
-    <div><h1><i class="fas fa-file-signature"></i> Contratos de prestação de serviços</h1>
-        <p class="page-subtitle">O contrato nasce do cadastro (Clientes ou Avulsos) e dos honorários, e é assinado eletronicamente pelo link enviado a cada parte. Nada é digitado do zero.</p></div>
-    <a class="btn btn-primary" href="#pc-prontas" onclick="pcIrProntas(); return false;"><i class="fas fa-building"></i> Escolher empresa</a>
-</div>
+{% include 'comercial/_nav_comercial.html' %}
+<div class="tx">
+<div class="ef-hero"><div class="ef-hero-inner ef-hero-head">
+  <div><h1 class="ef-hero-title">Contratos de prestação</h1><p class="ef-hero-sub">Nasce do cadastro completo e dos honorários, o escritório aprova e cada parte assina pelo link</p></div>
+  <div class="ef-hero-actions"><button type="button" class="oc-btn-novo" onclick="ctNovo()"><span class="mais"><i class="fas fa-plus"></i></span><span class="tx"><b>Novo contrato</b><small>escolha a empresa; o resto vem do cadastro</small></span></button></div>
+</div></div>
 
-<div class="pc-barra">
-    <div class="pc-abas fin-abas-claras">
-    {% for k, rot in (('todos', 'Todos'), ('rascunho', 'Rascunhos'), ('aprovacao', 'Para aprovar' if aprov else 'Aguardando aprovação'), ('aprovado', 'Aprovados'), ('enviado', 'Aguardando assinatura'), ('assinado', 'Assinados'), ('cancelado', 'Cancelados')) %}
-        <a class="fin-chip {{ 'ativo' if aba == k }}" href="{{ url_for('financeiro.contratos', aba=k) }}">{{ rot }}{% if k != 'todos' %} <strong>{{ res.get(k.upper(), 0) }}</strong>{% else %} <strong>{{ res.values() | sum }}</strong>{% endif %}</a>
+<div class="ef-body">
+  {% set abas = [('RASCUNHO', 'tx-a-perd', 'fa-pen-ruler', 'Rascunhos', 'ainda não pedidos'), ('APROVACAO', 'tx-a-atr', 'fa-stamp', 'Para aprovar' if aprov else 'Em aprovação', 'esperando o escritório'),
+                 ('APROVADO', 'tx-a-rec', 'fa-circle-check', 'Aprovados', 'enviar para assinatura'), ('ENVIADO', 'tx-a-abe', 'fa-hourglass-half', 'Aguardando assinatura', 'link enviado às partes'),
+                 ('ASSINADO', 'tx-a-fut', 'fa-file-signature', 'Assinados', 'em vigor'), ('', 'tx-a-tod', 'fa-layer-group', 'Todos', 'inclui cancelados')] %}
+  <div class="tx-abas oc-abas">
+    {% for st, cls, ico, rot, sub in abas %}
+    <button type="button" class="tx-aba {{ cls }}{{ ' on' if aba == st }}" data-p="{{ st }}"><span class="tx-aba-ico"><i class="fas {{ ico }}"></i></span>
+      <span class="tx-aba-txt"><span class="tx-aba-lbl">{{ rot }}</span><span class="tx-aba-val">{{ cont[st][0] if st else lista|length }}</span>
+      <span class="tx-aba-sub">{% if st and cont[st][1] %}{{ cont[st][1] | format_currency }}/mês · {% endif %}{{ sub }}</span></span></button>
     {% endfor %}
-    </div>
-    {% if lista %}<label class="pc-busca"><i class="fas fa-search"></i><input type="search" id="pc-busca-ctr" placeholder="procurar contrato: número QC, empresa, quem montou…" autocomplete="off"></label>{% endif %}
-</div>
+  </div>
 
-{% if lista %}
-<div class="gc-grid" id="pc-grid-ctr">
-{% for c in lista %}
-    <article class="gc-card" data-q="{{ ((c.numero or '') ~ ' ' ~ (c.numero_cliente or '') ~ ' ' ~ c.nome_razao_social ~ ' ' ~ (c.criado_por_nome or '') ~ ' ' ~ c.status) | lower }}" onclick="location.href='{{ url_for('financeiro.contrato_ver', cid=c.id) }}'">
-        <header class="gc-head">
-            <span class="gc-ava {% if not c.numero_cliente %}pf{% endif %}">{{ c.numero_cliente or 'PF' }}</span>
-            <div class="gc-tit"><h3 title="{{ c.nome_razao_social }}">{{ c.nome_razao_social }}{% if c.n_empresas > 1 %} +{{ c.n_empresas - 1 }}{% endif %}</h3><small>{{ c.numero or ('nº ' ~ c.id) }} · {{ c.titulo | title }} · {{ c.criado_em.strftime('%d/%m/%Y') }}{% if c.criado_por_nome %} · {{ c.criado_por_nome.split()[0] }}{% endif %}</small></div>
-            <span class="pc-st {{ c.status }}">{{ {'RASCUNHO': 'Rascunho', 'APROVACAO': 'Para aprovar' if aprov else 'Em aprovação', 'APROVADO': 'Aprovado', 'ENVIADO': 'Aguardando', 'ASSINADO': 'Assinado', 'CANCELADO': 'Cancelado'}[c.status] }}</span>
-        </header>
-        {% if c.status in ('ENVIADO', 'ASSINADO') %}
-        <div class="pc-prog"><i style="width:{{ (100 * c.n_assinados / c.n_assinantes) if c.n_assinantes else 0 }}%"></i></div>
-        <div class="pc-pe"><span>assinaturas <b>{{ c.n_assinados }}/{{ c.n_assinantes }}</b></span><span>{% if c.assinado_em %}assinado em <b>{{ c.assinado_em.strftime('%d/%m/%Y') }}</b>{% elif c.enviado_em %}enviado em <b>{{ c.enviado_em.strftime('%d/%m/%Y') }}</b>{% endif %}</span></div>
-        {% else %}
-        <div class="pc-pe"><span>{{ c.n_assinantes }} assinantes · montou {{ (c.criado_por_nome or '').split()[0] }}</span><span>{% if c.status == 'RASCUNHO' %}confira o PDF e {{ 'envie' if aprov else 'mande para aprovação' }}{% elif c.status == 'APROVACAO' %}<b style="color:#b45309">{{ 'confira e aprove' if aprov else 'com Anderson/Alessandra' }}</b>{% elif c.status == 'APROVADO' %}<b style="color:#15803d">aprovado · envie para assinar</b>{% endif %}</span></div>
-        {% endif %}
-    </article>
-{% endfor %}
-</div>
-<div class="pc-nada" id="pc-nada-ctr">Nenhum contrato com esse texto.</div>
-{% else %}
-<div class="pc-vazio">
-    <div class="ico"><i class="fas fa-file-signature"></i></div>
-    <h3>{% if aba == 'todos' %}Nenhum contrato montado ainda{% else %}Nenhum contrato {{ {'rascunho': 'em rascunho', 'aprovacao': 'aguardando aprovação', 'aprovado': 'aprovado esperando envio', 'enviado': 'aguardando assinatura', 'assinado': 'assinado', 'cancelado': 'cancelado'}.get(aba, '') }}{% endif %}</h3>
-    <p>Escolha uma empresa pronta na lista abaixo e clique em Montar: o contrato nasce com os dados do cadastro e dos honorários, você confere o PDF e envia para assinatura.</p>
-    <a class="btn btn-primary" href="#pc-prontas" onclick="pcIrProntas(); return false;"><i class="fas fa-building"></i> Escolher empresa</a>
-</div>
-{% endif %}
+  <div class="oc-faixa">
+    <div class="tx-filtros" id="ctFil">
+      <button type="button" class="tx-f on" data-v="">Todos <b>{{ lista|length }}</b></button>
+      {% if cont['CANCELADO'][0] %}<button type="button" class="tx-f" data-v="CANCELADO"><i class="fas fa-ban" style="font-size:10px"></i> Cancelados <b>{{ cont['CANCELADO'][0] }}</b></button>{% endif %}
+      {% if aprov and pessoas|length > 1 %}{% for uid, nome in pessoas.items() | sort(attribute='1') %}<button type="button" class="tx-f" data-q="{{ uid }}"><i class="fas fa-user" style="font-size:10px"></i> {{ nome.split(' ')[0] }}</button>{% endfor %}{% endif %}
+    </div>
+    <div class="tx-busca"><i class="fas fa-magnifying-glass"></i><input type="search" id="ctBusca" placeholder="Buscar empresa, número ou quem montou"></div>
+  </div>
 
-{% if aba == 'todos' %}
-{% set n_cli = prontas | rejectattr('avulso') | list | length %}
-{% set n_av = prontas | selectattr('avulso') | list | length %}
-{% set n_hon = prontas | selectattr('valor') | list | length %}
-{% set n_ra = prontas | selectattr('n_rascunhos') | list | length %}
-<div class="pc-sem" id="pc-prontas">
-    <div class="pc-sem-h">
-        <span class="ico"><i class="fas fa-file-circle-plus"></i></span>
-        <div><h2>Prontas para contrato <span style="font-weight:600; opacity:.8;">· {{ prontas | length }}</span></h2>
-            <p>Cadastro completo em Clientes ou Avulsos e ainda sem contrato. Quem está em <a href="{{ url_for('clientes.a_cadastrar') }}">A CADASTRAR</a> ({{ pend_empresas }} empresas, <a href="{{ url_for('clientes.a_cadastrar_avulsos') }}">{{ pend_avulsos }} avulsos</a>) só entra aqui depois de completar o cadastro.</p></div>
-        <label class="pc-busca"><i class="fas fa-search"></i><input type="search" id="pc-busca" placeholder="número, nome, fantasia, CNPJ/CPF, cidade ou grupo…" autocomplete="off"></label>
+  {% if not lista %}
+  <div class="oc-vazio"><span class="ic"><i class="fas fa-file-contract"></i></span><b>Nenhum contrato ainda</b>
+    O primeiro nasce aqui: escolha a empresa, confira o que veio do cadastro e dos honorários, e mande para aprovação. Aprovado, cada parte recebe o link e assina.
+    <div style="margin-top:14px"><button type="button" class="oc-btn-novo" onclick="ctNovo()"><span class="mais"><i class="fas fa-plus"></i></span><span class="tx"><b>Novo contrato</b><small>leva um minuto</small></span></button></div></div>
+  {% endif %}
+  <div class="oc-vazio nada" id="ctNada"><b>Nenhum contrato aqui</b>Troque a aba ou limpe a busca.</div>
+
+  <div class="oc-grade" id="ctGrade">
+  {% for c in lista %}
+    {% set ver = url_for('financeiro.contrato_ver', cid=c.id) %}
+    <div class="tx-c oc-c {{ c.cls }}" data-st="{{ c.status }}" data-quem="{{ c.criado_por }}" data-b="{{ c.numero or '' }} {{ c.numero_cliente or '' }} {{ c.nome_razao_social }} {{ c.criado_por_nome or '' }} {{ c.carteira }}" onclick="location.href='{{ ver }}'">
+      <div class="tx-c-top"><span class="tx-c-num">{{ c.numero or ('nº ' ~ c.id) }}</span><span class="tx-c-nome" title="{{ c.nome_razao_social }}">{{ c.nome_razao_social }}{% if c.n_empresas > 1 %} <small style="opacity:.85">+ {{ c.n_empresas - 1 }} empresa{{ 's' if c.n_empresas > 2 }}</small>{% endif %}</span></div>
+      <div class="tx-c-meio">
+        <div><div class="tx-c-val">{% if c.valor %}{{ c.valor | format_currency }} <small>/ mês</small>{% else %}<small>honorários a definir</small>{% endif %}</div>
+          <div class="tx-c-desc">{{ c.titulo | capitalize }}{% if c.inicio %} · início {{ c.inicio[8:10] }}/{{ c.inicio[5:7] }}/{{ c.inicio[:4] }}{% endif %}{% if c.numero_cliente %} · nº {{ c.numero_cliente }}{% endif %}</div></div>
+        <span class="tx-c-st"><i class="fas {{ c.ico }}"></i> {{ {'RASCUNHO': 'Rascunho', 'APROVACAO': 'Para aprovar' if aprov else 'Em aprovação', 'APROVADO': 'Aprovado', 'ENVIADO': 'Aguardando', 'ASSINADO': 'Assinado', 'CANCELADO': 'Cancelado'}[c.status] }}</span>
+      </div>
+      <div class="hp-itens">
+        {% for a in c.areas[:3] %}<div class="hp-it"><span>{{ a }}</span><b></b></div>{% endfor %}
+        {% if c.areas|length + c.extras|length > 3 %}<div class="hp-it"><span>+ {{ c.areas|length + c.extras|length - 3 }} serviço{{ 's' if c.areas|length + c.extras|length - 3 != 1 }}</span><b></b></div>{% elif c.extras %}{% for e in c.extras[:3 - c.areas|length] %}<div class="hp-it"><span>{{ e | capitalize }}</span><b></b></div>{% endfor %}{% endif %}
+        {% if not c.areas and not c.extras %}<div class="hp-it"><span style="color:#94a3b8">serviços ainda não escolhidos</span><b></b></div>{% endif %}
+      </div>
+      {% if c.status in ('ENVIADO', 'ASSINADO') %}
+      <div class="ct-ass"><div class="b"><i style="width:{{ (100 * c.n_assinados / c.n_assinantes) if c.n_assinantes else 0 }}%"></i></div>
+        <small><span>assinaturas <b>{{ c.n_assinados }}/{{ c.n_assinantes }}</b></span><span>{% if c.assinado_em %}assinado em <b>{{ c.assinado_em.strftime('%d/%m/%Y') }}</b>{% elif c.enviado_em %}enviado em <b>{{ c.enviado_em.strftime('%d/%m/%Y') }}</b>{% endif %}</span></small></div>
+      {% endif %}
+      <div class="hp-linha">
+        {% if c.grupo_n > 1 %}<span class="oc-chip"><i class="fas fa-layer-group"></i> grupo de {{ c.grupo_n }}</span>{% endif %}
+        {% if c.carteira %}<span class="oc-chip amb" title="quem ganha a comissão da carteira"><i class="fas fa-hand-holding-dollar"></i> {{ c.carteira.split(' ')[0] }}</span>{% endif %}
+        {% if c.status == 'APROVACAO' %}<span class="oc-chip amb"><i class="fas fa-stamp"></i> {{ 'confira e aprove' if aprov else 'com o escritório' }}</span>
+        {% elif c.status == 'APROVADO' %}<span class="oc-chip ok"><i class="fas fa-paper-plane"></i> pronto para enviar</span>
+        {% elif c.status == 'CANCELADO' and c.cancel_motivo %}<span class="oc-chip venc" title="{{ c.cancel_motivo }}"><i class="fas fa-ban"></i> {{ c.cancel_motivo[:28] }}{{ '…' if c.cancel_motivo|length > 28 }}</span>{% endif %}
+        <span class="oc-chip quem"><i class="fas fa-user"></i> {{ (c.criado_por_nome or '').split(' ')[0] }} · {{ c.criado_em.strftime('%d/%m') }}</span>
+      </div>
+      <div class="hp-ac">
+        <a href="{{ ver }}" onclick="event.stopPropagation()"><i class="fas fa-folder-open"></i> Abrir</a>
+        <a href="{{ url_for('financeiro.contrato_pdf', cid=c.id) }}" target="_blank" onclick="event.stopPropagation()"><i class="fas fa-file-pdf"></i> PDF</a>
+        {% if c.status == 'RASCUNHO' %}<a class="prim" href="{{ url_for('financeiro.contrato_editar', cid=c.id) }}" onclick="event.stopPropagation()"><i class="fas fa-pen"></i> Alterar</a>
+        {% elif c.status == 'APROVACAO' and aprov %}<a class="prim" href="{{ ver }}" onclick="event.stopPropagation()"><i class="fas fa-check"></i> Aprovar</a>
+        {% elif c.status == 'APROVADO' %}<a class="prim" href="{{ ver }}" onclick="event.stopPropagation()"><i class="fas fa-paper-plane"></i> Enviar</a>
+        {% elif c.status == 'ENVIADO' %}<a class="prim" href="{{ ver }}" onclick="event.stopPropagation()"><i class="fab fa-whatsapp"></i> Links</a>{% endif %}
+      </div>
     </div>
-    {% if prontas %}
-    <div class="pc-filtros" id="pc-filtros">
-        <span class="fc ativo" data-f="">Todas<b>{{ prontas | length }}</b></span>
-        <span class="fc" data-f="tipo=cliente">Clientes<b>{{ n_cli }}</b></span>
-        <span class="fc" data-f="tipo=avulso">Avulsos<b>{{ n_av }}</b></span>
-        {% if aprov %}<span class="fc" data-f="hon=1">Com honorários<b>{{ n_hon }}</b></span>
-        <span class="fc" data-f="hon=0">Sem honorários<b>{{ prontas | length - n_hon }}</b></span>{% endif %}
-        {% if n_ra %}<span class="fc" data-f="rasc=1">Com rascunho<b>{{ n_ra }}</b></span>{% endif %}
-        {% if grupos %}<select id="pc-grupo"><option value="">todos os grupos</option>{% for g in grupos %}<option value="{{ g | lower }}">{{ g }}</option>{% endfor %}<option value="__sem__">sem grupo</option></select>{% endif %}
-        <span class="lim" id="pc-limpar" style="display:none;">limpar</span>
-    </div>
-    <div class="pc-sem-grid" id="pc-sem-grid">
-    {% for s in prontas %}
-        <article class="pc-item" data-q="{{ ((s.numero_cliente or '') ~ ' ' ~ s.nome_razao_social ~ ' ' ~ (s.nome_fantasia or '') ~ ' ' ~ (s.doc or '') ~ ' ' ~ (s.cpf_cnpj or '') ~ ' ' ~ (s.cidade or '') ~ ' ' ~ (s.grupo or '')) | lower }}"
-                 data-tipo="{{ 'avulso' if s.avulso else 'cliente' }}" data-hon="{{ 1 if s.valor else 0 }}" data-rasc="{{ 1 if s.n_rascunhos else 0 }}" data-grupo="{{ (s.grupo or '__sem__') | lower }}"
-                 onclick="location.href='{{ url_for('financeiro.contrato_novo', cliente_id=s.id) }}'" title="Montar o contrato">
-            <div class="h"><span class="n {% if s.avulso %}av{% elif s.tipo_pessoa == 'PF' %}pf{% endif %}">{{ s.numero_cliente or ('AV' if s.avulso else 'PF') }}</span>
-                <span class="t"><b title="{{ s.nome_razao_social }}">{{ s.nome_razao_social }}</b><small>{{ s.doc }}{% if s.nome_fantasia and s.nome_fantasia | lower != s.nome_razao_social | lower %} · {{ s.nome_fantasia }}{% endif %}{% if s.cidade %} · {{ s.cidade }}{% if s.uf %}/{{ s.uf }}{% endif %}{% endif %}</small></span></div>
-            <div class="pe">
-                {% if not aprov and not s.valor %}<span class="val" style="color:#94a3b8;font-weight:600;font-size:12px">honorário no contrato</span>{% elif s.valor %}<span class="val">R$ {{ '{:,.2f}'.format(s.valor).replace(',', 'X').replace('.', ',').replace('X', '.') }} <small>/ mês</small></span>{% else %}<span class="val sem"><i class="fas fa-triangle-exclamation"></i> sem honorários cadastrados</span>{% endif %}
-                <span class="pills">{% if s.avulso %}<span class="gr tp">avulso</span>{% endif %}{% if s.n_rascunhos %}<span class="gr ra">rascunho</span>{% endif %}{% if s.grupo %}<span class="gr">{{ s.grupo }}</span>{% else %}<span class="gr sem">sem grupo</span>{% endif %}</span>
-                <a class="btn btn-primary btn-sm" href="{{ url_for('financeiro.contrato_novo', cliente_id=s.id) }}" onclick="event.stopPropagation();"><i class="fas fa-file-signature"></i> Montar</a></div>
-        </article>
-    {% endfor %}
-    </div>
-    <div class="pc-nada" id="pc-nada">Nenhuma empresa pronta com esse filtro.</div>
-    <div class="pc-sem-pe"><span id="pc-sem-pe"></span><span>Falta alguém? Veja o que falta em <a href="{{ url_for('clientes.a_cadastrar') }}">A CADASTRAR</a>.</span></div>
-    {% else %}
-    <div class="pc-vazio" style="border:0; border-radius:0;">
-        <div class="ico"><i class="fas fa-clipboard-check"></i></div>
-        <h3>Nenhuma empresa pronta para contrato</h3>
-        <p>Quem tem pendência no cadastro fica em A CADASTRAR e não aparece aqui. Complete o cadastro de uma empresa e ela entra nesta lista sozinha.</p>
-        <a class="btn btn-primary" href="{{ url_for('clientes.a_cadastrar') }}"><i class="fas fa-list-check"></i> Abrir A CADASTRAR</a>
-    </div>
-    {% endif %}
+  {% endfor %}
+  </div>
 </div>
-{% endif %}
+</div>
+<script id="ctCliJ" type="application/json">{{ clientes_json | safe }}</script>
 {% endblock %}
 
 {% block extra_js %}
+<script src="{{ url_for('static', filename='js/caixa_cliente.js') }}"></script>
 <script>
-function pcIrProntas() { var p = document.getElementById('pc-prontas'); if (!p) return; p.scrollIntoView({ behavior: 'smooth', block: 'start' }); var q = document.getElementById('pc-busca'); if (q) setTimeout(function () { q.focus(); }, 400); }
 (function () {
-    // busca dos CONTRATOS (cartões de cima)
-    var qc = document.getElementById('pc-busca-ctr'), gc = document.getElementById('pc-grid-ctr'), nc = document.getElementById('pc-nada-ctr');
-    if (qc) qc.addEventListener('input', function () {
-        var v = qc.value.trim().toLowerCase(), n = 0;
-        gc.querySelectorAll('.gc-card').forEach(function (it) { var ok = !v || it.dataset.q.indexOf(v) >= 0; it.style.display = ok ? '' : 'none'; if (ok) n++; });
-        nc.style.display = n ? 'none' : 'block';
+  var CLI = JSON.parse(document.getElementById('ctCliJ').textContent);
+  var $ = function (id) { return document.getElementById(id); };
+  function semAc(s) { return String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase(); }
+
+  // ── abas, filtros e busca (igual à lista de Orçamentos) ──
+  var st = {{ aba | tojson }}, fil = '', quem = '', q = '';
+  function aplicar() {
+    var n = 0, cards = document.querySelectorAll('#ctGrade .oc-c');
+    cards.forEach(function (c) {
+      var ok = (!st || c.dataset.st === st) && (!q || semAc(c.dataset.b).indexOf(q) >= 0) && (!quem || c.dataset.quem === quem);
+      if (ok && fil) ok = c.dataset.st === fil;
+      c.style.display = ok ? '' : 'none'; if (ok) n++;
     });
-    // PRONTAS: texto + pílula (tipo / honorários / rascunho) + grupo
-    var q = document.getElementById('pc-busca'), grid = document.getElementById('pc-sem-grid'), pe = document.getElementById('pc-sem-pe'),
-        fil = document.getElementById('pc-filtros'), sel = document.getElementById('pc-grupo'), lim = document.getElementById('pc-limpar'), nada = document.getElementById('pc-nada');
-    if (!q || !grid) return;
-    var f = { k: '', v: '' };
-    function filtrar() {
-        var v = q.value.trim().toLowerCase(), g = sel ? sel.value : '', n = 0, t = 0;
-        grid.querySelectorAll('.pc-item').forEach(function (it) {
-            t++;
-            var ok = (!v || it.dataset.q.indexOf(v) >= 0) && (!f.k || it.dataset[f.k] === f.v) && (!g || it.dataset.grupo === g);
-            it.style.display = ok ? '' : 'none'; if (ok) n++;
-        });
-        var ativo = v || f.k || g;
-        pe.textContent = ativo ? (n + ' de ' + t + ' empresas') : (t + ' empresas prontas');
-        nada.style.display = n ? 'none' : 'block';
-        if (lim) lim.style.display = ativo ? '' : 'none';
-    }
-    q.addEventListener('input', filtrar);
-    if (sel) sel.addEventListener('change', filtrar);
-    if (fil) fil.querySelectorAll('.fc').forEach(function (b) {
-        b.addEventListener('click', function () {
-            fil.querySelectorAll('.fc').forEach(function (x) { x.classList.remove('ativo'); }); b.classList.add('ativo');
-            var p = (b.dataset.f || '').split('='); f = p[0] ? { k: p[0], v: p[1] } : { k: '', v: '' }; filtrar();
-        });
+    $('ctNada').style.display = (cards.length && !n) ? 'block' : 'none';
+  }
+  document.querySelectorAll('.oc-abas .tx-aba').forEach(function (b) {
+    b.addEventListener('click', function () {
+      st = b.dataset.p; document.querySelectorAll('.oc-abas .tx-aba').forEach(function (x) { x.classList.toggle('on', x === b); });
+      try { var u = new URL(location.href); if (st) u.searchParams.set('aba', st); else u.searchParams.delete('aba'); history.replaceState(null, '', u); } catch (e) {}
+      aplicar();
     });
-    if (lim) lim.addEventListener('click', function () { q.value = ''; if (sel) sel.value = ''; f = { k: '', v: '' }; fil.querySelectorAll('.fc').forEach(function (x) { x.classList.remove('ativo'); }); fil.querySelector('.fc').classList.add('ativo'); filtrar(); });
-    filtrar();
-    if (location.hash === '#pc-prontas') pcIrProntas();
+  });
+  $('ctFil').addEventListener('click', function (e) {
+    var b = e.target.closest('.tx-f'); if (!b) return;
+    if (b.dataset.q !== undefined) { quem = b.classList.contains('on') ? '' : b.dataset.q; this.querySelectorAll('.tx-f[data-q]').forEach(function (x) { x.classList.toggle('on', x === b && !!quem); }); }
+    else { fil = b.dataset.v; this.querySelectorAll('.tx-f[data-v]').forEach(function (x) { x.classList.toggle('on', x === b); }); }
+    aplicar();
+  });
+  $('ctBusca').addEventListener('input', function () { q = semAc(this.value); aplicar(); });
+  if (st) aplicar();
+
+  // ── Novo contrato: a caixa da empresa (só cadastro completo em Clientes ou Avulsos, sem contrato vivo) ──
+  window.ctNovo = function () {
+    if (!window.CaixaCliente) return;
+    CaixaCliente.abrir({ clientes: CLI, titulo: 'Empresa do contrato', sub: {{ ('%d com cadastro completo e sem contrato · quem está em A CADASTRAR só entra depois de completar' % n_prontas) | tojson }},
+      onUsar: function (c) { if (c) location.href = '/comercial/contratos/novo?cliente_id=' + c.id; } });
+  };
+  {% if request.args.get('novo') %}setTimeout(function () { ctNovo(); }, 150);{% endif %}
 })();
 </script>
 {% endblock %}

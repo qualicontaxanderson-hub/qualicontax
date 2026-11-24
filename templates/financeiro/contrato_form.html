@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Montar contrato - Financeiro - Qualicontax{% endblock %}
+{% block title %}Montar contrato - Comercial - Qualicontax{% endblock %}
 
 {% block extra_css %}
 {% include 'financeiro/_ns_css.html' %}
@@ -58,7 +58,7 @@
 {% endblock %}
 
 {% block content %}
-{% include 'financeiro/_nav_financeiro.html' %}
+{% include 'comercial/_nav_comercial.html' %}
 {% set e0 = dados.empresas[0] if dados.empresas else rep0 %}
 {% set ex = dados.assinante_extra or {} %}
 {% set reaj = dados.reajuste_tipo or (fin.reajuste_tipo if fin else 'SALARIO_MINIMO') %}
@@ -309,7 +309,7 @@ function ctGrupo() {
     var ids = Array.prototype.map.call(document.querySelectorAll('#pf-emps [name=emp_cliente_id]'), function (i) { return i.value; }).filter(Boolean);
     var box = $('pf-grupo');
     if (ids.length < 2) { box.hidden = true; return; }
-    fetch('/financeiro/contratos/socios-iguais?ids=' + ids.join(',')).then(function (r) { return r.json(); }).then(function (d) {
+    fetch('/comercial/contratos/socios-iguais?ids=' + ids.join(',')).then(function (r) { return r.json(); }).then(function (d) {
         box.hidden = false; box.className = 'ct-grupo ' + (d.iguais ? 'ok' : 'aut');
         box.innerHTML = d.iguais ? '<i class="fas fa-circle-check"></i> <b>Contrato em grupo:</b> ' + esc(d.detalhe) + '. Pode seguir.'
             : '<i class="fas fa-triangle-exclamation"></i> <b>Contrato em grupo com sócios diferentes:</b> ' + esc(d.detalhe) + '. Precisa da <b>autorização do escritório</b>: ao aprovar, o Anderson ou a Alessandra autorizam e fica registrado no contrato. Se quem assina não é sócio de todas, ponha quem responde pelas outras em "Mais alguém assina".';
@@ -343,7 +343,7 @@ function ctGrupo() {
     q.addEventListener('input', function () {
         clearTimeout(t); var v = q.value.trim(); if (v.length < 2) { sug.style.display = 'none'; return; }
         t = setTimeout(function () {
-            fetch('/financeiro/contratos/pessoas?q=' + encodeURIComponent(v)).then(function (r) { return r.json(); }).then(function (lista) {
+            fetch('/comercial/contratos/pessoas?q=' + encodeURIComponent(v)).then(function (r) { return r.json(); }).then(function (lista) {
                 sug.innerHTML = '';
                 (lista || []).forEach(function (p) {
                     var d = document.createElement('div');

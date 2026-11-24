@@ -7,6 +7,7 @@ A CADASTRAR não entra na lista nem passa no salvar. A assinatura é PÚBLICA (b
 ``assinatura``): o token de 32 bytes na URL identifica o signatário; a identidade é confirmada por código de 6 dígitos
 enviado ao e-mail dele. Ninguém assina sem e-mail.
 """
+import json
 import logging
 from datetime import date, datetime
 
@@ -418,7 +419,7 @@ def _form_ctx(cliente_id=None, fin_contrato_id=None, contrato=None):
             'carteira_pct': float(pct) if pct else None}
 
 
-@financeiro.route('/financeiro/contratos/socios-iguais')
+@financeiro.route('/comercial/contratos/socios-iguais')
 @permission_required(MONTAR)
 def contrato_socios_iguais():
     """Para a tela avisar na hora: as empresas escolhidas têm o mesmo quadro de sócios?"""
@@ -427,7 +428,7 @@ def contrato_socios_iguais():
     return jsonify({'iguais': iguais, 'detalhe': detalhe, 'n': len(ids)})
 
 
-@financeiro.route('/financeiro/contratos/pessoas')
+@financeiro.route('/comercial/contratos/pessoas')
 @permission_required(MONTAR)
 def contrato_pessoas():
     """Pessoas físicas do cadastro (nome ou CPF) para puxar quem assina, com documento, e-mail e celular."""
@@ -435,53 +436,66 @@ def contrato_pessoas():
 
 
 # ---------------------------------------------------------------- telas internas
-@financeiro.route('/financeiro/contratos')
+@financeiro.route('/comercial/contratos')
 @permission_required(MONTAR)
 def contratos():
-    aba = request.args.get('aba') or ('aprovacao' if _aprovador() and execute_query(
-        "SELECT 1 FROM prest_contratos WHERE status = 'APROVACAO' LIMIT 1", fetch=True) else 'todos')
+    """Lista no molde da lista de Orçamentos (24/11/2026, Anderson: "está horrível e não tem que aparecer nenhum cadastro"):
+    só os contratos, em abas por situação; a empresa é escolhida na caixa ao clicar em Novo contrato, nunca numa lista solta."""
+    aba = request.args.get('aba') or ('APROVACAO' if _aprovador() and execute_query(
+        "SELECT 1 FROM prest_contratos WHERE status = 'APROVACAO' LIMIT 1", fetch=True) else '')
     aprov = _aprovador()
     escopo = None if aprov else _escopo()
-    todos = PrestContrato.listar()
+    lista = PrestContrato.listar()
     if not aprov:
-        todos = [r for r in todos if r.get('criado_por') == current_user.id or r['cliente_id'] in escopo
+        lista = [r for r in lista if r.get('criado_por') == current_user.id or r['cliente_id'] in escopo
                  or (escopo & set(r.get('empresas_ids') or []))]
-    lista = [r for r in todos if aba == 'todos' or r['status'] == aba.upper()]
-    res = {s: 0 for s in ROTULO}
-    for r in todos:
-        res[r['status']] = res.get(r['status'], 0) + 1
+    cont = {s: [0, 0.0] for s in ROTULO}
+    pessoas = {}
+    for r in lista:
+        d = r.get('dados') or {}
+        try:
+            r['valor'] = float(str(d.get('valor') or '0').replace(',', '.'))
+        except ValueError:
+            r['valor'] = 0.0
+        r['areas'] = [AREAS[a][0].capitalize() for a in (d.get('areas') or []) if a in AREAS]
+        r['extras'] = [x for x in (d.get('servicos_extras') or d.get('extras') or []) if x]
+        r['carteira'] = (d.get('carteira') or {}).get('nome') or ''
+        r['grupo_n'] = int((d.get('grupo') or {}).get('n') or 0)
+        r['inicio'] = d.get('inicio') or ''
+        r['cancel_motivo'] = (d.get('cancelado') or {}).get('motivo') or ''
+        r['cls'], r['ico'] = STATUS_CLS.get(r['status'], ('tx-perd', 'fa-circle'))
+        cont.setdefault(r['status'], [0, 0.0]); cont[r['status']][0] += 1; cont[r['status']][1] += r['valor']
+        if r.get('criado_por'):
+            pessoas[r['criado_por']] = r.get('criado_por_nome') or ''
+    # a caixa "Novo contrato" só oferece cadastro completo (Clientes ou Avulsos) sem contrato vivo — PrestContrato.prontas()
     pr = PrestContrato.prontas()
-    if not aprov:
-        for s in pr['lista']:
-            if s['id'] not in escopo:
-                s['valor'] = None          # honorário de empresa fora do escopo não aparece
+    cli = []
     for s in pr['lista']:
-        d = ''.join(ch for ch in (s['cpf_cnpj'] or '') if ch.isdigit())
-        s['doc'] = format_cnpj(d) if len(d) == 14 else (format_cpf(d) if len(d) == 11 else (s['cpf_cnpj'] or ''))
-    grupos = sorted({s['grupo'] for s in pr['lista'] if s['grupo']})
-    return render_template('financeiro/contratos.html', aba=aba, lista=lista, res=res, prontas=pr['lista'], grupos=grupos,
-                           ROTULO=ROTULO, aprov=aprov,
+        cli.append({'id': s['id'], 'num': str(s['numero_cliente'] or ''), 'nome': s['nome_razao_social'], 'doc': s['cpf_cnpj'] or '',
+                    'av': bool(s['avulso']), 'mensal': float(s['valor'] or 0) if (aprov or s['id'] in escopo) else 0.0})
+    return render_template('financeiro/contratos.html', aba=aba, lista=lista, cont=cont, pessoas=pessoas, ROTULO=ROTULO, aprov=aprov,
+                           clientes_json=json.dumps(cli, ensure_ascii=False), n_prontas=len(cli),
                            pend_empresas=pr['pendentes_empresas'], pend_avulsos=pr['pendentes_avulsos'], hoje=date.today())
 
 
-@financeiro.route('/financeiro/contratos/novo')
+@financeiro.route('/comercial/contratos/novo')
 @permission_required(MONTAR)
 def contrato_novo():
     """Só a partir de um cadastro completo: sem cliente_id, ou com pendência em A CADASTRAR, volta para a lista."""
     cid = request.args.get('cliente_id', type=int)
     if not cid:
-        flash('O contrato nasce do cadastro: escolha a empresa na lista "Prontas para contrato". Nada é digitado do zero.', 'warning')
-        return redirect(url_for('financeiro.contratos') + '#pc-prontas')
+        flash('O contrato nasce do cadastro: clique em Novo contrato e escolha a empresa. Nada é digitado do zero.', 'warning')
+        return redirect(url_for('financeiro.contratos'))
     imp = PrestContrato.impedimentos([cid])
     if cid in imp:
         emp = PrestContrato.empresa(cid)
         flash('%s não pode receber contrato ainda — %s. Complete o cadastro em A CADASTRAR e volte aqui.'
               % ((emp or {}).get('nome_razao_social') or 'A empresa', imp[cid]), 'warning')
-        return redirect(url_for('financeiro.contratos') + '#pc-prontas')
+        return redirect(url_for('financeiro.contratos'))
     return render_template('financeiro/contrato_form.html', **_form_ctx(cid, request.args.get('fin_contrato_id', type=int)))
 
 
-@financeiro.route('/financeiro/contratos/<int:cid>/editar')
+@financeiro.route('/comercial/contratos/<int:cid>/editar')
 @permission_required(MONTAR)
 def contrato_editar(cid):
     c = PrestContrato.get(cid)
@@ -492,7 +506,7 @@ def contrato_editar(cid):
     return render_template('financeiro/contrato_form.html', **_form_ctx(contrato=c))
 
 
-@financeiro.route('/financeiro/contratos/salvar', methods=['POST'])
+@financeiro.route('/comercial/contratos/salvar', methods=['POST'])
 @permission_required(MONTAR)
 def contrato_salvar():
     f = request.form
@@ -515,7 +529,7 @@ def contrato_salvar():
         return redirect(request.referrer or url_for('financeiro.contratos'))
 
 
-@financeiro.route('/financeiro/contratos/<int:cid>')
+@financeiro.route('/comercial/contratos/<int:cid>')
 @permission_required(MONTAR)
 def contrato_ver(cid):
     c = PrestContrato.get(cid)
@@ -544,7 +558,7 @@ def _pdf_bytes(c):
                      rodape='Contrato nº %s · %s' % (c.get('numero') or c['id'], 'assinado eletronicamente' if registro else 'minuta'))
 
 
-@financeiro.route('/financeiro/contratos/<int:cid>/pdf')
+@financeiro.route('/comercial/contratos/<int:cid>/pdf')
 @permission_required(MONTAR)
 def contrato_pdf(cid):
     c = PrestContrato.get(cid)
@@ -569,7 +583,7 @@ def _email_assinatura(a, c, link):
     return _enviar([a['email']], 'Assinatura: %s – %s' % (c['titulo'].title(), emp), html, texto)
 
 
-@financeiro.route('/financeiro/contratos/<int:cid>/enviar', methods=['POST'])
+@financeiro.route('/comercial/contratos/<int:cid>/enviar', methods=['POST'])
 @permission_required(MONTAR)
 def contrato_enviar(cid):
     c = PrestContrato.get(cid)
@@ -604,7 +618,7 @@ def contrato_enviar(cid):
     return redirect(url_for('financeiro.contrato_ver', cid=cid))
 
 
-@financeiro.route('/financeiro/contratos/<int:cid>/cancelar', methods=['POST'])
+@financeiro.route('/comercial/contratos/<int:cid>/cancelar', methods=['POST'])
 @permission_required(MONTAR)
 def contrato_cancelar(cid):
     c = PrestContrato.get(cid)
@@ -627,7 +641,7 @@ def contrato_cancelar(cid):
     return redirect(url_for('financeiro.contrato_ver', cid=cid))
 
 
-@financeiro.route('/financeiro/contratos/<int:cid>/nota', methods=['POST'])
+@financeiro.route('/comercial/contratos/<int:cid>/nota', methods=['POST'])
 @permission_required(MONTAR)
 def contrato_nota(cid):
     """Anotação da equipe na linha do tempo do contrato (só quem vê o contrato; fica em dados.notas)."""
@@ -642,7 +656,7 @@ def contrato_nota(cid):
     return redirect(url_for('financeiro.contrato_ver', cid=cid))
 
 
-@financeiro.route('/financeiro/contratos/<int:cid>/pedir-aprovacao', methods=['POST'])
+@financeiro.route('/comercial/contratos/<int:cid>/pedir-aprovacao', methods=['POST'])
 @permission_required(MONTAR)
 def contrato_pedir_aprovacao(cid):
     c = PrestContrato.get(cid)
@@ -661,7 +675,7 @@ def contrato_pedir_aprovacao(cid):
     return redirect(url_for('financeiro.contrato_ver', cid=cid))
 
 
-@financeiro.route('/financeiro/contratos/<int:cid>/aprovar', methods=['POST'])
+@financeiro.route('/comercial/contratos/<int:cid>/aprovar', methods=['POST'])
 @permission_required(APROVAR)
 def contrato_aprovar(cid):
     """Aprovar: o honorário passa a valer (Anderson, 18/11/2026: "Na nossa aprovação, a aprovação ela tem a presunção
@@ -691,7 +705,7 @@ def contrato_aprovar(cid):
     return redirect(url_for('financeiro.contrato_ver', cid=cid))
 
 
-@financeiro.route('/financeiro/contratos/<int:cid>/reprovar', methods=['POST'])
+@financeiro.route('/comercial/contratos/<int:cid>/reprovar', methods=['POST'])
 @permission_required(APROVAR)
 def contrato_reprovar(cid):
     c = PrestContrato.get(cid)
@@ -860,3 +874,14 @@ def _concluir(c):
             anexos=[(nome_arq, pdf, 'application/pdf')])
     registrar('escrita.concluiu_contrato_prestacao', 'financeiro', tabela='prest_contratos', registro_id=c['id'],
               depois={'empresa': emp.get('razao'), 'dropbox': path, 'copias_para': para})
+
+
+# ---------------------------------------------------------------- caminho antigo (24/11/2026, Anderson: "os contratos é
+# para aparecer somente no COMERCIAL e não no Financeiro"): tudo que era /financeiro/contratos... vive em /comercial/contratos...
+@financeiro.route('/financeiro/contratos', defaults={'resto': ''})
+@financeiro.route('/financeiro/contratos/<path:resto>')
+def contratos_antigo(resto):
+    url = '/comercial/contratos' + ('/' + resto if resto else '')
+    if request.query_string:
+        url += '?' + request.query_string.decode('utf-8', 'ignore')
+    return redirect(url, code=301)

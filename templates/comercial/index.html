@@ -53,14 +53,6 @@
             <p class="ef-card-desc">Empresas e avulsos: o cadastro completo é o que libera orçamento e contrato</p>
         </a>
         {% endif %}
-        {% if pode_rota('financeiro.contratos') %}
-        <a href="{{ url_for('financeiro.contratos') }}#prontas" class="ef-card">
-            <div class="ef-card-ico" style="background:#fef3c7;color:#b45309;"><i class="fas fa-clipboard-check"></i></div>
-            <h3 class="ef-card-title">Prontas para contrato</h3>
-            <div class="ef-card-num" data-counter="prontas"></div>
-            <p class="ef-card-desc">Cadastro completo e ainda sem contrato de prestação: é só montar</p>
-        </a>
-        {% endif %}
     </div>
 
     <div class="ef-section-label">Em breve</div>

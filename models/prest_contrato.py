@@ -372,7 +372,7 @@ class PrestContrato:
             cond.append('(p.cliente_id = %s OR p.id IN (SELECT contrato_id FROM prest_contrato_empresas WHERE cliente_id = %s))'); params += [cliente_id, cliente_id]
         where = ('WHERE ' + ' AND '.join(cond)) if cond else ''
         rows = execute_query(
-            f"""SELECT p.id, p.numero, p.cliente_id, p.tipo, p.titulo, p.status, p.criado_em, p.enviado_em, p.assinado_em, p.pdf_path,
+            f"""SELECT p.id, p.numero, p.cliente_id, p.tipo, p.titulo, p.status, p.criado_em, p.enviado_em, p.assinado_em, p.pdf_path, p.dados,
                        p.criado_por, (SELECT GROUP_CONCAT(e.cliente_id) FROM prest_contrato_empresas e WHERE e.contrato_id = p.id) AS empresas_csv,
                        cl.numero_cliente, cl.nome_razao_social, u.nome AS criado_por_nome,
                        (SELECT COUNT(*) FROM prest_contrato_empresas e WHERE e.contrato_id = p.id) AS n_empresas,
@@ -382,6 +382,10 @@ class PrestContrato:
                  {where} ORDER BY p.id DESC""", tuple(params), fetch=True) or []
         for r in rows:
             r['empresas_ids'] = [int(x) for x in (r.get('empresas_csv') or '').split(',') if x.strip().isdigit()]
+            try:
+                r['dados'] = json.loads(r['dados']) if isinstance(r['dados'], str) else (r['dados'] or {})
+            except ValueError:
+                r['dados'] = {}
         return rows
 
     @staticmethod

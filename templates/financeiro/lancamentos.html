@@ -387,7 +387,7 @@
       {# 21/11/2026 — Anderson: "vamos deixar nessa tela somente o + Nova Solicitação". Notas e boletos, Emitir direto
          e Serviços e comissões saíram (a aba SERVIÇOS já existe); a Configuração fiscal foi para dentro de EMPRESAS.
          O aviso de contratos para aprovar fica, porque só aparece quando há pendência. #}
-      {% if aprov and ctr_aprovar %}<a class="lm-btn lm-btn2" style="background:#f59e0b;color:#fff;border-color:#f59e0b" href="{{ url_for('financeiro.contratos', aba='aprovacao') }}"><i class="fas fa-file-signature"></i> Contratos para aprovar · {{ ctr_aprovar }}</a>{% endif %}
+      {% if aprov and ctr_aprovar %}<a class="lm-btn lm-btn2" style="background:#f59e0b;color:#fff;border-color:#f59e0b" href="{{ url_for('financeiro.contratos', aba='APROVACAO') }}"><i class="fas fa-file-signature"></i> Contratos para aprovar · {{ ctr_aprovar }}</a>{% endif %}
       {% if pode_rota('financeiro.lancamento_novo') %}<button type="button" class="lm-btn" onclick="nsAbrir()"><i class="fas fa-plus"></i> Nova solicitação</button>{% endif %}
     </div>
   </div>
