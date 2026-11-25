@@ -203,6 +203,65 @@ def pagamentos_do_titulo(titulo_id):
     return rows
 
 
+_REF_BOLETO = (('cora:', 'cora'), ('efi:', 'efi'), ('bradesco:', 'bradesco'))
+
+
+@financeiro.route('/financeiro/titulos/baixas/<int:baixa_id>/desfazer', methods=['POST'])
+@permission_required('financeiro.titulos')
+def baixa_desfazer(baixa_id):
+    """25/11/2026 — Anderson, no caso da B2t (o crédito a mais do boleto de nov. deu baixa na parcela de dez.):
+    "B e eu faço a operação para aprender". Desfaz UMA baixa errada: o título volta para em aberto (ou parcial), a
+    linha do extrato fica livre e, se for do Cora, é revista na hora (o pagamento repetido vira PAGO EM DOBRO).
+    Só admin, com motivo. Não desfaz a baixa que o próprio boleto deu quando o banco diz que ele foi pago."""
+    from utils.financeiro_core import recalcular_status
+    volta = request.form.get('volta') or url_for('financeiro.titulos', aba='rec')
+    if not current_user.is_admin():
+        flash('Só o administrador desfaz um recebimento.', 'danger')
+        return redirect(volta)
+    motivo = (request.form.get('motivo') or '').strip()
+    x = _q("""SELECT b.*, t.contraparte_nome, t.descricao, t.vencimento, t.empresa_id
+                FROM fin_titulo_baixas b JOIN fin_titulos t ON t.id = b.titulo_id WHERE b.id = %s""", (baixa_id,), one=True)
+    if not x or x['empresa_id'] not in FinEmpresa.ids_validos():
+        abort(404)
+    if len(motivo) < 5:
+        flash('Diga o motivo (pelo menos 5 letras) para desfazer o recebimento.', 'warning')
+        return redirect(volta)
+    ref = x.get('referencia') or ''
+    for pre, prov in _REF_BOLETO:
+        if ref.startswith(pre):
+            bol = _q("SELECT situacao FROM fin_boletos WHERE provedor = %s AND charge_id = %s AND titulo_id = %s",
+                     (prov, ref[len(pre):], x['titulo_id']), one=True)
+            if bol and bol['situacao'] == 'paid':
+                flash('Este recebimento é o próprio boleto pago no banco: ele é verdadeiro e não se desfaz.', 'warning')
+                return redirect(volta)
+    execute_query('DELETE FROM fin_titulo_baixas WHERE id = %s', (baixa_id,), fetch=False)
+    recalcular_status(x['titulo_id'])
+    registrar('escrita.desfez_recebimento', 'financeiro', tabela='fin_titulos', registro_id=x['titulo_id'],
+              antes={'empresa': x['contraparte_nome'], 'cobrança': x['descricao'], 'valor': str(x['valor']),
+                     'data': str(x['data_baixa']), 'referencia': ref, 'linha do extrato': x.get('lancamento_id')},
+              depois={'status': 'recebimento desfeito', 'motivo': motivo})
+    extra = ''
+    if x.get('lancamento_id'):
+        lanc = _q('SELECT * FROM extrato_lancamentos WHERE id = %s', (x['lancamento_id'],), one=True)
+        if lanc and lanc.get('origem') == 'cora':
+            # revê na hora as linhas do Cora do mesmo dia e valor (a livre e a irmã), na ordem em que entraram
+            irmas = _q("""SELECT * FROM extrato_lancamentos WHERE origem = 'cora' AND empresa_id = %s AND data = %s
+                              AND ABS(valor - %s) < 0.005 ORDER BY id""", (lanc['empresa_id'], lanc['data'], lanc['valor']))
+            sits = []
+            try:
+                from utils import cora_extrato
+                for l in irmas:
+                    sits.append(cora_extrato.baixar(l, seco=False)[0])
+            except Exception:
+                logger.exception('[desfazer] revisão da linha %s pelo Cora falhou', lanc['id'])
+            if 'baixado' in sits or 'ja-baixado' in sits:
+                extra += ' O crédito foi ligado ao boleto certo.'
+            if 'dobro' in sits:
+                extra += ' O pagamento repetido ficou no Extrato como PAGO EM DOBRO.'
+    flash('Recebimento desfeito: %s · %s voltou para a receber.%s' % (x['contraparte_nome'] or '', x['descricao'] or '', extra), 'success')
+    return redirect(volta)
+
+
 @financeiro.app_template_global('titulo_em_aberto')
 def titulo_em_aberto(titulo_id):
     return bool(titulo_id and _q("SELECT 1 x FROM fin_titulos WHERE id = %s AND status IN ('aberto', 'parcial')",

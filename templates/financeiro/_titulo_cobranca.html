@@ -211,7 +211,16 @@
       {% endif %}
       {% if pagtos %}
       <div class="tj-pag"><dt>Como foi pago</dt>
-        {% for p in pagtos %}<div><b>{{ p.valor | float | format_currency }}</b><span>{{ p.data_baixa.strftime('%d/%m/%Y') }} · {{ p.onde }}{% if p.quem %} · {{ p.quem }}{% endif %}</span></div>{% endfor %}
+        {% set pode_desf = not restrito and current_user.is_admin() and pode_rota('financeiro.baixa_desfazer') %}
+        {% for p in pagtos %}<div><b>{{ p.valor | float | format_currency }}</b><span>{{ p.data_baixa.strftime('%d/%m/%Y') }} · {{ p.onde }}{% if p.quem %} · {{ p.quem }}{% endif %}</span>
+          {# 25/11/2026: recebimento que caiu na cobrança errada (B2t) — só admin, com motivo #}
+          {% if pode_desf %}<form method="POST" action="{{ url_for('financeiro.baixa_desfazer', baixa_id=p.id) }}" class="tj-desf"
+                onsubmit="var m = prompt('Desfazer este recebimento de {{ p.valor | float | format_currency }}? A cobrança volta para a receber e o dinheiro fica livre no Extrato.
+
+Motivo:'); if (!m || m.trim().length < 5) { if (m !== null) alert('Escreva o motivo (pelo menos 5 letras).'); return false; } this.motivo.value = m; return true;">
+            <input type="hidden" name="volta" value="{{ volta }}"><input type="hidden" name="motivo">
+            <button type="submit" title="Recebimento errado? Desfaz só este pagamento: a cobrança volta para a receber"><i class="fas fa-rotate-left"></i> Desfazer</button></form>{% endif %}
+        </div>{% endfor %}
       </div>
       {% endif %}
     </section>

@@ -527,6 +527,7 @@ MAPA = {
     'financeiro.titulo_excluir': 'financeiro.titulos.excluir',
     'financeiro.titulo_perdido': 'financeiro.titulos.excluir',
     'financeiro.titulo_perdido_voltar': 'financeiro.titulos.excluir',
+    'financeiro.baixa_desfazer': 'financeiro.titulos.excluir',
     'financeiro.titulo_novo': 'financeiro.titulos.incluir',
     # grupos
     'grupos.desativar': 'grupos.excluir',
