@@ -512,7 +512,7 @@ def servicos():
     n_emp = {r['ramo_atividade_id']: int(r['n']) for r in execute_query(
         "SELECT ramo_atividade_id, COUNT(DISTINCT cliente_id) n FROM cliente_ramo_atividade_relacao GROUP BY ramo_atividade_id", fetch=True) or []}
     ramos = [dict(r, n_empresas=n_emp.get(r['id'], 0), sugestao=float(r['mensalidade_sugerida']) if r.get('mensalidade_sugerida') else 0.0)
-             for r in RamoAtividade.get_all('ATIVO')]
+             for r in RamoAtividade.get_all('ATIVO', fresco=True)]      # direto do banco: a memória de 60 s é por worker
     # 25/11/2026 — Anderson: "já temos que ter um campo no sistema para colocar esses índices": os índices de reajuste do contrato
     from models.reajuste_indice import ReajusteIndice
     indices = ReajusteIndice.listar()

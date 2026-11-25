@@ -48,7 +48,7 @@ class RamoAtividade:
     """Classe para gestão de ramos de atividade dos clientes"""
     
     @staticmethod
-    def get_all(situacao=None):
+    def get_all(situacao=None, fresco=False):
         """
         Retorna todos os ramos de atividade.
         
@@ -70,7 +70,9 @@ class RamoAtividade:
             params.append(situacao)
         query += " ORDER BY nome"
 
-        if situacao == 'ATIVO':
+        # fresco=True pula a memória de 60 s: ela é por processo (Gunicorn com 4 workers) e o salvar só limpa a do
+        # worker que gravou — a tela de Serviços mostrava a mensalidade antiga logo depois do Salvar (Anderson, 25/11/2026)
+        if situacao == 'ATIVO' and not fresco:
             with _cache_lock:
                 if _cache_ativos is not None and (time.time() - _cache_ativos_ts) < _CACHE_TTL_SECONDS:
                     return _cache_ativos

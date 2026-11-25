@@ -222,6 +222,7 @@
 .ct-valor .ns-money { height:52px; } .ct-valor .ns-money > input.ns-in { font-size:22px; }
 /* frase de leitura das condições / cláusulas */
 .ct-frase { display:flex; flex-wrap:wrap; gap:6px 0; font-size:13px; color:#334155; line-height:1.5; }
+.ct-abre { cursor:pointer; } h4.ct-abre:hover, .ct-frase.ct-abre:hover { color:var(--cor-e, #0f172a); } .ct-frase.ct-abre { border-radius:10px; margin:0 -8px; padding:4px 8px; } .ct-frase.ct-abre:hover { background:var(--cor-f, #f8fafc); }
 .ct-frase span { display:inline-flex; align-items:center; } .ct-frase span + span::before { content:'·'; color:#cbd5e1; margin:0 9px; }
 .ct-frase b { color:#0f172a; margin-left:4px; }
 .ct-note { font-size:12px; color:#64748b; margin-top:6px; line-height:1.4; } .ct-note.ok { color:#15803d; }
@@ -395,8 +396,8 @@
       <div class="ns-campo"><label>Vence no dia</label><div class="ct-chips ct-dia" id="ct-dias">{% for d in (4, 10, 15, 20, 25, 30) %}<button type="button" data-v="{{ d }}" class="{{ 'on' if dia|int == d }}" onclick="ctDia(this)">{{ d }}</button>{% endfor %}<input type="text" class="ns-in" id="ct-dia-outro" placeholder="outro" inputmode="numeric" maxlength="2" value="{{ dia if dia|int not in (4, 10, 15, 20, 25, 30) else '' }}" oninput="ctDiaOutro(this)"></div></div>
       <div class="ns-campo"><label>Início do contrato</label><div class="ct-chips" id="ct-inis"><button type="button" data-v="hoje" onclick="ctIni(this)">hoje</button><button type="button" data-v="mes" onclick="ctIni(this)">1º deste mês</button><button type="button" data-v="prox" onclick="ctIni(this)">1º do mês que vem</button><span class="ct-data"><i class="fas fa-calendar-days"></i><input type="date" class="ns-in" id="ct-ini-txt" value="{{ ini if ini and ini|length == 10 else '' }}" min="2000-01-01" onchange="ctIniTxt(this)"></span></div></div>
     </div>
-    <h4 style="margin:16px 0 8px; --cor:#2563eb; --cor-e:#1e40af; --cor-f:#eff6ff"><i class="fas fa-sliders"></i> Condições <small>reajuste, 13º, multa e juros</small><button type="button" class="ct-alt" onclick="ctToggle('ct-cond-body', this)"><i class="fas fa-pen"></i> Alterar</button></h4>
-    <div class="ct-frase" id="ct-cond-sum"></div>
+    <h4 class="ct-abre" style="margin:16px 0 8px; --cor:#2563eb; --cor-e:#1e40af; --cor-f:#eff6ff" onclick="ctAbre(event, 'ct-cond-body')" title="Clique para alterar"><i class="fas fa-sliders"></i> Condições <small>reajuste, 13º, multa e juros</small><button type="button" class="ct-alt" data-alvo="ct-cond-body" onclick="ctToggle('ct-cond-body', this)"><i class="fas fa-pen"></i> Alterar</button></h4>
+    <div class="ct-frase ct-abre" id="ct-cond-sum" onclick="ctAbre(event, 'ct-cond-body')" title="Clique para alterar"></div>
     <div class="ct-body" id="ct-cond-body" hidden>
       {# reajuste em cartões coloridos; índice vem do cadastro (25/11/2026 — Anderson: "muito cinza sem vida... clico em índice próprio e coloco o índice") #}
       <div class="ct-cond-grp cg-azul">
@@ -439,8 +440,8 @@
   </section>
 
   {# ── 5. cláusulas e assinatura pela Qualicontax: frase de leitura, abre em Alterar ── #}
-  <section class="tj-sec c-roxo"><h4><i class="fas fa-scale-balanced"></i> Cláusulas e assinatura <small>{{ contratada.razao | nome_proprio }} · CNPJ {{ contratada.cnpj }}{% if contratada.crc %} · CRC {{ contratada.crc }}{% endif %}</small><button type="button" class="ct-alt" onclick="ctToggle('ct-cla-body', this)"><i class="fas fa-pen"></i> Alterar</button></h4>
-    <div class="ct-frase" id="ct-cla-sum"></div>
+  <section class="tj-sec c-roxo"><h4 class="ct-abre" onclick="ctAbre(event, 'ct-cla-body')" title="Clique para alterar"><i class="fas fa-scale-balanced"></i> Cláusulas e assinatura <small>{{ contratada.razao | nome_proprio }} · CNPJ {{ contratada.cnpj }}{% if contratada.crc %} · CRC {{ contratada.crc }}{% endif %}</small><button type="button" class="ct-alt" data-alvo="ct-cla-body" onclick="ctToggle('ct-cla-body', this)"><i class="fas fa-pen"></i> Alterar</button></h4>
+    <div class="ct-frase ct-abre" id="ct-cla-sum" onclick="ctAbre(event, 'ct-cla-body')" title="Clique para alterar"></div>
     {% if not contratada.crc %}<div class="ct-note" style="color:#b45309"><i class="fas fa-triangle-exclamation"></i> A Qualicontax está sem CRC no cadastro (cliente nº 1).</div>{% endif %}
     <div class="ct-body" id="ct-cla-body" hidden>
       {# cláusulas com vida (25/11/2026): aviso prévio e LGPD em cartões, foro/local/título, quem assina e testemunhas (equipe + alguém do cliente) #}
@@ -460,11 +461,10 @@
         <div class="ns-ops ct-ops2" id="ct-extras-ops"><button type="button" data-v="1" class="ns-op {{ 'on' if exc }}" onclick="ctSeg(this, 'ct-extras')"><i class="fas fa-receipt"></i><b>Cobrados à parte</b><small>com preço combinado antes</small></button><button type="button" data-v="" class="ns-op {{ 'on' if not exc }}" onclick="ctSeg(this, 'ct-extras')"><i class="fas fa-stamp"></i><b>Só as taxas</b><small>sem honorário extra; o cliente paga só taxas e custas</small></button></div>
       </div>
       <div class="ct-cond-grp cg-roxo">
-        <div class="ct-cond-lbl"><i class="fas fa-gavel"></i> Foro, local e título</div>
-        <div class="ns-campos tres">
+        <div class="ct-cond-lbl"><i class="fas fa-gavel"></i> Foro e local da assinatura</div>
+        <div class="ns-campos">
           <div class="ns-campo"><label>Foro</label><input type="text" name="foro" class="ns-in ct-in-cor" value="{{ dados.foro or (contratada.cidade ~ '/' ~ contratada.uf) }}" oninput="ctResumo()"></div>
           <div class="ns-campo"><label>Local da assinatura</label><input type="text" name="local" class="ns-in ct-in-cor" value="{{ dados.local or contratada.cidade }}" oninput="ctResumo()"></div>
-          <div class="ns-campo"><label>Título do contrato</label><input type="text" name="titulo" class="ns-in ns-up ct-in-cor" value="{{ dados.titulo or '' }}" placeholder="em branco = pelos serviços escolhidos" oninput="ctResumo()"></div>
         </div>
       </div>
       <div class="ct-cond-grp cg-agua">
@@ -521,7 +521,10 @@ var TESTES = {{ testemunhas | tojson }};
 function nomeProprio(s) { s = String(s || ''); if (s !== s.toUpperCase()) return s; return s.toLowerCase().replace(/(^|\s)(\S)/g, function (m, a, b) { return a + b.toUpperCase(); }).replace(/\b(De|Da|Do|Das|Dos|E)\b/g, function (m) { return m.toLowerCase(); }); }
 function sigla(nome) { var p = String(nome || '').trim().split(/\s+/).filter(function (x) { return x.length > 2 && !/^(DE|DA|DO|DAS|DOS|E)$/i.test(x); }); return (((p[0] || '')[0] || '') + ((p[1] || '')[0] || '')).toUpperCase() || '?'; }
 // ---- seções que abrem em "Alterar" ----
-function ctToggle(id, bt) { var b = $(id); b.hidden = !b.hidden; if (bt) bt.innerHTML = b.hidden ? '<i class="fas fa-pen"></i> Alterar' : '<i class="fas fa-chevron-up"></i> Fechar'; if (!b.hidden) { var f = b.querySelector('input:not([type=hidden]), button'); if (f && f.tagName === 'INPUT') f.focus(); } }
+// 25/11/2026 — Anderson: "não quero ficar limitado clicar no botão ALTERAR, quero clicar na frente em qq lugar e já abrir":
+// o título e a frase-resumo abrem/fecham o bloco; o clique no próprio botão Alterar não conta duas vezes
+function ctAbre(ev, id) { if (ev.target.closest('.ct-alt, a, input, button')) return; ctToggle(id); }
+function ctToggle(id, bt) { var b = $(id); bt = bt || document.querySelector('.ct-alt[data-alvo="' + id + '"]'); b.hidden = !b.hidden; if (bt) bt.innerHTML = b.hidden ? '<i class="fas fa-pen"></i> Alterar' : '<i class="fas fa-chevron-up"></i> Fechar'; if (!b.hidden) { var f = b.querySelector('input:not([type=hidden]), button'); if (f && f.tagName === 'INPUT') f.focus(); } }
 function ctJuntar() { $('ct-busca-emp').hidden = false; $('pf-busca').focus(); }
 // ---- quem assina: cartão de leitura; quem altera é o cadastro ----
 function cardPessoa(pref, linkId, nomeVazio) {
@@ -794,7 +797,7 @@ function ctResumo() {
     var v = num(val('valor')), dia = $('ct-dia').value, ini = $('ct-inicio').value;
     var q = SIGNQ[$('ct-assq').value] || SIGNQ[Object.keys(SIGNQ)[0]] || {};
     var tests = Array.prototype.map.call(document.querySelectorAll('#ct-testes button.on'), function (b) { return b.textContent.replace(/do cliente/, '').trim().split(' ')[0]; });
-    var titulo = val('titulo') || (areas.indexOf('Contabilidade') >= 0 ? 'Contrato de prestação de serviços contábeis' : (areas.length === 1 ? 'Contrato de prestação de serviços de ' + areas[0].toLowerCase() : 'Contrato de prestação de serviços'));
+    var titulo = (areas.indexOf('Contabilidade') >= 0 ? 'Contrato de prestação de serviços contábeis' : (areas.length === 1 ? 'Contrato de prestação de serviços de ' + areas[0].toLowerCase() : 'Contrato de prestação de serviços'));
     var rt = $('ct-reaj').value, reajDet = rt === 'ESCALONADO' ? val('reajuste_escala') : ((rt === 'INDICE' || rt === 'DATA_PROPRIA') ? val('reajuste_indice') : '');
     var reaj = segTx('ct-reajs') + (reajDet ? ' · ' + reajDet : '') + (rt === 'DATA_PROPRIA' && val('reajuste_mes') ? ' · em ' + val('reajuste_mes') : '');
     var lin = ctLinhas(), pag = lin.filter(function (x) { return x.sit === 'PAGA'; }), via = lin.filter(function (x) { return x.sit === 'VIA_GRUPO'; }), sem = lin.filter(function (x) { return x.sit === 'SEM_MOVIMENTO'; }), semSit = lin.filter(function (x) { return !x.sit; });
