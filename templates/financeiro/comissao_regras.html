@@ -181,7 +181,19 @@
 .tx-painel[data-p="pessoas"] { --sec:#7c3aed; --sec-e:#5b21b6; --sec-f:#f5f3ff; --sec-b:#ddd6fe; }
 .tx-painel[data-p="servicos"] { --sec:#0f766e; --sec-e:#115e59; --sec-f:#f0fdfa; --sec-b:#99f6e4; }
 .tx-painel[data-p="ramos"] { --sec:#b45309; --sec-e:#92400e; --sec-f:#fffbeb; --sec-b:#fde68a; }
-.rg-abas { grid-template-columns:repeat(3, minmax(0,1fr)) !important; }
+.rg-abas { grid-template-columns:repeat(4, minmax(0,1fr)) !important; }
+@media (max-width:760px) { .rg-abas { grid-template-columns:1fr 1fr !important; } }
+.tx-painel[data-p="indices"] { --sec:#2563eb; --sec-e:#1e40af; --sec-f:#eff6ff; --sec-b:#bfdbfe; }
+.tx-a-idx { --cor:#2563eb; --cor-e:#1e40af; --fundo:#eef4ff; }
+/* índices de reajuste (25/11/2026): um cartão por índice, nome e descrição editáveis; o novo é o primeiro cartão */
+.ix-grade { display:grid; grid-template-columns:repeat(auto-fill, minmax(320px, 1fr)); gap:12px; }
+.ix-c { padding:14px 16px; gap:10px; } .ix-c .rg-av { width:auto; min-width:42px; padding:0 8px; background:linear-gradient(135deg,#2563eb,#1e40af); color:#fff; font-size:12px; letter-spacing:.02em; }
+.ix-c.off { opacity:.72; } .ix-c.off .rg-av { background:#cbd5e1; color:#475569; }
+.ix-c.ix-novo { border:1.5px dashed #93c5fd; background:#f8fbff; box-shadow:none; } .ix-c.ix-novo .rg-av { background:#fff; color:#2563eb; border:1.5px dashed #93c5fd; }
+.ix-campos { display:flex; flex-direction:column; gap:6px; } .ix-campos .rg-in { width:100%; } .ix-campos .rg-in:focus { border-color:#2563eb; box-shadow:0 0 0 3px #dbeafe; }
+.ix-tag { font-size:10px; font-weight:800; letter-spacing:.04em; text-transform:uppercase; color:#64748b; background:#f1f5f9; border-radius:99px; padding:3px 8px; }
+.ix-c .rg-acoes .ix-sit { order:-1; margin-right:auto; border:0; background:none; font:inherit; font-size:12.5px; font-weight:700; color:#64748b; cursor:pointer; } .ix-c .rg-acoes .ix-sit:hover { color:#b91c1c; }
+.ix-c .rg-ok { background:#1e40af; }
 .tx-a-ram { --cor:#d97706; --cor-e:#92400e; --fundo:#fff7ec; }
 /* mensalidade sugerida por ramo (24/11/2026): um cartão por ramo, valor editável no próprio cartão */
 .rm-grade { display:grid; grid-template-columns:repeat(auto-fill, minmax(300px, 1fr)); gap:12px; }
@@ -221,6 +233,31 @@
     <button type="button" class="tx-aba tx-a-ram{{ ' on' if aba == 'ramos' }}" data-p="ramos"><span class="tx-aba-ico"><i class="fas fa-tags"></i></span>
       <span class="tx-aba-txt"><span class="tx-aba-lbl">Mensalidade por ramo</span><span class="tx-aba-val">{{ n_ramos_com }} de {{ ramos|length }} ramos</span>
       <span class="tx-aba-sub">com valor sugerido · o contrato de prestação oferece a soma dos ramos da empresa</span></span></button>
+    <button type="button" class="tx-aba tx-a-idx{{ ' on' if aba == 'indices' }}" data-p="indices"><span class="tx-aba-ico"><i class="fas fa-chart-line"></i></span>
+      <span class="tx-aba-txt"><span class="tx-aba-lbl">Índices de reajuste</span><span class="tx-aba-val">{{ n_indices_ativos }} índice{{ 's' if n_indices_ativos != 1 }}</span>
+      <span class="tx-aba-sub">IPCA, IGP-M… · o contrato de prestação escolhe na caixa de "Índice próprio" e "Data própria"</span></span></button>
+  </div>
+
+  {# ── ÍNDICES DE REAJUSTE (25/11/2026 — Anderson: "já temos que ter um campo no sistema para colocar esses índices") ── #}
+  <div class="tx-painel{{ ' on' if aba == 'indices' }}" data-p="indices">
+    <div class="rg-faixa"><span class="rg-muted">Os índices que o contrato de prestação oferece em "Índice próprio" e "Data própria". No contrato sai a sigla e o nome por extenso. Inativar tira da caixa; os contratos já feitos não mudam.</span>
+      <div class="tx-busca"><i class="fas fa-magnifying-glass"></i><input type="search" placeholder="Buscar índice" data-busca="indices"></div></div>
+    <div class="ix-grade">
+      <form class="ix-c ix-novo rg-c" method="POST" action="{{ url_for('financeiro.indice_reajuste') }}" data-b="novo indice" autocomplete="off">
+        <input type="hidden" name="acao" value="novo">
+        <div class="rm-top"><span class="rg-av"><i class="fas fa-plus"></i></span><div><b>Novo índice</b><small>sigla, nome por extenso e uma linha de descrição</small></div></div>
+        <div class="ix-campos"><input class="rg-in" name="sigla" placeholder="SIGLA (ex.: IPCA-15)" maxlength="20" required style="text-transform:uppercase"><input class="rg-in" name="nome" placeholder="Nome por extenso" maxlength="120" required><input class="rg-in" name="descricao" placeholder="ex.: IBGE · a inflação oficial do país" maxlength="160"></div>
+        <div class="rg-acoes"><button class="rg-ok"><i class="fas fa-check"></i> Cadastrar</button></div>
+      </form>
+      {% for i in indices %}
+      <form class="ix-c rg-c{{ ' off' if i.situacao != 'ATIVO' }}" id="i{{ i.id }}" method="POST" action="{{ url_for('financeiro.indice_reajuste') }}" data-b="{{ i.sigla }} {{ i.nome }} {{ i.descricao or '' }}" autocomplete="off">
+        <input type="hidden" name="id" value="{{ i.id }}">
+        <div class="rm-top"><span class="rg-av">{{ i.sigla }}</span><div><b>{{ i.nome }}</b><small>{{ 'na caixa do contrato' if i.situacao == 'ATIVO' else 'fora da caixa do contrato' }}</small></div>{% if i.situacao != 'ATIVO' %}<span class="ix-tag">inativo</span>{% endif %}</div>
+        <div class="ix-campos"><input class="rg-in" name="nome" value="{{ i.nome }}" maxlength="120" required title="nome por extenso"><input class="rg-in" name="descricao" value="{{ i.descricao or '' }}" maxlength="160" placeholder="descrição curta (quem calcula, para que serve)"></div>
+        <div class="rg-acoes"><button class="rg-ok" name="acao" value="alterar"><i class="fas fa-check"></i> Salvar</button><button type="submit" class="ix-sit" name="acao" value="{{ 'reativar' if i.situacao != 'ATIVO' else 'inativar' }}"><i class="fas {{ 'fa-rotate-left' if i.situacao != 'ATIVO' else 'fa-ban' }}"></i> {{ 'Reativar' if i.situacao != 'ATIVO' else 'Inativar' }}</button></div>
+      </form>
+      {% endfor %}
+    </div>
   </div>
 
   {# ── MENSALIDADE POR RAMO (24/11/2026 — Anderson: "sugestões de mensalidades para as atividades... será aqui o parâmetro") ── #}

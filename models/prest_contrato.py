@@ -20,6 +20,7 @@ from decimal import Decimal
 from utils.db_helper import execute_query
 from utils.extenso import reais_extenso
 from utils.texto import nome_proprio
+from models.reajuste_indice import ReajusteIndice
 
 QUALICONTAX = {
     'razao': 'QUALICONTAX ASSESSORIA CONTÁBIL LTDA – EPP',
@@ -57,8 +58,8 @@ TITULOS = {'CONTABIL': 'CONTRATO DE PRESTAÇÃO DE SERVIÇOS CONTÁBEIS', 'FISCA
 STATUS = ('RASCUNHO', 'APROVACAO', 'APROVADO', 'ENVIADO', 'ASSINADO', 'CANCELADO')   # 18/11/2026: aprovação da equipe
 REAJUSTE_TXT = {
     'SALARIO_MINIMO': 'Os honorários serão reajustados anualmente, no mês de janeiro, pelo mesmo percentual de reajuste do salário mínimo nacional.',
-    'INDICE': 'Os honorários serão reajustados anualmente pelo índice {indice}.',
-    'DATA_PROPRIA': 'Os honorários serão reajustados anualmente, no mês de {mes}, {indice}.',
+    'INDICE': 'Os honorários serão reajustados anualmente pela variação acumulada do {indice}, ou de outro índice oficial que venha a substituí-lo.',
+    'DATA_PROPRIA': 'Os honorários serão reajustados anualmente, no mês de {mes}, {indice_txt}.',
     'SEM': 'Os honorários serão reajustados de comum acordo entre as partes.',
     'ESCALONADO': 'Os honorários seguirão a escala combinada entre as partes: {indice}.',
 }
@@ -230,6 +231,20 @@ class PrestContrato:
             out.append({'id': r['id'], 'nome': (r['nome'] or '').strip(), 'cpf': r.get('cpf') or '', 'avulso': bool(r.get('avulso')), 'documento': _doc_texto(Documentos.listar(r['id'])),
                         'email': (email or r.get('email') or '').strip().lower(), 'celular': _celular_da_pessoa(r['id'], r.get('cpf'))})
         return out
+
+    @staticmethod
+    def pessoa(cliente_id):
+        """Uma pessoa física do cadastro (cliente ou avulso), com e-mail, celular e documento: testemunha do cliente
+        (25/11/2026 — Anderson: "alguém que deverá estar cadastrado como Cliente ou Avulso, sendo obrigatório Pessoa Física")."""
+        r = execute_query("""SELECT c.id, c.nome_razao_social AS nome, c.cpf_cnpj AS cpf, c.email, COALESCE(c.avulso, 0) AS avulso
+                                 FROM clientes c WHERE c.id = %s AND c.tipo_pessoa = 'PF'""", (cliente_id,), fetch=True, fetch_one=True)
+        if not r:
+            return None
+        from models.pessoa_dados import Documentos
+        email, _ = _email_da_pessoa(r['id'], r.get('cpf'))
+        return {'id': r['id'], 'nome': (r['nome'] or '').strip(), 'cpf': r.get('cpf') or '', 'avulso': bool(r.get('avulso')),
+                'documento': _doc_texto(Documentos.listar(r['id'])), 'email': (email or r.get('email') or '').strip().lower(),
+                'celular': _celular_da_pessoa(r['id'], r.get('cpf'))}
 
     @staticmethod
     def socios_iguais(cliente_ids):
@@ -550,8 +565,14 @@ class PrestContrato:
         if len(empresas) > 1 and dados.get('valores_por_empresa'):
             hon.append('PARÁGRAFO PRIMEIRO. Os honorários são compostos pelos valores de cada empresa: ' +
                        '; '.join('%s: %s' % (e['razao'], brl(e.get('valor'))) for e in empresas) + '.')
-        reaj = REAJUSTE_TXT.get(dados.get('reajuste_tipo') or 'SALARIO_MINIMO', REAJUSTE_TXT['SALARIO_MINIMO'])
-        reaj = reaj.format(indice=dados.get('reajuste_indice') or 'combinado entre as partes', mes=dados.get('reajuste_mes') or 'janeiro')
+        rt = dados.get('reajuste_tipo') or 'SALARIO_MINIMO'
+        reaj = REAJUSTE_TXT.get(rt, REAJUSTE_TXT['SALARIO_MINIMO'])
+        # 25/11/2026: o índice vem do cadastro (sigla + nome por extenso); escalonado tem o próprio texto
+        idx = ReajusteIndice.texto(dados.get('reajuste_indice')) if rt in ('INDICE', 'DATA_PROPRIA') else ''
+        escala = dados.get('reajuste_escala') or dados.get('reajuste_indice') or 'combinada entre as partes'
+        reaj = reaj.format(indice=escala if rt == 'ESCALONADO' else (idx or 'índice combinado entre as partes'), mes=dados.get('reajuste_mes') or 'janeiro',
+                           indice_txt=('pela variação acumulada do %s, ou de outro índice oficial que venha a substituí-lo' % idx) if idx
+                           else 'pelo mesmo percentual de reajuste do salário mínimo nacional')
         hon.append('PARÁGRAFO %s. %s' % ('SEGUNDO' if len(hon) > 1 else 'PRIMEIRO', reaj))
         hon.append('PARÁGRAFO %s. Os honorários pagos após a data acarretarão à %s o acréscimo de multa de %s%% (%s por cento), sem prejuízo de juros moratórios de %s%% '
                    '(%s por cento) ao mês ou fração.' % ('TERCEIRO' if len(hon) > 2 else 'SEGUNDO', apelido, dados.get('multa') or '10', _pct_extenso(dados.get('multa') or '10'),
@@ -614,8 +635,8 @@ class PrestContrato:
         # ficha estruturada para a folha de rosto do PDF (23/11/2026: "PDF elegante como o do orçamento")
         rt = dados.get('reajuste_tipo') or 'SALARIO_MINIMO'
         reaj_curto = {'SALARIO_MINIMO': ('salário mínimo', 'todo janeiro'), 'INDICE': ('pelo %s' % (dados.get('reajuste_indice') or 'índice combinado'), 'anual'),
-                      'DATA_PROPRIA': ('em %s' % (dados.get('reajuste_mes') or 'data própria'), dados.get('reajuste_indice') or ''), 'SEM': ('de comum acordo', ''),
-                      'ESCALONADO': ('escalonado', dados.get('reajuste_indice') or '')}.get(rt, ('de comum acordo', ''))
+                      'DATA_PROPRIA': ('em %s' % (dados.get('reajuste_mes') or 'data própria'), dados.get('reajuste_indice') or 'salário mínimo'), 'SEM': ('de comum acordo', ''),
+                      'ESCALONADO': ('escalonado', dados.get('reajuste_escala') or dados.get('reajuste_indice') or '')}.get(rt, ('de comum acordo', ''))
         decimo_curto = {'COBRADO': ('em 2 parcelas', 'novembro e dezembro'), 'UNICA': ('em dezembro', '1 honorário mensal')}.get(dados.get('decimo'), ('isento', ''))
         e0 = empresas[0] if empresas else {}
         ficha = {'valor': valor, 'dia': dia, 'inicio': inicio_d, 'areas': [(AREAS[a][0], list(AREAS[a][1])) for a in areas],

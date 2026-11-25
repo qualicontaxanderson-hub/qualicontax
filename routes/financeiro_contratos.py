@@ -19,6 +19,7 @@ from models.prest_contrato import (AREAS, QUALICONTAX, SIGNATARIOS_QUALICONTAX, 
 from routes.financeiro import financeiro
 from utils import email_envio
 from utils.texto import nome_proprio
+from models.reajuste_indice import ReajusteIndice
 from utils.atividade import registrar
 from utils.auth_helper import admin_required, permission_required  # noqa: F401 (admin_required: compat)
 from utils.formatters import format_cnpj, format_cpf
@@ -138,13 +139,29 @@ def _ler_form(f):
         cpf = u.get('cpf') or ''
         cpf = '%s.%s.%s-%s' % (cpf[:3], cpf[3:6], cpf[6:9], cpf[9:]) if len(cpf) == 11 else cpf
         assinantes.append({'papel': 'TESTEMUNHA', 'ordem': n, 'nome': u['nome'], 'cpf': cpf, 'email': u['email'], 'usuario_id': u['id']})
+    # testemunha do cliente (25/11/2026): pessoa física de Clientes ou Avulsos; precisa de e-mail para assinar pelo link
+    n0 = len([a for a in assinantes if a['papel'] == 'TESTEMUNHA'])
+    for n, pid in enumerate(f.getlist('testemunha_pf'), n0 + 1):
+        if not (pid or '').isdigit():
+            continue
+        p = PrestContrato.pessoa(int(pid))
+        if not p:
+            raise ValueError('A testemunha escolhida precisa estar cadastrada como pessoa física (Clientes ou Avulsos).')
+        if not p.get('email'):
+            raise ValueError('A testemunha %s não tem e-mail no cadastro.' % nome_proprio(p['nome']))
+        assinantes.append({'papel': 'TESTEMUNHA', 'ordem': n, 'nome': p['nome'], 'cpf': p['cpf'], 'documento': p.get('documento') or '',
+                           'email': p['email'], 'pf_cliente_id': p['id'], 'celular': p.get('celular') or ''})
+    if len([a for a in assinantes if a['papel'] == 'TESTEMUNHA']) > 2:
+        raise ValueError('No máximo duas testemunhas.')
+    rt = f.get('reajuste_tipo') if f.get('reajuste_tipo') in ('SALARIO_MINIMO', 'INDICE', 'DATA_PROPRIA', 'ESCALONADO', 'SEM') else 'SALARIO_MINIMO'
     dados = {
         'empresas': empresas, 'apelido': (f.get('apelido') or '').strip().upper() or None, 'areas': areas, 'servicos_extras': extras,
         'valor': valor, 'valores_por_empresa': bool(f.get('valores_por_empresa')), 'dia_vencimento': int(f.get('dia_vencimento') or 10),
         # ramos cuja mensalidade sugerida a pessoa trouxe para o valor (24/11/2026): fica registrado como o valor foi composto
         'sugestoes': [{'ramo_id': int(x.split('|')[0]), 'nome': x.split('|')[1][:60], 'valor': x.split('|')[2]} for x in f.getlist('sugestao_ramo') if x.count('|') == 2 and x.split('|')[0].isdigit()],
-        'reajuste_tipo': f.get('reajuste_tipo') or 'SALARIO_MINIMO', 'reajuste_indice': (f.get('reajuste_indice') or '').strip() or None,
-        'reajuste_mes': (f.get('reajuste_mes') or '').strip() or None,
+        'reajuste_tipo': rt, 'reajuste_indice': (f.get('reajuste_indice') or '').strip().upper() or None if rt in ('INDICE', 'DATA_PROPRIA') else None,
+        'reajuste_mes': (f.get('reajuste_mes') or '').strip().lower() or None if rt == 'DATA_PROPRIA' else None,
+        'reajuste_escala': (f.get('reajuste_escala') or '').strip() or None if rt == 'ESCALONADO' else None,
         'decimo': f.get('decimo') if f.get('decimo') in ('COBRADO', 'UNICA', 'ISENTO') else 'COBRADO',
         'multa': (f.get('multa') or '10').strip(), 'juros': (f.get('juros') or '1').strip(), 'aviso_previo': int(f.get('aviso_previo') or 30),
         'foro': (f.get('foro') or 'São Paulo/SP').strip(), 'local': (f.get('local') or 'São Paulo').strip(),
@@ -388,7 +405,7 @@ def _honorario_do_contrato(c, aprovado_por):
         fid = FinContrato.criar(cid, valor, int(d.get('dia_vencimento') or 10), inicio,
                                 [{'descricao': 'Honorários contábeis', 'valor': valor}],
                                 decimo_tipo=_DECIMO.get(d.get('decimo'), 'DUAS'), reajuste_tipo=reaj,
-                                reajuste_obs=d.get('reajuste_indice'), criado_por=c['criado_por'], aprovado_por=aprovado_por,
+                                reajuste_obs=d.get('reajuste_escala') or d.get('reajuste_indice'), criado_por=c['criado_por'], aprovado_por=aprovado_por,
                                 observacao='Do contrato de prestação nº %s, aprovado no sistema' % (c.get('numero') or c['id']))
         criados.append(fid)
     return criados, avisos
@@ -432,6 +449,7 @@ def _form_ctx(cliente_id=None, fin_contrato_id=None, contrato=None, mais=None):
                 'rep_email': s0.get('email') or '', 'rep_cargo': s0.get('cargo') or 'sócio administrador', 'rep_celular': s0.get('celular') or ''}
     return {'emp': emp, 'fin': fin, 'dados': d, 'contrato': contrato, 'AREAS': AREAS, 'SIGN_Q': PrestContrato.signatarios_qualicontax(),
             'contratada': PrestContrato.contratada(), 'rep0': rep0, 'emps_ini': emps_ini,
+            'indices': [dict(i) for i in ReajusteIndice.listar(so_ativos=True)],
             'testemunhas': PrestContrato.testemunhas_disponiveis(), 'hoje': date.today(),
             'carteira_pct': float(pct) if pct else None}
 

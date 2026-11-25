@@ -74,6 +74,44 @@
 .ct-data .ns-in::-webkit-calendar-picker-indicator { cursor:pointer; opacity:.7; }
 #ct-dias + label, .ns-campo:has(#ct-inis) > label { color:#1e40af; } .ns-campo:has(#ct-dias) > label { color:#92400e; }
 
+/* condições com vida (25/11/2026): reajuste azul, 13º roxo, atraso rosa; índice vem do cadastro numa caixa nossa */
+.ct-cond-grp { border-radius:14px; padding:12px 14px; margin-top:10px; background:var(--g-f); border:1px solid var(--g-b); }
+.ct-cond-grp.cg-azul { --g:#2563eb; --g-e:#1e40af; --g-f:#eff6ff; --g-b:#bfdbfe; } .ct-cond-grp.cg-roxo { --g:#7c3aed; --g-e:#5b21b6; --g-f:#f5f3ff; --g-b:#ddd6fe; } .ct-cond-grp.cg-rosa { --g:#db2777; --g-e:#9d174d; --g-f:#fdf2f8; --g-b:#fbcfe8; }
+.ct-cond-lbl { font-size:11.5px; font-weight:800; text-transform:uppercase; letter-spacing:.06em; color:var(--g-e); display:flex; align-items:center; gap:7px; margin-bottom:9px; } .ct-cond-lbl i { color:var(--g); } .ct-cond-lbl small { text-transform:none; letter-spacing:0; font-weight:600; color:#64748b; font-size:12px; }
+.ct-cond-grp .ns-op { background:#fff; border-color:var(--g-b); } .ct-cond-grp .ns-op > i { color:var(--g); }
+.ct-cond-grp .ns-op.on { background:linear-gradient(135deg, var(--g), var(--g-e)); border-color:var(--g-e); color:#fff; box-shadow:0 8px 18px rgba(0,0,0,.12); } .ct-cond-grp .ns-op.on > i, .ct-cond-grp .ns-op.on b, .ct-cond-grp .ns-op.on small { color:#fff; }
+.ct-ops5 { grid-template-columns:repeat(5, minmax(0,1fr)); } .ct-ops5 .ns-op small, .ct-cond-grp .ct-ops3 .ns-op small { display:block; white-space:normal; line-height:1.3; overflow:visible; } .ct-cond-grp .ct-ops3 .ns-op b, .ct-ops5 .ns-op b { white-space:normal; overflow:visible; }
+.ct-cond-duas { display:grid; grid-template-columns:minmax(0,1.35fr) minmax(0,1fr); gap:10px; }
+.ct-cond-sub { font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:.05em; color:var(--g-e); margin:10px 0 6px; }
+.ct-meses button { border-color:var(--g-b); background:#fff; color:var(--g-e); text-transform:capitalize; min-width:46px; justify-content:center; } .ct-meses button.on { background:linear-gradient(135deg, var(--g), var(--g-e)); border-color:var(--g-e); color:#fff; }
+.ct-escala { border-color:var(--g-b); color:var(--g-e); font-weight:700; text-transform:none; } .ct-escala:focus { border-color:var(--g); box-shadow:0 0 0 3px rgba(37,99,235,.15); }
+.ct-idx { margin-top:10px; }
+.ct-idx-vazio { width:100%; display:flex; align-items:center; gap:12px; padding:11px 14px; border:1.5px dashed #93c5fd; border-radius:13px; background:#fff; color:var(--g-e); cursor:pointer; font:inherit; text-align:left; } .ct-idx-vazio > i { font-size:18px; color:var(--g); } .ct-idx-vazio b { display:block; font-size:13.5px; } .ct-idx-vazio small { color:#64748b; font-size:12px; } .ct-idx-vazio:hover { background:var(--g-f); } .ct-idx-vazio[hidden] { display:none; }
+.ct-idx-card { display:flex; align-items:center; gap:12px; padding:10px 14px; border:1.5px solid var(--g-b); border-radius:13px; background:#fff; flex-wrap:wrap; } .ct-idx-card[hidden] { display:none; }
+.ct-idx-card .sg { min-width:56px; height:40px; padding:0 9px; border-radius:11px; background:linear-gradient(135deg, var(--g), var(--g-e)); color:#fff; font-weight:900; font-size:12.5px; display:inline-flex; align-items:center; justify-content:center; }
+.ct-idx-card .tx { flex:1; min-width:160px; display:flex; flex-direction:column; } .ct-idx-card .tx b { font-size:13.5px; } .ct-idx-card .tx small { color:#64748b; font-size:12px; } .ct-idx-card a { font-size:12.5px; font-weight:700; color:var(--g-e); text-decoration:none; display:inline-flex; gap:5px; align-items:center; margin-left:4px; }
+.ct-cond-pcts { display:grid; grid-template-columns:1fr 1fr; gap:10px; } .cg-rosa .ns-money.ct-pct { width:100%; border-color:var(--g-b); } .cg-rosa .ns-money.ct-pct > span { background:var(--g-f); color:var(--g-e); border-color:var(--g-b); } .cg-rosa .ns-money.ct-pct > input.ns-in { color:var(--g-e); font-weight:800; } .cg-rosa .ns-campo label { color:var(--g-e); }
+/* caixa do índice (no molde das caixas do Financeiro) */
+.ct-cx-fundo { position:fixed; inset:0; z-index:1400; background:rgba(15,23,42,.45); backdrop-filter:blur(2px); }
+.ct-cx { position:absolute; left:50%; top:10vh; transform:translateX(-50%); width:min(760px, 96vw); max-height:80vh; border-radius:20px; background:#f3f6f4; box-shadow:0 30px 80px rgba(15,23,42,.35); overflow:hidden; display:flex; flex-direction:column; color:#0f172a; }
+.ct-cx header { background:linear-gradient(120deg,#2563eb,#1e40af); color:#fff; padding:18px 60px 16px 22px; display:flex; align-items:center; gap:14px; position:relative; } .ct-cx header .av { width:48px; height:48px; border-radius:14px; background:rgba(255,255,255,.18); border:1px solid rgba(255,255,255,.25); display:inline-flex; align-items:center; justify-content:center; font-size:20px; flex-shrink:0; } .ct-cx header b { display:block; font-size:19px; } .ct-cx header span { font-size:12.5px; opacity:.9; }
+.ct-cx header .x { position:absolute; right:14px; top:14px; width:36px; height:36px; border-radius:99px; border:0; background:rgba(255,255,255,.18); color:#fff; cursor:pointer; font-size:16px; }
+.ct-cx .corpo { overflow:auto; padding:14px 16px; } .ct-cx .grade { display:grid; grid-template-columns:repeat(auto-fill, minmax(300px,1fr)); gap:10px; }
+.ct-cx .cx-card { display:flex; align-items:center; gap:12px; padding:12px 14px; border:1.5px solid #e3ece7; border-radius:14px; background:#fff; cursor:pointer; font:inherit; text-align:left; color:inherit; min-width:0; } .ct-cx .cx-card:hover { border-color:#93c5fd; box-shadow:0 8px 22px rgba(37,99,235,.12); } .ct-cx .cx-card.on { border-color:#2563eb; box-shadow:0 0 0 3px #dbeafe; background:linear-gradient(180deg,#eff6ff,#fff 60%); }
+.ct-cx .cx-card .sg { min-width:56px; height:42px; padding:0 8px; border-radius:11px; background:linear-gradient(135deg,#2563eb,#1e40af); color:#fff; font-weight:900; font-size:12.5px; display:inline-flex; align-items:center; justify-content:center; flex-shrink:0; } .ct-cx .cx-card .tx { min-width:0; display:flex; flex-direction:column; } .ct-cx .cx-card b { font-size:13.5px; line-height:1.25; } .ct-cx .cx-card small { color:#64748b; font-size:12px; margin-top:2px; }
+.ct-cx footer { display:flex; align-items:center; gap:12px; padding:12px 16px; background:#fff; border-top:1px solid #e6eeea; } .ct-cx footer .info { flex:1; font-size:13px; color:#475569; } .ct-cx footer a { font-size:13px; font-weight:700; color:#1e40af; text-decoration:none; display:inline-flex; gap:6px; align-items:center; } .ct-cx footer .canc { height:40px; padding:0 16px; border:1px solid #e2e8f0; border-radius:11px; background:#fff; font:inherit; font-weight:700; cursor:pointer; }
+.ct-cx .vazio { grid-column:1/-1; padding:22px; text-align:center; color:#64748b; font-size:13.5px; }
+@media (max-width:980px) { .ct-ops5 { grid-template-columns:1fr 1fr; } .ct-cond-duas { grid-template-columns:minmax(0,1fr); } .ct-cond-grp .ct-ops3 { grid-template-columns:1fr; } }
+
+/* cláusulas com vida (25/11/2026) */
+.ct-cond-grp.cg-agua { --g:#0d9488; --g-e:#115e59; --g-f:#f0fdfa; --g-b:#99f6e4; } .ct-cond-grp.cg-ambar { --g:#d97706; --g-e:#92400e; --g-f:#fffbeb; --g-b:#fde68a; }
+.ct-in-cor { border-color:var(--g-b); color:var(--g-e); font-weight:700; } .ct-in-cor:focus { border-color:var(--g); box-shadow:0 0 0 3px rgba(124,58,237,.14); } .cg-roxo .ns-campo label { color:var(--g-e); }
+.ct-cond-grp .ct-ops2 .ns-op small { display:block; white-space:normal; line-height:1.3; overflow:visible; }
+.ct-testes button { border-color:var(--g-b); background:#fff; color:var(--g-e); } .ct-testes button.on { background:linear-gradient(135deg,#f59e0b,#b45309); border-color:#b45309; color:#fff; }
+.ct-testes button.fora em { font-style:normal; font-size:10px; font-weight:800; text-transform:uppercase; letter-spacing:.04em; background:rgba(255,255,255,.25); border-radius:99px; padding:1px 7px; margin-left:2px; }
+.ct-testes button.on.fora { background:linear-gradient(135deg,#16a34a,#166534); border-color:#166534; }
+.ct-test-mais { border-style:dashed !important; background:#fff !important; color:#92400e !important; } .ct-test-mais:hover { background:#fffbeb !important; }
+
 /* ações (iguais às da janela do contrato) */
 .tj-acao { display:flex; align-items:center; gap:12px; width:100%; text-align:left; border:1px solid #e2e8f0; background:#fff; border-radius:14px; padding:10px 12px; font:inherit; cursor:pointer; margin-bottom:8px; color:inherit; text-decoration:none; }
 .tj-acao > i { width:36px; height:36px; border-radius:11px; background:#f1f5f4; color:#475569; display:inline-flex; align-items:center; justify-content:center; font-size:14px; flex-shrink:0; }
@@ -341,17 +379,37 @@
     <h4 style="margin:16px 0 8px; --cor:#2563eb; --cor-e:#1e40af; --cor-f:#eff6ff"><i class="fas fa-sliders"></i> Condições <small>reajuste, 13º, multa e juros</small><button type="button" class="ct-alt" onclick="ctToggle('ct-cond-body', this)"><i class="fas fa-pen"></i> Alterar</button></h4>
     <div class="ct-frase" id="ct-cond-sum"></div>
     <div class="ct-body" id="ct-cond-body" hidden>
-      <div class="ct-linha">
-        <div class="ns-campo"><label>Reajuste</label><div class="ns-seg" id="ct-reajs">{% for k, v in (('SALARIO_MINIMO', 'Salário mínimo, todo janeiro'), ('INDICE', 'Índice próprio'), ('DATA_PROPRIA', 'Data própria'), ('ESCALONADO', 'Escalonado'), ('SEM', 'De comum acordo')) %}<button type="button" data-v="{{ k }}" class="{{ 'on' if reaj == k }}" onclick="ctReaj(this)">{{ v }}</button>{% endfor %}</div>
-          <div class="ns-campos" style="margin-top:8px">
-            <div class="ns-campo ct-det" data-para="INDICE ESCALONADO" {{ '' if reaj in ('INDICE', 'ESCALONADO') else 'hidden' }}><label id="ct-det-lbl">{{ 'Como escalona' if reaj == 'ESCALONADO' else 'Qual índice' }}</label><input type="text" name="reajuste_indice" class="ns-in" value="{{ dados.reajuste_indice or (fin.reajuste_obs if fin else '') or '' }}" placeholder="ex.: IPCA · ou 3.000 → 5.000 em jun/27"></div>
-            <div class="ns-campo ct-det" data-para="DATA_PROPRIA" {{ '' if reaj == 'DATA_PROPRIA' else 'hidden' }}><label>Em que mês</label><input type="text" name="reajuste_mes" class="ns-in" value="{{ dados.reajuste_mes or '' }}" placeholder="ex.: julho"></div>
-          </div></div>
+      {# reajuste em cartões coloridos; índice vem do cadastro (25/11/2026 — Anderson: "muito cinza sem vida... clico em índice próprio e coloco o índice") #}
+      <div class="ct-cond-grp cg-azul">
+        <div class="ct-cond-lbl"><i class="fas fa-arrow-trend-up"></i> Reajuste <small>quando e por qual regra os honorários sobem</small></div>
+        <div class="ns-ops ct-ops5" id="ct-reajs">{% for k, ic, v, sb in (('SALARIO_MINIMO', 'fa-sack-dollar', 'Salário mínimo', 'todo janeiro, pelo mesmo percentual'), ('INDICE', 'fa-chart-line', 'Índice próprio', 'IPCA, IGP-M, INPC…'), ('DATA_PROPRIA', 'fa-calendar-check', 'Data própria', 'no mês combinado'), ('ESCALONADO', 'fa-stairs', 'Escalonado', 'valores por período'), ('SEM', 'fa-handshake', 'De comum acordo', 'sem regra fixa')) %}<button type="button" class="ns-op {{ 'on' if reaj == k }}" data-v="{{ k }}" onclick="ctReaj(this)"><i class="fas {{ ic }}"></i><b>{{ v }}</b><small>{{ sb }}</small></button>{% endfor %}</div>
+        <div class="ct-det ct-idx" data-para="INDICE DATA_PROPRIA" {{ '' if reaj in ('INDICE', 'DATA_PROPRIA') else 'hidden' }}>
+          <input type="hidden" name="reajuste_indice" id="ct-idx" value="{{ (dados.reajuste_indice or '') if reaj in ('INDICE', 'DATA_PROPRIA') else '' }}">
+          <div class="ct-idx-card" id="ct-idx-card" hidden><span class="sg" id="ct-idx-sg"></span><span class="tx"><b id="ct-idx-nome"></b><small id="ct-idx-desc"></small></span><a href="#" onclick="ctIndiceCaixa(); return false;"><i class="fas fa-arrows-rotate"></i> Trocar</a><a href="#" onclick="ctIndice(null); return false;"><i class="fas fa-xmark"></i> Tirar</a></div>
+          <button type="button" class="ct-idx-vazio" id="ct-idx-vazio" onclick="ctIndiceCaixa()"><i class="fas fa-chart-line"></i><span><b>Escolher o índice</b><small>IPCA, IGP-M, INPC… os cadastrados em Financeiro › Serviços</small></span></button>
+        </div>
+        <div class="ct-det" data-para="DATA_PROPRIA" {{ '' if reaj == 'DATA_PROPRIA' else 'hidden' }}>
+          <input type="hidden" name="reajuste_mes" id="ct-mes" value="{{ dados.reajuste_mes or '' }}">
+          <div class="ct-cond-sub">Em que mês</div>
+          <div class="ct-chips ct-meses" id="ct-meses">{% for m in ('janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro') %}<button type="button" data-v="{{ m }}" class="{{ 'on' if dados.reajuste_mes == m }}" onclick="ctSeg(this, 'ct-mes')">{{ m[:3] }}</button>{% endfor %}</div>
+        </div>
+        <div class="ct-det" data-para="ESCALONADO" {{ '' if reaj == 'ESCALONADO' else 'hidden' }}>
+          <div class="ct-cond-sub">Como escalona</div>
+          <input type="text" name="reajuste_escala" class="ns-in ct-escala" value="{{ dados.reajuste_escala or (dados.reajuste_indice if reaj == 'ESCALONADO' else '') or '' }}" placeholder="ex.: R$ 3.000 até junho de 2027, depois R$ 5.000" oninput="ctResumo()">
+        </div>
       </div>
-      <div class="ct-linha" style="margin-top:12px">
-        <div class="ns-campo"><label>13º honorário</label><div class="ns-seg" id="ct-decs">{% for k, v in (('COBRADO', 'Em novembro e dezembro'), ('UNICA', 'Em dezembro, parcela única'), ('ISENTO', 'Isento')) %}<button type="button" data-v="{{ k }}" class="{{ 'on' if dec == k }}" onclick="ctSeg(this, 'ct-dec')">{{ v }}</button>{% endfor %}</div></div>
-        <div class="ns-campo" style="flex:0 0 150px"><label>Multa por atraso</label><div class="ns-money pct ct-pct"><span>%</span><input class="ns-in" name="multa" value="{{ dados.multa or '10' }}" inputmode="decimal"></div></div>
-        <div class="ns-campo" style="flex:0 0 150px"><label>Juros ao mês</label><div class="ns-money pct ct-pct"><span>%</span><input class="ns-in" name="juros" value="{{ dados.juros or '1' }}" inputmode="decimal"></div></div>
+      <div class="ct-cond-duas">
+        <div class="ct-cond-grp cg-roxo">
+          <div class="ct-cond-lbl"><i class="fas fa-gift"></i> 13º honorário</div>
+          <div class="ns-ops ct-ops3" id="ct-decs">{% for k, ic, v, sb in (('COBRADO', 'fa-calendar-days', 'Novembro e dezembro', 'em duas parcelas'), ('UNICA', 'fa-calendar-day', 'Em dezembro', 'parcela única'), ('ISENTO', 'fa-ban', 'Isento', 'sem 13º')) %}<button type="button" data-v="{{ k }}" class="ns-op {{ 'on' if dec == k }}" onclick="ctSeg(this, 'ct-dec')"><i class="fas {{ ic }}"></i><b>{{ v }}</b><small>{{ sb }}</small></button>{% endfor %}</div>
+        </div>
+        <div class="ct-cond-grp cg-rosa">
+          <div class="ct-cond-lbl"><i class="fas fa-triangle-exclamation"></i> Atraso</div>
+          <div class="ct-cond-pcts">
+            <div class="ns-campo"><label>Multa</label><div class="ns-money pct ct-pct"><span>%</span><input class="ns-in" name="multa" value="{{ dados.multa or '10' }}" inputmode="decimal" oninput="ctResumo()"></div></div>
+            <div class="ns-campo"><label>Juros ao mês</label><div class="ns-money pct ct-pct"><span>%</span><input class="ns-in" name="juros" value="{{ dados.juros or '1' }}" inputmode="decimal" oninput="ctResumo()"></div></div>
+          </div>
+        </div>
       </div>
     </div>
   </section>
@@ -361,22 +419,39 @@
     <div class="ct-frase" id="ct-cla-sum"></div>
     {% if not contratada.crc %}<div class="ct-note" style="color:#b45309"><i class="fas fa-triangle-exclamation"></i> A Qualicontax está sem CRC no cadastro (cliente nº 1).</div>{% endif %}
     <div class="ct-body" id="ct-cla-body" hidden>
-      <div class="ct-linha">
-        <div class="ns-campo"><label>Aviso prévio para encerrar</label><div class="ns-seg" id="ct-avisos">{% for d in (30, 60, 90) %}<button type="button" data-v="{{ d }}" class="{{ 'on' if (dados.aviso_previo or 30)|int == d }}" onclick="ctSeg(this, 'ct-aviso')">{{ d }} dias</button>{% endfor %}</div></div>
-        <div class="ns-campo"><label>Cláusula LGPD</label><div class="ns-seg" id="ct-lgpds"><button type="button" data-v="1" class="{{ 'on' if dados.lgpd or not contrato }}" onclick="ctSeg(this, 'ct-lgpd')">Com a cláusula</button><button type="button" data-v="" class="{{ 'on' if contrato and not dados.lgpd }}" onclick="ctSeg(this, 'ct-lgpd')">Sem</button></div></div>
+      {# cláusulas com vida (25/11/2026): aviso prévio e LGPD em cartões, foro/local/título, quem assina e testemunhas (equipe + alguém do cliente) #}
+      <div class="ct-cond-duas">
+        <div class="ct-cond-grp cg-roxo">
+          <div class="ct-cond-lbl"><i class="fas fa-door-open"></i> Aviso prévio para encerrar</div>
+          <div class="ns-ops ct-ops3" id="ct-avisos">{% for d, sb in ((30, 'um mês'), (60, 'dois meses'), (90, 'três meses')) %}<button type="button" data-v="{{ d }}" class="ns-op {{ 'on' if (dados.aviso_previo or 30)|int == d }}" onclick="ctSeg(this, 'ct-aviso')"><i class="fas fa-hourglass-half"></i><b>{{ d }} dias</b><small>{{ sb }}</small></button>{% endfor %}</div>
+        </div>
+        <div class="ct-cond-grp cg-azul">
+          <div class="ct-cond-lbl"><i class="fas fa-shield-halved"></i> Cláusula LGPD</div>
+          <div class="ns-ops ct-ops2" id="ct-lgpds"><button type="button" data-v="1" class="ns-op {{ 'on' if dados.lgpd or not contrato }}" onclick="ctSeg(this, 'ct-lgpd')"><i class="fas fa-lock"></i><b>Com a cláusula</b><small>proteção de dados</small></button><button type="button" data-v="" class="ns-op {{ 'on' if contrato and not dados.lgpd }}" onclick="ctSeg(this, 'ct-lgpd')"><i class="fas fa-lock-open"></i><b>Sem</b><small>não entra no contrato</small></button></div>
+        </div>
       </div>
-      <div class="ns-campos tres" style="margin-top:12px">
-        <div class="ns-campo"><label>Foro</label><input type="text" name="foro" class="ns-in" value="{{ dados.foro or (contratada.cidade ~ '/' ~ contratada.uf) }}"></div>
-        <div class="ns-campo"><label>Local da assinatura</label><input type="text" name="local" class="ns-in" value="{{ dados.local or contratada.cidade }}"></div>
-        <div class="ns-campo"><label>Título do contrato</label><input type="text" name="titulo" class="ns-in ns-up" value="{{ dados.titulo or '' }}" placeholder="em branco = pelos serviços escolhidos"></div>
+      <div class="ct-cond-grp cg-roxo">
+        <div class="ct-cond-lbl"><i class="fas fa-gavel"></i> Foro, local e título</div>
+        <div class="ns-campos tres">
+          <div class="ns-campo"><label>Foro</label><input type="text" name="foro" class="ns-in ct-in-cor" value="{{ dados.foro or (contratada.cidade ~ '/' ~ contratada.uf) }}" oninput="ctResumo()"></div>
+          <div class="ns-campo"><label>Local da assinatura</label><input type="text" name="local" class="ns-in ct-in-cor" value="{{ dados.local or contratada.cidade }}" oninput="ctResumo()"></div>
+          <div class="ns-campo"><label>Título do contrato</label><input type="text" name="titulo" class="ns-in ns-up ct-in-cor" value="{{ dados.titulo or '' }}" placeholder="em branco = pelos serviços escolhidos" oninput="ctResumo()"></div>
+        </div>
       </div>
-      <h4 style="margin:16px 0 8px"><i class="fas fa-pen-nib"></i> Quem assina pela Qualicontax</h4>
-      <div class="ns-ops ct-ops2" id="ct-assq-ops">
-        {% for k, q in SIGN_Q.items() %}<button type="button" class="ns-op {{ 'on' if assina_q == k or (not assina_q and loop.first) }}" data-v="{{ k }}" onclick="ctAssQ(this)">{% if q.docs_faltam or not q.email %}<span class="ns-op-tag" style="background:#fef3c7;color:#b45309">{{ 'sem documento' if q.docs_faltam else 'sem e-mail' }}</span>{% endif %}<i class="fas fa-user-tie"></i><b>{{ q.nome }}</b><small>{{ q.cargo }}{% if q.documento %} · {{ q.documento }}{% endif %}{% if q.email %} · {{ q.email }}{% endif %}</small></button>{% endfor %}
+      <div class="ct-cond-grp cg-agua">
+        <div class="ct-cond-lbl"><i class="fas fa-pen-nib"></i> Quem assina pela Qualicontax</div>
+        <div class="ns-ops ct-ops2" id="ct-assq-ops">
+          {% for k, q in SIGN_Q.items() %}<button type="button" class="ns-op {{ 'on' if assina_q == k or (not assina_q and loop.first) }}" data-v="{{ k }}" onclick="ctAssQ(this)">{% if q.docs_faltam or not q.email %}<span class="ns-op-tag" style="background:#fef3c7;color:#b45309">{{ 'sem documento' if q.docs_faltam else 'sem e-mail' }}</span>{% endif %}<i class="fas fa-user-tie"></i><b>{{ q.nome }}</b><small>{{ q.cargo }}{% if q.documento %} · {{ q.documento }}{% endif %}{% if q.email %} · {{ q.email }}{% endif %}</small></button>{% endfor %}
+        </div>
       </div>
-      <h4 style="margin:16px 0 8px"><i class="fas fa-people-group"></i> Testemunhas <small>até duas, da equipe</small></h4>
-      <div class="ct-chips" id="ct-testes">
-        {% for t in testemunhas %}{% set on = (tests | selectattr('usuario_id', 'equalto', t.id) | list | length > 0) or (not contrato and t.id == current_user.id) %}<button type="button" data-v="{{ t.id }}" class="{{ 'on' if on }}{{ ' av' if not t.email or not t.cpf }}" onclick="ctTest(this)" title="{{ 'sem e-mail no cadastro de usuários' if not t.email else ('sem CPF no cadastro de usuários: sai sem CPF no contrato' if not t.cpf else '') }}"><i class="fas fa-user"></i> {{ t.nome.split(' ')[0] }} {{ t.nome.split(' ')[-1] if ' ' in t.nome else '' }}{% if not t.email or not t.cpf %} <i class="fas fa-triangle-exclamation falta"></i>{% endif %}</button>{% endfor %}
+      <div class="ct-cond-grp cg-ambar">
+        <div class="ct-cond-lbl"><i class="fas fa-people-group"></i> Testemunhas <small>até duas · da equipe ou alguém do cliente cadastrado como pessoa física</small></div>
+        <div class="ct-chips ct-testes" id="ct-testes">
+          {% for t in testemunhas %}{% set on = (tests | selectattr('usuario_id', 'equalto', t.id) | list | length > 0) or (not contrato and t.id == current_user.id) %}<button type="button" data-v="{{ t.id }}" class="{{ 'on' if on }}{{ ' av' if not t.email or not t.cpf }}" onclick="ctTest(this)" title="{{ 'sem e-mail no cadastro de usuários' if not t.email else ('sem CPF no cadastro de usuários: sai sem CPF no contrato' if not t.cpf else '') }}"><i class="fas fa-user"></i> {{ t.nome.split(' ')[0] }} {{ t.nome.split(' ')[-1] if ' ' in t.nome else '' }}{% if not t.email or not t.cpf %} <i class="fas fa-triangle-exclamation falta"></i>{% endif %}</button>{% endfor %}
+          {% for a in tests if a.pf_cliente_id %}<button type="button" data-pf="{{ a.pf_cliente_id }}" class="on fora" onclick="ctTest(this)"><i class="fas fa-user-check"></i> {{ a.nome | nome_proprio }} <em>do cliente</em></button>{% endfor %}
+          <button type="button" class="ct-test-mais" id="ct-test-mais" onclick="ctTestFora()"><i class="fas fa-user-plus"></i> Testemunha do cliente</button>
+        </div>
+        <div class="ct-busca" id="ct-test-busca" hidden><i class="fas fa-magnifying-glass"></i><input type="text" id="pf-tbusca" class="ns-in" placeholder="Nome ou CPF · precisa estar em Clientes ou Avulsos como pessoa física" autocomplete="off"><div id="pf-tsug" class="pf-sug ct-pgrid"></div></div>
       </div>
     </div>
   </section>
@@ -482,18 +557,50 @@ function ctSug(inp) {
 }
 function ctCart(bt) { document.querySelectorAll('#ct-cart-ops .ns-op').forEach(function (x) { x.classList.toggle('on', x === bt); }); $('ct-cart').value = bt.dataset.v; ctResumo(); }
 function ctAssQ(bt) { document.querySelectorAll('#ct-assq-ops .ns-op').forEach(function (x) { x.classList.toggle('on', x === bt); }); $('ct-assq').value = bt.dataset.v; ctResumo(); }
+function ctTestHidden() {
+    $('ct-tests').innerHTML = Array.prototype.map.call(document.querySelectorAll('#ct-testes button.on'), function (b) { return b.dataset.pf ? '<input type="hidden" name="testemunha_pf" value="' + esc(b.dataset.pf) + '">' : '<input type="hidden" name="testemunha_id" value="' + esc(b.dataset.v) + '">'; }).join('');
+}
 function ctTest(bt) {
     var on = !bt.classList.contains('on');
-    if (on && document.querySelectorAll('#ct-testes button.on').length >= 2) { document.querySelector('#ct-testes button.on').classList.remove('on'); }
+    if (on && document.querySelectorAll('#ct-testes button.on').length >= 2) { var p = document.querySelector('#ct-testes button.on'); p.classList.remove('on'); if (p.dataset.pf) p.remove(); }
     bt.classList.toggle('on', on);
-    $('ct-tests').innerHTML = Array.prototype.map.call(document.querySelectorAll('#ct-testes button.on'), function (b) { return '<input type="hidden" name="testemunha_id" value="' + esc(b.dataset.v) + '">'; }).join('');
-    ctResumo();
+    if (!on && bt.dataset.pf) bt.remove();           // testemunha do cliente desmarcada sai da lista
+    ctTestHidden(); ctResumo();
+}
+function ctTestFora() { $('ct-test-busca').hidden = false; $('pf-tbusca').focus(); }
+function pfTest(p) {   // testemunha do cliente: pessoa física de Clientes ou Avulsos (25/11/2026)
+    $('pf-tbusca').value = ''; $('pf-tsug').classList.remove('aberta'); $('pf-tsug').innerHTML = ''; $('ct-test-busca').hidden = true;
+    if (document.querySelector('#ct-testes button[data-pf="' + p.id + '"]')) return;
+    var b = document.createElement('button'); b.type = 'button'; b.className = 'fora'; b.dataset.pf = p.id;
+    b.innerHTML = '<i class="fas fa-user-check"></i> ' + esc(nomeProprio(p.nome)) + ' <em>do cliente</em>' + (p.email ? '' : ' <i class="fas fa-triangle-exclamation falta" title="sem e-mail no cadastro"></i>');
+    b.onclick = function () { ctTest(b); };
+    $('ct-testes').insertBefore(b, $('ct-test-mais')); ctTest(b);
 }
 function ctSeg(bt, hid) { bt.parentNode.querySelectorAll('button').forEach(function (x) { x.classList.toggle('on', x === bt); }); $(hid).value = bt.dataset.v; ctResumo(); }
 function ctReaj(bt) {
     ctSeg(bt, 'ct-reaj'); var v = bt.dataset.v;
     document.querySelectorAll('.ct-det').forEach(function (d) { d.hidden = d.dataset.para.split(' ').indexOf(v) < 0; });
-    $('ct-det-lbl').textContent = v === 'ESCALONADO' ? 'Como escalona' : 'Qual índice';
+    if ((v === 'INDICE' || v === 'DATA_PROPRIA') && !$('ct-idx').value) ctIndiceCaixa();
+}
+// ---- índice de reajuste: vem do cadastro (Financeiro › Serviços › Índices de reajuste), escolhido numa caixa nossa ----
+var INDICES = {{ indices | tojson }};
+function ctIndice(i) {
+    $('ct-idx').value = i ? i.sigla : ''; $('ct-idx-card').hidden = !i; $('ct-idx-vazio').hidden = !!i;
+    if (i) { $('ct-idx-sg').textContent = i.sigla; $('ct-idx-nome').textContent = i.nome; $('ct-idx-desc').textContent = i.descricao || ''; }
+    ctResumo();
+}
+function ctIndiceCaixa() {
+    var atual = $('ct-idx').value, f = document.createElement('div'); f.className = 'ct-cx-fundo';
+    f.innerHTML = '<div class="ct-cx" role="dialog" aria-modal="true" aria-label="Índice de reajuste"><header><span class="av"><i class="fas fa-chart-line"></i></span><div><b>Índice de reajuste</b><span>os honorários sobem pela variação acumulada do índice, todo ano</span></div><button type="button" class="x" title="Fechar (Esc)"><i class="fas fa-xmark"></i></button></header>'
+        + '<div class="corpo"><div class="grade">' + (INDICES.length ? INDICES.map(function (i) { return '<button type="button" class="cx-card' + (i.sigla === atual ? ' on' : '') + '" data-s="' + esc(i.sigla) + '"><span class="sg">' + esc(i.sigla) + '</span><span class="tx"><b>' + esc(i.nome) + '</b><small>' + esc(i.descricao || '') + '</small></span></button>'; }).join('') : '<div class="vazio">Nenhum índice cadastrado ainda.</div>') + '</div></div>'
+        + '<footer><span class="info">' + (INDICES.length ? INDICES.length + ' índice' + (INDICES.length > 1 ? 's' : '') + ' · toque num cartão' : '') + '</span>{% if current_user.has_permission('financeiro.lancamentos.aprovar') %}<a href="/financeiro/servicos?aba=indices" target="_blank" rel="noopener"><i class="fas fa-plus"></i> Cadastrar índice</a>{% endif %}<button type="button" class="canc">Cancelar</button></footer></div>';
+    document.body.appendChild(f); var trava = document.body.style.overflow; document.body.style.overflow = 'hidden';
+    function fechar() { document.removeEventListener('keydown', tecla, true); f.remove(); document.body.style.overflow = trava; }
+    function tecla(e) { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); fechar(); } }
+    document.addEventListener('keydown', tecla, true);
+    f.querySelector('.x').addEventListener('click', fechar); f.querySelector('.canc').addEventListener('click', fechar);
+    f.addEventListener('mousedown', function (e) { if (e.target === f) fechar(); });
+    f.querySelectorAll('.cx-card').forEach(function (c) { c.addEventListener('click', function () { ctIndice(INDICES.filter(function (i) { return i.sigla === c.dataset.s; })[0] || null); fechar(); }); });
 }
 function ctDia(bt) { $('ct-dia-outro').value = ''; ctSeg(bt, 'ct-dia'); }
 function ctDiaOutro(inp) { var n = parseInt(inp.value.replace(/\D/g, ''), 10); if (n >= 1 && n <= 31) { $('ct-dia').value = n; document.querySelectorAll('#ct-dias button').forEach(function (x) { x.classList.remove('on'); }); } ctResumo(); }
@@ -584,11 +691,12 @@ function ctBuscaPessoa(inId, sugId, escolher, vazio) {   // cartões: nome e, em
 }
 ctBuscaPessoa('pf-rbusca', 'pf-rsug', pfOutra, 'Cadastre em Cadastros › Clientes ou Avulsos (pessoa física) e volte.');
 ctBuscaPessoa('pf-pbusca', 'pf-psug', pfExtra, 'Cadastre em Cadastros › Clientes ou Avulsos (pessoa física) e volte.');
+ctBuscaPessoa('pf-tbusca', 'pf-tsug', pfTest, 'A testemunha precisa estar em Cadastros › Clientes ou Avulsos como pessoa física.');
 // ---- resumo vivo ----
 function num(s) { s = String(s || '').trim(); if (!s) return 0; if (s.indexOf(',') >= 0) s = s.replace(/\./g, '').replace(',', '.'); return parseFloat(s) || 0; }
 function brl(v) { return 'R$ ' + (v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
 function val(n) { var e = document.querySelector('[name=' + n + ']'); return e ? e.value : ''; }
-function segTx(id) { var b = document.querySelector('#' + id + ' button.on'); return b ? b.textContent.trim() : ''; }
+function segTx(id) { var b = document.querySelector('#' + id + ' button.on'); if (!b) return ''; var t = b.querySelector('b'); return (t || b).textContent.trim(); }
 function F(k, v) { return '<span>' + k + '<b>' + esc(v) + '</b></span>'; }
 function ctResumo() {
     var emps = Array.prototype.map.call(document.querySelectorAll('#pf-emps .ct-emp .nome'), function (x) { return x.textContent; });
@@ -597,9 +705,10 @@ function ctResumo() {
     var extras = Array.prototype.filter.call(document.querySelectorAll('[name=servico_extra]'), function (i) { return i.value.trim(); }).length;
     var v = num(val('valor')), dia = $('ct-dia').value, ini = $('ct-inicio').value;
     var q = SIGNQ[$('ct-assq').value] || SIGNQ[Object.keys(SIGNQ)[0]] || {};
-    var tests = Array.prototype.map.call(document.querySelectorAll('#ct-testes button.on'), function (b) { return b.textContent.trim().split(' ')[0]; });
+    var tests = Array.prototype.map.call(document.querySelectorAll('#ct-testes button.on'), function (b) { return b.textContent.replace(/do cliente/, '').trim().split(' ')[0]; });
     var titulo = val('titulo') || (areas.indexOf('Contabilidade') >= 0 ? 'Contrato de prestação de serviços contábeis' : (areas.length === 1 ? 'Contrato de prestação de serviços de ' + areas[0].toLowerCase() : 'Contrato de prestação de serviços'));
-    var reaj = segTx('ct-reajs') + (val('reajuste_indice') ? ' · ' + val('reajuste_indice') : '') + (val('reajuste_mes') ? ' · ' + val('reajuste_mes') : '');
+    var rt = $('ct-reaj').value, reajDet = rt === 'ESCALONADO' ? val('reajuste_escala') : ((rt === 'INDICE' || rt === 'DATA_PROPRIA') ? val('reajuste_indice') : '');
+    var reaj = segTx('ct-reajs') + (reajDet ? ' · ' + reajDet : '') + (rt === 'DATA_PROPRIA' && val('reajuste_mes') ? ' · em ' + val('reajuste_mes') : '');
     var faltas = [];
     if (!emps.length) faltas.push('a empresa'); if (!rep || !repEmail) faltas.push('quem assina e o e-mail'); if (rep && !val('rep_cargo')) faltas.push('em que qualidade assina'); if (extra && !val('extra_email')) faltas.push('o e-mail do outro assinante');
     if (!areas.length && !extras) faltas.push('os serviços'); if (!v) faltas.push('o valor'); if (!ini) faltas.push('a data de início');
@@ -611,7 +720,7 @@ function ctResumo() {
     var K = function (k, x, sub, falta) { return '<div class="ct-kpi"><small>' + k + '</small><b' + (falta ? ' class="falta"' : '') + '>' + esc(x) + '</b>' + (sub ? '<span>' + esc(sub) + '</span>' : '') + '</div>'; };
     $('ct-ficha-tit').textContent = titulo.toUpperCase();
     $('ct-kpis').innerHTML = K('Honorários', v ? brl(v) : 'a informar', 'por mês', !v) + K('Vencimento', dia ? 'dia ' + dia : '—', 'de cada mês')
-        + K('Início', ini ? ini.split('-').reverse().join('/') : 'a informar', '', !ini) + K('Reajuste', segTx('ct-reajs').split(',')[0], val('reajuste_indice') || val('reajuste_mes') || '');
+        + K('Início', ini ? ini.split('-').reverse().join('/') : 'a informar', '', !ini) + K('Reajuste', segTx('ct-reajs'), (reajDet || '') + (rt === 'DATA_PROPRIA' && val('reajuste_mes') ? (reajDet ? ' · ' : '') + val('reajuste_mes') : ''));
     var L = function (k, x, falta) { return '<div><span>' + k + '</span><b' + (falta ? ' class="ct-falta"' : '') + '>' + esc(x || '—') + '</b></div>'; };
     var html = (emps.length > 1 ? L('Rede', emps.length + ' empresas' + (apelido ? ' · ' + apelido.toUpperCase() : '')) : '')
         + (extra ? L('Também assina', nomeProprio(extra) + ' · ' + (val('extra_cargo') || 'autorizado(a)'), !val('extra_email')) : '')
@@ -628,9 +737,10 @@ function ctResumo() {
 $('pf-form').addEventListener('input', ctResumo); $('pf-form').addEventListener('change', ctResumo);
 $('pf-form').addEventListener('submit', function (e) { if (!$('ct-inicio').value) { e.preventDefault(); $('ct-ini-txt').focus(); } });
 window.Dinheiro.ligar();
-ctTest.init = true; $('ct-tests').innerHTML = Array.prototype.map.call(document.querySelectorAll('#ct-testes button.on'), function (b) { return '<input type="hidden" name="testemunha_id" value="' + esc(b.dataset.v) + '">'; }).join('');
+ctTest.init = true; ctTestHidden();
 if (!$('ct-assq').value) { var f = document.querySelector('#ct-assq-ops .ns-op.on'); if (f) $('ct-assq').value = f.dataset.v; }
 ctIniMarca(); ctEmps();
+(function () { var v = $('ct-idx').value; if (v) ctIndice(INDICES.filter(function (i) { return i.sigla === v; })[0] || { sigla: v, nome: v, descricao: 'índice fora do cadastro' }); })();
 if ($('extra_nome').value.trim()) { cardPessoa('extra_', 'ct-extra-link', 'Quem mais assina?'); }
 if ($('ct-sug') && !$('ct-valor').value.trim()) { var s0 = document.querySelector('#ct-sug input'); if (s0) ctSug(s0); }
 </script>

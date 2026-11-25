@@ -276,6 +276,7 @@ MAPA = {
     'financeiro.carteira_cobranca':        'financeiro.lancamentos',          # boleto da mensalidade da carteira (a rota confere)
     'financeiro.fechamento_cancelar':      'financeiro.lancamentos',          # o próprio pedido, até ser pago (a rota confere)
     'financeiro.servico_comissao':         'financeiro.lancamentos.aprovar',
+    'financeiro.indice_reajuste':           'financeiro.lancamentos.aprovar',   # índices de reajuste (25/11/2026); a rota só deixa o admin
     'financeiro.ramo_mensalidade':          'financeiro.lancamentos.aprovar',   # mensalidade sugerida por ramo (24/11/2026)  # e a rota só deixa o admin
     'financeiro.comissao_regras':          'financeiro.lancamentos.aprovar',  # endereço antigo: redireciona para SERVIÇOS
     'financeiro.servicos':                 'financeiro.lancamentos.aprovar',  # aba SERVIÇOS (20/11/2026): a rota só deixa o admin

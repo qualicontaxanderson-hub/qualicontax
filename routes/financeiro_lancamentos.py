@@ -478,9 +478,13 @@ def servicos():
         "SELECT ramo_atividade_id, COUNT(DISTINCT cliente_id) n FROM cliente_ramo_atividade_relacao GROUP BY ramo_atividade_id", fetch=True) or []}
     ramos = [dict(r, n_empresas=n_emp.get(r['id'], 0), sugestao=float(r['mensalidade_sugerida']) if r.get('mensalidade_sugerida') else 0.0)
              for r in RamoAtividade.get_all('ATIVO')]
+    # 25/11/2026 — Anderson: "já temos que ter um campo no sistema para colocar esses índices": os índices de reajuste do contrato
+    from models.reajuste_indice import ReajusteIndice
+    indices = ReajusteIndice.listar()
     return render_template('financeiro/comissao_regras.html', pessoas=pessoas, servicos=servicos, hoje=date.today(), ramos=ramos,
-                           n_ramos_com=sum(1 for r in ramos if r['sugestao']),
-                           aba=request.args.get('aba') if request.args.get('aba') in ('pessoas', 'servicos', 'ramos') else 'servicos',
+                           n_ramos_com=sum(1 for r in ramos if r['sugestao']), indices=indices,
+                           n_indices_ativos=sum(1 for i in indices if i['situacao'] == 'ATIVO'),
+                           aba=request.args.get('aba') if request.args.get('aba') in ('pessoas', 'servicos', 'ramos', 'indices') else 'servicos',
                            n_recebem=sum(1 for p in pessoas if p['geral']), n_carteira=sum(len(p['carteira']) for p in pessoas),
                            n_serv_regra=sum(1 for s in servicos if s.get('comissao_tipo')),
                            n_serv_sem=sum(1 for s in servicos if s.get('comissao_tipo') == 'SEM'),
@@ -586,6 +590,47 @@ def servico_comissao():
     if request.form.get('volta') == 'regras':
         return redirect(url_for('financeiro.servicos', aba='servicos') + '#s%d' % sid)
     return redirect(url_for('financeiro.lancamentos', aba='com') + '#servicos-comissao')
+
+
+@financeiro.route('/financeiro/servicos/indice', methods=['POST'])
+@permission_required(PERM)
+def indice_reajuste():
+    """Índices de reajuste do contrato de prestação (só o administrador). 25/11/2026 — Anderson: "clico em índice próprio e
+    coloco o índice, e já temos que ter um campo no sistema para colocar esses índices". Cadastrar, alterar o nome e a
+    descrição, inativar (some da caixa do contrato; os contratos já feitos não mudam) e reativar."""
+    if not _admin():
+        abort(403)
+    from models.reajuste_indice import ReajusteIndice
+    f = request.form
+    acao = f.get('acao') or 'alterar'
+    volta = url_for('financeiro.servicos', aba='indices')
+    quem = {'usuario_id': current_user.id}
+    try:
+        if acao == 'novo':
+            iid = ReajusteIndice.criar(f.get('sigla'), f.get('nome'), f.get('descricao'))
+            i = ReajusteIndice.get(iid)
+            registrar('escrita.criou_indice_reajuste', 'financeiro', tabela='reajuste_indices', registro_id=iid, depois=dict(i, **quem))
+            flash('Índice %s cadastrado. Já aparece na caixa do contrato de prestação.' % i['sigla'], 'success')
+            return redirect(volta + '#i%d' % iid)
+        i = ReajusteIndice.get(f.get('id', type=int))
+        if not i:
+            abort(400)
+        if acao in ('inativar', 'reativar'):
+            nova = 'INATIVO' if acao == 'inativar' else 'ATIVO'
+            ReajusteIndice.set_situacao(i['id'], nova)
+            registrar('escrita.alterou_indice_reajuste', 'financeiro', tabela='reajuste_indices', registro_id=i['id'],
+                      antes={'sigla': i['sigla'], 'situacao': i['situacao']}, depois={'sigla': i['sigla'], 'situacao': nova})
+            flash('%s %s.' % (i['sigla'], 'não aparece mais na caixa do contrato' if nova == 'INATIVO' else 'voltou para a caixa do contrato'), 'success')
+        else:
+            ReajusteIndice.alterar(i['id'], f.get('nome'), f.get('descricao'))
+            registrar('escrita.alterou_indice_reajuste', 'financeiro', tabela='reajuste_indices', registro_id=i['id'],
+                      antes={'sigla': i['sigla'], 'nome': i['nome'], 'descricao': i.get('descricao')},
+                      depois={'sigla': i['sigla'], 'nome': (f.get('nome') or '').strip(), 'descricao': (f.get('descricao') or '').strip()})
+            flash('%s salvo.' % i['sigla'], 'success')
+        return redirect(volta + '#i%d' % i['id'])
+    except ValueError as e:
+        flash(str(e), 'danger')
+        return redirect(volta)
 
 
 @financeiro.route('/financeiro/servicos/ramo-mensalidade', methods=['POST'])
