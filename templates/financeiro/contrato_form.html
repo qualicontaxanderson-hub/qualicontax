@@ -500,7 +500,7 @@
   <section class="tj-sec c-roxo">
     <h4><i class="fas fa-route"></i> O que acontece depois</h4>
     <div class="oc-passos">
-      <div class="oc-passo"><i class="fas fa-stamp"></i><span><b>Aprovação.</b> Anderson ou Alessandra aprovam; o honorário passa a valer{% if carteira_pct %} e a comissão de carteira nasce{% endif %}.</span></div>
+      <div class="oc-passo"><i class="fas fa-stamp"></i><span><b>Aprovação.</b> O contrato fica aguardando aprovação; aprovado, o honorário passa a valer{% if carteira_pct %} e a comissão de carteira nasce{% endif %}.</span></div>
       <div class="oc-passo"><i class="fas fa-envelope"></i><span><b>Assinatura.</b> Cada assinante recebe o link por e-mail e assina com código.</span></div>
       <div class="oc-passo"><i class="fas fa-file-signature"></i><span><b>Assinado.</b> O contrato fica guardado na empresa, com quem assinou e quando.</span></div>
     </div>
@@ -728,7 +728,7 @@ function ctGrupo() {
     fetch('/comercial/contratos/socios-iguais?ids=' + ids.join(',')).then(function (r) { return r.json(); }).then(function (d) {
         box.hidden = false; box.className = 'ct-grupo ' + (d.iguais ? 'ok' : 'aut');
         box.innerHTML = d.iguais ? '<i class="fas fa-circle-check"></i> <b>Contrato em grupo:</b> ' + esc(d.detalhe) + '. Pode seguir.'
-            : '<i class="fas fa-triangle-exclamation"></i> <b>Contrato em grupo com sócios diferentes:</b> ' + esc(d.detalhe) + '. Precisa da <b>autorização do escritório</b>: ao aprovar, o Anderson ou a Alessandra autorizam e fica registrado no contrato. Se quem assina não é sócio de todas, ponha quem responde pelas outras em "Mais alguém assina".';
+            : '<i class="fas fa-triangle-exclamation"></i> <b>Contrato em grupo com sócios diferentes:</b> ' + esc(d.detalhe) + '. Precisa da <b>autorização do escritório</b>: fica registrado no contrato na aprovação. Se quem assina não é sócio de todas, ponha quem responde pelas outras em "Mais alguém assina".';
     }).catch(function () { box.hidden = true; });
 }
 (function () {

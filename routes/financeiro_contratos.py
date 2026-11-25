@@ -772,7 +772,7 @@ def contrato_cancelar(cid):
     c = PrestContrato.get(cid)
     _so_meu_ou_aprov(c)
     if c['status'] in ('APROVADO', 'ENVIADO') and not _aprovador():
-        flash('Contrato já aprovado: só o Anderson ou a Alessandra cancelam.', 'warning')
+        flash('Contrato já aprovado: só quem aprova pode cancelar.', 'warning')
         return redirect(url_for('financeiro.contrato_ver', cid=cid))
     if not c or c['status'] == 'ASSINADO':
         flash('Contrato assinado não se cancela aqui: faça um distrato ou adendo.', 'warning')
@@ -819,7 +819,7 @@ def contrato_pedir_aprovacao(cid):
     registrar('escrita.pediu_aprovacao_contrato', 'financeiro', tabela='prest_contratos', registro_id=cid,
               depois={'empresa': c['dados']['empresas'][0]['razao'], 'valor': c['dados'].get('valor')})
     _avisar_aprovadores(PrestContrato.get(cid))
-    flash('Enviado para aprovação. Anderson ou Alessandra conferem; aprovado, você envia para o cliente assinar.', 'success')
+    flash('Enviado para aprovação. Aprovado, você recebe aviso e envia para o cliente assinar.', 'success')
     return redirect(url_for('financeiro.contrato_ver', cid=cid))
 
 
