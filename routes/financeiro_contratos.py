@@ -65,20 +65,47 @@ def _dec_str(raw):
         return '0.00'
 
 
+SITUACOES_REDE = ('PAGA', 'VIA_GRUPO', 'SEM_MOVIMENTO')
+
+
+def _dig(s):
+    return ''.join(ch for ch in str(s or '') if ch.isdigit())
+# como a situação da empresa no contrato vira a cobrança do cadastro (clientes.cobranca) na aprovação
+_COBRANCA_DA_REDE = {'PAGA': 'PROPRIA', 'VIA_GRUPO': 'VIA_GRUPO', 'SEM_MOVIMENTO': 'SEM_MOVIMENTO'}
+
+
 def _ler_form(f):
     """Formulário → ``dados`` (JSON guardado no contrato). Levanta ValueError com a mensagem para a tela."""
     empresas = []
+    sits = f.getlist('emp_sit'); socios_cpf = {}
     for i, cid in enumerate(f.getlist('emp_cliente_id')):
         if not (cid or '').isdigit():
             continue
         e = PrestContrato.empresa(int(cid))
         if not e:
             continue
+        socios_cpf[int(cid)] = {_dig(s.get('cpf')) for s in (e.get('socios') or []) if _dig(s.get('cpf'))}
+        sit = (sits[i] if i < len(sits) else '').strip().upper()
         empresas.append({'cliente_id': int(cid), 'razao': e['nome_razao_social'], 'cnpj': e['cpf_cnpj'], 'numero': e['numero_cliente'],
                          'endereco': (f.getlist('emp_endereco')[i] if i < len(f.getlist('emp_endereco')) else '') or e['endereco'],
-                         'valor': _dec_str(f.getlist('emp_valor')[i]) if i < len(f.getlist('emp_valor')) else None})
+                         'valor': _dec_str(f.getlist('emp_valor')[i]) if i < len(f.getlist('emp_valor')) else None,
+                         'situacao': sit if sit in SITUACOES_REDE else ''})
     if not empresas:
         raise ValueError('Escolha ao menos uma empresa.')
+    # rede (25/11/2026 — Anderson: "tem que ser escolhido quem e qual CNPJ pagará; Sem movimento não paga, Via grupo também;
+    # se forem empresas pagantes, ter a opção de distribuir")
+    if len(empresas) == 1:
+        empresas[0]['situacao'] = 'PAGA'
+    elif any(not e['situacao'] for e in empresas):
+        raise ValueError('Diga como paga cada empresa da rede: Paga, Via grupo ou Sem movimento.')
+    pagantes = [e for e in empresas if e['situacao'] == 'PAGA']
+    if not pagantes:
+        raise ValueError('Escolha ao menos uma empresa que paga os honorários.')
+    for e in empresas:
+        if e['situacao'] != 'PAGA' or len(pagantes) == 1:
+            e['valor'] = None
+    if len(pagantes) > 1 and any(not e['valor'] or float(e['valor']) <= 0 for e in pagantes):
+        raise ValueError('Com mais de uma empresa pagante, informe o valor de cada uma (ou use "Dividir igualmente").')
     imp = PrestContrato.impedimentos([e['cliente_id'] for e in empresas])
     if imp:                                               # nunca contrato digitado: só cadastro completo
         raise ValueError('; '.join('%s: %s' % (e['razao'], imp[e['cliente_id']]) for e in empresas if e['cliente_id'] in imp)
@@ -108,6 +135,8 @@ def _ler_form(f):
     if not areas and not extras:
         raise ValueError('Marque ao menos um serviço.')
     valor = _dec_str(f.get('valor'))
+    if len(pagantes) > 1:                      # distribuído: a soma das pagantes é o honorário do contrato
+        valor = '%.2f' % sum(float(e['valor']) for e in pagantes)
     if float(valor) <= 0:
         raise ValueError('Informe o valor mensal dos honorários.')
     sign = PrestContrato.signatarios_qualicontax()
@@ -128,6 +157,12 @@ def _ler_form(f):
     if extra:
         assinantes.insert(1, {'papel': 'CONTRATANTE', 'ordem': 2, 'nome': extra['nome'], 'cpf': extra['cpf'], 'documento': extra['documento'], 'email': extra['email'],
                               'empresa': (extra.get('cargo') or 'autorizado(a)') + ' · ' + (empresas[0]['razao'] if len(empresas) == 1 else ((f.get('apelido') or '').strip().upper() or empresas[0]['razao']))})
+    # rede (25/11/2026 — Anderson): o cartão de assinatura lista TODAS as empresas pelas quais a pessoa assina e avisa
+    # quando ela não consta no quadro de sócios de alguma
+    if len(empresas) > 1:
+        for a in assinantes:
+            if a['papel'] == 'CONTRATANTE':
+                a['empresas_assina'] = [{'razao': e['razao'], 'cnpj': e['cnpj'], 'socio': _dig(a.get('cpf')) in socios_cpf.get(e['cliente_id'], set())} for e in empresas]
     for n, uid in enumerate(f.getlist('testemunha_id'), 1):
         if not (uid or '').isdigit():
             continue
@@ -156,7 +191,7 @@ def _ler_form(f):
     rt = f.get('reajuste_tipo') if f.get('reajuste_tipo') in ('SALARIO_MINIMO', 'INDICE', 'DATA_PROPRIA', 'ESCALONADO', 'SEM') else 'SALARIO_MINIMO'
     dados = {
         'empresas': empresas, 'apelido': (f.get('apelido') or '').strip().upper() or None, 'areas': areas, 'servicos_extras': extras,
-        'valor': valor, 'valores_por_empresa': bool(f.get('valores_por_empresa')), 'dia_vencimento': int(f.get('dia_vencimento') or 10),
+        'valor': valor, 'valores_por_empresa': len(pagantes) > 1, 'dia_vencimento': int(f.get('dia_vencimento') or 10),
         # ramos cuja mensalidade sugerida a pessoa trouxe para o valor (24/11/2026): fica registrado como o valor foi composto
         'sugestoes': [{'ramo_id': int(x.split('|')[0]), 'nome': x.split('|')[1][:60], 'valor': x.split('|')[2]} for x in f.getlist('sugestao_ramo') if x.count('|') == 2 and x.split('|')[0].isdigit()],
         'reajuste_tipo': rt, 'reajuste_indice': (f.get('reajuste_indice') or '').strip().upper() or None if rt in ('INDICE', 'DATA_PROPRIA') else None,
@@ -390,10 +425,11 @@ def _honorario_do_contrato(c, aprovado_por):
         inicio = date.today()
     reaj = d.get('reajuste_tipo') if d.get('reajuste_tipo') in REAJUSTE_TIPOS else 'SALARIO_MINIMO'
     empresas = d.get('empresas') or []
-    if d.get('valores_por_empresa'):
-        alvos = [(e['cliente_id'], e.get('valor') or '0', e['razao']) for e in empresas]
+    pagantes = [e for e in empresas if (e.get('situacao') or 'PAGA') == 'PAGA']     # contrato antigo sem situação: todas pagam
+    if d.get('valores_por_empresa') and len(pagantes) > 1:
+        alvos = [(e['cliente_id'], e.get('valor') or '0', e['razao']) for e in pagantes]
     else:
-        alvos = [(empresas[0]['cliente_id'], d.get('valor'), empresas[0]['razao'])]
+        alvos = [(pagantes[0]['cliente_id'], d.get('valor'), pagantes[0]['razao'])] if pagantes else []
     criados, avisos = [], []
     for cid, valor, razao in alvos:
         if not valor or float(valor) <= 0:
@@ -409,6 +445,34 @@ def _honorario_do_contrato(c, aprovado_por):
                                 observacao='Do contrato de prestação nº %s, aprovado no sistema' % (c.get('numero') or c['id']))
         criados.append(fid)
     return criados, avisos
+
+
+def _cobranca_do_contrato(c, avisos):
+    """Na aprovação, cada empresa do contrato fica no cadastro com a cobrança que o contrato diz (25/11/2026): quem paga
+    → PROPRIA; VIA_GRUPO aponta a pagante principal em cobranca_pagador_id; SEM_MOVIMENTO fica sem cobrança até
+    movimentar. É o que dá o filtro em Honorários › Sem honorários e em Clientes. Devolve [(cliente_id, de, para)]."""
+    d = c['dados']
+    empresas = d.get('empresas') or []
+    pagantes = [e for e in empresas if (e.get('situacao') or 'PAGA') == 'PAGA']
+    principal = pagantes[0]['cliente_id'] if pagantes else None
+    mudou = []
+    for e in empresas:
+        sit = e.get('situacao') or 'PAGA'
+        para = _COBRANCA_DA_REDE.get(sit, 'PROPRIA')
+        pagador = principal if sit == 'VIA_GRUPO' else None
+        atual = execute_query('SELECT cobranca, cobranca_pagador_id FROM clientes WHERE id = %s', (e['cliente_id'],), fetch=True, fetch_one=True) or {}
+        de = atual.get('cobranca') or 'PENDENTE'
+        if de == para and (atual.get('cobranca_pagador_id') or None) == pagador:
+            continue
+        execute_query('UPDATE clientes SET cobranca = %s, cobranca_pagador_id = %s, alterado_por = %s, alterado_em = CURRENT_TIMESTAMP WHERE id = %s',
+                      (para, pagador, current_user.id, e['cliente_id']), fetch=False)
+        registrar('escrita.alterou_cliente', 'cadastros', tabela='clientes', registro_id=e['cliente_id'],
+                  antes={'cobranca': de}, depois={'cobranca': para, 'origem': 'contrato de prestação nº %s aprovado' % (c.get('numero') or c['id'])})
+        mudou.append((e['cliente_id'], de, para))
+    if mudou:
+        from models.cliente import COBRANCA_CURTA
+        avisos.append('Cobrança no cadastro: ' + '; '.join('%s → %s' % (next((x['razao'] for x in empresas if x['cliente_id'] == cid), cid), COBRANCA_CURTA.get(para, para)) for cid, _, para in mudou))
+    return mudou
 
 
 def _form_ctx(cliente_id=None, fin_contrato_id=None, contrato=None, mais=None):
@@ -432,14 +496,14 @@ def _form_ctx(cliente_id=None, fin_contrato_id=None, contrato=None, mais=None):
     emps_ini = []
     if emp and not contrato:
         emps_ini.append({'cliente_id': emp['id'], 'razao': emp['nome_razao_social'], 'numero': emp['numero_cliente'], 'cnpj': emp['cpf_cnpj'],
-                         'endereco': emp['endereco'], 'valor': (fin or {}).get('valor') or ''})
+                         'endereco': emp['endereco'], 'valor': (fin or {}).get('valor') or '', 'situacao': 'PAGA'})
         for cid2 in (mais or []):
             e2 = PrestContrato.empresa(cid2)
             if not e2:
                 continue
             f2 = (FinContrato.por_cliente(cid2) or [None])[0] if (_aprovador() or cid2 in _escopo()) else None
             emps_ini.append({'cliente_id': e2['id'], 'razao': e2['nome_razao_social'], 'numero': e2['numero_cliente'], 'cnpj': e2['cpf_cnpj'],
-                             'endereco': e2['endereco'], 'valor': (f2 or {}).get('valor') or ''})
+                             'endereco': e2['endereco'], 'valor': (f2 or {}).get('valor') or '', 'situacao': ''})
     pct = (execute_query('SELECT carteira_pct FROM usuarios WHERE id = %s', (current_user.id,), fetch=True, fetch_one=True) or {}).get('carteira_pct')
     # contrato novo nasce preenchido com o sócio administrador do cadastro (22/11/2026 — Anderson: "os campos quase nada preenchido, e está tudo no cadastro")
     rep0 = None
@@ -594,6 +658,9 @@ def _pdf_bytes(c):
     registro = None
     if c['status'] == 'ASSINADO':
         registro = [a for a in PrestContrato.assinantes(c['id']) if a['assinado_em']]
+        por_quem = {(x['papel'], int(x.get('ordem') or 1)): x.get('empresas_assina') for x in (c['dados'].get('assinantes') or [])}
+        for a in registro:                      # rede: o registro também lista as empresas pelas quais a pessoa assinou
+            a['empresas_assina'] = por_quem.get((a['papel'], int(a.get('ordem') or 1)))
     return gerar_pdf(PrestContrato.montar(c['dados']), registro=registro, numero=c.get('numero'),
                      rodape='Contrato nº %s · %s' % (c.get('numero') or c['id'], 'assinado eletronicamente' if registro else 'minuta'))
 
@@ -730,8 +797,9 @@ def contrato_aprovar(cid):
         flash('Não aprovei: %s' % e, 'danger')
         return redirect(url_for('financeiro.contrato_ver', cid=cid))
     acordos = _carteira_do_contrato(c, current_user.id, avisos)
+    cobrancas = _cobranca_do_contrato(c, avisos)
     c['dados']['aprovacao'] = {'por': current_user.id, 'nome': getattr(current_user, 'nome', ''), 'em': datetime.now().isoformat(timespec='minutes'),
-                               'honorarios_criados': criados, 'avisos': avisos, 'acordos_carteira': acordos}
+                               'honorarios_criados': criados, 'avisos': avisos, 'acordos_carteira': acordos, 'cobrancas': cobrancas}
     if (c['dados'].get('grupo') or {}).get('autorizacao_necessaria'):
         c['dados']['autorizacao'] = {'por': current_user.id, 'nome': getattr(current_user, 'nome', ''), 'em': datetime.now().isoformat(timespec='minutes'),
                                      'texto': 'Contrato em grupo com quadro de sócios diferente autorizado pelo escritório na aprovação'}

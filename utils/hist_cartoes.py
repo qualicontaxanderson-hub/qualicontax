@@ -61,7 +61,7 @@ _NOMES = {'nome', 'contato', 'socio_nome', 'contabilidade_anterior', 'nome_razao
           'logradouro', 'bairro', 'cidade', 'grupos', 'nome_mae', 'empresa', 'endereco', 'nome_fantasia'}
 
 _CODIGO = {
-    'PENDENTE': 'Pendente', 'VIA_GRUPO': 'Via grupo', 'PROPRIA': 'Própria',
+    'PENDENTE': 'Pendente', 'VIA_GRUPO': 'Via grupo', 'SEM_MOVIMENTO': 'Sem movimento', 'PROPRIA': 'Própria',
     'SIMPLES_NACIONAL': 'Simples Nacional', 'LUCRO_PRESUMIDO': 'Lucro Presumido', 'LUCRO_REAL': 'Lucro Real',
     'MEI': 'MEI', 'ME': 'ME', 'EPP': 'EPP', 'MEDIO': 'Médio', 'GRANDE': 'Grande', 'DEMAIS': 'Demais',
     'ATIVO': 'Ativa', 'INATIVO': 'Inativa', 'COMERCIAL': 'Comercial', 'RESIDENCIAL': 'Residencial',

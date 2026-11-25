@@ -173,6 +173,17 @@
   .ho-itens-pe { flex-wrap:wrap; } .ho-venc { gap:8px; } }
 .modal-body .form-group { margin-bottom:0; }
 @media (max-width:640px) { .ho-busca { margin-left:0; width:100%; } .ho-busca input { width:100%; } }
+/* Sem honorários: como cada empresa paga (25/11/2026) */
+.ho-cobf { display:flex; flex-wrap:wrap; gap:6px; margin:0 0 10px; }
+.ho-cobf button { border:1px solid #e2e8f0; background:#fff; color:#475569; border-radius:99px; padding:6px 12px; font:inherit; font-size:12.5px; font-weight:700; cursor:pointer; }
+.ho-cobf button strong { font-weight:900; margin-left:3px; } .ho-cobf button.on { background:#0f172a; border-color:#0f172a; color:#fff; }
+.ho-cobf button.c-via_grupo.on { background:#1d4ed8; border-color:#1d4ed8; } .ho-cobf button.c-sem_movimento.on { background:#b45309; border-color:#b45309; }
+.ho-cobf button.c-pendente.on { background:#be123c; border-color:#be123c; } .ho-cobf button.c-propria.on { background:#15803d; border-color:#15803d; }
+.ho-cob { display:inline-flex; align-items:center; gap:6px; border-radius:99px; padding:3px 10px; font-size:12px; font-weight:800; white-space:nowrap; }
+.ho-cob small { font-weight:600; opacity:.85; }
+.ho-cob.c-pendente { background:#fff1f2; color:#be123c; } .ho-cob.c-propria { background:#f0fdf4; color:#15803d; }
+.ho-cob.c-via_grupo { background:#eff6ff; color:#1d4ed8; } .ho-cob.c-sem_movimento { background:#fff7ed; color:#b45309; }
+#ho-tab-sem tr[hidden] { display:none; }
 </style>
 {% endblock %}
 
@@ -221,16 +232,24 @@
 <div class="fin-caixa">
 {% if aba == 'sem' %}
     {% if sem_contrato %}
+    {# 25/11/2026 (Anderson): "Sem movimento" e "Via grupo" não pagam; a lista mostra como cada empresa paga e filtra por isso #}
+    {% set ns_cob = namespace(n={}) %}{% for c in sem_contrato %}{% set _ = ns_cob.n.__setitem__(c.cobranca, (ns_cob.n.get(c.cobranca) or 0) + 1) %}{% endfor %}
+    <div class="ho-cobf" id="ho-cobf">
+        <button type="button" class="on" data-v="" onclick="hoCobF(this)">Todas <strong>{{ sem_contrato | length }}</strong></button>
+        {% for v, rot in [('PENDENTE', 'Pendente'), ('PROPRIA', 'Própria, sem honorários'), ('VIA_GRUPO', 'Via grupo'), ('SEM_MOVIMENTO', 'Sem movimento')] %}{% if ns_cob.n.get(v) %}
+        <button type="button" class="c-{{ v | lower }}" data-v="{{ v }}" onclick="hoCobF(this)">{{ rot }} <strong>{{ ns_cob.n.get(v) }}</strong></button>{% endif %}{% endfor %}
+    </div>
     <div class="fin-rolar">
         <table class="fin-tab" id="ho-tab-sem">
-            <thead><tr><th>Nº</th><th>Empresa</th><th>CPF/CNPJ</th><th>Tipo</th><th></th></tr></thead>
+            <thead><tr><th>Nº</th><th>Empresa</th><th>CPF/CNPJ</th><th>Tipo</th><th>Como paga</th><th></th></tr></thead>
             <tbody>
             {% for c in sem_contrato %}
-                <tr>
+                <tr data-cob="{{ c.cobranca }}">
                     <td class="fin-num">{{ c.numero_cliente }}</td>
                     <td class="fin-td-titulo"><a href="{{ url_for('clientes.detalhes', id=c.id) }}">{{ c.nome_razao_social }}</a>{% if c.encerrado_em %}<span class="ho-plano" title="Teve honorários e o contrato foi encerrado. Se a empresa fechou, inative o cadastro em Clientes para ela sair desta lista."><i class="fas fa-box-archive"></i> honorários encerrados em {{ c.encerrado_em.strftime('%m/%Y') }}</span>{% endif %}</td>
                     <td class="fin-td-oculta ho-num">{{ c.cpf_cnpj or '—' }}</td>
                     <td class="fin-td-oculta">{{ c.tipo_pessoa or '' }}</td>
+                    <td><span class="ho-cob c-{{ c.cobranca | lower }}">{% if c.cobranca == 'VIA_GRUPO' %}<i class="fas fa-people-group"></i> Via grupo{% if c.pagador_nome %} <small>· paga {{ c.pagador_nome | nome_proprio }}</small>{% endif %}{% elif c.cobranca == 'SEM_MOVIMENTO' %}<i class="fas fa-circle-pause"></i> Sem movimento{% elif c.cobranca == 'PROPRIA' %}<i class="fas fa-building"></i> Própria{% else %}<i class="fas fa-hourglass-half"></i> Pendente{% endif %}</span></td>
                     <td><button class="btn btn-outline btn-sm" onclick="hoNovo({{ c.id }}, {{ c.nome_razao_social | tojson }}, {{ c.numero_cliente | tojson }})"><i class="fas fa-plus"></i> Cadastrar honorários</button>
                         {% if modo == 'admin' %}<button class="btn btn-outline btn-sm" title="Gerar link para quem cadastrou a empresa preencher" onclick="hoConvite({{ c.id }}, {{ c.nome_razao_social | tojson }})"><i class="fas fa-link"></i> Link</button>{% endif %}</td>
                 </tr>
@@ -992,6 +1011,11 @@ document.getElementById('ho-desc-campos').addEventListener('input', hoSoma);
 document.getElementById('ho-form').addEventListener('input', function (e) { if (document.getElementById('ho-decimo').value === 'PROPRIO' && !(e.target && e.target.closest && e.target.closest('#ho-dp-acao'))) hoDpPinta(); });
 document.getElementById('ho-form').addEventListener('change', hoResumo);
 function hoTrocarCliente() { hoSetCliente(null); document.getElementById('ho-cli-q').focus(); }
+function hoCobF(bt) {
+    document.querySelectorAll('#ho-cobf button').forEach(function (b) { b.classList.toggle('on', b === bt); });
+    var v = bt.dataset.v;
+    document.querySelectorAll('#ho-tab-sem tbody tr').forEach(function (tr) { tr.hidden = !!v && tr.dataset.cob !== v; });
+}
 function hoNovo(id, nome, numero) {
     hoLimpar(); document.getElementById('ho-titulo').textContent = 'Novo contrato de honorários';
     hoSetCliente(id, nome, numero); hoAddItem('Honorários contábeis', '', HO_SERV_HON);

@@ -6,11 +6,16 @@ from utils.acesso import filtrar_lista, sql_sem_ocultas
 
 COBRANCAS = (('PROPRIA', 'Própria: a empresa paga os honorários'),
              ('VIA_GRUPO', 'Via grupo: outra empresa do grupo paga'),
+             ('SEM_MOVIMENTO', 'Sem movimento: sem cobrança até começar a movimentar'),
              ('PENDENTE', 'Pendente: ainda não definido'))
+# 25/11/2026 (Anderson): no contrato em grupo se escolhe quem paga; "Sem movimento lógico não pagará, Via grupo também".
+# SEM_MOVIMENTO = tem cadastro e contrato, mas não movimenta: sem cobrança até começar (depois, aditivo). Difere de
+# VIA_GRUPO, que movimenta e está coberta pelo pagamento de outra empresa do grupo. Os dois dão filtro em Honorários.
+COBRANCA_CURTA = {'PROPRIA': 'Própria', 'VIA_GRUPO': 'Via grupo', 'SEM_MOVIMENTO': 'Sem movimento', 'PENDENTE': 'Pendente'}
 
 
 def _cobranca(v):
-    """PROPRIA | VIA_GRUPO | PENDENTE; qualquer outra coisa (vazio, lixo) fica PENDENTE — a pendência aparece em A CADASTRAR."""
+    """PROPRIA | VIA_GRUPO | SEM_MOVIMENTO | PENDENTE; qualquer outra coisa (vazio, lixo) fica PENDENTE — a pendência aparece em A CADASTRAR."""
     v = (v or '').strip().upper()
     return v if v in dict(COBRANCAS) else 'PENDENTE'
 

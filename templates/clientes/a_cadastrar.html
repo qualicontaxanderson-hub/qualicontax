@@ -66,7 +66,7 @@
                 {% if eh_avulso %}
                 <div class="cli-campo"><span class="cli-rot">Avulso desde</span><b class="cli-val">{{ c.avulso_em.strftime('%d/%m/%Y') if c.avulso_em else '—' }}</b></div>
                 {% else %}
-                <div class="cli-campo"><span class="cli-rot">Cobrança</span><b class="cli-val">{{ {'PROPRIA': 'Própria', 'VIA_GRUPO': 'Via grupo', 'PENDENTE': 'Pendente'}.get(c.cobranca, 'Pendente') }}</b></div>
+                <div class="cli-campo"><span class="cli-rot">Cobrança</span><b class="cli-val">{{ {'PROPRIA': 'Própria', 'VIA_GRUPO': 'Via grupo', 'SEM_MOVIMENTO': 'Sem movimento', 'PENDENTE': 'Pendente'}.get(c.cobranca, 'Pendente') }}</b></div>
                 {% endif %}
             </div>
             {% if eh_avulso and c.observacoes %}<p class="acad-obs" title="{{ c.observacoes }}">{{ c.observacoes }}</p>{% endif %}

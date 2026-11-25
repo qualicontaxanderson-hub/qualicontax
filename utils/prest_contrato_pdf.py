@@ -188,7 +188,11 @@ def _capa(m, registro, numero, st):
     q1 = [Paragraph('CONTRATANTE' + (' · GRUPO DE %d EMPRESAS' % len(emps) if len(emps) > 1 else ''), st['k'])]
     for e in emps[:4]:
         q1.append(Paragraph(_esc(e.get('razao')), st['nome']))
-        mi = _doc(e.get('cnpj')) + ((' · %s' % _esc(brl(e.get('valor')))) if f['valores_por_empresa'] and e.get('valor') else '')
+        sit = e.get('situacao') or 'PAGA'
+        tag = {'VIA_GRUPO': ' · via grupo, sem cobrança', 'SEM_MOVIMENTO': ' · sem movimento, sem cobrança'}.get(sit, '')
+        if sit == 'PAGA' and len(emps) > 1:
+            tag = ' · paga %s' % _esc(brl(e.get('valor') if f['valores_por_empresa'] and e.get('valor') else f['valor']))
+        mi = _doc(e.get('cnpj')) + tag
         q1.append(Paragraph(mi, st['mi']))
     if len(emps) > 4:
         q1.append(Paragraph('e mais %d empresa(s), listadas no contrato' % (len(emps) - 4), st['mi']))
@@ -209,7 +213,7 @@ def _capa(m, registro, numero, st):
     # resumo em caixinhas
     def kpi(k, v, s=''):
         return [Paragraph(k, st['kpi_k']), Paragraph(_esc(v), st['kpi_v']), Paragraph(_esc(s), st['kpi_s'])]
-    linhas = [[kpi('HONORÁRIOS', brl(f['valor']), 'por mês' + (' · soma das %d empresas' % len(emps) if f['valores_por_empresa'] else '')),
+    linhas = [[kpi('HONORÁRIOS', brl(f['valor']), 'por mês' + ((' · soma das %d pagantes' % len(f.get('pagantes') or emps)) if f['valores_por_empresa'] else '')),
                kpi('VENCIMENTO', 'dia %d' % f['dia'], 'de cada mês'),
                kpi('INÍCIO', f['inicio'].strftime('%d/%m/%Y'), 'por tempo indeterminado'),
                kpi('REAJUSTE', f['reajuste'][0], f['reajuste'][1])],
@@ -259,13 +263,25 @@ def _capa(m, registro, numero, st):
 
 
 # ───────────────────────── assinaturas ─────────────────────────
+def _linhas_empresas_assina(a, st):
+    """Rede (25/11/2026): uma linha por empresa pela qual a pessoa assina; avisa quando ela não consta no quadro de sócios."""
+    out = []
+    for e in a.get('empresas_assina') or []:
+        txt = '%s · %s' % (_esc(e.get('razao')), _esc(e.get('cnpj') or ''))
+        if not e.get('socio'):
+            txt += ' · <font color="#b45309"><b>não consta no quadro de sócios</b></font>'
+        out.append(Paragraph('assina por ' + txt, st['card_sub']))
+    return out
+
+
 def _cartao_assinatura(a, feito, st, razao_contratada=None):
     """Um assinante em cartão: situação, nome, CPF, papel/empresa e data."""
-    papel = {'CONTRATANTE': (a.get('empresa') or 'Contratante'), 'CONTRATADA': _nome_curto(razao_contratada or QUALICONTAX['razao']), 'TESTEMUNHA': 'Testemunha'}.get(a['papel'], '')
+    papel = {'CONTRATANTE': ('Contratante' if a.get('empresas_assina') else (a.get('empresa') or 'Contratante')), 'CONTRATADA': _nome_curto(razao_contratada or QUALICONTAX['razao']), 'TESTEMUNHA': 'Testemunha'}.get(a['papel'], '')
     linhas = [Paragraph('✔ ASSINADO ELETRONICAMENTE' if feito else 'ASSINATURA ELETRÔNICA', st['card_st_ok'] if feito else st['card_st_wait']), Spacer(1, 3),
               Paragraph(_esc(feito.get('assinado_nome') if feito else a.get('nome') or ''), st['card_nome'])]
     sub = ' · '.join(x for x in (('CPF ' + (a.get('cpf') or '')) if a.get('cpf') else '', papel) if x)
     linhas.append(Paragraph(_esc(sub), st['card_sub']))
+    linhas += _linhas_empresas_assina(a, st)
     linhas.append(Paragraph(feito['assinado_em'].strftime('%d/%m/%Y às %H:%M') if feito else 'aguardando', st['card_sub']))
     t = Table([[linhas]], colWidths=[LW / 2 - 6])
     t.setStyle(_caixa(_FUNDO2 if feito else _FUNDO, _VERDE3 if feito else _LINHA2, pad=10))
@@ -332,8 +348,9 @@ def gerar_pdf(montado, registro=None, rodape=None, numero=None):
         for a in registro:
             linhas = [Paragraph(' · '.join(x for x in (PAPEL.get(a['papel'], a['papel']).upper(), _esc(a.get('empresa') or (_nome_curto(qc.get('razao')) if a['papel'] == 'CONTRATADA' else ''))) if x), st['card_st_ok']),
                       Spacer(1, 3), Paragraph(_esc(a.get('assinado_nome') or a.get('nome')), st['card_nome']),
-                      Paragraph(_esc(' · '.join(x for x in (('CPF ' + (a.get('assinado_cpf') or a.get('cpf') or '')) if (a.get('assinado_cpf') or a.get('cpf')) else '', a.get('email') or '') if x)), st['card_sub']),
-                      Paragraph(_esc('%s · IP %s' % (a['assinado_em'].strftime('%d/%m/%Y às %H:%M:%S'), a.get('assinado_ip') or '')), st['card_sub'])]
+                      Paragraph(_esc(' · '.join(x for x in (('CPF ' + (a.get('assinado_cpf') or a.get('cpf') or '')) if (a.get('assinado_cpf') or a.get('cpf')) else '', a.get('email') or '') if x)), st['card_sub'])]
+            linhas += _linhas_empresas_assina(a, st)
+            linhas.append(Paragraph(_esc('%s · IP %s' % (a['assinado_em'].strftime('%d/%m/%Y às %H:%M:%S'), a.get('assinado_ip') or '')), st['card_sub']))
             if a.get('assinado_agente'):
                 linhas.append(Paragraph(_esc(a['assinado_agente'][:110]), st['card_sub']))
             t = Table([[linhas]], colWidths=[LW / 2 - 6]); t.setStyle(_caixa(_FUNDO2, _VERDE3, pad=10)); cards.append(t)

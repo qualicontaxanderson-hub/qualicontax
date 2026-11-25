@@ -422,10 +422,10 @@
                 <span class="cf-seclabel-note">Financeiro · Pendente mantém o cadastro no A CADASTRAR</span></p>
             <input type="hidden" id="cobranca" name="cobranca" value="{{ cob_at }}">
             <div class="cf-cobr" role="radiogroup" aria-label="Cobrança dos honorários">
-                {% for v, ic, tit in [('PROPRIA', 'fa-building', 'Própria'), ('VIA_GRUPO', 'fa-people-group', 'Via grupo'), ('PENDENTE', 'fa-hourglass-half', 'Pendente')] %}
+                {% for v, ic, tit in [('PROPRIA', 'fa-building', 'Própria'), ('VIA_GRUPO', 'fa-people-group', 'Via grupo'), ('SEM_MOVIMENTO', 'fa-circle-pause', 'Sem movimento'), ('PENDENTE', 'fa-hourglass-half', 'Pendente')] %}
                 <button type="button" class="cf-op{{ ' on' if cob_at == v }}{{ ' cf-op-pend' if v == 'PENDENTE' }}" data-v="{{ v }}" role="radio" aria-checked="{{ 'true' if cob_at == v else 'false' }}">
                     <i class="fas {{ ic }}"></i><b>{{ tit }}</b>
-                    <small>{% if v == 'PROPRIA' %}<span class="pj-only">A própria empresa paga os honorários</span><span class="pf-only">O próprio cliente paga os honorários</span>{% elif v == 'VIA_GRUPO' %}Outra empresa do grupo paga por ela{% else %}Ainda não definido: segura o cadastro no A CADASTRAR{% endif %}</small></button>
+                    <small>{% if v == 'PROPRIA' %}<span class="pj-only">A própria empresa paga os honorários</span><span class="pf-only">O próprio cliente paga os honorários</span>{% elif v == 'VIA_GRUPO' %}Movimenta; outra empresa do grupo paga por ela{% elif v == 'SEM_MOVIMENTO' %}Não movimenta: sem cobrança até começar{% else %}Ainda não definido: segura o cadastro no A CADASTRAR{% endif %}</small></button>
                 {% endfor %}
             </div>
         </div>
@@ -963,7 +963,8 @@ textarea.cf-ctrl { height:auto; padding:10px 12px; line-height:1.5; resize:verti
 .ct-chip input:checked + span { background:#1f6f43; color:#fff; }
 /* cobrança em cartões, iguais aos da ficha (11/11/2026) */
 .nf .i-rosa { background:#fce7f3; color:#be185d; }
-.cf-cobr { display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:10px; }
+.cf-cobr { display:grid; grid-template-columns:repeat(4, minmax(0, 1fr)); gap:10px; }
+@media (max-width:900px) { .cf-cobr { grid-template-columns:repeat(2, minmax(0, 1fr)); } }
 .cf-op { position:relative; display:flex; flex-direction:column; align-items:flex-start; gap:2px; text-align:left; font:inherit; background:#fff;
     border:1.5px solid #e2e8f0; border-radius:14px; padding:14px 16px; cursor:pointer; }
 .cf-op:hover { border-color:#86efac; }

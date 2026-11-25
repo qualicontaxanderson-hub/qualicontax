@@ -160,6 +160,22 @@
 .ct-grupo { margin-top:10px; padding:9px 12px; border-radius:10px; font-size:12.5px; line-height:1.45; }
 .ct-grupo.ok { background:#f0fdf4; border:1px solid #bbf7d0; color:#166534; } .ct-grupo.aut { background:#fff7ed; border:1px solid #fed7aa; color:#9a3412; }
 .ct-rede { margin-top:10px; }
+/* rede: como cada empresa paga (25/11/2026 — Anderson: "tem que ser escolhido quem e qual CNPJ pagará") */
+.ct-sit { display:flex; gap:4px; flex:0 0 auto; } .ct-sit[hidden] { display:none; }
+.ct-sit button { border:1px solid #e2e8f0; background:#fff; color:#64748b; border-radius:99px; padding:5px 10px; font:inherit; font-size:11.5px; font-weight:800; cursor:pointer; display:inline-flex; align-items:center; gap:5px; white-space:nowrap; }
+.ct-sit button i { font-size:10px; } .ct-sit button:hover { border-color:#94a3b8; color:#0f172a; }
+.ct-sit button.on.s-paga { background:#15803d; border-color:#15803d; color:#fff; } .ct-sit button.on.s-via_grupo { background:#1d4ed8; border-color:#1d4ed8; color:#fff; } .ct-sit button.on.s-sem_movimento { background:#b45309; border-color:#b45309; color:#fff; }
+.ct-emp.st-paga { border-color:#bbf7d0; background:#f7fdf9; } .ct-emp.st-via_grupo { border-color:#bfdbfe; background:#f6f9ff; } .ct-emp.st-sem_movimento { border-color:#fed7aa; background:#fffaf3; }
+.ct-emp.st-via_grupo .sg { background:linear-gradient(135deg,#3b82f6,#1e3a8a); } .ct-emp.st-sem_movimento .sg { background:linear-gradient(135deg,#f59e0b,#92400e); }
+.ct-emp.st-falta { border-color:#fecaca; background:#fff7f7; }
+.ct-quem { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:8px; } .ct-quem:empty { display:none; } .ct-quem span { border-radius:99px; padding:4px 11px; font-size:12px; font-weight:800; display:inline-flex; align-items:center; gap:5px; }
+.ct-quem .q-paga { background:#dcfce7; color:#15803d; } .ct-quem .q-via { background:#dbeafe; color:#1d4ed8; } .ct-quem .q-sem { background:#ffedd5; color:#b45309; } .ct-quem .q-falta { background:#fee2e2; color:#b91c1c; }
+.ct-dist { margin:0 0 10px; padding:10px 12px; border-radius:12px; background:#f0fdf4; border:1px solid #bbf7d0; display:flex; gap:10px; align-items:center; flex-wrap:wrap; font-size:12.5px; color:#166534; } .ct-dist[hidden] { display:none; }
+.ct-dist > i { color:#15803d; } .ct-dist span { flex:1; min-width:200px; } .ct-dist .ct-mais { margin-left:auto; }
+/* na rede a linha quebra: nome em cima; chips e valor embaixo (o cartão tem meia largura) */
+.ct-emps.rede .ct-emp { flex-wrap:wrap; row-gap:8px; } .ct-emps.rede .ct-emp .tx { flex:1 1 140px; }
+.ct-emps.rede .ct-emp .ct-sit { order:5; margin-left:52px; } .ct-emps.rede .ct-emp .ns-money { order:6; width:140px; }
+@media (max-width:640px) { .ct-emps.rede .ct-emp .ct-sit { margin-left:0; width:100%; flex-wrap:wrap; } .ct-emps.rede .ct-emp .ns-money { width:100%; } }
 /* cartão da pessoa (leitura) */
 /* partes do contrato: cartões da empresa e de quem assina */
 .ct-partes { display:grid; grid-template-columns:repeat(2, minmax(0,1fr)); gap:12px; }
@@ -278,10 +294,11 @@
         </div>
         <div class="pt-acoes">{% if emp %}<a href="{{ url_for('clientes.detalhes', id=emp.id) }}" target="_blank" rel="noopener"><i class="fas fa-up-right-from-square"></i> Cadastro</a>{% endif %}<a href="#" id="ct-juntar" onclick="ctJuntar(); return false;"><i class="fas fa-plus"></i> Juntar outra empresa da rede</a></div>
         <div class="ct-emps" id="pf-emps">
-          {% for e in dados.empresas or emps_ini %}
-          <div class="ct-emp"><input type="hidden" name="emp_cliente_id" value="{{ e.cliente_id }}"><input type="hidden" name="emp_endereco" value="{{ e.endereco }}">
+          {% for e in dados.empresas or emps_ini %}{% set sit0 = e.situacao or ('PAGA' if loop.first else '') %}
+          <div class="ct-emp"><input type="hidden" name="emp_cliente_id" value="{{ e.cliente_id }}"><input type="hidden" name="emp_endereco" value="{{ e.endereco }}"><input type="hidden" name="emp_sit" value="{{ sit0 }}">
             <span class="sg">{{ e.numero or 'PF' }}</span><span class="tx"><b class="nome">{{ e.razao }}</b><small>{{ e.cnpj }}</small></span>
-            <div class="ns-money fixo" hidden><span>R$</span><input class="ns-in dinheiro" name="emp_valor" value="{{ e.valor or '' }}" placeholder="0,00" title="valor desta empresa (só para rede)"></div>
+            <div class="ct-sit" hidden>{% for v, ic, t in [('PAGA', 'fa-coins', 'Paga'), ('VIA_GRUPO', 'fa-people-group', 'Via grupo'), ('SEM_MOVIMENTO', 'fa-circle-pause', 'Sem movimento')] %}<button type="button" class="s-{{ v | lower }}{{ ' on' if sit0 == v }}" data-v="{{ v }}" onclick="ctSit(this)"><i class="fas {{ ic }}"></i>{{ t }}</button>{% endfor %}</div>
+            <div class="ns-money fixo" hidden><span>R$</span><input class="ns-in dinheiro" name="emp_valor" value="{{ e.valor or '' }}" placeholder="0,00" title="valor que esta empresa paga"></div>
             <button type="button" class="rm" title="Tirar esta empresa" onclick="this.closest('.ct-emp').remove(); ctEmps();"><i class="fas fa-xmark"></i></button></div>
           {% endfor %}
         </div>
@@ -289,11 +306,9 @@
         <div id="pf-grupo" class="ct-grupo" hidden></div>
         <div class="ct-rede" id="ct-rede" hidden>
           <input type="hidden" name="valores_por_empresa" id="ct-vpe" value="{{ '1' if dados.valores_por_empresa else '' }}">
+          <div class="ct-quem" id="ct-quem"></div>
+          <div class="ct-dist" id="ct-dist" hidden><i class="fas fa-scale-balanced"></i><span><b>Mais de uma empresa paga:</b> o valor de cada pagante fica ao lado dela e a soma é o honorário do contrato.</span><button type="button" class="ct-mais" onclick="ctDividir()"><i class="fas fa-divide"></i> Dividir igualmente</button></div>
           <div class="ns-campo"><label>Como o contrato chama a rede</label><input type="text" name="apelido" class="ns-in ns-up" value="{{ dados.apelido or '' }}" placeholder="ex.: TRANSMASUT (em branco = razão social da primeira)"></div>
-          <div class="ns-ops ct-ops2" id="ct-vpe-ops">
-            <button type="button" class="ns-op {{ '' if dados.valores_por_empresa else 'on' }}" data-v="" onclick="ctVpe(this)"><i class="fas fa-coins"></i><b>Um valor geral para a rede</b><small>os honorários valem pelo conjunto</small></button>
-            <button type="button" class="ns-op {{ 'on' if dados.valores_por_empresa else '' }}" data-v="1" onclick="ctVpe(this)"><i class="fas fa-list-ol"></i><b>Um valor por empresa</b><small>o contrato lista uma a uma e o total</small></button>
-          </div>
         </div>
       </div>
 
@@ -547,7 +562,35 @@ function pfOutra(d) {
     ctPessoaCard(); ctResumo();
 }
 function ctQualidade(bt) { bt.parentNode.querySelectorAll('button').forEach(function (x) { x.classList.toggle('on', x === bt); }); $('rep_cargo').value = bt.dataset.v; ctPessoaCard(); ctResumo(); }
-function ctVpe(bt) { document.querySelectorAll('#ct-vpe-ops .ns-op').forEach(function (x) { x.classList.toggle('on', x === bt); }); $('ct-vpe').value = bt.dataset.v; ctEmps(); }
+// ---- rede: quem paga (PAGA), quem está coberta (VIA_GRUPO) e quem não movimenta (SEM_MOVIMENTO) ----
+function ctSitHtml(sit) {
+    return [['PAGA', 'fa-coins', 'Paga'], ['VIA_GRUPO', 'fa-people-group', 'Via grupo'], ['SEM_MOVIMENTO', 'fa-circle-pause', 'Sem movimento']].map(function (o) {
+        return '<button type="button" class="s-' + o[0].toLowerCase() + (sit === o[0] ? ' on' : '') + '" data-v="' + o[0] + '" onclick="ctSit(this)"><i class="fas ' + o[1] + '"></i>' + o[2] + '</button>';
+    }).join('');
+}
+function ctSit(bt) {
+    var row = bt.closest('.ct-emp'); row.querySelector('[name=emp_sit]').value = bt.dataset.v;
+    row.querySelectorAll('.ct-sit button').forEach(function (b) { b.classList.toggle('on', b === bt); });
+    ctEmps();
+}
+function ctLinhas() {
+    return Array.prototype.map.call(document.querySelectorAll('#pf-emps .ct-emp'), function (e) {
+        return { el: e, nome: e.querySelector('.nome').textContent, sit: e.querySelector('[name=emp_sit]').value, inp: e.querySelector('[name=emp_valor]'), val: num(e.querySelector('[name=emp_valor]').value) };
+    });
+}
+function ctPagantes() { return ctLinhas().filter(function (x) { return x.sit === 'PAGA'; }); }
+function fmtBr(v) { return (Math.round(v * 100) / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+function ctDividir() {
+    var pag = ctPagantes(), total = Math.round(num($('ct-valor').value) * 100); if (!pag.length || !total) { $('ct-valor').focus(); return; }
+    var cota = Math.floor(total / pag.length), resto = total - cota * pag.length;
+    pag.forEach(function (p, i) { p.inp.value = fmtBr((cota + (i === 0 ? resto : 0)) / 100); });
+    ctResumo();
+}
+function ctSoma() {
+    if ($('ct-vpe').value !== '1') return;
+    var s = ctPagantes().reduce(function (a, p) { return a + num(p.inp.value); }, 0);
+    if (s) $('ct-valor').value = fmtBr(s);          // sem valor nas pagantes, o total digitado fica para o "Dividir igualmente"
+}
 // ---- sugestão de mensalidade pelos ramos: a soma dos marcados vira o valor ----
 function ctSug(inp) {
     inp.parentNode.classList.toggle('on', inp.checked);
@@ -626,8 +669,16 @@ function ctIniMarca() {
 function ctEmps() {
     var emps = document.querySelectorAll('#pf-emps .ct-emp'); var n = emps.length; var rede = n > 1;
     $('ct-rede').hidden = !rede; $('pf-emps').classList.toggle('rede', rede);
-    var porEmp = rede && $('ct-vpe').value === '1';
-    emps.forEach(function (e) { e.querySelector('.ns-money').hidden = !porEmp; });
+    if (!rede) { emps.forEach(function (e) { e.querySelector('[name=emp_sit]').value = 'PAGA'; }); }
+    var pag = ctPagantes(); var porEmp = rede && pag.length > 1;
+    $('ct-vpe').value = porEmp ? '1' : ''; $('ct-dist').hidden = !porEmp;
+    emps.forEach(function (e) {
+        var s = e.querySelector('[name=emp_sit]').value;
+        e.querySelector('.ct-sit').hidden = !rede; e.querySelector('.ns-money').hidden = !(porEmp && s === 'PAGA');
+        e.querySelectorAll('.ct-sit button').forEach(function (b) { b.classList.toggle('on', b.dataset.v === s); });
+        e.className = 'ct-emp' + (rede ? ' st-' + (s ? s.toLowerCase() : 'falta') : '');
+    });
+    if (porEmp) ctSoma();
     var p = document.querySelector('#pf-emps .ct-emp .sg'); var nm = document.querySelector('#pf-emps .ct-emp .nome');
     $('ct-cab-nome').textContent = n ? (nm.textContent + (n > 1 ? ' + ' + (n - 1) + (n > 2 ? ' empresas' : ' empresa') : '')) : 'escolha a empresa';
     $('pt-emp-nome').textContent = n ? (nm.textContent + (n > 1 ? ' + ' + (n - 1) + (n > 2 ? ' empresas da rede' : ' empresa da rede') : '')) : 'escolha a empresa';
@@ -653,8 +704,8 @@ function ctGrupo() {
                     var d = document.createElement('div'); d.innerHTML = '<strong>' + (c.numero_cliente ? esc(c.numero_cliente) + ' · ' : '') + esc(c.nome) + '</strong> <span class="ho-num">' + esc(c.cpf_cnpj || '') + '</span>';
                     d.onclick = function () {
                         var w = document.createElement('div'); w.className = 'ct-emp';
-                        w.innerHTML = '<input type="hidden" name="emp_cliente_id" value="' + esc(c.id) + '"><input type="hidden" name="emp_endereco" value=""><span class="sg">' + esc(c.numero_cliente || 'PF') + '</span><span class="tx"><b class="nome">' + esc(c.nome) + '</b><small>' + esc(c.cpf_cnpj || '') + '</small></span>'
-                            + '<div class="ns-money fixo" hidden><span>R$</span><input class="ns-in dinheiro" name="emp_valor" placeholder="0,00"></div><button type="button" class="rm" title="Tirar esta empresa" onclick="this.closest(\'.ct-emp\').remove(); ctEmps();"><i class="fas fa-xmark"></i></button>';
+                        w.innerHTML = '<input type="hidden" name="emp_cliente_id" value="' + esc(c.id) + '"><input type="hidden" name="emp_endereco" value=""><input type="hidden" name="emp_sit" value=""><span class="sg">' + esc(c.numero_cliente || 'PF') + '</span><span class="tx"><b class="nome">' + esc(c.nome) + '</b><small>' + esc(c.cpf_cnpj || '') + '</small></span>'
+                            + '<div class="ct-sit">' + ctSitHtml('') + '</div><div class="ns-money fixo" hidden><span>R$</span><input class="ns-in dinheiro" name="emp_valor" placeholder="0,00" title="valor que esta empresa paga"></div><button type="button" class="rm" title="Tirar esta empresa" onclick="this.closest(\'.ct-emp\').remove(); ctEmps();"><i class="fas fa-xmark"></i></button>';
                         $('pf-emps').appendChild(w); window.Dinheiro.ligar(w);
                         q.value = ''; sug.style.display = 'none'; ctEmps();
                     };
@@ -709,8 +760,14 @@ function ctResumo() {
     var titulo = val('titulo') || (areas.indexOf('Contabilidade') >= 0 ? 'Contrato de prestação de serviços contábeis' : (areas.length === 1 ? 'Contrato de prestação de serviços de ' + areas[0].toLowerCase() : 'Contrato de prestação de serviços'));
     var rt = $('ct-reaj').value, reajDet = rt === 'ESCALONADO' ? val('reajuste_escala') : ((rt === 'INDICE' || rt === 'DATA_PROPRIA') ? val('reajuste_indice') : '');
     var reaj = segTx('ct-reajs') + (reajDet ? ' · ' + reajDet : '') + (rt === 'DATA_PROPRIA' && val('reajuste_mes') ? ' · em ' + val('reajuste_mes') : '');
+    var lin = ctLinhas(), pag = lin.filter(function (x) { return x.sit === 'PAGA'; }), via = lin.filter(function (x) { return x.sit === 'VIA_GRUPO'; }), sem = lin.filter(function (x) { return x.sit === 'SEM_MOVIMENTO'; }), semSit = lin.filter(function (x) { return !x.sit; });
+    var rede = emps.length > 1;
+    $('ct-quem').innerHTML = !rede ? '' : pag.map(function (p) { return '<span class="q-paga"><i class="fas fa-coins"></i> ' + esc(nomeProprio(p.nome)) + (pag.length > 1 && p.val ? ' · ' + brl(p.val) : '') + '</span>'; }).join('')
+        + (via.length ? '<span class="q-via"><i class="fas fa-people-group"></i> via grupo: ' + via.length + '</span>' : '') + (sem.length ? '<span class="q-sem"><i class="fas fa-circle-pause"></i> sem movimento: ' + sem.length + '</span>' : '')
+        + (semSit.length ? '<span class="q-falta"><i class="fas fa-circle-exclamation"></i> falta dizer como paga: ' + semSit.length + '</span>' : '');
     var faltas = [];
-    if (!emps.length) faltas.push('a empresa'); if (!rep || !repEmail) faltas.push('quem assina e o e-mail'); if (rep && !val('rep_cargo')) faltas.push('em que qualidade assina'); if (extra && !val('extra_email')) faltas.push('o e-mail do outro assinante');
+    if (!emps.length) faltas.push('a empresa');
+    if (rede && semSit.length) faltas.push('como paga cada empresa da rede'); else if (rede && !pag.length) faltas.push('uma empresa que paga'); else if (rede && pag.length > 1 && pag.some(function (p) { return !p.val; })) faltas.push('o valor de cada pagante'); if (!rep || !repEmail) faltas.push('quem assina e o e-mail'); if (rep && !val('rep_cargo')) faltas.push('em que qualidade assina'); if (extra && !val('extra_email')) faltas.push('o e-mail do outro assinante');
     if (!areas.length && !extras) faltas.push('os serviços'); if (!v) faltas.push('o valor'); if (!ini) faltas.push('a data de início');
     // frases de leitura (condições e cláusulas)
     $('ct-cond-sum').innerHTML = F('Reajuste', reaj.toLowerCase()) + F('13º', segTx('ct-decs').toLowerCase()) + F('Multa', val('multa') + '%') + F('Juros', val('juros') + '% ao mês');
@@ -722,7 +779,8 @@ function ctResumo() {
     $('ct-kpis').innerHTML = K('Honorários', v ? brl(v) : 'a informar', 'por mês', !v) + K('Vencimento', dia ? 'dia ' + dia : '—', 'de cada mês')
         + K('Início', ini ? ini.split('-').reverse().join('/') : 'a informar', '', !ini) + K('Reajuste', segTx('ct-reajs'), (reajDet || '') + (rt === 'DATA_PROPRIA' && val('reajuste_mes') ? (reajDet ? ' · ' : '') + val('reajuste_mes') : ''));
     var L = function (k, x, falta) { return '<div><span>' + k + '</span><b' + (falta ? ' class="ct-falta"' : '') + '>' + esc(x || '—') + '</b></div>'; };
-    var html = (emps.length > 1 ? L('Rede', emps.length + ' empresas' + (apelido ? ' · ' + apelido.toUpperCase() : '')) : '')
+    var html = (rede ? L('Rede', emps.length + ' empresas' + (apelido ? ' · ' + apelido.toUpperCase() : '')) + L('Quem paga', pag.length ? pag.map(function (p) { return nomeProprio(p.nome); }).join(' e ') : 'a escolher', !pag.length)
+        + (via.length || sem.length ? L('Sem cobrança', (via.length ? via.length + ' via grupo' : '') + (via.length && sem.length ? ' · ' : '') + (sem.length ? sem.length + ' sem movimento' : '')) : '') : '')
         + (extra ? L('Também assina', nomeProprio(extra) + ' · ' + (val('extra_cargo') || 'autorizado(a)'), !val('extra_email')) : '')
         + L('13º', segTx('ct-decs')) + L('Multa / juros', val('multa') + '% · ' + val('juros') + '% ao mês') + L('Aviso prévio', $('ct-aviso').value + ' dias') + L('LGPD', $('ct-lgpd').value ? 'com a cláusula' : 'sem')
         + L('Foro', val('foro')) + L('Pela Qualicontax', q.nome || '') + L('Testemunhas', tests.length ? tests.join(' e ') : 'nenhuma')
@@ -734,6 +792,7 @@ function ctResumo() {
     $('ct-msg').className = 'ct-msg' + (faltas.length ? '' : ' ok');
     ctPessoaCard();
 }
+$('pf-emps').addEventListener('input', function (ev) { if (ev.target.name === 'emp_valor') ctSoma(); });
 $('pf-form').addEventListener('input', ctResumo); $('pf-form').addEventListener('change', ctResumo);
 $('pf-form').addEventListener('submit', function (e) { if (!$('ct-inicio').value) { e.preventDefault(); $('ct-ini-txt').focus(); } });
 window.Dinheiro.ligar();

@@ -560,11 +560,28 @@ class PrestContrato:
             'da imperfeição ou inexecução dos serviços por parte da QUALICONTAX, serão de sua responsabilidade.']))
         valor = _d(dados.get('valor'))
         dia = int(dados.get('dia_vencimento') or 10)
-        hon = ['A %s pagará à QUALICONTAX pelos serviços prestados os honorários mensais de %s (%s), com vencimento todo dia %d (%s) do mês.'
-               % (apelido, brl(valor), reais_extenso(valor), dia, _dia_extenso(dia))]
-        if len(empresas) > 1 and dados.get('valores_por_empresa'):
-            hon.append('PARÁGRAFO PRIMEIRO. Os honorários são compostos pelos valores de cada empresa: ' +
-                       '; '.join('%s: %s' % (e['razao'], brl(e.get('valor'))) for e in empresas) + '.')
+        # 25/11/2026 — rede: quem paga (PAGA), quem está coberta (VIA_GRUPO) e quem não movimenta (SEM_MOVIMENTO)
+        pagantes = [e for e in empresas if (e.get('situacao') or 'PAGA') == 'PAGA']    # contrato antigo sem situação: todas pagam
+        via = [e for e in empresas if e.get('situacao') == 'VIA_GRUPO']
+        sem = [e for e in empresas if e.get('situacao') == 'SEM_MOVIMENTO']
+        venc = 'com vencimento todo dia %d (%s) do mês' % (dia, _dia_extenso(dia))
+        if len(empresas) > 1 and len(pagantes) == 1 and (via or sem):
+            p0 = pagantes[0]
+            todas = 'a todas as contratantes acima qualificadas' if apelido == 'CONTRATANTE' else 'a todas as empresas do grupo %s' % apelido
+            hon = ['Pelos serviços prestados %s, a contratante %s, inscrita no %s nº %s, pagará à QUALICONTAX os honorários mensais de %s (%s), %s.'
+                   % (todas, p0['razao'], 'CPF' if _pf(p0) else 'CNPJ', p0['cnpj'], brl(valor), reais_extenso(valor), venc)]
+        elif len(empresas) > 1 and len(pagantes) > 1 and dados.get('valores_por_empresa'):
+            hon = ['A %s pagará à QUALICONTAX pelos serviços prestados os honorários mensais de %s (%s), %s, assim distribuídos entre as empresas pagantes: %s.'
+                   % (apelido, brl(valor), reais_extenso(valor), venc, '; '.join('%s: %s' % (e['razao'], brl(e.get('valor'))) for e in pagantes))]
+        else:
+            hon = ['A %s pagará à QUALICONTAX pelos serviços prestados os honorários mensais de %s (%s), %s.' % (apelido, brl(valor), reais_extenso(valor), venc)]
+        paras = []
+        if via:
+            paras.append('Os serviços prestados a %s estão abrangidos pelos honorários acima, sem cobrança adicional, por integrar%s o mesmo grupo econômico da empresa pagante.'
+                         % (_nomes(via), 'em' if len(via) > 1 else ''))
+        if sem:
+            paras.append('%s, atualmente sem movimento, não ter%s cobrança de honorários enquanto permanecer%s nessa situação; ao iniciar%s suas atividades, os honorários '
+                         'correspondentes serão fixados por aditivo a este contrato.' % (_nomes(sem), 'ão' if len(sem) > 1 else 'á', 'em' if len(sem) > 1 else '', 'em' if len(sem) > 1 else ''))
         rt = dados.get('reajuste_tipo') or 'SALARIO_MINIMO'
         reaj = REAJUSTE_TXT.get(rt, REAJUSTE_TXT['SALARIO_MINIMO'])
         # 25/11/2026: o índice vem do cadastro (sigla + nome por extenso); escalonado tem o próprio texto
@@ -573,10 +590,12 @@ class PrestContrato:
         reaj = reaj.format(indice=escala if rt == 'ESCALONADO' else (idx or 'índice combinado entre as partes'), mes=dados.get('reajuste_mes') or 'janeiro',
                            indice_txt=('pela variação acumulada do %s, ou de outro índice oficial que venha a substituí-lo' % idx) if idx
                            else 'pelo mesmo percentual de reajuste do salário mínimo nacional')
-        hon.append('PARÁGRAFO %s. %s' % ('SEGUNDO' if len(hon) > 1 else 'PRIMEIRO', reaj))
-        hon.append('PARÁGRAFO %s. Os honorários pagos após a data acarretarão à %s o acréscimo de multa de %s%% (%s por cento), sem prejuízo de juros moratórios de %s%% '
-                   '(%s por cento) ao mês ou fração.' % ('TERCEIRO' if len(hon) > 2 else 'SEGUNDO', apelido, dados.get('multa') or '10', _pct_extenso(dados.get('multa') or '10'),
-                                                          dados.get('juros') or '1', _pct_extenso(dados.get('juros') or '1')))
+        paras.append(reaj)
+        paras.append('Os honorários pagos após a data acarretarão à %s o acréscimo de multa de %s%% (%s por cento), sem prejuízo de juros moratórios de %s%% '
+                     '(%s por cento) ao mês ou fração.' % (apelido, dados.get('multa') or '10', _pct_extenso(dados.get('multa') or '10'),
+                                                            dados.get('juros') or '1', _pct_extenso(dados.get('juros') or '1')))
+        ordp = ['PRIMEIRO', 'SEGUNDO', 'TERCEIRO', 'QUARTO', 'QUINTO', 'SEXTO']
+        hon += ['PARÁGRAFO %s. %s' % (ordp[i], p) for i, p in enumerate(paras)]
         cl.append(('CLÁUSULA', hon))
         if dados.get('decimo') == 'COBRADO':
             cl.append(('CLÁUSULA', ['Nos meses de novembro e dezembro de cada ano, será cobrado o equivalente a 1 (um) honorário mensal, dividido em duas parcelas iguais, '
@@ -628,7 +647,7 @@ class PrestContrato:
         local = '%s, %s' % (dados.get('local') or 'São Paulo', data_extenso(_data(dados.get('data_assinatura')) or date.today()))
         areas_txt = ', '.join(nome_proprio(AREAS[a][0]) for a in areas) + ((' + ' + '; '.join(dados.get('servicos_extras'))) if dados.get('servicos_extras') else '')
         decimo_txt = {'COBRADO': '1 honorário mensal, em duas parcelas (novembro e dezembro)', 'UNICA': '1 honorário mensal, em dezembro'}.get(dados.get('decimo'), 'isento')
-        resumo = [('Objeto', areas_txt or '—'), ('Honorários mensais', '%s, com vencimento todo dia %d' % (brl(valor), dia)),
+        resumo = [('Objeto', areas_txt or '—'), ('Honorários mensais', '%s, com vencimento todo dia %d' % (brl(valor), dia) + ((' · paga %s' % pagantes[0]['razao']) if len(empresas) > 1 and len(pagantes) == 1 else '')),
                   ('Início', inicio_d.strftime('%d/%m/%Y')), ('13º honorário', decimo_txt),
                   ('Reajuste', {'SALARIO_MINIMO': 'salário mínimo, todo janeiro', 'INDICE': 'índice próprio', 'DATA_PROPRIA': 'data própria', 'SEM': 'de comum acordo', 'ESCALONADO': 'escalonado'}.get(dados.get('reajuste_tipo') or 'SALARIO_MINIMO')),
                   ('Aviso prévio', '%d dias' % aviso), ('Foro', dados.get('foro') or 'São Paulo/SP')]
@@ -643,7 +662,8 @@ class PrestContrato:
                  'extras': [x.strip() for x in (dados.get('servicos_extras') or []) if (x or '').strip()],
                  'reajuste': reaj_curto, 'decimo': decimo_curto, 'aviso': aviso, 'foro': dados.get('foro') or 'São Paulo/SP',
                  'multa': str(dados.get('multa') or '10').replace('.', ','), 'juros': str(dados.get('juros') or '1').replace('.', ','),
-                 'valores_por_empresa': bool(len(empresas) > 1 and dados.get('valores_por_empresa')),
+                 'valores_por_empresa': bool(len(empresas) > 1 and dados.get('valores_por_empresa') and len(pagantes) > 1),
+                 'pagantes': [e['razao'] for e in pagantes], 'via_grupo': [e['razao'] for e in via], 'sem_movimento': [e['razao'] for e in sem],
                  'representante': {'nome': e0.get('rep_nome') or '', 'cargo': e0.get('rep_cargo') or '', 'cpf': e0.get('rep_cpf') or ''},
                  'extra': ex if (ex and ex.get('nome')) else None, 'assina': q, 'n_testemunhas': n_test}
         return {'titulo': titulo, 'partes': partes, 'preambulo': preambulo, 'clausulas': clausulas, 'fecho': fecho, 'local_data': local,
@@ -656,6 +676,12 @@ def _data(s):
         return datetime.strptime(s, '%Y-%m-%d').date() if s else None
     except Exception:
         return None
+
+
+def _nomes(empresas):
+    """'A', 'A e B', 'A, B e C' — razões sociais para o texto do contrato."""
+    r = [e['razao'] for e in empresas]
+    return r[0] if len(r) == 1 else ', '.join(r[:-1]) + ' e ' + r[-1]
 
 
 def _dia_extenso(n):

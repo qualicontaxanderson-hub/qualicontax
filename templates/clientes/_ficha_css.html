@@ -591,7 +591,8 @@
 .qb-oks li { display:flex; gap:8px; font-size:13px; color:#334155; } .qb-oks li i { color:#22c55e; margin-top:2px; } .qb-oks small { color:#94a3b8; }
 
 /* financeiro */
-.qb-cobr { display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:10px; }
+.qb-cobr { display:grid; grid-template-columns:repeat(4, minmax(0, 1fr)); gap:10px; }
+@media (max-width:900px) { .qb-cobr { grid-template-columns:repeat(2, minmax(0, 1fr)); } }
 .qb-op { position:relative; display:flex; flex-direction:column; align-items:flex-start; gap:2px; text-align:left; font:inherit; background:#fff;
     border:1.5px solid #e2e8f0; border-radius:16px; padding:14px; cursor:pointer; transition:border-color .15s, background .15s; }
 .qb-op:hover:not([disabled]) { border-color:#86efac; }

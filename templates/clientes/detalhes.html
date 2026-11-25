@@ -269,7 +269,7 @@
                 <div class="qb-bh"><span class="qb-ico i-rosa"><i class="fas fa-coins"></i></span><h3>Como {{ 'a empresa' if pj else 'o cliente' }} paga os honorários?</h3>{{ selo(['cobranca']) }}</div>
                 <div id="campo-cobranca" class="tu-v{% if pode_rota('clientes.salvar_campos') %} tu-ed{% endif %} qb-opcoes" data-campo="cobranca" data-tipo="opcoes" data-rotulo="Cobrança" data-valor="{{ cob }}">
                     <div class="qb-cobr">
-                        {% for v, ic, tit, sub in [('PROPRIA', 'fa-building', 'Própria', 'A própria empresa paga os honorários' if pj else 'O próprio cliente paga os honorários'), ('VIA_GRUPO', 'fa-people-group', 'Via grupo', 'Outra empresa do grupo paga por ela'), ('PENDENTE', 'fa-hourglass-half', 'Pendente', 'Ainda não definido — segura a empresa no A CADASTRAR')] %}
+                        {% for v, ic, tit, sub in [('PROPRIA', 'fa-building', 'Própria', 'A própria empresa paga os honorários' if pj else 'O próprio cliente paga os honorários'), ('VIA_GRUPO', 'fa-people-group', 'Via grupo', 'Movimenta; outra empresa do grupo paga por ela'), ('SEM_MOVIMENTO', 'fa-circle-pause', 'Sem movimento', 'Não movimenta: sem cobrança até começar'), ('PENDENTE', 'fa-hourglass-half', 'Pendente', 'Ainda não definido — segura a empresa no A CADASTRAR')] %}
                         <button type="button" class="qb-op{{ ' on' if cob == v }}{{ ' qb-op-pend' if v == 'PENDENTE' }}" data-v="{{ v }}"{% if not pode_rota('clientes.salvar_campos') %} disabled{% endif %}>
                             <i class="fas {{ ic }}"></i><b>{{ tit }}</b><small>{{ sub }}</small></button>
                         {% endfor %}

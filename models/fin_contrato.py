@@ -234,6 +234,8 @@ class FinContrato:
         """Clientes ativos (numerados, não avulsos) sem contrato vigente — a lista da Alessandra."""
         return execute_query(
             """SELECT cl.id, cl.numero_cliente, cl.nome_razao_social, cl.cpf_cnpj, cl.tipo_pessoa, cl.criado_por,
+                      COALESCE(cl.cobranca, 'PENDENTE') AS cobranca, cl.cobranca_pagador_id,
+                      (SELECT p.nome_razao_social FROM clientes p WHERE p.id = cl.cobranca_pagador_id) AS pagador_nome,
                       (SELECT MAX(c2.fim) FROM fin_contratos c2 WHERE c2.cliente_id = cl.id AND c2.empresa_id = %s
                         AND c2.situacao = 'ENCERRADO') AS encerrado_em
                  FROM clientes cl
