@@ -424,20 +424,37 @@ def emails_financeiro_do_boleto(b):
     return emails_financeiro(cliente_id)
 
 
+# 25/11/2026 — Anderson: a Educamix tinha "email@email.com.br" no cadastro e o servidor recusou ("Mailbox does not
+# exist"); 22 cadastros vieram da migração com esse enchimento. Um e-mail assim não é destinatário.
+_EMAIL_FALSO_DOMINIOS = {'email.com', 'email.com.br', 'teste.com', 'teste.com.br', 'exemplo.com', 'exemplo.com.br',
+                         'example.com', 'test.com', 'naotem.com', 'naotem.com.br', 'sememail.com'}
+_EMAIL_FALSO_NOMES = {'email', 'e-mail', 'emali', 'teste', 'test', 'exemplo', 'example', 'naotem', 'sememail', 'inserir', 'iserir', 'xxx', 'x'}
+
+
+def email_falso(email):
+    """True quando o endereço é de preenchimento (email@email.com, teste@..., inserir@...) ou nem tem forma de e-mail."""
+    e = (email or '').strip().lower()
+    if '@' not in e or ' ' in e:
+        return True
+    nome, dom = e.rsplit('@', 1)
+    return '.' not in dom or dom in _EMAIL_FALSO_DOMINIOS or nome in _EMAIL_FALSO_NOMES
+
+
 def destinatarios_cobranca(cliente_id, email_cadastro=None):
     """Quem recebe a cobrança, em ordem de preferência — Anderson (15/11/2026): "está puxando o e-mail do
     CNPJ porque no cadastro está outro... isso não pode falhar de jeito nenhum".
 
     1. contatos ativos do departamento Financeiro (id 8);
     2. senão, o contato principal ativo com e-mail;
-    3. senão, qualquer contato ativo com e-mail;
-    4. por último, o e-mail do cadastro da empresa (o do CNPJ).
-    Devolve [{'email', 'nome', 'fonte'}] sem repetir e-mail."""
+    3. senão, qualquer contato ativo com e-mail.
+    25/11/2026 — Anderson: "o e-mail do CNPJ nunca é para ser usado no Financeiro, e sim o do contato": o e-mail do
+    cadastro da empresa saiu da lista (``email_cadastro`` fica só para quem ainda chama assim e é ignorado).
+    E-mails de preenchimento (email_falso) não contam. Devolve [{'email', 'nome', 'fonte'}] sem repetir e-mail."""
     out, vistos = [], set()
 
     def add(email, nome, fonte):
         e = (email or '').strip().lower()
-        if '@' in e and e not in vistos:
+        if '@' in e and e not in vistos and not email_falso(e):
             vistos.add(e); out.append({'email': e, 'nome': (nome or '').strip(), 'fonte': fonte})
 
     if cliente_id:
@@ -457,8 +474,19 @@ def destinatarios_cobranca(cliente_id, email_cadastro=None):
                         add(m, c['nome'], fonte)
             if out:
                 return out
-    add(email_cadastro, '', 'e-mail do cadastro (CNPJ)')
+        # Pessoa física: sem contato, vale o e-mail da própria pessoa, que fica no cadastro (não é "e-mail do CNPJ").
+        # 103 PFs ativas em 25/11/2026 só têm esse e-mail. Para PJ o e-mail do cadastro nunca entra.
+        c = execute_query('SELECT tipo_pessoa, email FROM clientes WHERE id = %s', (cliente_id,), fetch=True, fetch_one=True) or {}
+        if c.get('tipo_pessoa') == 'PF':
+            add(c.get('email'), '', 'e-mail da pessoa (cadastro)')
     return out
+
+
+def emails_do_cliente(cliente_id):
+    """Para a caixa de pedido (25/11/2026): (destinatários válidos, e-mail de preenchimento do cadastro ou None)."""
+    c = execute_query('SELECT email FROM clientes WHERE id = %s', (cliente_id,), fetch=True, fetch_one=True) or {}
+    cad = (c.get('email') or '').strip()
+    return destinatarios_cobranca(cliente_id), (cad if cad and email_falso(cad) else None)
 
 
 def destinatarios_do_boleto(b):
@@ -466,11 +494,7 @@ def destinatarios_do_boleto(b):
     if b.get('titulo_id'):
         t = execute_query('SELECT cliente_id FROM fin_titulos WHERE id = %s', (b['titulo_id'],), fetch=True, fetch_one=True)
         cliente_id = (t or {}).get('cliente_id')
-    email_cad = None
-    if cliente_id:
-        c = execute_query('SELECT email FROM clientes WHERE id = %s', (cliente_id,), fetch=True, fetch_one=True)
-        email_cad = (c or {}).get('email')
-    return destinatarios_cobranca(cliente_id, email_cad or b.get('pagador_email'))
+    return destinatarios_cobranca(cliente_id)
 
 
 def remetente_do_boleto(b):
@@ -512,9 +536,9 @@ def enviar_boleto(boleto_id, para=None, usuario_id=None, com_nota=True):
     # e-mail do CNPJ só quando a empresa não tem contato nenhum com e-mail (destinatarios_cobranca).
     if not para:
         para = ', '.join(d['email'] for d in destinatarios_do_boleto(b)) or None
-    destinos = [p.strip().lower() for p in str(para or b.get('pagador_email') or '').replace(';', ',').split(',') if p.strip()]
+    destinos = [p.strip().lower() for p in str(para or '').replace(';', ',').split(',') if p.strip()]   # 25/11/2026: sem o e-mail do CNPJ (pagador_email)
     if not destinos:
-        return False, 'A empresa não tem contato do Financeiro com e-mail nem e-mail no cadastro: informe um endereço para enviar.'
+        return False, 'A empresa não tem contato com e-mail (o e-mail do CNPJ não é usado na cobrança): cadastre o contato ou informe um endereço.'
     if any('@' not in p for p in destinos):
         return False, 'Há um endereço de e-mail inválido.'
     try:

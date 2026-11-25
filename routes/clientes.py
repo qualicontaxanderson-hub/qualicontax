@@ -3583,7 +3583,10 @@ def responsaveis_convite_salvar(token):
 def novo_contato(cliente_id):
     """Adicionar novo contato (celular obrigatório; departamentos que recebe)."""
     dados, falta = _contato_form()
+    por_fetch = request.headers.get('X-Requested-With') == 'fetch'     # 25/11/2026: a janela aberta de Lançamentos fica na página
     if falta:
+        if por_fetch:
+            return jsonify({'ok': False, 'erro': 'Contato não salvo: falta ' + ' e '.join(falta) + '.'}), 400
         flash('Contato não salvo: falta ' + ' e '.join(falta) + '.', 'danger')
         return redirect(url_for('clientes.detalhes', id=cliente_id) + '#contatos')
     extras = dados.pop('_extras')
@@ -3592,9 +3595,13 @@ def novo_contato(cliente_id):
         ContatoCliente.set_meios(contato_id, *extras)
         dados['_extras'] = extras
         registrar('escrita.criou_contato', 'cadastros', tabela='contatos_clientes', registro_id=contato_id,
-                  depois=dict(_contato_resumo(dados), cliente_id=cliente_id))
+                  depois=dict(_contato_resumo(dados), cliente_id=cliente_id, de='caixa Nova cobrança (Lançamentos)' if por_fetch else None))
+        if por_fetch:
+            return jsonify({'ok': True, 'id': contato_id, 'msg': 'Contato %s gravado no cadastro.' % (dados.get('nome') or '').upper()})
         flash('Contato adicionado.', 'success')
     else:
+        if por_fetch:
+            return jsonify({'ok': False, 'erro': 'Erro ao adicionar contato.'}), 500
         flash('Erro ao adicionar contato!', 'danger')
     return redirect(url_for('clientes.detalhes', id=cliente_id) + '#contatos')
 

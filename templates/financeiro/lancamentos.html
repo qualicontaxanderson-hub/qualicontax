@@ -25,6 +25,8 @@
 .ns-serv-bt.vazio { border-style:dashed; border-color:#fdba74; } .ns-serv-bt.vazio b { color:#9a3412; } .ns-serv-bt:hover { border-color:#22c55e; }
 .ns-desc-un { color:#15803d; margin-left:4px; } #nsDescBox .ns-seg button:disabled { opacity:.35; cursor:not-allowed; }
 .ns-pag { margin-top:10px; } .ns-pag label small { display:block; font-weight:500; color:#64748b; font-size:11px; margin-top:2px; } .ns-pag[hidden] { display:none; }
+/* 25/11/2026: e-mails da cobrança no bloco Cliente — quem recebe, trava sem e-mail e cadastro rápido do contato */
+.ns-mail { margin-top:10px; border:1px solid #cfe3d7; border-radius:12px; padding:9px 12px 10px; background:#f6fbf8; } .ns-mail[hidden] { display:none; } .ns-mail-h { display:flex; align-items:center; gap:8px; font-size:11.5px; font-weight:800; text-transform:uppercase; letter-spacing:.04em; color:#0f3d2e; flex-wrap:wrap; } .ns-mail-h i { color:#16a34a; } .ns-mail-h small { margin-left:auto; text-transform:none; letter-spacing:0; font-weight:600; color:#64748b; font-size:11.5px; text-align:right; } .ns-mail-l { display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; } .ns-mail-l span, .ns-mail-l label { display:inline-flex; align-items:center; gap:7px; border:1.5px solid #bfe3cc; background:#fff; border-radius:999px; padding:5px 11px 5px 8px; font-size:12.5px; cursor:pointer; max-width:100%; min-width:0; } .ns-mail-l label input { margin:0; accent-color:#16a34a; flex:0 0 auto; } .ns-mail-l span i { color:#16a34a; font-size:12px; } .ns-mail-l span b, .ns-mail-l label b { font-weight:700; color:#0f172a; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0; } .ns-mail-l span small, .ns-mail-l label small { color:#64748b; white-space:nowrap; } .ns-mail-l label.off { opacity:.5; border-style:dashed; } .ns-mail.red { background:#fef2f2; border-color:#fecaca; } .ns-mail.red .ns-mail-h, .ns-mail.red .ns-mail-h i { color:#991b1b; } .ns-mail-txt { font-size:12.5px; color:#7f1d1d; margin-top:6px; line-height:1.45; } .ns-mail-txt.amb { color:#92400e; } .ns-mail-f { display:grid; grid-template-columns:1.1fr 1.4fr .9fr; gap:8px; margin-top:8px; } .ns-mail-f .ns-in { height:36px; font-size:13px; } .ns-mail-ac { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-top:8px; } .ns-mail-ac .ns-bt { padding:7px 12px; font-size:12.5px; border-radius:10px; } .ns-mail-ac .ns-bt.prim { font-size:12.5px; padding:8px 14px; box-shadow:none; } .ns-mail-ac a { font-size:12.5px; font-weight:700; color:#15803d; text-decoration:none; } .ns-mail-ac a:hover { text-decoration:underline; } .ns-mail-ok { font-size:12.5px; color:#15803d; font-weight:700; margin-top:6px; } @media (max-width:980px) { .ns-mail-f { grid-template-columns:minmax(0,1fr); } }
 .lm-t-pag { background:#fef3c7; color:#92400e; }
 .lm-t-desc { background:#dcfce7; color:#166534; } .tx-c.desc .tx-c-val { color:#15803d; } .lm-junto { font-size:11.5px; color:#166534; background:#f0fdf4; border:1px solid #bbf7d0; border-radius:9px; padding:6px 9px; margin-top:8px; }
 </style>
@@ -399,7 +401,7 @@
   <div class="tx-abas">
     <button type="button" class="tx-aba tx-a-atr{{ ' on' if aba == 'apr' }}" data-p="apr"><span class="tx-aba-ico"><i class="fas {{ 'fa-stamp' if aprov else 'fa-hourglass-half' }}"></i></span>
       <span class="tx-aba-txt"><span class="tx-aba-lbl">{{ 'Para aprovar' if aprov else 'Aguardando aprovação' }}</span><span class="tx-aba-val">{{ tot.apr | format_currency }}</span>
-      <span class="tx-aba-sub">{{ 'solicitações da equipe' if aprov else 'com Anderson ou Alessandra' }}</span></span><span class="tx-aba-n">{{ grupos.apr|length }}</span></button>
+      <span class="tx-aba-sub">{{ 'solicitações da equipe' if aprov else 'aguardando aprovação' }}</span></span><span class="tx-aba-n">{{ grupos.apr|length }}</span></button>
     <button type="button" class="tx-aba tx-a-abe{{ ' on' if aba == 'cob' }}" data-p="cob"><span class="tx-aba-ico"><i class="fas fa-paper-plane"></i></span>
       <span class="tx-aba-txt"><span class="tx-aba-lbl">Em cobrança</span><span class="tx-aba-val">{{ tot.cob | format_currency }}</span><span class="tx-aba-sub">aprovados · a vencer</span></span><span class="tx-aba-n">{{ grupos.cob|length }}</span></button>
     <button type="button" class="tx-aba tx-a-rec{{ ' on' if aba == 'pag' }}" data-p="pag"><span class="tx-aba-ico"><i class="fas fa-circle-check"></i></span>
@@ -547,7 +549,7 @@
 {# ── caixa: Nova solicitação ── #}
 <div class="ns-fundo" id="nsFundo"><div class="ns" role="dialog" aria-modal="true" aria-label="Nova solicitação">
   <header class="ns-cab"><span class="ns-logo"><img src="{{ url_for('static', filename='images/logo.png') }}" alt="Qualicontax"></span>
-    <div class="ns-tit"><b>{{ 'Nova cobrança' if aprov else 'Nova solicitação de cobrança' }}</b><span>{{ (eu.nome or '').split()[0] }} · {{ 'emite agora ou inclui na mensalidade — sem passar por aprovação' if aprov else 'vai para aprovação de Anderson ou Alessandra' }}</span></div>
+    <div class="ns-tit"><b>{{ 'Nova cobrança' if aprov else 'Nova solicitação de cobrança' }}</b><span>{{ (eu.nome or '').split()[0] }} · {{ 'emite agora ou inclui na mensalidade — sem passar por aprovação' if aprov else 'vai para aprovação' }}</span></div>
     <div class="ns-prev"><small>cliente vai pagar</small><b id="nsPv">R$ 0,00</b><span id="nsPc">escolha o serviço</span></div>
     <button type="button" class="ns-x" onclick="nsFechar()" title="Fechar (Esc)"><i class="fas fa-xmark"></i></button></header>
   <form method="POST" action="{{ url_for('financeiro.lancamento_novo') }}" data-novo="{{ url_for('financeiro.lancamento_novo') }}" id="nsForm" style="display:contents">
@@ -559,7 +561,8 @@
         <button type="button" class="ns-in ns-serv-bt vazio" id="nsCliBt" onclick="nsCliAbrir()"><span class="sg">?</span><span class="tx"><b>Escolher a empresa</b><small>nome, número ou CNPJ/CPF</small></span><i class="fas fa-chevron-right"></i></button></div>
       <div class="ns-campo ns-pag" id="nsPagBox"><label>Quem paga <small>só se for outra empresa · o serviço fica no histórico da empresa acima; boleto e nota saem no nome de quem paga</small></label>
         <select id="nsPag" name="pagador_cliente_id" placeholder="A própria empresa (padrão)"></select>
-        <button type="button" class="ns-in ns-serv-bt" id="nsPagBt" onclick="nsPagAbrir()"><span class="sg"><i class="fas fa-building"></i></span><span class="tx"><b>A própria empresa</b><small>toque para escolher outra que paga</small></span><i class="fas fa-chevron-right"></i></button></div></section>
+        <button type="button" class="ns-in ns-serv-bt" id="nsPagBt" onclick="nsPagAbrir()"><span class="sg"><i class="fas fa-building"></i></span><span class="tx"><b>A própria empresa</b><small>toque para escolher outra que paga</small></span><i class="fas fa-chevron-right"></i></button></div>
+      <div class="ns-mail" id="nsMail" hidden></div></section>
     {% if aprov %}
     <section class="ns-b"><div class="ns-h"><i class="fas fa-route"></i> O que fazer</div><div class="ns-ops ns-ops-a" id="nsOps">
       <button type="button" class="ns-op on" data-v="BOLETO_NOTA"><span class="ns-op-tag"><i class="fas fa-bolt"></i> agora</span><i class="fas fa-file-invoice-dollar"></i><b>Emitir boleto + nota</b><small>a nota e o boleto saem agora e vão por e-mail</small></button>
@@ -685,9 +688,12 @@
 
 <script id="lmDados" type="application/json">{{ caixa_json | safe }}</script>
 <script id="lmApr" type="application/json">{{ (grupos.apr | map(attribute='id') | list) | tojson }}</script>
+{% with ct_solto=True, cliente=None, socios=[] %}{% include 'clientes/_contato_modal.html' %}{% endwith %}{# 25/11/2026: a janela "Adicionar contato" da ficha, dentro da caixa #}
 {% endblock %}
 
 {% block extra_js %}
+<script src="{{ url_for('static', filename='js/contato_sugere.js') }}"></script>
+<script src="{{ url_for('static', filename='js/mascaras_registro.js') }}"></script>
 <div class="tx-gav" id="txGav" hidden>
   <div class="tx-gav-fundo" onclick="txGavFechar()"></div>
   <div class="tx-gav-pane">
@@ -979,6 +985,59 @@
   }
   function nsCliPinta() { var bt = $('nsCliBt'); if (bt) nsBtPinta(bt, cliente(), 'Escolher a empresa', 'nome, número ou CNPJ/CPF', false); }
   function nsPagPinta() { var bt = $('nsPagBt'); if (bt) nsBtPinta(bt, pagador(), 'A própria empresa', 'toque para escolher outra que paga', true); }
+  /* 25/11/2026 — Anderson: "forçar o usuário, ao escolher o cliente, a ter o e-mail cadastrado... a pessoa visualizar os e-mails
+     que recebem os boletos... se não tiver, não deixar avançar"; "não pode aparecer opção para digitar, selecionar ou tirar
+     seleção de alguém; se precisar alterar tem que clicar e incluir o contato, igual temos lá no cadastro, e depois salvando
+     já começa a aparecer". Quem recebe é quem paga (ou a própria empresa); só os contatos do cadastro, nunca o e-mail do CNPJ. */
+  var URL_MAIL = {{ url_for('financeiro.lancamento_cliente_emails', cid=999999) | tojson }};
+  var nsMailOk = false, nsMailCid = null, nsMailDados = null;
+  function nsMailQuem() { return pagador() || cliente(); }
+  function nsMailZera() { nsMailOk = false; nsMailCid = null; nsMailDados = null; var b = $('nsMail'); if (b) { b.hidden = true; b.innerHTML = ''; } }
+  function nsMailCarrega() {
+    var q = nsMailQuem(), box = $('nsMail'); if (!box) return;
+    if (!q) { nsMailZera(); return; }
+    if (String(q.id) === String(nsMailCid)) return;
+    nsMailCid = q.id; nsMailOk = false;
+    box.hidden = false; box.className = 'ns-mail'; box.innerHTML = '<div class="ns-mail-h"><i class="fas fa-envelope"></i> E-mails da cobrança <small><i class="fas fa-spinner fa-spin"></i> conferindo o cadastro…</small></div>';
+    fetch(URL_MAIL.replace('999999', q.id), { credentials: 'same-origin' }).then(function (r) { return r.json(); }).then(function (d) {
+      if (String(q.id) !== String(nsMailCid)) return;
+      nsMailPinta(q, d);
+    }).catch(function () { box.innerHTML = '<div class="ns-mail-h"><i class="fas fa-envelope"></i> E-mails da cobrança <small>não consegui conferir o cadastro</small></div><div class="ns-mail-ac"><button type="button" class="ns-bt" onclick="nsMailRecarrega()"><i class="fas fa-rotate"></i> tentar de novo</button></div>'; });
+  }
+  function nsMailPinta(q, d, aviso) {
+    var box = $('nsMail'), lista = (d && d.emails) || []; nsMailDados = d;
+    var quem = (pagador() ? 'Quem paga, ' : '') + esc(q.nome);
+    var ac = '<div class="ns-mail-ac"><button type="button" class="ns-bt prim" onclick="nsMailContato()"><i class="fas fa-user-plus"></i> Adicionar contato</button>'
+           + '<a href="' + esc(d.cadastro || '#') + '" target="_blank" rel="noopener"><i class="fas fa-arrow-up-right-from-square"></i> abrir o cadastro</a> '
+           + '<button type="button" class="ns-bt" onclick="nsMailRecarrega()"><i class="fas fa-rotate"></i> conferir de novo</button></div>';
+    if (lista.length) {
+      nsMailOk = true; box.className = 'ns-mail';
+      var h = '<div class="ns-mail-h"><i class="fas fa-envelope"></i> E-mails da cobrança <small>' + (lista.length === 1 ? 'o boleto vai para este e-mail' : 'o boleto vai para estes ' + lista.length + ' e-mails') + ' · para mudar, mexa no contato do cadastro</small></div><div class="ns-mail-l">';
+      lista.forEach(function (e) { h += '<span><i class="fas fa-circle-check"></i><b>' + esc(e.email) + '</b><small>' + esc((e.nome ? e.nome.split(' ')[0] + ' · ' : '') + e.fonte) + '</small></span>'; });
+      h += '</div>' + (aviso ? '<div class="ns-mail-ok"><i class="fas fa-circle-check"></i> ' + esc(aviso) + '</div>' : '');
+      if (d.falso) h += '<div class="ns-mail-txt amb">O e-mail do cadastro da empresa (' + esc(d.falso) + ') não é de verdade e fica de fora.</div>';
+      box.innerHTML = h + ac;
+    } else {
+      nsMailOk = false; box.className = 'ns-mail red';
+      box.innerHTML = '<div class="ns-mail-h"><i class="fas fa-triangle-exclamation"></i> Sem e-mail para a cobrança</div>'
+        + '<div class="ns-mail-txt">' + quem + ' não tem contato com e-mail' + (d.falso ? ' (o e-mail do cadastro, ' + esc(d.falso) + ', não é de verdade)' : '') + '. Sem e-mail o boleto não chega ao cliente, então o pedido não segue. Inclua o contato que recebe a cobrança, igual no cadastro:</div>' + ac;
+    }
+    resumo();
+  }
+  function nsMailFalta() {
+    var b = $('nsMail');
+    if (!b || b.hidden) return 'Escolha o cliente.';
+    if (b.classList.contains('red')) return 'Sem e-mail de cobrança: inclua o contato que recebe o boleto (botão "Adicionar contato") antes de seguir.';
+    return 'Ainda conferindo os e-mails do cliente; aguarde um instante.';
+  }
+  window.nsMailRecarrega = function (aviso) { var q = nsMailQuem(); if (!q) return; nsMailCid = null; var box = $('nsMail'); nsMailCarrega(); if (aviso) box.dataset.aviso = aviso; };
+  window.nsMailContato = function () {      // a mesma janela "Adicionar contato" da ficha, para a empresa escolhida
+    var q = nsMailQuem(), d = nsMailDados; if (!q || typeof contatoAbrirPara !== 'function') return;
+    contatoAbrirPara({ id: q.id, nome: q.nome, pf: d && d.pf, socios: (d && d.socios) || [], aoSalvar: function (r) {
+      nsMailCid = null; var box = $('nsMail');
+      fetch(URL_MAIL.replace('999999', q.id), { credentials: 'same-origin' }).then(function (x) { return x.json(); }).then(function (dd) { nsMailCid = q.id; nsMailPinta(q, dd, r.msg || 'Contato gravado no cadastro.'); });
+    } });
+  };
   window.nsCliAbrir = function () {
     if (!window.CaixaCliente || !tsCli) return;
     CaixaCliente.abrir({ clientes: D.clientes, atual: tsCli.getValue(), titulo: 'Empresa do serviço', sub: 'é nela que o serviço fica registrado', z: 1300,
@@ -1065,7 +1124,7 @@
         : '<i class="fas fa-bolt"></i> Emitir agora';
     } else {
       $('nsAviso').innerHTML = como === 'MENSAL' ? 'Entra no boleto da mensalidade' + (comp ? ' de <b>' + comp.textContent + '</b>' : '') + ' depois da aprovação. Você vê só a sua parte (' + brl(valor) + ').'
-        : 'Nada sai agora: ' + (como === 'BOLETO' ? 'o boleto é emitido' : 'a nota e o boleto são emitidos') + ' quando Anderson ou Alessandra aprovarem. Você acompanha em <b>Aguardando aprovação</b>.';
+        : 'Nada sai agora: ' + (como === 'BOLETO' ? 'o boleto é emitido' : 'a nota e o boleto são emitidos') + ' quando for aprovado. Você acompanha em <b>Aguardando aprovação</b>.';
     }
   }
   function setComo(v) {
@@ -1126,9 +1185,9 @@
       searchField: ['text', 'busca'], maxOptions: 60, dropdownParent: 'body', dropdownClass: 'ts-dropdown ns-dd', closeAfterSelect: true, allowEmptyOption: true,
       render: { option: function (o) { return '<div class="ns-o"><span>' + esc(o.text) + '</span><small>' + esc(docf(o.c.doc)) + '</small></div>'; },
                 no_results: function () { return '<div class="no-results">Nenhum cadastro com esse nome</div>'; } },
-      onChange: resumo
+      onChange: function () { resumo(); nsMailCarrega(); }
     });
-    tsCli.on('change', function () { var c = cliente(); if (tsPag) tsPag.setValue(c && c.pag ? String(c.pag) : '', true); nsCliPinta(); nsPagPinta(); resumo(); });
+    tsCli.on('change', function () { var c = cliente(); if (tsPag) tsPag.setValue(c && c.pag ? String(c.pag) : '', true); nsCliPinta(); nsPagPinta(); resumo(); nsMailCarrega(); });
     tsServ = new TomSelect('#nsServ', {
       options: D.servicos.map(function (s) { return { value: String(s.id), text: s.nome, s: s }; }), searchField: ['text'], maxOptions: 200,
       dropdownParent: 'body', dropdownClass: 'ts-dropdown ns-dd',
@@ -1173,7 +1232,7 @@
     });
     $('nsForm').addEventListener('submit', function (e) {
       var soDesc = !!dtipo && dsobre === 'MENSAL' && !tsServ.getValue(), dd = desconto(soDesc ? 0 : num($('nsValor').value), cliente());
-      var m = !tsCli.getValue() ? 'Escolha o cliente.' : (!tsServ.getValue() && !soDesc) ? 'Escolha o serviço (ou marque o desconto "sobre a mensalidade").' : (tsServ.getValue() && !num($('nsValor').value)) ? 'Informe o valor.'
+      var m = !tsCli.getValue() ? 'Escolha o cliente.' : !nsMailOk ? nsMailFalta() : (!tsServ.getValue() && !soDesc) ? 'Escolha o serviço (ou marque o desconto "sobre a mensalidade").' : (tsServ.getValue() && !num($('nsValor').value)) ? 'Informe o valor.'
             : (dtipo && !(dd.valor > 0)) ? 'Informe o valor do desconto.' : (dtipo && !dd.motivo) ? 'Diga o motivo do desconto.'
             : (como !== 'MENSAL' && !$('nsVenc').value) ? 'Informe o vencimento.' : ((ct === 'PCT' || ct === 'FIXO') && !num($('nsCv').value)) ? 'Informe a comissão.' : '';
       if (m) { e.preventDefault(); $('nsMsg').textContent = m; return; }
@@ -1185,7 +1244,7 @@
   function nsLimpar() {      // volta a caixa ao estado de "Nova solicitação"
     nsEd = null; var f = $('nsForm'); f.action = f.dataset.novo;
     var t = $('nsFundo').querySelector('.ns-tit'); if (t.dataset.b) { t.querySelector('b').textContent = t.dataset.b; t.querySelector('span').textContent = t.dataset.s; }
-    tsCli.clear(true); tsPag.clear(true); tsServ.clear(true);
+    tsCli.clear(true); tsPag.clear(true); tsServ.clear(true); nsMailZera();
     $('nsValor').value = ''; $('nsDesc').value = ''; f.observacao.value = ''; $('nsCv').value = ''; $('nsParc').value = '1'; $('nsComp').selectedIndex = 0;
     $('nsDescValor').value = ''; $('nsDescPct').value = ''; $('nsDescMotivo').value = ''; dsobre = 'SERVICO'; $('nsDescSobreIn').value = 'SERVICO';
     $('nsDescSobre').querySelectorAll('button').forEach(function (b) { b.classList.toggle('on', b.dataset.v === 'SERVICO'); });
@@ -1213,6 +1272,7 @@
     t.querySelector('b').textContent = 'Alterar o pedido nº ' + ed.id;
     t.querySelector('span').textContent = ed.status === 'REPROVADO' ? 'foi reprovado: corrija e envie de novo para aprovação' : 'ainda aguardando aprovação: corrija o que precisar';
     tsCli.setValue(String(ed.cliente_id), true); tsPag.setValue(ed.pagador ? String(ed.pagador) : '', true);
+    nsMailCarrega();
     tsServ.setValue(String(ed.servico_id));        // com o onChange: trava de comissão e de nota do serviço
     var brn = function (v) { return (+v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); };
     $('nsValor').value = ed.valor ? brn(ed.valor) : '';

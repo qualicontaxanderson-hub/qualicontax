@@ -11,7 +11,7 @@ import re
 from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
 
-from flask import abort, flash, g, redirect, render_template, request, send_file, session, url_for
+from flask import abort, flash, g, jsonify, redirect, render_template, request, send_file, session, url_for
 from flask_login import current_user
 from werkzeug.datastructures import MultiDict
 
@@ -354,8 +354,10 @@ def lancamentos():
         'comps': [{'v': c.isoformat(), 'rot': c.strftime('%m/%Y')} for c in comps],
         'hoje': hoje.isoformat(), 'eu': getattr(_eu(), 'nome', ''), 'aprovador': aprov,
     }
+    from models.contato_cliente import ContatoCliente
     return render_template(
         'financeiro/lancamentos.html', aprov=aprov, admin=_admin(), hoje=hoje, grupos=grupos, fora=fora[:30],
+        departamentos_contato=ContatoCliente.departamentos_disponiveis(),      # 25/11/2026: janela "Adicionar contato" dentro da caixa
         tot={k: soma(v) for k, v in grupos.items()}, liberadas=liberadas, meus_com=meus_com, aguard=aguard, tem_adiantavel=tem_adiantavel,
         tot_liberadas=sum(float(l['comissao_valor'] or 0) for l in liberadas),
         pedidos=pedidos, a_pagar=a_pagar, sem_pedido=sem_pedido, tot_sem_pedido=sum(p['total'] for p in sem_pedido), sem_dre=sem_dre, cats_dre=cats_dre, tot_a_pagar=sum(float(f['total'] or 0) - float(f['valor_pago'] or 0) for f in a_pagar),
@@ -739,6 +741,33 @@ def servico_novo():
     return redirect(volta + '#s%s' % sid)
 
 
+def _nome_cliente(cid):
+    r = execute_query('SELECT nome_razao_social AS n FROM clientes WHERE id = %s', (cid,), fetch=True, fetch_one=True) or {}
+    return r.get('n') or 'A empresa'
+
+
+@financeiro.route('/financeiro/lancamentos/cliente/<int:cid>/emails')
+@permission_required(PERM)
+def lancamento_cliente_emails(cid):
+    """25/11/2026 — Anderson: "forçar o usuário, ao escolher o cliente, que tenha o e-mail cadastrado... a pessoa visualizar
+    os e-mails que recebem os boletos... se não tiver, não deixar avançar". A caixa mostra quem vai receber a cobrança
+    (a mesma regra do envio: contatos do Financeiro, senão o principal, senão qualquer contato; nunca o e-mail do CNPJ)."""
+    from utils import cobranca_email
+    c = execute_query('SELECT id, nome_razao_social AS nome, tipo_pessoa, email, celular FROM clientes WHERE id = %s', (cid,), fetch=True, fetch_one=True)
+    if not c:
+        return jsonify({'ok': False, 'erro': 'Empresa não encontrada.'}), 404
+    dest, falso = cobranca_email.emails_do_cliente(cid)
+    # a janela "Adicionar contato" (a mesma da ficha) precisa dos sócios (PJ) ou da própria pessoa (PF)
+    from flask import current_app
+    from models.socio_cliente import SocioCliente
+    np = current_app.jinja_env.filters['nome_proprio']
+    socios = [] if c['tipo_pessoa'] == 'PF' else [{'nome': s.get('nome') or '', 'nome_proprio': np(s.get('nome') or ''), 'cargo': s.get('qualificacao') or 'Sócio',
+                                                 'email': s.get('email') or '', 'telefone': s.get('telefone') or ''} for s in (SocioCliente.get_by_cliente(cid) or [])]
+    pf = {'nome': c['nome'], 'email': c.get('email') or '', 'celular': c.get('celular') or ''} if c['tipo_pessoa'] == 'PF' else None
+    return jsonify({'ok': True, 'nome': c['nome'], 'emails': dest, 'falso': falso, 'cadastro': url_for('clientes.detalhes', id=cid) + '#contatos',
+                    'socios': socios, 'pf': pf})
+
+
 def _pedido_do_form(f):
     """Lê e confere o pedido da caixa (Nova solicitação e, desde 25/11/2026, Alterar o pedido): cliente, serviço, como
     cobrar, valor, vencimento/competência, quem paga e o desconto. Levanta ValueError com a frase para a tela."""
@@ -773,6 +802,13 @@ def _pedido_do_form(f):
             raise ValueError('A empresa que paga não está no cadastro (ou está inativa).')
     else:
         pagador = None
+    # 25/11/2026 — Anderson: "forçar o usuário a ter o e-mail cadastrado; se não tiver, não deixar avançar". Quem recebe é
+    # quem paga (ou a própria empresa); vale a mesma regra do envio (contatos do cadastro; nunca o e-mail do CNPJ).
+    from utils import cobranca_email
+    dest, falso = cobranca_email.emails_do_cliente(pagador or cliente_id)
+    if not dest:
+        raise ValueError('%s não tem contato com e-mail%s. Sem e-mail o boleto não chega: cadastre quem recebe a cobrança antes de pedir.'
+                         % (_nome_cliente(pagador or cliente_id), (' (o e-mail do cadastro, %s, não é de verdade)' % falso) if falso else ''))
     dv = None
     if desc:
         dv = _valor_desconto(desc, valor if desc['sobre'] == 'SERVICO' else _mensal_de(cliente_id),
@@ -846,7 +882,7 @@ def lancamento_novo():
                   else ('Incluído na mensalidade de %s de %s%s: sai no boleto do lote do mês.' % (', '.join(p['competencia'].strftime('%m/%Y') for p in parcelas), l['nome_razao_social'],
                                                                                               (' com desconto de R$ %s' % dv) if dv else '')), 'success')
             return redirect(url_for('financeiro.lancamentos', aba='cob'))
-        flash('Solicitação enviada: %s · %s%s. Anderson ou Alessandra aprovam e a cobrança sai.' % (l['nome_razao_social'], _como(l), (' · desconto de R$ %s' % dv) if dv else ''), 'success')
+        flash('Solicitação enviada: %s · %s%s. aprovada, a cobrança sai.' % (l['nome_razao_social'], _como(l), (' · desconto de R$ %s' % dv) if dv else ''), 'success')
     except (ValueError, InvalidOperation) as e:
         flash(str(e) if isinstance(e, ValueError) else 'Valor inválido.', 'danger')
     return redirect(url_for('financeiro.lancamentos', aba='apr'))
@@ -1392,7 +1428,7 @@ def comissoes_fechar():
         f = FinComissaoFechamento.get(fid)
         registrar('escrita.fechou_comissoes', 'financeiro', tabela='fin_comissao_fechamentos', registro_id=fid,
                   depois={'total': str(f['total']), 'itens': f['qtd_itens'], 'adiantadas': adiantadas})
-        flash('Pedido nº %d criado: R$ %s em %d comissão(ões)%s. Mande para Anderson ou Alessandra pelo WhatsApp, em PDF ou em imagem.'
+        flash('Pedido nº %d criado: R$ %s em %d comissão(ões)%s. Mande para quem aprova pelo WhatsApp, em PDF ou em imagem.'
               % (fid, f['total'], f['qtd_itens'], (' · %d adiantada(s): o cliente ainda não pagou' % adiantadas) if adiantadas else ''), 'success')
         return redirect(url_for('financeiro.comissao_pedido', fid=fid))
     except ValueError as e:

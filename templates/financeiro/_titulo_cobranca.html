@@ -256,11 +256,11 @@
             {% endfor %}
           {% endfor %}
           {% set emails_ctt = contatos | map(attribute='emails') | sum(start=[]) %}
-          {% if (t.email and (t.email | lower) not in emails_ctt) or (not contatos and t.celular) %}
-            <label class="cnpj">{% if t.email and pode_email %}<input type="checkbox" name="para_chk" value="{{ t.email | lower }}"{% if not contatos %} checked{% endif %}>{% else %}<i class="fas fa-building tj-ctt-ico"></i>{% endif %}
-              <b>Cadastro (CNPJ)</b><small>{{ t.email or 'sem e-mail' }}{% if t.celular %} · {{ t.celular }}{% endif %}</small><em class="sec">último recurso</em>{{ wa(cel if not contatos else '', t.celular, 'o cadastro') }}</label>
+          {% if not contatos and t.celular %}{# 25/11/2026: o e-mail do CNPJ não recebe cobrança; o celular do cadastro só pelo WhatsApp #}
+            <label class="cnpj"><i class="fas fa-building tj-ctt-ico"></i>
+              <b>Cadastro (CNPJ)</b><small>{{ t.celular }} · só WhatsApp</small><em class="sec">último recurso</em>{{ wa(cel, t.celular, 'o cadastro') }}</label>
           {% endif %}
-          {% if not contatos and not t.email %}<div class="tj-dest tj-dest-falta"><i class="fas fa-triangle-exclamation"></i> A empresa não tem contato com e-mail nem celular{% if t.cliente_id %}: <a href="{{ url_for('clientes.detalhes', id=t.cliente_id) }}#contatos">cadastrar</a>{% endif %}.</div>{% endif %}
+          {% if not emails_ctt %}<div class="tj-dest tj-dest-falta"><i class="fas fa-triangle-exclamation"></i> Nenhum contato com e-mail: a cobrança não sai por e-mail até cadastrar um{% if t.cliente_id %} (<a href="{{ url_for('clientes.detalhes', id=t.cliente_id) }}#contatos">abrir o cadastro</a>){% endif %}. O e-mail do CNPJ não é usado.</div>{% endif %}
         </div>
         {% if pode_email %}
         <div><input type="text" id="tje_{{ boleto.id }}" name="para" value="" placeholder="qualquer outro e-mail (opcional)" title="Vai junto com os contatos marcados; pode ser um endereço que não está no cadastro"><button type="submit" class="tj-prim"><i class="fas fa-paper-plane"></i> {{ 'Reenviar' if boleto.email_enviado_em else 'Enviar' }}</button></div>

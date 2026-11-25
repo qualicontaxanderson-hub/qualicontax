@@ -189,9 +189,11 @@ def janela(titulo_id, restrito=None):
 
     # ── os CONTATOS da empresa mandam no e-mail e no telefone (Anderson, 15/11/2026: "o telefone e e-mail
     #    têm que vir dos contatos... lembre sempre: o e-mail e telefone do CNPJ" são só o último recurso).
-    #    E-mail: pode ir para um, dois ou todos os contatos; os do Financeiro já vêm marcados. ──
+    #    E-mail: pode ir para um, dois ou todos os contatos; os do Financeiro já vêm marcados.
+    #    25/11/2026 — Anderson: "o e-mail do CNPJ nunca é para ser usado no Financeiro": só o celular do cadastro
+    #    continua como último recurso (WhatsApp); o e-mail do CNPJ não aparece mais. ──
     from utils.cobranca_email import destinatarios_cobranca
-    destinatarios = destinatarios_cobranca(cid, t.get('email'))
+    destinatarios = destinatarios_cobranca(cid)
     padrao = {d['email'] for d in destinatarios}
     contatos = []
     if cid:

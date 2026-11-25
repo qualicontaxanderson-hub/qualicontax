@@ -358,9 +358,9 @@ span.hp-bco, span.hp-nf { cursor:default; }
       <p class="ef-hero-sub">Os contratos mensais e a cobrança de cada mês: honorários, 13º e serviços lançados, numa cobrança por empresa</p>
     </div>
     <div class="hp-acoes">
-      <div class="hp-comp"><a href="{{ url_for('financeiro.honorarios', competencia=comp_ant.strftime('%Y-%m')) }}" title="Mês anterior"><i class="fas fa-chevron-left"></i></a>
+      <div class="hp-comp"><a href="{{ url_for('financeiro.honorarios', competencia=comp_ant.strftime('%Y-%m')) }}" onclick="return hpIrComp(this)" title="Mês anterior"><i class="fas fa-chevron-left"></i></a>
         <span><small>Competência</small><b>{{ competencia.strftime('%m/%Y') }}</b></span>
-        <a href="{{ url_for('financeiro.honorarios', competencia=comp_prox.strftime('%Y-%m')) }}" title="Próximo mês"><i class="fas fa-chevron-right"></i></a></div>
+        <a href="{{ url_for('financeiro.honorarios', competencia=comp_prox.strftime('%Y-%m')) }}" onclick="return hpIrComp(this)" title="Próximo mês"><i class="fas fa-chevron-right"></i></a></div>
       {% if pode_rota('financeiro.honorarios_reajuste') %}<a class="hp-btn hp-btn2" href="{{ url_for('financeiro.honorarios_reajuste') }}"><i class="fas fa-arrow-trend-up"></i> Reajuste de janeiro</a>{% endif %}
       {% if pode_rota('financeiro.honorarios_salvar') %}<a class="hp-btn" href="{{ url_for('financeiro.honorarios', aba='com', novo=1, volta='painel', competencia=competencia.strftime('%Y-%m')) }}"><i class="fas fa-plus"></i> Novo contrato</a>{% endif %}
     </div>
@@ -538,12 +538,24 @@ var URL_PADRAO = "{{ url_for('financeiro.honorarios_banco_padrao') if pode_rota(
 var URL_COB = "{{ url_for('financeiro.titulo_cobranca', titulo_id=999999999) }}";
 var COMP = "{{ competencia.strftime('%Y-%m') }}";
 var URL_REL = "{{ url_for('financeiro.honorarios_relatorio') }}";
-function hpRelatorio() {      // 25/11/2026: o PDF sai com os mesmos filtros da tela e o quadro aberto
-  var p = new URLSearchParams(); p.set('competencia', COMP);
-  var pa = hpPainelAtivo(); p.set('fase', pa && pa.dataset ? pa.dataset.p : 'emitir');
+function hpEstado(comp) {   // 25/11/2026: o estado da tela (quadro aberto, filtros e busca) vira parâmetros de URL
+  var p = new URLSearchParams(); p.set('competencia', comp || COMP);
+  var pa = hpPainelAtivo(); if (pa && pa.dataset && pa.dataset.p !== 'emitir') p.set('fase', pa.dataset.p);
   for (var d in F) if (F[d].length) p.set(d, F[d].join('|'));
   var q = ((document.getElementById('hpBuscaG') || {}).value || '').trim(); if (q) p.set('q', q);
+  return p;
+}
+function hpRelatorio() {      // 25/11/2026: o PDF sai com os mesmos filtros da tela e o quadro aberto
+  var p = hpEstado(); if (!p.has('fase')) p.set('fase', 'emitir');
   window.open(URL_REL + '?' + p.toString(), '_blank');
+}
+function hpIrComp(a) {        // 25/11/2026, Anderson: "fiz uma pesquisa, se eu voltar para 11/26 volta para a pesquisa limpa" — a seta leva a busca e os filtros
+  var comp = new URL(a.href, location.href).searchParams.get('competencia');
+  location.href = a.pathname + '?' + hpEstado(comp).toString();
+  return false;
+}
+function hpGuardaUrl() {      // a URL acompanha a tela: F5, voltar e copiar o link mantêm a mesma vista
+  try { history.replaceState(null, '', location.pathname + '?' + hpEstado().toString()); } catch (e) {}
 }
 document.querySelectorAll('.tx-aba').forEach(function (a) {
   a.addEventListener('click', function () {
@@ -669,6 +681,7 @@ function hpRefinoPinta() {
   var chips = document.getElementById('hpRefChips'), h = '';
   for (var dim in F) F[dim].forEach(function (v) { h += '<span class="tx-chip"><i class="fas fa-sliders dim"></i>' + HP_DIM_NOME[dim] + ': ' + hpRotulo(dim, v) + '<button type="button" onclick="hpTira(\'' + dim + '\', ' + JSON.stringify(v).replace(/"/g, '&quot;') + ')"><i class="fas fa-xmark"></i></button></span>'; });
   chips.innerHTML = h; chips.classList.toggle('on', !!h);
+  hpGuardaUrl();
 }
 function hpTira(dim, v) { var i = F[dim].indexOf(v); if (i >= 0) F[dim].splice(i, 1); hpFiltrar(); hpSincroniza(); }
 function hpLimpar() { for (var d in F) F[d] = []; var g = document.getElementById('hpBuscaG'); if (g) g.value = ''; hpFiltrar(); hpSincroniza(); }
@@ -685,7 +698,14 @@ window.hpNotaClique = function (l) {
   F.nota = so ? [] : [v]; hpFiltrar(); hpSincroniza();
 };
 document.querySelectorAll('.tx-abas .tx-aba').forEach(function (a) { a.addEventListener('click', function () { setTimeout(hpRefinoPinta, 0); }); });
-hpRefinoPinta();
+(function () {   // 25/11/2026: devolve da URL o quadro, os filtros e a busca (vindos da seta de competência, do F5 ou de um link copiado)
+  var u = new URLSearchParams(location.search), mudou = false;
+  var fase = u.get('fase'); var ab = fase && document.querySelector('.tx-abas .tx-aba[data-p="' + fase + '"]');
+  if (ab && !ab.classList.contains('on')) { ab.click(); mudou = true; }
+  for (var d in F) { var v = u.get(d); if (v) { F[d] = v.split('|').filter(Boolean); mudou = true; } }
+  var g = document.getElementById('hpBuscaG'), q = (u.get('q') || '').trim(); if (g && q) { g.value = q; mudou = true; }
+  if (mudou) { hpFiltrar(); hpSincroniza(); } else hpRefinoPinta();
+})();
 /* marcar e emitir */
 function hpSoma() {
   var soma = 0, n = 0, pb = {}, nf = 0;
