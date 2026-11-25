@@ -520,6 +520,141 @@ def honorarios_escolha():
     return jsonify({'ok': True})
 
 
+# 25/11/2026 — Anderson: "no que marcar ter um botão de alterar... nome de empresa / vencimento se alterar, perguntar só essa ou
+# todas? / Banco / Valor se alterar alterar até os honorários, lógico com confirmação". Uma janela para as empresas marcadas;
+# cada campo mudado vale "só esta cobrança" (fin_honorarios_escolhas) ou "sempre" (no contrato). Só quem ainda não foi emitido.
+def _brl_alt(v):
+    return ('{:,.2f}'.format(v)).replace(',', 'X').replace('.', ',').replace('X', '.')
+
+
+def _dec_alt(raw):
+    t = str(raw or '').strip()
+    if ',' in t:
+        t = t.replace('.', '').replace(',', '.')
+    return Decimal(t).quantize(Decimal('0.01'))
+
+
+@financeiro.route('/financeiro/honorarios/alterar', methods=['POST'])
+@permission_required('financeiro.lote')
+def honorarios_alterar():
+    import json
+    from models.fin_contrato import EMPRESA_QUALICONTAX as EMP
+    from utils import lote_mensal
+    comp = _competencia_painel()
+    try:
+        pedidos = json.loads(request.form.get('mudancas') or '[]')
+        assert isinstance(pedidos, list) and pedidos
+    except (ValueError, AssertionError):
+        return jsonify({'ok': False, 'erro': 'Nada para alterar.'}), 400
+    _lote, linhas = lote_mensal.previa(EMP, comp, so_clientes=[int(x.get('cliente_id') or 0) for x in pedidos])
+    por_cli = {l['cliente_id']: l for l in linhas if l['tipo'] == 'MENSAL'}
+    contas = _contas_emissoras()
+    padrao = next((x['id'] for x in contas.values() if x['padrao']), None)
+    hoje = date.today()
+    sc = ' (só %s)' % comp.strftime('%m/%Y')
+    feitas, erros = [], []
+    for p in pedidos:
+        cid = int(p.get('cliente_id') or 0)
+        l = por_cli.get(cid)
+        if not l:
+            erros.append('Empresa %s sem contrato ativo nesta competência.' % cid)
+            continue
+        if (l.get('feito') or {}).get('status') not in (None, 'erro'):
+            erros.append('%s: a cobrança de %s já foi emitida; não mudei nada.' % (l['empresa'], comp.strftime('%m/%Y')))
+            continue
+        c = l['contrato']
+        esc, dados, antes, depois = {}, {}, {}, {}
+        # vencimento
+        if p.get('venc'):
+            try:
+                nova = datetime.strptime(p['venc'], '%Y-%m-%d').date()
+            except ValueError:
+                erros.append('%s: data inválida.' % l['empresa'])
+                continue
+            if nova < hoje:
+                erros.append('%s: o vencimento não pode ser antes de hoje.' % l['empresa'])
+                continue
+            antes['vencimento'] = l['vencimento'].strftime('%d/%m/%Y')
+            if p.get('venc_vale') == 'sempre':
+                dados['dia_vencimento'] = nova.day
+                esc['vencimento'] = None if nova == lote_mensal.vencimento_para(nova.day, comp) else nova
+                antes['dia do contrato'] = c['dia_vencimento']
+                depois['dia do contrato'] = nova.day
+                depois['vencimento'] = nova.strftime('%d/%m/%Y')
+            else:
+                esc['vencimento'] = nova
+                depois['vencimento'] = nova.strftime('%d/%m/%Y') + sc
+        # banco
+        if p.get('banco'):
+            conta_id = int(p['banco'])
+            if conta_id not in contas:
+                erros.append('%s: banco inválido.' % l['empresa'])
+                continue
+            regra = lote_mensal.regra_banco(c)
+            antes['banco'] = (contas.get(l.get('conta_id') or padrao) or {}).get('nome')
+            if p.get('banco_vale') == 'sempre':
+                dados['banco_boleto'] = None if conta_id == padrao else str(conta_id)
+                esc['conta_cobranca_id'] = None
+                depois['banco'] = contas[conta_id]['nome'] + ' (sempre)'
+            else:
+                esc['conta_cobranca_id'] = None if conta_id == (regra or padrao) else conta_id
+                depois['banco'] = contas[conta_id]['nome'] + sc
+        # honorários
+        novo_hon = None
+        if p.get('valor'):
+            try:
+                novo_hon = _dec_alt(p['valor'])
+            except (InvalidOperation, ValueError):
+                erros.append('%s: valor inválido.' % l['empresa'])
+                continue
+            if l.get('honorarios') is None:
+                erros.append('%s: o contrato tem mais de uma linha de honorários; mude o valor abrindo o contrato.' % l['empresa'])
+                continue
+            if novo_hon <= 0:
+                erros.append('%s: o valor precisa ser maior que zero.' % l['empresa'])
+                continue
+            antes['honorários'] = 'R$ ' + _brl_alt(l['honorarios'])
+            if p.get('valor_vale') == 'sempre':
+                esc['valor_honorarios'] = None
+                depois['honorários'] = 'R$ %s (no contrato, daqui em diante)' % _brl_alt(novo_hon)
+            else:
+                esc['valor_honorarios'] = None if novo_hon == l['hon_contrato'] else novo_hon
+                depois['honorários'] = 'R$ ' + _brl_alt(novo_hon) + sc
+        if not antes:
+            continue
+        if dados:
+            FinContrato.atualizar(c['id'], dados)
+        if novo_hon is not None and p.get('valor_vale') == 'sempre' and novo_hon != l['hon_contrato']:
+            itens = FinContrato.itens(c['id'])
+            k = lote_mensal.linha_honorarios(itens)
+            novos = [{'descricao': i['descricao'], 'valor': (novo_hon if n == k else i['valor']), 'servico_id': i['servico_id']}
+                     for n, i in enumerate(itens)]
+            total = sum((Decimal(str(i['valor'])) for i in novos), Decimal('0'))
+            # fica no histórico de reajustes do contrato (tipo MANUAL), com o antes, para desfazer
+            execute_query(
+                """INSERT INTO fin_contrato_reajustes (contrato_id, cliente_id, lote, tipo, vigencia, percentual, valor_antes, valor_depois,
+                                                       itens_antes, proximo_antes, aplicado_por)
+                   VALUES (%s, %s, %s, 'MANUAL', %s, %s, %s, %s, %s, %s, %s)""",
+                (c['id'], c['cliente_id'], 'ALT-' + datetime.now().strftime('%Y%m%d%H%M%S'), comp,
+                 ((total / Decimal(str(c['valor'])) - 1) * 100).quantize(Decimal('0.0001')) if c['valor'] else 0, c['valor'], total,
+                 json.dumps([{'descricao': i['descricao'], 'valor': str(i['valor']), 'servico_id': i['servico_id']} for i in itens]),
+                 c.get('proximo_reajuste'), current_user.id), fetch=False)
+            FinContrato.atualizar(c['id'], {'valor': total}, novos)
+        if esc:
+            cols = list(esc)
+            execute_query(
+                'INSERT INTO fin_honorarios_escolhas (empresa_id, competencia, cliente_id, usuario_id, %s) VALUES (%%s, %%s, %%s, %%s, %s) '
+                'ON DUPLICATE KEY UPDATE usuario_id = VALUES(usuario_id), %s'
+                % (', '.join(cols), ', '.join(['%s'] * len(cols)), ', '.join('%s = VALUES(%s)' % (k, k) for k in cols)),
+                (EMP, comp, cid, current_user.id) + tuple(esc[k] for k in cols), fetch=False)
+        antes['empresa'] = depois['empresa'] = l['empresa']
+        registrar('escrita.honorarios_alterar', 'financeiro', tabela='fin_contratos', registro_id=c['id'], antes=antes, depois=depois)
+        feitas.append(l['empresa'])
+    if feitas:
+        flash(('Alterado: %s.' % ', '.join(feitas)) if len(feitas) <= 3 else '%d empresas alteradas.' % len(feitas), 'success')
+    return jsonify({'ok': bool(feitas) or not erros, 'feitas': len(feitas), 'erros': erros})
+
+
 @financeiro.route('/financeiro/honorarios/banco-padrao', methods=['POST'])
 @permission_required('financeiro.lote')
 def honorarios_banco_padrao():

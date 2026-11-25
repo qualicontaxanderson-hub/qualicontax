@@ -87,6 +87,13 @@ def escolhas(empresa_id, competencia):
     return {x['cliente_id']: x for x in r}
 
 
+def linha_honorarios(itens_contrato):
+    """Índice da ÚNICA linha de honorários contábeis do contrato (a que o "Alterar" muda), ou None se houver zero ou várias
+    — aí o valor só muda abrindo o contrato."""
+    ks = [k for k, i in enumerate(itens_contrato or []) if (i.get('servico_id') or SERVICO_HONORARIOS) == SERVICO_HONORARIOS]
+    return ks[0] if len(ks) == 1 else None
+
+
 def regra_banco(contrato):
     """Banco gravado no contrato (fin_contratos.banco_boleto guarda o id da conta de cobrança) ou None = o padrão."""
     v = str(contrato.get('banco_boleto') or '').strip()
@@ -117,16 +124,28 @@ def previa(empresa_id, competencia, so_clientes=None, so_decimo=None):
     esc = escolhas(empresa_id, competencia)
     linhas = []
     for c in contratos:
-        itens = itens_da_empresa(c, competencia, por_contrato.get(c['id'], []), por_cliente.get(c['cliente_id'], []))
+        e = esc.get(c['cliente_id']) or {}
+        # 25/11/2026 — "Alterar as marcadas": honorários e vencimento SÓ DESTA cobrança (fin_honorarios_escolhas)
+        ic = por_contrato.get(c['id'], [])
+        k_hon = linha_honorarios(ic)
+        hon_mes = e.get('valor_honorarios') is not None and k_hon is not None
+        if hon_mes:
+            ic = [dict(i, valor=e['valor_honorarios']) if k == k_hon else i for k, i in enumerate(ic)]
+        itens = itens_da_empresa(c, competencia, ic, por_cliente.get(c['cliente_id'], []))
         total = sum(_d(i['valor']) for i in itens)
+        venc = vencimento_para(c['dia_vencimento'], competencia)
+        venc_mes = bool(e.get('vencimento')) and e['vencimento'] != venc
+        if venc_mes:
+            venc = max(e['vencimento'], date.today())
         linhas.append({'contrato': c, 'cliente_id': c['cliente_id'], 'numero': c['numero_cliente'], 'empresa': c['nome_razao_social'],
-                       'tipo': 'MENSAL', 'itens': itens, 'total': total, 'vencimento': vencimento_para(c['dia_vencimento'], competencia),
+                       'tipo': 'MENSAL', 'itens': itens, 'total': total, 'vencimento': venc, 'venc_mes': venc_mes,
+                       'honorarios': _d(ic[k_hon]['valor']) if k_hon is not None else None, 'hon_mes': hon_mes,
+                       'hon_contrato': _d(por_contrato.get(c['id'], [])[k_hon]['valor']) if k_hon is not None else None,
                        'nota': bool(c.get('gerar_nfse')), 'boleto': bool(c.get('gerar_boleto')),
                        'contatos': c.get('n_contatos_fin') or 0, 'feito': feitos.get((c['cliente_id'], 'MENSAL'))})
         # 18/11/2026 — Anderson: "teremos o Banco Padrão e poderemos decidir emitir por outro caso necessário" e
         # "temos que ter o controle dos que fazem NF e ter as opções de selecionar para ser regra e/ou desmarcar".
         # Ordem: escolha deste mês > regra do contrato > padrão.
-        e = esc.get(c['cliente_id']) or {}
         l = linhas[-1]
         l['nota_regra'] = l['nota']
         l['nota_mes'] = e.get('gerar_nfse') is not None and bool(e['gerar_nfse']) != l['nota_regra']

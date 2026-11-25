@@ -320,6 +320,7 @@ MAPA = {
     'financeiro.lote_status':              'financeiro.lote',
     'financeiro.lote_reabrir':             'financeiro.lote.reabrir',
     'financeiro.honorarios_escolha':       'financeiro.lote.incluir',    # 18/11/2026: banco/nota da empresa
+    'financeiro.honorarios_alterar':       'financeiro.lote.incluir',    # 25/11/2026: vencimento/banco/valor das marcadas
     'financeiro.honorarios_banco_padrao':  'ADMIN',
 
     # --- Relatórios ---------------------------------------------------------

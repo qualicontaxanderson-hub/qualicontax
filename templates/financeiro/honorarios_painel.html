@@ -218,6 +218,62 @@ span.hp-bco, span.hp-nf { cursor:default; }
 .hp-13-bl.pagas { background:#f0fdf4; border-color:#bbf7d0; color:#166534; } .hp-13-bl.pagas .t b, .hp-13-bl.pagas .v { color:#166534; }
 .hp-13-bl.atrasadas, .hp-13-bl.erro { background:#fef2f2; border-color:#fecaca; color:#991b1b; } .hp-13-bl.atrasadas .v, .hp-13-bl.erro .v { color:#991b1b; }
 @media (max-width:900px) { .hp-filtros { margin-left:0; width:100%; } .hp-legenda .dir { margin-left:0; } }
+/* 25/11/2026: "Alterar" as marcadas — vencimento, banco e honorários; só esta cobrança ou sempre */
+.hp-so { display:inline-block; font-size:10px; font-weight:800; color:#7c3aed; background:#f5f3ff; border:1px dashed #a78bfa; border-radius:99px; padding:1px 7px; margin-top:2px; }
+.hp-barra button.alt { background:rgba(255,255,255,.16); color:#fff; box-shadow:inset 0 0 0 1.5px rgba(255,255,255,.7); }
+.hp-barra button:disabled { opacity:.55; cursor:default; }
+#hpAltCx { padding-top:3vh; } #hpAltCx .hp-cx { width:min(1060px, calc(100vw - 24px)); max-height:94vh; display:flex; flex-direction:column; }
+#hpAltCx .hp-cx-corpo { overflow:auto; }
+.hp-cx-cab.alt { background:radial-gradient(120% 140% at 0% 0%, #60a5fa 0%, #2563eb 45%, #1e3a8a 100%); }
+.ha-grade { display:flex; flex-direction:column; gap:6px; }
+.ha-row { display:grid; grid-template-columns:minmax(0,1.5fr) 220px minmax(0,1.25fr) 180px; gap:10px; align-items:center; background:#fff; border:1px solid #e6eeea; border-radius:14px; padding:8px 12px; }
+.ha-row.cab { background:none; border:0; padding:0 12px; font-size:10.5px; font-weight:800; letter-spacing:.07em; text-transform:uppercase; color:#64748b; }
+.ha-row.todas { background:#eff6ff; border:1.5px dashed #93c5fd; }
+.ha-row.mudou { border-color:#93c5fd; box-shadow:0 0 0 3px #dbeafe; }
+.ha-emp { display:flex; gap:8px; align-items:center; min-width:0; }
+.ha-emp .n { font-size:10.5px; font-weight:800; color:#64748b; background:#f1f5f4; border-radius:6px; padding:2px 6px; font-variant-numeric:tabular-nums; flex:0 0 auto; }
+.ha-emp b { font-size:13px; color:#0f172a; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; display:block; }
+.ha-emp small { display:block; font-size:11px; color:#64748b; }
+.ha-row.todas .ha-emp b { color:#1d4ed8; } .ha-row.todas .ha-emp i { color:#2563eb; }
+.ha-cel { display:flex; flex-direction:column; gap:3px; min-width:0; }
+.ha-cel .era { font-size:11px; color:#94a3b8; min-height:14px; } .ha-cel .era s { color:#94a3b8; } .ha-cel.mud .era { color:#1d4ed8; font-weight:700; }
+.ha-cel .qcd-bt, .ha-cel input[type=date] { min-height:38px; }
+.ha-cel.mud .qcd-bt, .ha-cel.mud input[type=date] { border-color:#2563eb !important; background:#eff6ff; }
+.ha-bcos { display:flex; gap:5px; flex-wrap:wrap; }
+.ha-bco { display:inline-flex; align-items:center; gap:6px; border:1.5px solid #e2e8f0; background:#fff; border-radius:10px; padding:4px 9px 4px 4px; font:inherit; font-size:12px; font-weight:800; color:#334155; cursor:pointer; }
+.ha-bco img { border-radius:6px; } .ha-bco.on { border-color:#16a34a; background:#f0fdf4; color:#166534; }
+.ha-cel.mud .ha-bco.on { border-color:#2563eb; background:#eff6ff; color:#1d4ed8; box-shadow:0 0 0 2px #dbeafe; }
+.ha-val { display:flex; align-items:center; border:1.5px solid #e2e8f0; border-radius:10px; background:#fff; height:38px; overflow:hidden; }
+.ha-val span { padding:0 9px; font-size:12px; font-weight:800; color:#64748b; background:#f8fafc; height:100%; display:inline-flex; align-items:center; border-right:1px solid #e2e8f0; }
+.ha-val input { border:0; outline:0; font:inherit; font-size:14.5px; font-weight:800; text-align:right; padding:0 10px; width:100%; min-width:0; background:none; font-variant-numeric:tabular-nums; color:#0f172a; }
+.ha-cel.mud .ha-val { border-color:#2563eb; background:#eff6ff; } .ha-cel.mud .ha-val input { color:#1d4ed8; }
+.ha-trava { font-size:11.5px; color:#64748b; background:#f8fafc; border:1px dashed #cbd5e1; border-radius:10px; padding:7px 9px; line-height:1.3; }
+.ha-trava a { color:#15803d; font-weight:800; }
+.ha-vale { display:none; background:#fff; border:1px solid #e6eeea; border-radius:14px; padding:12px 14px; gap:12px; align-items:center; }
+.ha-vale.on { display:grid; grid-template-columns:200px minmax(0,1fr); }
+.ha-vale > b { font-size:13.5px; color:#0f172a; display:flex; gap:8px; align-items:center; } .ha-vale > b i { color:#2563eb; width:16px; }
+.ha-vale > b small { display:block; font-size:11.5px; color:#64748b; font-weight:600; }
+.ha-vale .hp-seg label.on { border-color:#2563eb; box-shadow:0 0 0 3px #dbeafe; }
+.ha-vale.hon .hp-seg label.on.sempre { border-color:#c2410c; box-shadow:0 0 0 3px #ffedd5; }
+.ha-conf { display:none; flex-direction:column; gap:8px; }
+.ha-conf.on { display:flex; }
+.ha-conf-it { background:#fff; border:1px solid #e6eeea; border-radius:14px; padding:10px 14px; }
+.ha-conf-it > b { font-size:13.5px; color:#0f172a; } .ha-conf-it > b small { color:#64748b; font-weight:700; margin-right:6px; }
+.ha-conf-it ul { margin:6px 0 0; padding:0; list-style:none; display:flex; flex-direction:column; gap:4px; font-size:13px; color:#334155; }
+.ha-conf-it li { display:flex; gap:8px; align-items:baseline; flex-wrap:wrap; } .ha-conf-it li i { color:#2563eb; width:16px; text-align:center; }
+.ha-conf-it li s { color:#94a3b8; } .ha-conf-it li b { color:#0f172a; }
+.ha-conf-it li em { font-style:normal; font-size:11px; font-weight:800; border-radius:99px; padding:2px 8px; background:#ede9fe; color:#6d28d9; }
+.ha-conf-it li em.sem { background:#ffedd5; color:#c2410c; }
+.ha-ok { display:flex; gap:10px; align-items:flex-start; background:#fff7ed; border:1.5px solid #fdba74; border-radius:14px; padding:12px 14px; font-size:13px; color:#7c2d12; cursor:pointer; line-height:1.4; }
+.ha-ok input { width:18px; height:18px; margin-top:1px; accent-color:#c2410c; flex:0 0 auto; }
+.ha-aviso { font-size:12.5px; color:#475569; display:flex; gap:8px; align-items:flex-start; line-height:1.4; } .ha-aviso i { color:#2563eb; margin-top:2px; }
+.hp-cx-pe .prim.alt { background:linear-gradient(135deg,#2563eb,#1e3a8a); }
+@media (max-width:900px) {
+  .ha-row { grid-template-columns:minmax(0,1fr) minmax(0,1fr); } .ha-row .ha-emp { grid-column:1 / -1; } .ha-row.cab { display:none; }
+  .ha-row .ha-cel.bc { grid-column:1 / -1; order:3; } .ha-vale.on { grid-template-columns:minmax(0,1fr); }
+  #hpAltCx { padding:0; align-items:flex-end; } #hpAltCx .hp-cx { width:100%; border-radius:22px 22px 0 0; max-height:94vh; }
+  #hpAltCx .hp-cx-pe { flex-direction:column-reverse; } #hpAltCx .hp-cx-pe button { width:100%; justify-content:center; padding:13px; }
+}
 </style>
 {% endblock %}
 
@@ -234,18 +290,18 @@ span.hp-bco, span.hp-nf { cursor:default; }
 {% set d13 = l.dec13 %}
 {% set marca = l.pendente and pode_emitir %}
 {% set muda = f in ('emitir', 'erro') and pode_esc %}
-<div class="tx-c hp-c {{ cls }}{{ ' marcavel' if marca }}" data-dec13="{{ 1 if (d13 and d13.pendente) else 0 }}" data-banco="{{ l.banco.id if l.banco else '' }}" data-nota="{{ 1 if l.nota else 0 }}" data-v="{{ ((l.total if f in ('emitir', 'erro') else 0) + (d13.total if (d13 and d13.pendente) else 0)) | float }}" data-cli="{{ l.cliente_id }}" data-venc="{{ l.vencimento.isoformat() if l.vencimento else '' }}" data-grupo="{{ l.grupo or '' }}" data-dec="{{ 1 if l.decimo else 0 }}"
+<div class="tx-c hp-c {{ cls }}{{ ' marcavel' if marca }}" data-dec13="{{ 1 if (d13 and d13.pendente) else 0 }}" data-banco="{{ l.banco.id if l.banco else '' }}" data-nota="{{ 1 if l.nota else 0 }}" data-v="{{ ((l.total if f in ('emitir', 'erro') else 0) + (d13.total if (d13 and d13.pendente) else 0)) | float }}" data-cli="{{ l.cliente_id }}" data-venc="{{ l.vencimento.isoformat() if l.vencimento else '' }}" data-grupo="{{ l.grupo or '' }}" data-dec="{{ 1 if l.decimo else 0 }}" data-hon="{{ l.honorarios if l.honorarios is not none else '' }}" data-dia="{{ l.contrato.dia_vencimento or '' }}"
      data-busca="{{ l.numero or '' }} {{ l.empresa }} {{ l.contrato.nome_fantasia or '' }} {{ l.contrato.cpf_cnpj or '' }} {{ l.grupo or '' }}"{% if marca %} onclick="hpMarcar(event, this)"{% endif %}>
   {% if marca %}<input type="checkbox" name="cliente" value="{{ l.cliente_id }}" hidden form="hpForm"><span class="hp-ck"><i class="fas fa-check"></i></span>{% endif %}
   <div class="tx-c-top"><span class="tx-c-num">{{ l.numero or '—' }}</span><span class="tx-c-nome" title="{{ l.empresa }}">{{ l.empresa }}</span></div>
   <div class="tx-c-meio">
     <div><div class="tx-c-val">{{ (l.atual.valor if l.atual else l.total) | float | format_currency }}</div>
       <div class="tx-c-desc">{% if f == 'emitir' %}a emitir · competência {{ competencia.strftime('%m/%Y') }}{% elif f == 'erro' %}a cobrança não saiu{% elif f == 'pagas' %}pago{% elif f == 'atrasadas' %}em atraso{% else %}emitida · aguardando{% endif %}</div></div>
-    <div class="hp-venc">{{ 'venceu' if f == 'pagas' else 'vence' }}<b>{{ (l.atual.venc if l.atual else l.vencimento).strftime('%d/%m/%Y') }}</b></div>
+    <div class="hp-venc">{{ 'venceu' if f == 'pagas' else 'vence' }}<b>{{ (l.atual.venc if l.atual else l.vencimento).strftime('%d/%m/%Y') }}</b>{% if l.venc_mes and not l.atual %}<small class="hp-so" title="data escolhida só para esta cobrança; o contrato continua no dia {{ l.contrato.dia_vencimento }}">só {{ competencia.strftime('%m/%Y') }}</small>{% endif %}</div>
   </div>
   <div class="hp-itens">
     {% for i in l.itens %}<div class="hp-it{{ ' dec' if i.origem == 'decimo' else (' lan' if i.origem == 'lancamento' else (' desc' if i.origem == 'desconto' else '')) }}">
-      <span>{% if i.origem == 'decimo' %}<i class="fas fa-gift"></i>{% elif i.origem == 'lancamento' %}<i class="fas fa-plus"></i>{% elif i.origem == 'desconto' %}<i class="fas fa-tag"></i>{% endif %}{{ i.nome }}</span><b>{% if i.origem == 'desconto' %}− {{ (i.valor | float | abs) | format_currency }}{% else %}{{ i.valor | float | format_currency }}{% endif %}</b></div>{% endfor %}
+      <span>{% if i.origem == 'decimo' %}<i class="fas fa-gift"></i>{% elif i.origem == 'lancamento' %}<i class="fas fa-plus"></i>{% elif i.origem == 'desconto' %}<i class="fas fa-tag"></i>{% endif %}{{ i.nome }}{% if i.origem == 'honorarios' and l.hon_mes %} <small class="hp-so" title="valor só desta cobrança; no contrato é {{ l.hon_contrato | float | format_currency }}">só {{ competencia.strftime('%m/%Y') }}</small>{% endif %}</span><b>{% if i.origem == 'desconto' %}− {{ (i.valor | float | abs) | format_currency }}{% else %}{{ i.valor | float | format_currency }}{% endif %}</b></div>{% endfor %}
   </div>
   {% if f == 'erro' %}{% set mf = motivo_nfse(l.feito.erro) if motivo_nfse is defined else {} %}<div class="hp-err"><i class="fas fa-triangle-exclamation"></i> {% if mf and mf.texto %}<b>{{ mf.texto }}</b>{% if mf.fazer %}<br>{{ mf.fazer }}{% endif %}{% else %}{{ l.feito.erro or 'A nota ou o boleto não saíram.' }}{% endif %} Corrija e emita de novo.</div>{% endif %}
   <div class="hp-linha">
@@ -366,6 +422,7 @@ span.hp-bco, span.hp-nf { cursor:default; }
     {% else %}<div class="tx-vazio"><i class="fas fa-mug-hot"></i>{{ {'emitir': 'Tudo emitido nesta competência.', 'cobradas': 'Nenhuma cobrança aguardando pagamento.', 'pagas': 'Nenhuma paga ainda.', 'atrasadas': 'Ninguém em atraso.', 'contratos': 'Nenhum contrato ativo.'}[fase] }}</div>{% endif %}
     {% if fase == 'emitir' and grupos.emitir and pode_emitir %}
     <div class="hp-barra"><span><b id="hpSoma">R$ 0,00</b> · <span id="hpQtd">nenhuma empresa marcada</span><span id="hpPorBanco"></span><span class="hp-marcadas" id="hpMarcadas"></span></span>
+      {% if pode_esc %}<button type="button" id="hpAlterar" class="alt" disabled onclick="hpAltAbrir()"><i class="fas fa-pen-to-square"></i> Alterar</button>{% endif %}
       <button type="button" id="hpEmitir" disabled onclick="hpEmAbrir()"><i class="fas fa-paper-plane"></i> Emitir as marcadas</button></div>
     {% endif %}
   </div>
@@ -395,6 +452,29 @@ span.hp-bco, span.hp-nf { cursor:default; }
       <div class="hp-msg" id="hpEmMsg"></div>
     </div>
     <div class="hp-cx-pe"><button type="button" onclick="hpEmFechar()">Voltar</button><button type="button" class="prim em" id="hpEmOk" onclick="hpEmConfirmar()"><i class="fas fa-paper-plane"></i> <span>Emitir</span></button></div>
+  </div>
+</div>
+<div class="hp-fundo" id="hpAltCx" onclick="if (event.target === this) hpAltFechar()" role="dialog" aria-modal="true" aria-labelledby="hpAltTit">
+  <div class="hp-cx">
+    <div class="hp-cx-cab alt"><span class="hp-em-ico"><i class="fas fa-pen-to-square"></i></span><div><b id="hpAltTit">Alterar as empresas marcadas</b><span id="hpAltSub"></span></div><button type="button" onclick="hpAltFechar()" aria-label="Fechar"><i class="fas fa-xmark"></i></button></div>
+    <div class="hp-cx-corpo">
+      <div id="hpAltPasso1" style="display:flex;flex-direction:column;gap:10px">
+        <div class="ha-aviso"><i class="fas fa-circle-info"></i><span>Mude só o que quiser: o que ficar igual não é gravado. A linha azul muda <b>todas</b> as marcadas de uma vez.</span></div>
+        <div class="ha-grade" id="hpAltGrade"></div>
+        <div class="ha-vale" id="hpAltValeVenc"><b><i class="fas fa-calendar-day"></i><span>Vencimento<small>a data nova vale para…</small></span></b>
+          <div class="hp-seg"><label class="on"><input type="radio" name="haVenc" value="mes" checked><b>Só esta cobrança</b>competência {{ competencia.strftime('%m/%Y') }}; no mês que vem volta ao dia do contrato</label>
+            <label><input type="radio" name="haVenc" value="sempre"><b>Todas, daqui em diante</b><span id="hpAltVencSempre">passa a ser o dia novo no contrato</span></label></div></div>
+        <div class="ha-vale" id="hpAltValeBanco"><b><i class="fas fa-building-columns"></i><span>Banco<small>o banco novo vale para…</small></span></b>
+          <div class="hp-seg"><label class="on"><input type="radio" name="haBanco" value="mes" checked><b>Só esta cobrança</b>competência {{ competencia.strftime('%m/%Y') }}; no mês que vem volta à regra</label>
+            <label><input type="radio" name="haBanco" value="sempre"><b>Sempre (regra)</b>fica gravado no contrato até você trocar de novo</label></div></div>
+        <div class="ha-vale hon" id="hpAltValeHon"><b><i class="fas fa-sack-dollar"></i><span>Honorários<small>o valor novo vale para…</small></span></b>
+          <div class="hp-seg"><label class="on"><input type="radio" name="haHon" value="mes" checked><b>Só esta cobrança</b>competência {{ competencia.strftime('%m/%Y') }}; o contrato não muda</label>
+            <label class="sempre"><input type="radio" name="haHon" value="sempre"><b>Mudar os honorários no contrato</b>vale desta cobrança em diante; fica no histórico de reajustes do contrato</label></div></div>
+      </div>
+      <div class="ha-conf" id="hpAltPasso2"></div>
+      <div class="hp-msg" id="hpAltMsg"></div>
+    </div>
+    <div class="hp-cx-pe"><button type="button" id="hpAltVoltar" onclick="hpAltVoltar()">Cancelar</button><button type="button" class="prim alt" id="hpAltOk" onclick="hpAltAvancar()"><i class="fas fa-eye"></i> <span>Conferir</span></button></div>
   </div>
 </div>
 <div class="hp-fundo" id="hpCx" onclick="if (event.target === this) hpFechar()">
@@ -592,6 +672,7 @@ function hpSoma() {
   Object.keys(pb).forEach(function (k) { var b = BANCOS[k] || {}; h += '<span class="pb">' + (b.img ? '<img src="' + b.img + '" width="18" height="18" alt="">' : '') + (b.nome || '?') + ' · ' + pb[k] + '</span>'; });
   document.getElementById('hpPorBanco').innerHTML = h;
   document.getElementById('hpEmitir').disabled = !n;
+  if (document.getElementById('hpAlterar')) document.getElementById('hpAlterar').disabled = !n;
   // 19/11/2026: a lista das marcadas (a busca esconde o cartão, mas a marca fica — aqui a pessoa vê e tira com o ×)
   var mk = document.getElementById('hpMarcadas'), cards = [].slice.call(document.querySelectorAll('.tx-painel[data-p="emitir"] .hp-c.marcado'));
   if (mk) {
@@ -756,6 +837,151 @@ function hpEmConfirmar() {
   document.getElementById('hpForm').submit();
 }
 document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && document.getElementById('hpEmCx') && document.getElementById('hpEmCx').classList.contains('on')) hpEmFechar(); });
+/* 25/11/2026 — "Alterar" as marcadas (Anderson: "vencimento se alterar, perguntar só essa ou todas? / Banco / Valor se
+   alterar alterar até os honorários, lógico com confirmação"). Passo 1: a grade; passo 2: conferir e gravar. */
+var URL_ALT = "{{ url_for('financeiro.honorarios_alterar') if pode_rota('financeiro.honorarios_alterar') else '' }}";
+var hpAlt = null;
+function hpMoeda(v) { return (Math.round(v * 100) / 100).toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2}); }
+function hpLeMoeda(t) { t = String(t || '').trim(); if (!t) return null; return parseFloat(t.replace(/\./g, '').replace(',', '.')); }
+function hpBcosHtml(sel) {
+  return Object.keys(BANCOS).map(function (k) { var b = BANCOS[k];
+    return '<button type="button" class="ha-bco' + (String(k) === String(sel) ? ' on' : '') + '" data-b="' + k + '">' + (b.img ? '<img src="' + b.img + '" width="22" height="22" alt="">' : '') + b.nome + '</button>'; }).join('');
+}
+function hpMascara(inp) {
+  inp.addEventListener('input', function () {
+    var d = inp.value.replace(/\D/g, '').replace(/^0+/, '').slice(0, 11);
+    inp.value = d ? hpMoeda(parseInt(d, 10) / 100) : '';
+  });
+}
+function hpAltAbrir() {
+  var cards = [].slice.call(document.querySelectorAll('.tx-painel[data-p="emitir"] .hp-c.marcado'));
+  if (!cards.length || !URL_ALT) return;
+  hpAlt = cards.map(function (c) {
+    return {cli: c.dataset.cli, num: (c.querySelector('.tx-c-num') || {}).textContent || '', nome: (c.querySelector('.tx-c-nome') || {}).textContent || '',
+            venc: c.dataset.venc, banco: c.dataset.banco, hon: c.dataset.hon === '' ? null : parseFloat(c.dataset.hon), dia: c.dataset.dia,
+            contrato: (c.querySelector('.hp-ac a[href*="editar="]') || {}).href || ''};
+  });
+  var g = document.getElementById('hpAltGrade'), h = '<div class="ha-row cab"><span>Empresa</span><span>Vencimento</span><span>Banco</span><span>Honorários</span></div>';
+  if (hpAlt.length > 1) h += '<div class="ha-row todas" data-todas="1"><div class="ha-emp"><i class="fas fa-layer-group"></i><div><b>Todas as ' + hpAlt.length + ' marcadas</b><small>mude aqui para mudar em todas</small></div></div>'
+    + '<div class="ha-cel"><input type="date" class="ha-dt" min="' + HOJE + '"><span class="era">mesma data para todas</span></div>'
+    + '<div class="ha-cel bc"><div class="ha-bcos">' + hpBcosHtml(null) + '</div><span class="era">mesmo banco para todas</span></div>'
+    + '<div class="ha-cel"><div class="ha-val"><span>R$</span><input class="ha-hon" inputmode="numeric" placeholder="mesmo valor" autocomplete="off"></div><span class="era">mesmos honorários para todas</span></div></div>';
+  hpAlt.forEach(function (e, k) {
+    h += '<div class="ha-row" data-k="' + k + '"><div class="ha-emp"><span class="n">' + e.num + '</span><div style="min-width:0"><b title="' + e.nome.replace(/"/g, '&quot;') + '">' + e.nome + '</b><small>dia ' + (e.dia || '—') + ' no contrato</small></div></div>'
+      + '<div class="ha-cel" data-c="venc"><input type="date" class="ha-dt" min="' + HOJE + '"><span class="era"></span></div>'
+      + '<div class="ha-cel bc" data-c="banco"><div class="ha-bcos">' + hpBcosHtml(e.banco) + '</div><span class="era"></span></div>'
+      + '<div class="ha-cel" data-c="hon">' + (e.hon === null ? '<div class="ha-trava">o contrato tem mais de uma linha de honorários: mude o valor <a href="' + e.contrato + '">no contrato</a></div>'
+        : '<div class="ha-val"><span>R$</span><input class="ha-hon" inputmode="numeric" autocomplete="off"></div>') + '<span class="era"></span></div></div>';
+  });
+  g.innerHTML = h;
+  g.querySelectorAll('.ha-row').forEach(function (r) {
+    var k = r.dataset.k, e = k !== undefined ? hpAlt[+k] : null, dt = r.querySelector('.ha-dt'), hon = r.querySelector('.ha-hon');
+    if (dt) { if (e) dt.value = e.venc && e.venc >= HOJE ? e.venc : HOJE; dt.addEventListener('change', function () { hpAltMuda(r, 'venc', dt.value); }); if (window.QCData) QCData.ligar(dt); }
+    if (hon) { if (e) hon.value = hpMoeda(e.hon); hpMascara(hon); hon.addEventListener('input', function () { hpAltMuda(r, 'hon', hon.value); }); }
+    r.querySelectorAll('.ha-bco').forEach(function (b) { b.addEventListener('click', function () { hpAltMuda(r, 'banco', b.dataset.b); }); });
+  });
+  document.getElementById('hpAltSub').textContent = (hpAlt.length === 1 ? '1 empresa' : hpAlt.length + ' empresas') + ' · cobrança de ' + COMP.split('-').reverse().join('/') + ' (ainda não emitida)';
+  ['haVenc', 'haBanco', 'haHon'].forEach(function (n) { document.querySelectorAll('input[name="' + n + '"]').forEach(function (x) { x.checked = x.value === 'mes'; }); });
+  hpAltPasso(1); hpAltPinta();
+  document.getElementById('hpAltCx').classList.add('on'); document.body.style.overflow = 'hidden';
+}
+function hpAltMuda(r, campo, v) {
+  var linhas = r.dataset.todas ? [].slice.call(document.querySelectorAll('#hpAltGrade .ha-row[data-k]')) : [r];
+  linhas.forEach(function (x) {
+    if (campo === 'venc') { var i = x.querySelector('.ha-dt'); i.value = v; }
+    if (campo === 'banco') x.querySelectorAll('.ha-bco').forEach(function (b) { b.classList.toggle('on', b.dataset.b === String(v)); });
+    if (campo === 'hon') { var h = x.querySelector('.ha-hon'); if (h && h !== document.activeElement) h.value = v; }
+  });
+  if (campo === 'venc' && window.QCData) QCData.pintarTodos();
+  if (r.dataset.todas && campo === 'banco') r.querySelectorAll('.ha-bco').forEach(function (b) { b.classList.toggle('on', b.dataset.b === String(v)); });
+  hpAltPinta();
+}
+function hpAltLe() {   // o que mudou, empresa por empresa
+  var out = [];
+  document.querySelectorAll('#hpAltGrade .ha-row[data-k]').forEach(function (r) {
+    var e = hpAlt[+r.dataset.k], m = {e: e};
+    var dt = r.querySelector('.ha-dt').value, base = e.venc && e.venc >= HOJE ? e.venc : HOJE;
+    if (dt && dt !== base) m.venc = dt;
+    var b = r.querySelector('.ha-bco.on'); if (b && b.dataset.b !== String(e.banco)) m.banco = b.dataset.b;
+    var h = r.querySelector('.ha-hon'), hv = h ? hpLeMoeda(h.value) : null;
+    if (h && hv !== null && Math.abs(hv - e.hon) >= 0.005) m.hon = hv;
+    out.push(m);
+  });
+  return out;
+}
+function hpAltPinta() {
+  var ms = hpAltLe(), tem = {venc: 0, banco: 0, hon: 0};
+  document.querySelectorAll('#hpAltGrade .ha-row[data-k]').forEach(function (r, i) {
+    var m = ms[i], e = m.e, cv = r.querySelector('[data-c=venc]'), cb = r.querySelector('[data-c=banco]'), ch = r.querySelector('[data-c=hon]');
+    cv.classList.toggle('mud', !!m.venc); cv.querySelector('.era').innerHTML = m.venc ? 'era <s>' + hpBr(e.venc) + '</s>' : 'vence ' + hpBr(e.venc);
+    cb.classList.toggle('mud', !!m.banco); cb.querySelector('.era').innerHTML = m.banco ? 'era <s>' + ((BANCOS[e.banco] || {}).nome || '?') + '</s>' : '';
+    if (e.hon !== null) { ch.classList.toggle('mud', m.hon !== undefined); ch.querySelector('.era').innerHTML = m.hon !== undefined ? 'era <s>R$ ' + hpMoeda(e.hon) + '</s>' : 'honorários do contrato'; }
+    r.classList.toggle('mudou', !!(m.venc || m.banco || m.hon !== undefined));
+    if (m.venc) tem.venc++; if (m.banco) tem.banco++; if (m.hon !== undefined) tem.hon++;
+  });
+  document.getElementById('hpAltValeVenc').classList.toggle('on', !!tem.venc);
+  document.getElementById('hpAltValeBanco').classList.toggle('on', !!tem.banco);
+  document.getElementById('hpAltValeHon').classList.toggle('on', !!tem.hon);
+  var dias = {}; ms.forEach(function (m) { if (m.venc) dias[+m.venc.slice(8)] = 1; });
+  var ds = Object.keys(dias);
+  document.getElementById('hpAltVencSempre').textContent = ds.length === 1 ? 'o contrato passa a vencer todo dia ' + ds[0] : 'cada contrato passa a vencer no dia escolhido';
+  document.querySelectorAll('#hpAltCx .ha-vale .hp-seg input').forEach(function (x) { x.closest('label').classList.toggle('on', x.checked); });
+  var n = ms.filter(function (m) { return m.venc || m.banco || m.hon !== undefined; }).length, ok = document.getElementById('hpAltOk');
+  if (document.getElementById('hpAltPasso2').classList.contains('on')) return;
+  ok.disabled = !n; ok.querySelector('span').textContent = n ? 'Conferir ' + (n === 1 ? '1 empresa' : n + ' empresas') : 'Nada mudou ainda';
+  document.getElementById('hpAltMsg').textContent = '';
+}
+document.getElementById('hpAltCx') && document.getElementById('hpAltCx').addEventListener('change', function (ev) { if (ev.target.name && ev.target.name.indexOf('ha') === 0) hpAltPinta(); });
+function hpVale(n) { var x = document.querySelector('input[name="' + n + '"]:checked'); return x ? x.value : 'mes'; }
+function hpAltPasso(n) {
+  document.getElementById('hpAltPasso1').style.display = n === 1 ? 'flex' : 'none';
+  document.getElementById('hpAltPasso2').classList.toggle('on', n === 2);
+  document.getElementById('hpAltVoltar').textContent = n === 1 ? 'Cancelar' : 'Voltar e mudar';
+  var ok = document.getElementById('hpAltOk');
+  ok.innerHTML = n === 1 ? '<i class="fas fa-eye"></i> <span>Conferir</span>' : '<i class="fas fa-check"></i> <span>Confirmar e gravar</span>';
+  ok.disabled = false;
+}
+function hpAltVoltar() { if (document.getElementById('hpAltPasso2').classList.contains('on')) { hpAltPasso(1); hpAltPinta(); } else hpAltFechar(); }
+function hpAltFechar() { document.getElementById('hpAltCx').classList.remove('on'); document.body.style.overflow = ''; }
+function hpAltAvancar() {
+  var p2 = document.getElementById('hpAltPasso2');
+  if (p2.classList.contains('on')) return hpAltGravar();
+  var ms = hpAltLe().filter(function (m) { return m.venc || m.banco || m.hon !== undefined; });
+  if (!ms.length) return;
+  var vv = hpVale('haVenc'), vb = hpVale('haBanco'), vh = hpVale('haHon'), comp = COMP.split('-').reverse().join('/');
+  var tag = function (v, txt) { return '<em class="' + (v === 'sempre' ? 'sem' : '') + '">' + (v === 'sempre' ? txt : 'só ' + comp) + '</em>'; };
+  var h = '<div class="ha-aviso"><i class="fas fa-list-check"></i><span>Confira antes de gravar. Fica tudo na Auditoria.</span></div>', somaAntes = 0, somaDepois = 0, nSempre = 0;
+  ms.forEach(function (m) {
+    var e = m.e; h += '<div class="ha-conf-it"><b><small>' + e.num + '</small>' + e.nome + '</b><ul>';
+    if (m.venc) h += '<li><i class="fas fa-calendar-day"></i> vencimento <s>' + hpBr(e.venc) + '</s> → <b>' + hpBr(m.venc) + '</b> ' + tag(vv, 'contrato: todo dia ' + (+m.venc.slice(8))) + '</li>';
+    if (m.banco) h += '<li><i class="fas fa-building-columns"></i> banco <s>' + ((BANCOS[e.banco] || {}).nome || '?') + '</s> → <b>' + BANCOS[m.banco].nome + '</b> ' + tag(vb, 'sempre') + '</li>';
+    if (m.hon !== undefined) { h += '<li><i class="fas fa-sack-dollar"></i> honorários <s>R$ ' + hpMoeda(e.hon) + '</s> → <b>R$ ' + hpMoeda(m.hon) + '</b> ' + tag(vh, 'no contrato, daqui em diante') + '</li>';
+      somaAntes += e.hon; somaDepois += m.hon; if (vh === 'sempre') nSempre++; }
+    h += '</ul></div>';
+  });
+  if (nSempre) h += '<label class="ha-ok"><input type="checkbox" id="hpAltCiente"><span><b>Confirmo a mudança dos honorários no contrato</b> de ' + (nSempre === 1 ? '1 empresa' : nSempre + ' empresas')
+    + ': de R$ ' + hpMoeda(somaAntes) + ' para <b>R$ ' + hpMoeda(somaDepois) + '</b> por mês. Vale desta cobrança em diante e entra no histórico de reajustes do contrato (dá para desfazer lá).</span></label>';
+  p2.innerHTML = h; hpAltPasso(2);
+  document.getElementById('hpAltOk').querySelector('span').textContent = 'Confirmar e gravar ' + (ms.length === 1 ? '1 empresa' : ms.length + ' empresas');
+}
+function hpAltGravar() {
+  var msg = document.getElementById('hpAltMsg'), ck = document.getElementById('hpAltCiente');
+  msg.className = 'hp-msg erro';
+  if (ck && !ck.checked) { msg.textContent = 'Marque a confirmação da mudança dos honorários no contrato.'; return; }
+  var vv = hpVale('haVenc'), vb = hpVale('haBanco'), vh = hpVale('haHon');
+  var lista = hpAltLe().filter(function (m) { return m.venc || m.banco || m.hon !== undefined; }).map(function (m) {
+    return {cliente_id: m.e.cli, venc: m.venc || null, venc_vale: vv, banco: m.banco || null, banco_vale: vb,
+            valor: m.hon !== undefined ? hpMoeda(m.hon) : null, valor_vale: vh};
+  });
+  var fd = new FormData(); fd.append('mudancas', JSON.stringify(lista)); fd.append('competencia', COMP);
+  var ok = document.getElementById('hpAltOk'); ok.disabled = true; ok.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> Gravando…';
+  fetch(URL_ALT, {method: 'POST', body: fd, credentials: 'same-origin'}).then(function (r) { return r.json(); }).then(function (j) {
+    if (j.erros && j.erros.length) { msg.innerHTML = j.erros.join('<br>') + (j.feitas ? '<br>As outras (' + j.feitas + ') foram gravadas.' : '');
+      ok.disabled = false; ok.innerHTML = '<i class="fas fa-rotate-right"></i> <span>Atualizar a tela</span>'; ok.onclick = function () { location.reload(); }; return; }
+    location.reload();
+  }).catch(function () { msg.textContent = 'Não consegui gravar agora. Tente de novo.'; ok.disabled = false; ok.innerHTML = '<i class="fas fa-check"></i> <span>Confirmar e gravar</span>'; });
+}
+document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && document.getElementById('hpAltCx') && document.getElementById('hpAltCx').classList.contains('on')) hpAltFechar(); });
 /* escolher banco / nota */
 var hpCx = document.getElementById('hpCx'), hpAtual = null;
 function hpEscolher(campo, bt) {

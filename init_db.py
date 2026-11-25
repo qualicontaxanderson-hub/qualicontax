@@ -1892,6 +1892,13 @@ def _apply_migrations():
             UNIQUE KEY uk_hon_esc (empresa_id, competencia, cliente_id)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     """)
+    # 25/11/2026 — "Alterar as marcadas" (Honorários): vencimento e honorários SÓ DESTA cobrança
+    for _col_name, _col_def in [('vencimento', 'DATE NULL'), ('valor_honorarios', 'DECIMAL(12,2) NULL')]:
+        _c = execute_query(
+            "SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() "
+            "AND TABLE_NAME = 'fin_honorarios_escolhas' AND COLUMN_NAME = %s", (_col_name,), fetch=True, fetch_one=True) or {}
+        if _c.get('cnt', 0) == 0:
+            _migrate(f"ALTER TABLE fin_honorarios_escolhas ADD COLUMN {_col_name} {_col_def}")
 
     print("✓ Migrations concluídas")
 
