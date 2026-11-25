@@ -1884,7 +1884,8 @@
                     if (!grupo && j.segmento) filtroSeg = j.segmento;
                     if (grupo) sel = id; else if (sel.indexOf(id) < 0) sel.push(id);
                     pills(); desenhar(); cabecalho(); kpis();
-                    aviso((j.ja_existia ? 'Já existia e foi escolhido: ' : 'Criado e escolhido: ') + j.nome + '.');
+                    aviso((j.ja_existia ? 'Já existia e foi escolhido: ' : 'Criado e escolhido: ') + j.nome + '.'
+                          + (!grupo && !j.ja_existia ? ' A mensalidade sugerida se define em Financeiro › SERVIÇOS › Mensalidade por ramo.' : ''));
                 }).catch(function () { bt.disabled = false; bt.textContent = 'Criar'; msg.textContent = 'Sem conexão. Tente de novo.'; });
         }
         function comecar(lista) {

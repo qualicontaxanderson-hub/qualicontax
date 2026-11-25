@@ -205,6 +205,19 @@
 .rm-form { display:flex; align-items:center; gap:8px; } .rm-form .rg-rs { flex:1; } .rm-form .rg-in { width:100%; }
 .rm-form .rg-ok { background:#b45309; }
 .rm-sec { grid-column:1/-1; font-size:11px; font-weight:800; letter-spacing:.06em; text-transform:uppercase; color:#94a3b8; margin:6px 0 -4px 2px; }
+/* novo ramo (25/11/2026): barra com os chips Com valor / Sem valor e o botão; cartão tracejado no fim; caixa no molde do Novo serviço */
+.rm-barra { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin:0 0 12px; } .rm-fil { display:flex; gap:6px; flex-wrap:wrap; }
+.rm-fil .tx-f b { margin-left:5px; font-weight:800; opacity:.8; }
+.rm-btn-novo { margin-left:auto; border:0; border-radius:12px; background:linear-gradient(135deg,#f59e0b,#b45309); color:#fff; font:inherit; font-size:13px; font-weight:800; padding:9px 14px; cursor:pointer; display:inline-flex; align-items:center; gap:8px; box-shadow:0 6px 16px rgba(180,83,9,.25); }
+.rm-btn-novo small { font-weight:600; opacity:.9; } .rm-btn-novo:hover { filter:brightness(1.05); }
+.rm-novo-c { border:2px dashed #fcd34d; background:#fffbeb; color:#92400e; cursor:pointer; align-items:center; justify-content:center; text-align:center; font:inherit; min-height:150px; box-shadow:none; }
+.rm-novo-c i { width:38px; height:38px; border-radius:12px; background:#fef3c7; display:inline-flex; align-items:center; justify-content:center; font-size:15px; } .rm-novo-c b { font-size:14.5px; } .rm-novo-c small { color:#b45309; font-size:12px; }
+.rm-novo-c:hover { border-color:#f59e0b; background:#fef3c7; }
+.rm-c.oculto { display:none; }
+#rmNovoFundo[hidden] { display:none; } .rmn.ns { width:min(820px, calc(100vw - 32px)); } .rmn-g { grid-template-columns:1fr; }
+.svn.rmn .ns-g { grid-template-columns:minmax(0,1fr); }      /* sem a coluna da prévia: a caixa é só o formulário */
+.svn.rmn .ns-ops.rmn-ops { grid-template-columns:repeat(3, minmax(0,1fr)); } .rmn-ops .ns-op small { white-space:normal; }
+@media (max-width:760px) { .svn.rmn .ns-ops.rmn-ops { grid-template-columns:repeat(2, minmax(0,1fr)); } .rm-btn-novo { margin-left:0; width:100%; justify-content:center; } }
 .tx-painel .tx-f.on { background:var(--sec); border-color:var(--sec); color:#fff; }
 /* pergunta (caixa nossa, no molde pk-*) */
 .pk.pk-peq { width:min(560px, 96vw); top:18vh; } .pk.pk-peq .pk-quem span { white-space:normal; line-height:1.4; }
@@ -264,6 +277,9 @@
   <div class="tx-painel{{ ' on' if aba == 'ramos' }}" data-p="ramos">
     <div class="rg-faixa"><span class="rg-muted">Cada ramo de atividade pode ter uma mensalidade sugerida. Ao montar o contrato de prestação, os ramos da empresa aparecem com o valor e a pessoa escolhe quais trazer: a soma vira os honorários.</span>
       <div class="tx-busca"><i class="fas fa-magnifying-glass"></i><input type="search" placeholder="Buscar ramo" data-busca="ramos"></div></div>
+    {# 25/11/2026 — Anderson: "Como Criar mensalidade por RAMO?": criar aqui, já com o valor; é a mesma lista da caixa da ficha #}
+    <div class="rm-barra"><div class="rm-fil" id="rmFil"><button type="button" class="tx-f on" data-f="">Todos <b>{{ ramos | length }}</b></button><button type="button" class="tx-f" data-f="com">Com valor <b>{{ n_ramos_com }}</b></button><button type="button" class="tx-f" data-f="sem">Sem valor <b>{{ ramos | length - n_ramos_com }}</b></button></div>
+      <button type="button" class="rm-btn-novo" onclick="rmNovoAbrir()"><i class="fas fa-plus"></i> Novo ramo <small>nome, onde entra e a mensalidade</small></button></div>
     <div class="rm-grade">
     {% set SEG = {'COMERCIO': 'Comércio', 'SERVICOS': 'Prestação de serviços', 'INDUSTRIA': 'Indústria', 'LOCACAO': 'Locação'} %}
     {% for seg in ['COMERCIO', 'SERVICOS', 'LOCACAO', 'INDUSTRIA', ''] %}
@@ -280,6 +296,7 @@
       </form>
       {% endfor %}
     {% endfor %}
+    <button type="button" class="rm-c rm-novo-c" onclick="rmNovoAbrir()"><i class="fas fa-plus"></i><b>Novo ramo</b><small>entra na lista e na caixa "Ramo de atividade" da ficha</small></button>
     </div>
   </div>
 
@@ -414,6 +431,34 @@
 </div>
 <script id="rgCli" type="application/json">{{ clientes_json | safe }}</script>
 
+{# ── NOVO RAMO (25/11/2026): caixa no molde do Novo serviço — nome, onde entra (cartões) e a mensalidade sugerida ── #}
+<div class="pk-fundo" id="rmNovoFundo" hidden style="z-index:1200">
+  <form class="ns svn rmn" id="rmNovoForm" method="POST" action="{{ url_for('financeiro.ramo_novo') }}" role="dialog" aria-modal="true" autocomplete="off">
+    <header class="ns-cab"><span class="ns-logo"><img src="{{ url_for('static', filename='images/logo.png') }}" alt="Qualicontax"></span>
+      <div class="ns-tit"><b>Novo ramo de atividade</b><span>entra na caixa "Ramo de atividade" da ficha e aqui, com a mensalidade sugerida</span></div>
+      <div class="ns-prev"><small>mensalidade sugerida</small><b id="rmnPrevVal">—</b><span id="rmnPrevSeg">escolha onde entra</span></div>
+      <button type="button" class="ns-x" title="Fechar (Esc)" onclick="rmNovoFechar()"><i class="fas fa-xmark"></i></button></header>
+    <div class="ns-g rmn-g">
+      <div class="ns-f">
+        <section class="ns-b"><div class="ns-h"><i class="fas fa-pen"></i> Nome do ramo <em>como vai aparecer na ficha e no contrato</em></div>
+          <input class="ns-in svn-nome" name="nome" maxlength="100" required placeholder="Ex.: Transportadora" oninput="rmnPrev()"></section>
+        <section class="ns-b"><div class="ns-h"><i class="fas fa-sitemap"></i> Onde entra <em>o segmento da ficha; pessoa física tem a própria lista</em></div>
+          <div class="ns-ops rmn-ops" data-campo="segmento">
+            <button type="button" class="ns-op" data-v="COMERCIO" onclick="rmnOp(this)"><i class="fas fa-store"></i><b>Comércio</b><small>loja, posto, distribuidora</small></button>
+            <button type="button" class="ns-op" data-v="SERVICOS" onclick="rmnOp(this)"><i class="fas fa-briefcase"></i><b>Prestação de serviços</b><small>consultoria, transporte, oficina</small></button>
+            <button type="button" class="ns-op" data-v="LOCACAO" onclick="rmnOp(this)"><i class="fas fa-key"></i><b>Locação</b><small>administração de bens, aluguel</small></button>
+            <button type="button" class="ns-op" data-v="INDUSTRIA" onclick="rmnOp(this)"><i class="fas fa-industry"></i><b>Indústria</b><small>fabricação</small></button>
+            <button type="button" class="ns-op cin" data-v="PF" onclick="rmnOp(this)"><i class="fas fa-user"></i><b>Pessoa física</b><small>produtor rural, autônomo</small></button>
+          </div><input type="hidden" name="segmento" value=""></section>
+        <section class="ns-b"><div class="ns-h"><i class="fas fa-tag"></i> Mensalidade sugerida <em>pode ficar vazia e ser digitada depois no cartão</em></div>
+          <div class="svn-din"><div class="ns-money fixo"><span>R$</span><input class="ns-in rg-din" name="valor" inputmode="numeric" placeholder="0,00"></div>
+            <small>digite os centavos: 162100 vira 1.621,00 · ao montar o contrato, o ramo aparece com esse valor</small></div></section>
+      </div>
+    </div>
+    <footer class="ns-pe"><div class="ns-pe-info" id="rmnMsg">Dê um nome ao ramo e escolha onde entra.</div><button type="button" class="ns-bt" onclick="rmNovoFechar()">Cancelar</button><button type="submit" class="ns-bt prim" id="rmnCriar" disabled><i class="fas fa-check"></i> Criar o ramo</button></footer>
+  </form>
+</div>
+
 {# ── NOVO SERVIÇO: caixa no molde da Nova cobrança (20/11/2026 — Anderson: "e os Novos?" / "está horrível essa nova,
    preciso que melhore muito"): cartões grandes de escolha, valor com R$ dentro do campo, prévia do cartão à direita ── #}
 <div class="pk-fundo" id="svNovoFundo" hidden style="z-index:1200">
@@ -513,6 +558,43 @@
     f.addEventListener('mousedown', function (e) { if (e.target === f) fechar(false); });
     f.querySelector('.pk-ok').focus();
   }
+
+  // ── NOVO RAMO (25/11/2026): mesma caixa do Novo serviço, mais curta ──
+  var rmNovoTrava;
+  window.rmNovoAbrir = function () {
+    var fd = document.getElementById('rmNovoFundo'); fd.hidden = false; rmNovoTrava = document.body.style.overflow; document.body.style.overflow = 'hidden';
+    document.addEventListener('keydown', rmNovoTecla, true); rmnPrev(); setTimeout(function () { fd.querySelector('[name=nome]').focus(); }, 50);
+  };
+  window.rmNovoFechar = function () { var fd = document.getElementById('rmNovoFundo'); fd.hidden = true; document.body.style.overflow = rmNovoTrava || ''; document.removeEventListener('keydown', rmNovoTecla, true); };
+  function rmNovoTecla(e) { if (e.key === 'Escape' && document.querySelectorAll('.pk-fundo:not([hidden])').length === 1) { e.preventDefault(); rmNovoFechar(); } }
+  document.getElementById('rmNovoFundo').addEventListener('mousedown', function (e) { if (e.target === this) rmNovoFechar(); });
+  var RMN_SEG = { COMERCIO: 'entra em Comércio', SERVICOS: 'entra em Prestação de serviços', LOCACAO: 'entra em Locação', INDUSTRIA: 'entra em Indústria', PF: 'ramo de pessoa física' };
+  window.rmnOp = function (bt) {
+    var ops = bt.parentNode, f = bt.closest('form');
+    ops.querySelectorAll('.ns-op').forEach(function (b) { b.classList.toggle('on', b === bt); });
+    f.querySelector('[name=segmento]').value = bt.dataset.v; rmnPrev();
+  };
+  window.rmnPrev = function () {
+    var f = document.getElementById('rmNovoForm'), nome = f.querySelector('[name=nome]').value.trim(), seg = f.querySelector('[name=segmento]').value, v = f.querySelector('[name=valor]').value;
+    document.getElementById('rmnPrevVal').textContent = v ? 'R$ ' + v : '—';
+    document.getElementById('rmnPrevSeg').textContent = RMN_SEG[seg] || 'escolha onde entra';
+    var falta = !nome ? 'Dê um nome ao ramo.' : (!seg ? 'Escolha onde o ramo entra.' : '');
+    document.getElementById('rmnMsg').textContent = falta || ('"' + nome + '" ' + RMN_SEG[seg] + (v ? ', com mensalidade sugerida de R$ ' + v : ', sem mensalidade por enquanto') + '.');
+    document.getElementById('rmnCriar').disabled = !!falta;
+  };
+  document.getElementById('rmNovoForm').addEventListener('submit', function (e) { rmnPrev(); if (document.getElementById('rmnCriar').disabled) e.preventDefault(); });
+  // chips Todos / Com valor / Sem valor
+  document.getElementById('rmFil').addEventListener('click', function (e) {
+    var b = e.target.closest('.tx-f'); if (!b) return;
+    this.querySelectorAll('.tx-f').forEach(function (x) { x.classList.toggle('on', x === b); });
+    var f = b.dataset.f;
+    document.querySelectorAll('.rm-grade .rm-c:not(.rm-novo-c)').forEach(function (c) { c.classList.toggle('oculto', f === 'com' ? !c.classList.contains('com') : (f === 'sem' ? c.classList.contains('com') : false)); });
+    document.querySelectorAll('.rm-grade .rm-sec').forEach(function (h) {          // some o título do segmento que ficou sem cartão
+      var n = h.nextElementSibling, tem = false;
+      while (n && !n.classList.contains('rm-sec')) { if (n.classList.contains('rm-c') && !n.classList.contains('rm-novo-c') && !n.classList.contains('oculto') && !n.hidden) tem = true; n = n.nextElementSibling; }
+      h.style.display = tem ? '' : 'none';
+    });
+  });
 
   // ── NOVO SERVIÇO (caixa no molde da Nova cobrança, com prévia do cartão) ──
   var svNovoTrava;
@@ -629,6 +711,7 @@
       var d = el.value.replace(/\D/g, '').replace(/^0+/, '').slice(0, 11);
       el.value = d ? (parseInt(d, 10) / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '';
       if (el.form && el.form.id === 'svNovoForm') svnPrev();      // a prévia lê o valor já mascarado
+      if (el.form && el.form.id === 'rmNovoForm') rmnPrev();
     });
   });
   // o lápis do chip abre a edição dentro do cartão, só do bloco pedido (nota, comissão ou valor); Desistir fecha e volta ao que estava

@@ -699,6 +699,65 @@ def ramo_mensalidade():
     return redirect(url_for('financeiro.servicos', aba='ramos') + '#r%d' % rid)
 
 
+@financeiro.route('/financeiro/servicos/ramo-novo', methods=['POST'])
+@permission_required(PERM)
+def ramo_novo():
+    """Ramo de atividade novo pela aba SERVIÇOS › Mensalidade por ramo, já com a mensalidade sugerida (25/11/2026 — Anderson:
+    "Como Criar mensalidade por RAMO? Teria que dar para Criar e já ir para o Ramo de Atividade"). É a mesma tabela da caixa
+    "Ramo de atividade" da ficha: criado aqui, aparece lá na hora, e vice-versa. Nome igual (sem diferenciar maiúscula) reaproveita
+    o ramo que existe (reativando se estava inativo) e só grava o valor."""
+    if not _admin():
+        abort(403)
+    from models.ramo_atividade import RamoAtividade, SEGMENTO_NOME
+    from utils.texto import nome_ramo
+    f = request.form
+    volta = url_for('financeiro.servicos', aba='ramos')
+    nome = nome_ramo(f.get('nome'))[:100]
+    seg = (f.get('segmento') or '').strip().upper()
+    tipo = 'PF' if seg == 'PF' else 'PJ'
+    seg = None if tipo == 'PF' else seg
+    if not nome:
+        flash('Dê um nome ao ramo.', 'danger')
+        return redirect(volta)
+    if tipo == 'PJ' and seg not in SEGMENTO_NOME:
+        flash('Escolha onde o ramo entra: Comércio, Prestação de serviços, Locação, Indústria ou Pessoa física.', 'danger')
+        return redirect(volta)
+    try:
+        vp = (f.get('valor') or '').strip()
+        valor = _dec(vp) if vp else None
+        if valor is not None and valor <= 0:
+            valor = None
+    except (ValueError, InvalidOperation):
+        flash('Mensalidade inválida para "%s".' % nome, 'danger')
+        return redirect(volta)
+    existe = execute_query('SELECT id, nome, situacao, tipo_pessoa, segmento FROM ramos_atividade WHERE UPPER(TRIM(nome)) = %s LIMIT 1',
+                           (nome.upper(),), fetch=True, fetch_one=True)
+    if existe:
+        rid = existe['id']
+        if existe.get('situacao') != 'ATIVO':
+            RamoAtividade.update(rid, existe['nome'], None, 'ATIVO', existe.get('tipo_pessoa'), existe.get('segmento'))
+        aviso = '"%s" já existia%s.' % (existe['nome'], ' e foi reativado' if existe.get('situacao') != 'ATIVO' else '')
+    else:
+        rid = RamoAtividade.create(nome, None, 'ATIVO', tipo, seg)
+        if not rid:
+            flash('Não consegui criar o ramo agora. Tente de novo.', 'danger')
+            return redirect(volta)
+        registrar('escrita.criou_ramo', 'cadastros', tabela='ramos_atividade', registro_id=rid,
+                  depois={'nome': nome, 'tipo_pessoa': tipo, 'segmento': seg, 'situacao': 'ATIVO', 'origem': 'financeiro_servicos'})
+        aviso = 'Ramo "%s" criado%s.' % (nome, (' em ' + SEGMENTO_NOME[seg]) if seg else ' (pessoa física)')
+    if valor is not None:
+        antes = execute_query('SELECT mensalidade_sugerida FROM ramos_atividade WHERE id = %s', (rid,), fetch=True, fetch_one=True) or {}
+        RamoAtividade.set_mensalidade(rid, valor)
+        registrar('escrita.alterou_mensalidade_ramo', 'financeiro', tabela='ramos_atividade', registro_id=rid,
+                  antes={'ramo': nome, 'mensalidade_sugerida': str(antes.get('mensalidade_sugerida') or '')},
+                  depois={'ramo': nome, 'mensalidade_sugerida': str(valor)})
+        aviso += ' Mensalidade sugerida de R$ %s.' % ('{:,.2f}'.format(valor)).replace(',', 'X').replace('.', ',').replace('X', '.')
+    else:
+        aviso += ' Sem mensalidade sugerida por enquanto: digite no cartão quando quiser.'
+    flash(aviso + ' Já aparece na caixa "Ramo de atividade" da ficha das empresas.', 'success')
+    return redirect(volta + '#r%d' % rid)
+
+
 @financeiro.route('/financeiro/servicos/novo', methods=['POST'])
 @permission_required(PERM)
 def servico_novo():
