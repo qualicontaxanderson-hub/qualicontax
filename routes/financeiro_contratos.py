@@ -18,6 +18,7 @@ from models.fin_contrato import FinContrato
 from models.prest_contrato import (AREAS, QUALICONTAX, SIGNATARIOS_QUALICONTAX, PrestContrato, brl)
 from routes.financeiro import financeiro
 from utils import email_envio
+from utils.texto import nome_proprio
 from utils.atividade import registrar
 from utils.auth_helper import admin_required, permission_required  # noqa: F401 (admin_required: compat)
 from utils.formatters import format_cnpj, format_cpf
@@ -393,7 +394,7 @@ def _honorario_do_contrato(c, aprovado_por):
     return criados, avisos
 
 
-def _form_ctx(cliente_id=None, fin_contrato_id=None, contrato=None):
+def _form_ctx(cliente_id=None, fin_contrato_id=None, contrato=None, mais=None):
     """O que a tela do formulário precisa: empresa(s), sócios, honorários, testemunhas, signatários da Qualicontax."""
     d = (contrato or {}).get('dados') or {}
     emp = None
@@ -410,6 +411,18 @@ def _form_ctx(cliente_id=None, fin_contrato_id=None, contrato=None):
         fin = None                     # honorário de empresa fora dos lançamentos/carteira da pessoa: não mostra
     if fin:
         fin['itens'] = FinContrato.itens(fin['id'])
+    # empresas com que a tela nasce: a escolhida e, num contrato em grupo, as outras marcadas na caixa (cada uma com o honorário que tiver)
+    emps_ini = []
+    if emp and not contrato:
+        emps_ini.append({'cliente_id': emp['id'], 'razao': emp['nome_razao_social'], 'numero': emp['numero_cliente'], 'cnpj': emp['cpf_cnpj'],
+                         'endereco': emp['endereco'], 'valor': (fin or {}).get('valor') or ''})
+        for cid2 in (mais or []):
+            e2 = PrestContrato.empresa(cid2)
+            if not e2:
+                continue
+            f2 = (FinContrato.por_cliente(cid2) or [None])[0] if (_aprovador() or cid2 in _escopo()) else None
+            emps_ini.append({'cliente_id': e2['id'], 'razao': e2['nome_razao_social'], 'numero': e2['numero_cliente'], 'cnpj': e2['cpf_cnpj'],
+                             'endereco': e2['endereco'], 'valor': (f2 or {}).get('valor') or ''})
     pct = (execute_query('SELECT carteira_pct FROM usuarios WHERE id = %s', (current_user.id,), fetch=True, fetch_one=True) or {}).get('carteira_pct')
     # contrato novo nasce preenchido com o sócio administrador do cadastro (22/11/2026 — Anderson: "os campos quase nada preenchido, e está tudo no cadastro")
     rep0 = None
@@ -418,7 +431,7 @@ def _form_ctx(cliente_id=None, fin_contrato_id=None, contrato=None):
         rep0 = {'rep_nome': (s0.get('nome') or '').strip(), 'rep_cpf': s0.get('cpf') or '', 'rep_documento': s0.get('documento') or '',
                 'rep_email': s0.get('email') or '', 'rep_cargo': s0.get('cargo') or 'sócio administrador', 'rep_celular': s0.get('celular') or ''}
     return {'emp': emp, 'fin': fin, 'dados': d, 'contrato': contrato, 'AREAS': AREAS, 'SIGN_Q': PrestContrato.signatarios_qualicontax(),
-            'contratada': PrestContrato.contratada(), 'rep0': rep0,
+            'contratada': PrestContrato.contratada(), 'rep0': rep0, 'emps_ini': emps_ini,
             'testemunhas': PrestContrato.testemunhas_disponiveis(), 'hoje': date.today(),
             'carteira_pct': float(pct) if pct else None}
 
@@ -461,7 +474,7 @@ def contratos():
             r['valor'] = float(str(d.get('valor') or '0').replace(',', '.'))
         except ValueError:
             r['valor'] = 0.0
-        r['areas'] = [AREAS[a][0].capitalize() for a in (d.get('areas') or []) if a in AREAS]
+        r['areas'] = [nome_proprio(AREAS[a][0]) for a in (d.get('areas') or []) if a in AREAS]
         r['extras'] = [x for x in (d.get('servicos_extras') or d.get('extras') or []) if x]
         r['carteira'] = (d.get('carteira') or {}).get('nome') or ''
         r['grupo_n'] = int((d.get('grupo') or {}).get('n') or 0)
@@ -490,13 +503,18 @@ def contrato_novo():
     if not cid:
         flash('O contrato nasce do cadastro: clique em Novo contrato e escolha a empresa. Nada é digitado do zero.', 'warning')
         return redirect(url_for('financeiro.contratos'))
-    imp = PrestContrato.impedimentos([cid])
-    if cid in imp:
-        emp = PrestContrato.empresa(cid)
-        flash('%s não pode receber contrato — %s.'
-              % ((emp or {}).get('nome_razao_social') or 'A empresa', imp[cid]), 'warning')
+    # 25/11/2026 — Anderson: "permitir que selecionemos mais de uma empresa para o contrato": as outras vêm em &mais=
+    mais = []
+    for x in (request.args.get('mais') or '').split(','):
+        if x.strip().isdigit() and int(x) != cid and int(x) not in mais:
+            mais.append(int(x))
+    imp = PrestContrato.impedimentos([cid] + mais)
+    if imp:
+        for k, motivo in imp.items():
+            emp = PrestContrato.empresa(k)
+            flash('%s não pode receber contrato — %s.' % ((emp or {}).get('nome_razao_social') or 'A empresa', motivo), 'warning')
         return redirect(url_for('financeiro.contratos'))
-    return render_template('financeiro/contrato_form.html', **_form_ctx(cid, request.args.get('fin_contrato_id', type=int)))
+    return render_template('financeiro/contrato_form.html', **_form_ctx(cid, request.args.get('fin_contrato_id', type=int), mais=mais))
 
 
 @financeiro.route('/comercial/contratos/<int:cid>/editar')

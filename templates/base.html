@@ -62,7 +62,7 @@
             {% endif %}
             {% if current_user.has_permission('modulos.comercial') %}
             <li>
-                <a href="{{ url_for('modulos.comercial') }}" class="rail-link rail-comercial {% if request.endpoint == 'modulos.comercial' %}active{% endif %}" title="Comercial">
+                <a href="{{ url_for('modulos.comercial') }}" class="rail-link rail-comercial {% if request.endpoint == 'modulos.comercial' or request.path.startswith('/comercial/') %}active{% endif %}" title="Comercial">
                     <i class="fas fa-handshake"></i>
                     <span>Comercial</span>
                 </a>
@@ -104,7 +104,7 @@
             {% set _fin_ep = 'financeiro.index' if current_user.has_permission('financeiro.index') else ('financeiro.lancamentos' if current_user.has_permission('financeiro.lancamentos') else ('financeiro.honorarios_cadastrar' if current_user.has_permission('financeiro.honorarios_cadastrar') else None)) %}
             {% if _fin_ep %}
             <li>
-                <a href="{{ url_for(_fin_ep) }}" class="rail-link rail-financeiro {% if request.endpoint and 'financeiro' in request.endpoint %}active{% endif %}" title="Financeiro">
+                <a href="{{ url_for(_fin_ep) }}" class="rail-link rail-financeiro {% if request.endpoint and 'financeiro' in request.endpoint and not request.path.startswith('/comercial/') %}active{% endif %}" title="Financeiro">
                     <i class="fas fa-dollar-sign"></i>
                     <span>Financeiro</span>
                 </a>

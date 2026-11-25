@@ -159,8 +159,8 @@
   // ── Novo contrato: a caixa da empresa (clientes ativos e avulsos sem contrato vivo) ──
   window.ctNovo = function () {
     if (!window.CaixaCliente) return;
-    CaixaCliente.abrir({ clientes: CLI, titulo: 'Empresa do contrato', sub: {{ ('%d empresas e avulsos sem contrato · o que faltar no cadastro você completa no contrato' % n_prontas) | tojson }},
-      onUsar: function (c) { if (c) location.href = '/comercial/contratos/novo?cliente_id=' + c.id; } });
+    CaixaCliente.abrir({ clientes: CLI, varios: true, titulo: 'Empresa do contrato', sub: {{ ('%d empresas e avulsos sem contrato · toque em uma, ou em várias para um contrato em grupo' % n_prontas) | tojson }},
+      onUsar: function (cs) { if (!cs || !cs.length) return; var mais = cs.slice(1).map(function (x) { return x.id; }).join(','); location.href = '/comercial/contratos/novo?cliente_id=' + cs[0].id + (mais ? '&mais=' + mais : ''); } });
   };
   {% if request.args.get('novo') %}setTimeout(function () { ctNovo(); }, 150);{% endif %}
 })();

@@ -19,6 +19,7 @@ from decimal import Decimal
 
 from utils.db_helper import execute_query
 from utils.extenso import reais_extenso
+from utils.texto import nome_proprio
 
 QUALICONTAX = {
     'razao': 'QUALICONTAX ASSESSORIA CONTÁBIL LTDA – EPP',
@@ -40,12 +41,12 @@ AREAS = {
         'Elaboração da Contabilidade de acordo com as Normas Brasileiras de Contabilidade;',
         'Emissão de balancetes; e',
         'Elaboração de Balanço Patrimonial e demais Demonstrações Contábeis obrigatórias.']),
-    'FISCAL': ('OBRIGAÇÕES FISCAIS', [
+    'FISCAL': ('ESCRITA FISCAL', [          # 25/11/2026 — Anderson: "Contabilidade, Escrita Fiscal e Departamento Pessoal"
         'Orientação e controle de aplicação dos dispositivos legais vigentes, sejam federais, estaduais ou municipais;',
         'Elaboração dos registros fiscais obrigatórios (EFD ICMS/IPI, GIA e outros), eletrônicos ou não, perante os órgãos municipais, '
         'estaduais e federais, bem como as demais obrigações que se fizerem necessárias; e',
         'Atendimento às demais exigências previstas na legislação, bem como aos eventuais procedimentos fiscais.']),
-    'PESSOAL': ('DEPARTAMENTO DE PESSOAL', [
+    'PESSOAL': ('DEPARTAMENTO PESSOAL', [
         'Registros de empregados e serviços correlatos;',
         'Elaboração da folha de pagamento dos empregados e de pró-labore, bem como das guias de recolhimento dos encargos sociais e tributos afins;',
         'Elaboração, orientação e controle da aplicação dos preceitos da Consolidação das Leis do Trabalho, bem como daqueles atinentes à '
@@ -604,7 +605,7 @@ class PrestContrato:
                  + (', na presença de %d (%s) testemunha%s.' % (n_test, {1: 'uma', 2: 'duas'}.get(n_test, _dia_extenso(n_test)), 's' if n_test > 1 else '') if n_test else '.'))
         # a data do fecho é a da assinatura (quando o contrato é fechado); antes disso, a de hoje
         local = '%s, %s' % (dados.get('local') or 'São Paulo', data_extenso(_data(dados.get('data_assinatura')) or date.today()))
-        areas_txt = ', '.join(AREAS[a][0].capitalize() for a in areas) + ((' + ' + '; '.join(dados.get('servicos_extras'))) if dados.get('servicos_extras') else '')
+        areas_txt = ', '.join(nome_proprio(AREAS[a][0]) for a in areas) + ((' + ' + '; '.join(dados.get('servicos_extras'))) if dados.get('servicos_extras') else '')
         decimo_txt = {'COBRADO': '1 honorário mensal, em duas parcelas (novembro e dezembro)', 'UNICA': '1 honorário mensal, em dezembro'}.get(dados.get('decimo'), 'isento')
         resumo = [('Objeto', areas_txt or '—'), ('Honorários mensais', '%s, com vencimento todo dia %d' % (brl(valor), dia)),
                   ('Início', inicio_d.strftime('%d/%m/%Y')), ('13º honorário', decimo_txt),

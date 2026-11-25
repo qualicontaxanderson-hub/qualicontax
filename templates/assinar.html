@@ -61,7 +61,7 @@ input.cod { letter-spacing:8px; font-size:22px; text-align:center; font-family:m
     <div class="as-card">
         <div class="as-res">
             <div><div class="l">Contratante</div><div class="v">{{ d.empresas[0].razao }}{% if d.empresas | length > 1 %} <small>+ {{ d.empresas | length - 1 }} empresa{{ 's' if d.empresas | length > 2 }}</small>{% endif %}</div></div>
-            <div><div class="l">Serviços</div><div class="v"><small>{% for k in d.areas %}{{ AREAS[k][0] | capitalize }}{% if not loop.last %}, {% endif %}{% endfor %}{% if d.servicos_extras %}{% if d.areas %}, {% endif %}{{ d.servicos_extras | length }} específico{{ 's' if d.servicos_extras | length > 1 }}{% endif %}</small></div></div>
+            <div><div class="l">Serviços</div><div class="v"><small>{% for k in d.areas %}{{ AREAS[k][0] | nome_proprio }}{% if not loop.last %}, {% endif %}{% endfor %}{% if d.servicos_extras %}{% if d.areas %}, {% endif %}{{ d.servicos_extras | length }} específico{{ 's' if d.servicos_extras | length > 1 }}{% endif %}</small></div></div>
             <div><div class="l">Honorários</div><div class="v">{{ brl(d.valor) }} <small>/ mês, dia {{ d.dia_vencimento }}</small></div></div>
             <div><div class="l">Início</div><div class="v">{{ d.inicio[8:10] }}/{{ d.inicio[5:7] }}/{{ d.inicio[:4] }}</div></div>
             <div><div class="l">13º honorário</div><div class="v"><small>{{ {'COBRADO': 'novembro e dezembro', 'UNICA': 'dezembro, parcela única', 'ISENTO': 'isento'}.get(d.decimo, d.decimo) }}</small></div></div>

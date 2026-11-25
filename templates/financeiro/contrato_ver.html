@@ -134,7 +134,7 @@
         {% if d.assinante_extra %}<div class="cv-tx" style="margin-top:6px"><b>{{ d.assinante_extra.nome | nome_proprio }}</b>, {{ d.assinante_extra.cargo }}{% if d.assinante_extra.cpf %} · CPF {{ d.assinante_extra.cpf }}{% endif %}{% if d.assinante_extra.documento %} · {{ d.assinante_extra.documento }}{% endif %}<br><small>{{ d.assinante_extra.email or 'SEM E-MAIL' }}{% if d.assinante_extra.celular %} · {{ d.assinante_extra.celular }}{% endif %}</small></div>{% endif %}
         <span class="cv-lbl">Serviços</span>
         <div class="tj-itens">
-          {% for k in d.areas %}<div class="tj-it"><span>{{ AREAS[k][0] | capitalize }}</span><b style="color:#94a3b8; font-weight:600">{{ AREAS[k][1] | length }} itens</b></div>{% endfor %}
+          {% for k in d.areas %}<div class="tj-it"><span>{{ AREAS[k][0] | nome_proprio }}</span><b style="color:#94a3b8; font-weight:600">{{ AREAS[k][1] | length }} itens</b></div>{% endfor %}
           {% for s in d.servicos_extras or [] %}<div class="tj-it"><span>{{ s }}</span><b style="color:#94a3b8; font-weight:600">específico</b></div>{% endfor %}
           {% if not d.areas and not d.servicos_extras %}<div class="tj-it"><span style="color:#b91c1c">nenhum serviço marcado</span></div>{% endif %}
         </div>

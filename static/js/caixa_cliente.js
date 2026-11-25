@@ -11,6 +11,7 @@
 
    CaixaCliente.abrir({ clientes: [{id, num, nome, doc, av, mensal, fant?, cid?}], atual: '149', titulo, sub, permite_vazio: true,
                         rotulo_vazio: 'A própria empresa', fora: [{id, num, nome, doc, av, motivo, url?}], rotulo_fora: 'em A CADASTRAR',
+                        varios: true,              // escolher várias: onUsar recebe a LISTA de clientes
                         onUsar: function (cliente|null) {} })                                                                 */
 (function () {
   var PK_CORES = ['#0f766e', '#4f46e5', '#b45309', '#be123c', '#7c3aed', '#0369a1', '#15803d', '#c2410c'];
@@ -47,7 +48,8 @@
   }
   function ordem(sel, q) {
     return function (a, b) {
-      if ((a.id === sel) !== (b.id === sel)) return a.id === sel ? -1 : 1;
+      var sa = Array.isArray(sel) ? sel.indexOf(a.id) >= 0 : a.id === sel, sb = Array.isArray(sel) ? sel.indexOf(b.id) >= 0 : b.id === sel;
+      if (sa !== sb) return sa ? -1 : 1;
       if (q) { var pa = a.nomeN.indexOf(q) === 0, pb = b.nomeN.indexOf(q) === 0; if (pa !== pb) return pa ? -1 : 1; }
       return a.nome.localeCompare(b.nome, 'pt-BR');
     };
@@ -56,19 +58,21 @@
   function abrir(o) {
     o = o || {};
     var lista = (o.clientes || []).map(prep), fora = (o.fora || []).map(prep);
-    var sel = o.atual ? String(o.atual) : '', orig = sel;
+    var varios = !!o.varios;                       // 25/11/2026: escolher mais de uma empresa (rede) para o contrato
+    var sel = o.atual ? String(o.atual) : '', orig = sel, sels = [];
+    function marcada(id) { return varios ? sels.indexOf(String(id)) >= 0 : sel === String(id); }
     var f = document.createElement('div'); f.className = 'pk-fundo pk-sobre';
     if (o.z) f.style.zIndex = o.z;
     f.innerHTML = '<div class="pk pk-verde" role="dialog" aria-modal="true" aria-label="Empresa">'
       + '<header class="pk-cab"><span class="pk-av"><i class="fas fa-building"></i></span>'
       + '<div class="pk-quem"><b>' + esc(o.titulo || 'Empresa') + '</b><span>' + esc(o.sub || 'nome, número ou CNPJ/CPF') + '</span></div>'
-      + '<div class="pk-val"><span class="pk-tag">escolhida</span><b class="pk-val-b"></b><small class="pk-val-s"></small></div>'
+      + '<div class="pk-val"><span class="pk-tag">' + (varios ? 'escolhidas' : 'escolhida') + '</span><b class="pk-val-b"></b><small class="pk-val-s"></small></div>'
       + '<button type="button" class="pk-x" title="Fechar (Esc)"><i class="fas fa-xmark"></i></button></header>'
       + '<div class="pk-barra"><div class="pk-busca"><i class="fas fa-search"></i><input type="search" name="q" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" inputmode="search" enterkeyhint="search" placeholder="Buscar pelo nome, fantasia, cidade, número ou CNPJ/CPF…"></div><div class="pk-conta"></div></div>'
       + '<div class="pk-corpo"><div class="pk-grade pk-emp-grade"></div><div class="pk-fora-bloco" hidden><div class="pk-fora-tit"></div><div class="pk-grade pk-grade-fora"></div></div></div>'
       + '<footer class="pk-pe"><div class="pk-pe-info"></div><button type="button" class="pk-canc">Cancelar</button>'
       + (o.permite_vazio ? '<button type="button" class="pk-sem"><i class="fas fa-ban"></i> ' + esc(o.rotulo_vazio || 'Sem empresa') + '</button>' : '')
-      + '<button type="button" class="pk-ok"><i class="fas fa-check"></i> Usar esta empresa</button></footer></div>';
+      + '<button type="button" class="pk-ok"><i class="fas fa-check"></i> ' + (varios ? 'Usar estas empresas' : 'Usar esta empresa') + '</button></footer></div>';
     document.body.appendChild(f);
     var trava = document.body.style.overflow; document.body.style.overflow = 'hidden';
     var $q = function (s) { return f.querySelector(s); };
@@ -77,9 +81,22 @@
     function tecla(e) { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); fechar(); } }
     document.addEventListener('keydown', tecla, true);
     function porId(id) { return lista.filter(function (x) { return x.id === String(id); })[0]; }
-    function usar(id) { var c = porId(id); fechar(); if (o.onUsar) o.onUsar(c || null); }
+    function usar(id) {
+      if (varios) { var cs = sels.map(porId).filter(Boolean); if (!cs.length) return; fechar(); if (o.onUsar) o.onUsar(cs); return; }
+      var c = porId(id); fechar(); if (o.onUsar) o.onUsar(c || null);
+    }
+    function alternar(id) { id = String(id); var i = sels.indexOf(id); if (i >= 0) sels.splice(i, 1); else sels.push(id); }
     function cabecalho() {
       var c = porId(sel), vb = $q('.pk-val-b'), vs = $q('.pk-val-s');
+      if (varios) {
+        var cs = sels.map(porId).filter(Boolean);
+        vb.textContent = !cs.length ? 'nenhuma' : cs.length === 1 ? cs[0].nome : cs.length + ' empresas';
+        vs.textContent = !cs.length ? 'toque nos cartões · uma ou várias (rede)' : cs.length === 1 ? ((cs[0].num ? 'nº ' + cs[0].num + ' · ' : '') + docf(cs[0].doc)) : cs.map(function (x) { return x.fant || x.nome; }).join(' · ');
+        $q('.pk-ok').disabled = !cs.length;
+        $q('.pk-ok').innerHTML = '<i class="fas fa-check"></i> ' + (cs.length > 1 ? 'Usar estas ' + cs.length + ' empresas' : 'Usar esta empresa');
+        $q('.pk-pe-info').innerHTML = cs.length > 1 ? '<i class="fas fa-link"></i> Contrato em grupo: as ' + cs.length + ' empresas entram juntas, com um valor geral ou um por empresa.' : '';
+        return;
+      }
       vb.textContent = c ? c.nome : (o.permite_vazio ? (o.rotulo_vazio || 'nenhuma') : 'nenhuma');
       vs.textContent = c ? ((c.num ? 'nº ' + c.num + ' · ' : '') + docf(c.doc)) : 'toque num cartão';
       $q('.pk-ok').disabled = !sel;
@@ -87,7 +104,7 @@
     }
     function cartao(c) {
       // cartão enxuto (24/11/2026, Anderson: "CARDs que mostre o Nome e abaixo o CNPJ ou CPF")
-      var on = sel === c.id;
+      var on = marcada(c.id);
       return '<button type="button" class="pk-card pk-emp' + (on ? ' on' : '') + '" data-id="' + c.id + '">'
         + '<span class="pk-ck"><i class="fas fa-check"></i></span><span class="pk-sig" style="background:' + cor(c.nome) + '">' + esc(sigla(c.nome)) + '</span>'
         + '<span class="pk-emp-tx"><b>' + esc(c.nome) + '</b><small>' + esc(docf(c.doc) || 'sem CNPJ') + (c.av ? ' · <em>avulso</em>' : '') + '</small></span></button>';
@@ -104,7 +121,7 @@
       var soNumero = qd.length >= 3 && qd === q.replace(/[.\-\/\s]/g, '');      // digitou só número: casa pelo documento/número
       // o modo estrito vale para as duas listas juntas: se ALGUÉM começa pelo digitado, só quem começa aparece (nas duas)
       var estrito = lista.some(function (x) { return casaInicio(x, toks, qd, soNumero); }) || fora.some(function (x) { return casaInicio(x, toks, qd, soNumero); });
-      var vis = filtrar(lista, toks, qd, soNumero, estrito).sort(ordem(sel, q));
+      var vis = filtrar(lista, toks, qd, soNumero, estrito).sort(ordem(varios ? sels : sel, q));
       var mostra = vis.slice(0, LIMITE);
       var visFora = (q.length >= 2 || soNumero) ? filtrar(fora, toks, qd, soNumero, estrito).sort(ordem('', q)) : [];
       grade.innerHTML = mostra.map(cartao).join('') + (!vis.length ? '<div class="pk-carregando">' + (visFora.length ? 'Nenhuma empresa disponível com esse nome.' : 'Nenhuma empresa com esse nome.') + '</div>' : '');
@@ -118,19 +135,20 @@
         gradeFora.querySelectorAll('.pk-fora').forEach(function (r) { r.addEventListener('click', function (e) { if (e.target.tagName === 'A') return; var d = r.querySelector('.pk-fora-pq'); d.hidden = !d.hidden; r.classList.toggle('aberta', !d.hidden); }); });
       }
       grade.querySelectorAll('.pk-card[data-id]').forEach(function (c) {
-        c.addEventListener('click', function () { sel = c.dataset.id; desenhar(); cabecalho(); });
-        c.addEventListener('dblclick', function () { sel = c.dataset.id; usar(sel); });
+        c.addEventListener('click', function () { if (varios) alternar(c.dataset.id); else sel = c.dataset.id; desenhar(); cabecalho(); });
+        c.addEventListener('dblclick', function () { if (varios) { if (!marcada(c.dataset.id)) alternar(c.dataset.id); usar(); } else { sel = c.dataset.id; usar(sel); } });
       });
     }
     busca.addEventListener('input', desenhar);
     busca.addEventListener('keydown', function (e) {
       if (e.key !== 'Enter') return; e.preventDefault();
-      var p = grade.querySelectorAll('.pk-card[data-id]'); if (p.length === 1) { sel = p[0].dataset.id; usar(sel); }
+      var p = grade.querySelectorAll('.pk-card[data-id]'); if (p.length !== 1) return;
+      if (varios) { if (!marcada(p[0].dataset.id)) alternar(p[0].dataset.id); busca.value = ''; desenhar(); cabecalho(); } else { sel = p[0].dataset.id; usar(sel); }
     });
     $q('.pk-x').addEventListener('click', fechar);
     $q('.pk-canc').addEventListener('click', fechar);
     if ($q('.pk-sem')) $q('.pk-sem').addEventListener('click', function () { fechar(); if (o.onUsar) o.onUsar(null); });
-    $q('.pk-ok').addEventListener('click', function () { if (sel) usar(sel); });
+    $q('.pk-ok').addEventListener('click', function () { if (varios) usar(); else if (sel) usar(sel); });
     f.addEventListener('mousedown', function (e) { if (e.target === f) fechar(); });
     desenhar(); cabecalho();
     if (!('ontouchstart' in window)) busca.focus();

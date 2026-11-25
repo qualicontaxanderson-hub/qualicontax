@@ -54,6 +54,26 @@
 /* o que acontece depois: ícones coloridos */
 .oc-passo:nth-child(1) i { background:#fff7ed; color:#ea580c; } .oc-passo:nth-child(2) i { background:#eff6ff; color:#2563eb; } .oc-passo:nth-child(3) i { background:#f5f3ff; color:#7c3aed; }
 
+/* busca de pessoa do cadastro em cartões (25/11/2026 — Anderson: "essa consulta para escolher outro responsável está horrível") */
+.pf-sug.ct-pgrid { position:static; display:none; grid-template-columns:repeat(auto-fill, minmax(250px, 1fr)); gap:10px; margin-top:10px; background:transparent; border:0; box-shadow:none; max-height:none; overflow:visible; }
+.pf-sug.ct-pgrid.aberta { display:grid; }
+.pf-sug.ct-pgrid .ct-pcard { display:flex; align-items:center; gap:11px; padding:10px 12px; border:1.5px solid #e3ece7; border-radius:13px; background:#fff; cursor:pointer; text-align:left; font:inherit; color:inherit; min-width:0; transition:border-color .15s, box-shadow .15s; }
+.pf-sug.ct-pgrid .ct-pcard:hover { border-color:#c4b5fd; box-shadow:0 8px 22px rgba(124,58,237,.10); }
+.ct-pcard .sg { width:38px; height:38px; border-radius:11px; color:#fff; font-weight:900; font-size:12.5px; display:inline-flex; align-items:center; justify-content:center; flex:0 0 auto; }
+.ct-pcard .tx { min-width:0; display:flex; flex-direction:column; line-height:1.25; } .ct-pcard .tx b { font-size:13.5px; color:#0f172a; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.ct-pcard .tx small { font-size:12px; color:#64748b; margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; } .ct-pcard .tx small em { font-style:normal; color:#15803d; font-weight:700; }
+.pf-sug.ct-pgrid .ct-pvazio { grid-column:1 / -1; padding:12px 14px; border:1.5px dashed #e2e8f0; border-radius:13px; color:#64748b; font-size:13px; background:#fff; }
+
+/* vence no dia e início do contrato: com cor (25/11/2026 — Anderson: "deixar mais colorido com vida") */
+.ct-dia button { border-color:#fde68a; background:#fffbeb; color:#92400e; min-width:44px; justify-content:center; } .ct-dia button.on { background:linear-gradient(135deg,#f59e0b,#b45309); border-color:#b45309; color:#fff; }
+.ct-dia .ns-in { border-color:#fde68a; color:#92400e; background:#fffbeb; } .ct-dia .ns-in:focus { border-color:#f59e0b; }
+#ct-inis button { border-color:#bfdbfe; background:#eff6ff; color:#1e40af; } #ct-inis button.on { background:linear-gradient(135deg,#3b82f6,#1e40af); border-color:#1e40af; color:#fff; }
+.ct-data { position:relative; display:inline-flex; align-items:center; } .ct-data > i { position:absolute; left:12px; color:#2563eb; pointer-events:none; }
+.ct-data .ns-in { width:170px; padding-left:34px; border-color:#bfdbfe; background:#eff6ff; color:#1e40af; font-weight:800; text-transform:none; cursor:pointer; }
+.ct-data .ns-in:focus { border-color:#2563eb; box-shadow:0 0 0 3px rgba(37,99,235,.15); }
+.ct-data .ns-in::-webkit-calendar-picker-indicator { cursor:pointer; opacity:.7; }
+#ct-dias + label, .ns-campo:has(#ct-inis) > label { color:#1e40af; } .ns-campo:has(#ct-dias) > label { color:#92400e; }
+
 /* ações (iguais às da janela do contrato) */
 .tj-acao { display:flex; align-items:center; gap:12px; width:100%; text-align:left; border:1px solid #e2e8f0; background:#fff; border-radius:14px; padding:10px 12px; font:inherit; cursor:pointer; margin-bottom:8px; color:inherit; text-decoration:none; }
 .tj-acao > i { width:36px; height:36px; border-radius:11px; background:#f1f5f4; color:#475569; display:inline-flex; align-items:center; justify-content:center; font-size:14px; flex-shrink:0; }
@@ -220,7 +240,7 @@
         </div>
         <div class="pt-acoes">{% if emp %}<a href="{{ url_for('clientes.detalhes', id=emp.id) }}" target="_blank" rel="noopener"><i class="fas fa-up-right-from-square"></i> Cadastro</a>{% endif %}<a href="#" id="ct-juntar" onclick="ctJuntar(); return false;"><i class="fas fa-plus"></i> Juntar outra empresa da rede</a></div>
         <div class="ct-emps" id="pf-emps">
-          {% for e in dados.empresas or ([{'cliente_id': emp.id, 'razao': emp.nome_razao_social, 'numero': emp.numero_cliente, 'cnpj': emp.cpf_cnpj, 'endereco': emp.endereco, 'valor': fin.valor if fin else ''}] if emp else []) %}
+          {% for e in dados.empresas or emps_ini %}
           <div class="ct-emp"><input type="hidden" name="emp_cliente_id" value="{{ e.cliente_id }}"><input type="hidden" name="emp_endereco" value="{{ e.endereco }}">
             <span class="sg">{{ e.numero or 'PF' }}</span><span class="tx"><b class="nome">{{ e.razao }}</b><small>{{ e.cnpj }}</small></span>
             <div class="ns-money fixo" hidden><span>R$</span><input class="ns-in dinheiro" name="emp_valor" value="{{ e.valor or '' }}" placeholder="0,00" title="valor desta empresa (só para rede)"></div>
@@ -274,12 +294,12 @@
         {# 24/11/2026 — Anderson: "opção de colocar outro para assinar... gerente, procurador... mas tem que ter o cadastro de CLIENTE ou AVULSO" #}
         <button type="button" class="ns-op ct-op-mais" id="ct-outra-bt" onclick="ctOutra()"><i class="fas fa-user-plus"></i><b>Outra pessoa do cadastro</b><small>procurador, gerente, quem tem poder para assinar</small></button>
       </div>
-      <div class="ct-busca" id="ct-outra-busca" style="margin-top:10px" hidden><i class="fas fa-magnifying-glass"></i><input type="text" id="pf-rbusca" class="ns-in" placeholder="Buscar no cadastro de pessoas (cliente ou avulso): nome ou CPF" autocomplete="off"><div id="pf-rsug" class="pf-sug" style="display:none;"></div></div>
+      <div class="ct-busca" id="ct-outra-busca" style="margin-top:10px" hidden><i class="fas fa-magnifying-glass"></i><input type="text" id="pf-rbusca" class="ns-in" placeholder="Buscar no cadastro de pessoas (cliente ou avulso): nome ou CPF" autocomplete="off"><div id="pf-rsug" class="pf-sug ct-pgrid"></div></div>
       <div class="ct-qual" id="ct-qual" hidden><span class="lbl">Assina como</span><div class="ct-chips" id="ct-qual-chips">{% for qd in ('Procurador(a)', 'Gerente', 'Diretor(a)', 'Administrador(a) não sócio(a)', 'Representante autorizado(a)') %}<button type="button" data-v="{{ qd }}" onclick="ctQualidade(this)">{{ qd }}</button>{% endfor %}</div></div>
     </div>
     <div class="ct-extra" id="ct-extra" hidden>
       <div class="pt-rot" style="margin:14px 0 8px"><i class="fas fa-user-plus"></i> Quem mais assina <small style="font-weight:600; text-transform:none; letter-spacing:0">· busque no cadastro de pessoas (cliente ou avulso)</small></div>
-      <div class="ct-busca" id="ct-extra-busca" style="margin-top:0"><i class="fas fa-magnifying-glass"></i><input type="text" id="pf-pbusca" class="ns-in" placeholder="Nome ou CPF" autocomplete="off"><div id="pf-psug" class="pf-sug" style="display:none;"></div></div>
+      <div class="ct-busca" id="ct-extra-busca" style="margin-top:0"><i class="fas fa-magnifying-glass"></i><input type="text" id="pf-pbusca" class="ns-in" placeholder="Nome ou CPF" autocomplete="off"><div id="pf-psug" class="pf-sug ct-pgrid"></div></div>
       <div class="ct-note">Quem não está no cadastro precisa ser cadastrado em Cadastros › Clientes ou Avulsos (pessoa física) antes de entrar no contrato.</div>
     </div>
   </section>
@@ -295,9 +315,9 @@
   {% endif %}
 
   {# ── 3. serviços ── #}
-  <section class="tj-sec c-agua"><h4><i class="fas fa-list-check"></i> Serviços <small>só fiscal, só DP ou tudo; mais os específicos</small></h4>
+  <section class="tj-sec c-agua"><h4><i class="fas fa-list-check"></i> Serviços <small>só escrita fiscal, só departamento pessoal ou tudo; mais os específicos</small></h4>
     <div class="ct-chips grande" id="ct-areas">
-      {% for k, v in AREAS.items() %}{% set on = (dados.areas and k in dados.areas) or (not dados and not contrato) %}<label class="{{ 'on' if on }}"><input type="checkbox" name="areas" value="{{ k }}" {% if on %}checked{% endif %} onchange="this.parentNode.classList.toggle('on', this.checked); ctResumo();"><i class="fas fa-check"></i> {{ v[0] | capitalize }}</label>{% endfor %}
+      {% for k, v in AREAS.items() %}{% set on = (dados.areas and k in dados.areas) or (not dados and not contrato) %}<label class="{{ 'on' if on }}"><input type="checkbox" name="areas" value="{{ k }}" {% if on %}checked{% endif %} onchange="this.parentNode.classList.toggle('on', this.checked); ctResumo();"><i class="fas fa-check"></i> {{ v[0] | nome_proprio }}</label>{% endfor %}
     </div>
     <div class="ct-serv" id="pf-extras">{% for s in dados.servicos_extras or [] %}<input type="text" name="servico_extra" class="ns-in" value="{{ s }}" placeholder="serviço específico">{% endfor %}</div>
     <div style="margin-top:10px"><button type="button" class="ct-mais" onclick="ctServExtra()"><i class="fas fa-plus"></i> Serviço específico <span style="font-weight:600; opacity:.8">ex.: emissão de notas em nome da contratante</span></button></div>
@@ -315,8 +335,8 @@
     {% endif %}
     <div class="ct-linha" style="{{ 'margin-top:12px' if sug }}">
       <div class="ns-campo ct-valor" style="flex:0 0 220px"><label>Valor mensal</label><div class="ns-money fixo"><span>R$</span><input class="ns-in dinheiro" name="valor" id="ct-valor" value="{{ dados.valor or (fin.valor if fin else '') }}" placeholder="0,00" required></div></div>
-      <div class="ns-campo"><label>Vence no dia</label><div class="ct-chips ct-dia" id="ct-dias">{% for d in (5, 10, 15, 20, 25, 30) %}<button type="button" data-v="{{ d }}" class="{{ 'on' if dia|int == d }}" onclick="ctDia(this)">{{ d }}</button>{% endfor %}<input type="text" class="ns-in" id="ct-dia-outro" placeholder="outro" inputmode="numeric" maxlength="2" value="{{ dia if dia|int not in (5, 10, 15, 20, 25, 30) else '' }}" oninput="ctDiaOutro(this)"></div></div>
-      <div class="ns-campo"><label>Início do contrato</label><div class="ct-chips" id="ct-inis"><button type="button" data-v="hoje" onclick="ctIni(this)">hoje</button><button type="button" data-v="mes" onclick="ctIni(this)">1º deste mês</button><button type="button" data-v="prox" onclick="ctIni(this)">1º do mês que vem</button><input type="text" class="ns-in" id="ct-ini-txt" placeholder="dd/mm/aaaa" inputmode="numeric" maxlength="10" style="width:120px" value="{{ ini[8:10] ~ '/' ~ ini[5:7] ~ '/' ~ ini[0:4] if ini and ini|length == 10 else '' }}" oninput="ctIniTxt(this)"></div></div>
+      <div class="ns-campo"><label>Vence no dia</label><div class="ct-chips ct-dia" id="ct-dias">{% for d in (4, 10, 15, 20, 25, 30) %}<button type="button" data-v="{{ d }}" class="{{ 'on' if dia|int == d }}" onclick="ctDia(this)">{{ d }}</button>{% endfor %}<input type="text" class="ns-in" id="ct-dia-outro" placeholder="outro" inputmode="numeric" maxlength="2" value="{{ dia if dia|int not in (4, 10, 15, 20, 25, 30) else '' }}" oninput="ctDiaOutro(this)"></div></div>
+      <div class="ns-campo"><label>Início do contrato</label><div class="ct-chips" id="ct-inis"><button type="button" data-v="hoje" onclick="ctIni(this)">hoje</button><button type="button" data-v="mes" onclick="ctIni(this)">1º deste mês</button><button type="button" data-v="prox" onclick="ctIni(this)">1º do mês que vem</button><span class="ct-data"><i class="fas fa-calendar-days"></i><input type="date" class="ns-in" id="ct-ini-txt" value="{{ ini if ini and ini|length == 10 else '' }}" min="2000-01-01" onchange="ctIniTxt(this)"></span></div></div>
     </div>
     <h4 style="margin:16px 0 8px; --cor:#2563eb; --cor-e:#1e40af; --cor-f:#eff6ff"><i class="fas fa-sliders"></i> Condições <small>reajuste, 13º, multa e juros</small><button type="button" class="ct-alt" onclick="ctToggle('ct-cond-body', this)"><i class="fas fa-pen"></i> Alterar</button></h4>
     <div class="ct-frase" id="ct-cond-sum"></div>
@@ -429,7 +449,7 @@ function pfSocio(nome, cpf, email, cel, doc, cargo, el, pf) {
 function pfExtra(d) {
     $('extra_nome').value = d.nome || ''; $('extra_cpf').value = d.cpf || ''; $('extra_documento').value = d.documento || ''; $('extra_email').value = d.email || ''; $('extra_celular').value = d.celular || ''; $('extra_pf').value = d.id || '';
     $('extra_cargo').value = d.cargo || 'representante autorizado(a)';
-    $('pf-pbusca').value = ''; $('pf-psug').style.display = 'none';
+    $('pf-pbusca').value = ''; $('pf-psug').classList.remove('aberta');
     var tem = !!(d.nome || '').trim(); $('ct-extra').hidden = true; $('ct-extra-card').hidden = !tem; $('ct-extra-vazio').hidden = tem;
     if (tem) cardPessoa('extra_', 'ct-extra-link', 'Quem mais assina?');
     ctResumo();
@@ -447,7 +467,7 @@ function ctOutra() {
 }
 function pfOutra(d) {
     pfSocio(d.nome || '', d.cpf || '', d.email || '', d.celular || '', d.documento || '', '', $('ct-outra-bt'), d.id || '');
-    $('rep_cargo').value = ''; $('pf-rbusca').value = ''; $('pf-rsug').style.display = 'none'; $('ct-outra-busca').hidden = true;
+    $('rep_cargo').value = ''; $('pf-rbusca').value = ''; $('pf-rsug').classList.remove('aberta'); $('ct-outra-busca').hidden = true;
     $('ct-qual').hidden = false; document.querySelectorAll('#ct-qual-chips button').forEach(function (x) { x.classList.remove('on'); });
     ctPessoaCard(); ctResumo();
 }
@@ -480,17 +500,15 @@ function ctDiaOutro(inp) { var n = parseInt(inp.value.replace(/\D/g, ''), 10); i
 function ctServExtra() { var i = document.createElement('input'); i.type = 'text'; i.name = 'servico_extra'; i.className = 'ns-in'; i.placeholder = 'serviço específico, ex.: emissão de notas fiscais em nome da contratante'; i.addEventListener('input', ctResumo); $('pf-extras').appendChild(i); i.focus(); }
 // ---- início: chips ou dd/mm/aaaa ----
 function pad(n) { return (n < 10 ? '0' : '') + n; }
-function ctIniSet(iso, bt) { $('ct-inicio').value = iso; $('ct-ini-txt').value = iso.slice(8, 10) + '/' + iso.slice(5, 7) + '/' + iso.slice(0, 4); document.querySelectorAll('#ct-inis button').forEach(function (x) { x.classList.toggle('on', x === bt); }); ctResumo(); }
+function ctIniSet(iso, bt) { $('ct-inicio').value = iso; $('ct-ini-txt').value = iso; document.querySelectorAll('#ct-inis button').forEach(function (x) { x.classList.toggle('on', x === bt); }); ctResumo(); }
 function ctIni(bt) {
     var h = new Date(), d;
     if (bt.dataset.v === 'hoje') d = h; else if (bt.dataset.v === 'mes') d = new Date(h.getFullYear(), h.getMonth(), 1); else d = new Date(h.getFullYear(), h.getMonth() + 1, 1);
     ctIniSet(d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()), bt);
 }
-function ctIniTxt(inp) {
-    var v = inp.value.replace(/\D/g, '').slice(0, 8); inp.value = v.replace(/^(\d{2})(\d)/, '$1/$2').replace(/^(\d{2}\/\d{2})(\d)/, '$1/$2');
-    document.querySelectorAll('#ct-inis button').forEach(function (x) { x.classList.remove('on'); });
-    if (v.length === 8) { var dd = +v.slice(0, 2), mm = +v.slice(2, 4), aa = +v.slice(4, 8); if (dd >= 1 && dd <= 31 && mm >= 1 && mm <= 12 && aa > 2000) $('ct-inicio').value = aa + '-' + pad(mm) + '-' + pad(dd); }
-    ctResumo();
+function ctIniTxt(inp) {   // o calendário do navegador devolve aaaa-mm-dd
+    $('ct-inicio').value = /^\d{4}-\d{2}-\d{2}$/.test(inp.value) ? inp.value : '';
+    ctIniMarca(); ctResumo();
 }
 function ctIniMarca() {
     var iso = $('ct-inicio').value, h = new Date(), hoje = h.getFullYear() + '-' + pad(h.getMonth() + 1) + '-' + pad(h.getDate());
@@ -541,46 +559,31 @@ function ctGrupo() {
     });
     document.addEventListener('click', function (e) { if (!sug.contains(e.target) && e.target !== q) sug.style.display = 'none'; });
 })();
-(function () {   // busca de pessoas do cadastro para "Outra pessoa assina" (quem assina pela contratante)
-    var q = $('pf-rbusca'), sug = $('pf-rsug'), t;
+var PC_CORES = ['#2563eb', '#7c3aed', '#0d9488', '#d97706', '#db2777', '#4f46e5', '#16a34a', '#b45309'];
+function pcCor(s) { var h = 0; String(s || '').split('').forEach(function (c) { h = (h * 31 + c.charCodeAt(0)) >>> 0; }); return PC_CORES[h % 8]; }
+function cpfFmt(d) { d = String(d || '').replace(/\D/g, ''); return d.length === 11 ? d.replace(/^(\d{3})(\d{3})(\d{3})(\d{2})$/, '$1.$2.$3-$4') : (d || ''); }
+function ctBuscaPessoa(inId, sugId, escolher, vazio) {   // cartões: nome e, embaixo, o CPF (25/11/2026)
+    var q = $(inId), sug = $(sugId), t;
     q.addEventListener('input', function () {
-        clearTimeout(t); var v = q.value.trim(); if (v.length < 2) { sug.style.display = 'none'; return; }
+        clearTimeout(t); var v = q.value.trim(); if (v.length < 2) { sug.classList.remove('aberta'); sug.innerHTML = ''; return; }
         t = setTimeout(function () {
             fetch('/comercial/contratos/pessoas?q=' + encodeURIComponent(v)).then(function (r) { return r.json(); }).then(function (lista) {
+                if (q.value.trim() !== v) return;
                 sug.innerHTML = '';
                 (lista || []).forEach(function (p) {
-                    var d = document.createElement('div');
-                    d.innerHTML = '<strong>' + esc(p.nome) + '</strong> <span class="ho-num">' + esc(p.cpf || '') + (p.avulso ? ' · avulso' : '') + (p.documento ? ' · ' + esc(p.documento) : ' · <span style="color:#b45309;">sem documento para contrato</span>') + (p.email ? ' · ' + esc(p.email) : ' · <span style="color:#b45309;">sem e-mail</span>') + '</span>';
-                    d.onclick = function () { pfOutra(p); };
+                    var d = document.createElement('button'); d.type = 'button'; d.className = 'ct-pcard';
+                    d.innerHTML = '<span class="sg" style="background:' + pcCor(p.nome) + '">' + esc(sigla(p.nome)) + '</span><span class="tx"><b>' + esc(nomeProprio(p.nome)) + '</b><small>' + esc(cpfFmt(p.cpf) || 'sem CPF') + (p.avulso ? ' · <em>avulso</em>' : '') + '</small></span>';
+                    d.onclick = function () { escolher(p); };
                     sug.appendChild(d);
                 });
-                if (!sug.children.length) { var n = document.createElement('div'); n.className = 'vazio'; n.textContent = 'Ninguém com esse nome no cadastro de pessoas. Cadastre em Cadastros › Clientes ou Avulsos (pessoa física) e volte.'; sug.appendChild(n); }
-                sug.style.display = 'block';
+                if (!sug.children.length) { var n = document.createElement('div'); n.className = 'ct-pvazio'; n.innerHTML = '<i class="fas fa-user-slash"></i> Ninguém com esse nome no cadastro de pessoas. ' + vazio; sug.appendChild(n); }
+                sug.classList.add('aberta');
             });
         }, 250);
     });
-    document.addEventListener('click', function (e) { if (!sug.contains(e.target) && e.target !== q) sug.style.display = 'none'; });
-})();
-(function () {   // busca de pessoas do cadastro para "Mais alguém assina"
-    var q = $('pf-pbusca'), sug = $('pf-psug'), t;
-    q.addEventListener('input', function () {
-        clearTimeout(t); var v = q.value.trim(); if (v.length < 2) { sug.style.display = 'none'; return; }
-        t = setTimeout(function () {
-            fetch('/comercial/contratos/pessoas?q=' + encodeURIComponent(v)).then(function (r) { return r.json(); }).then(function (lista) {
-                sug.innerHTML = '';
-                (lista || []).forEach(function (p) {
-                    var d = document.createElement('div');
-                    d.innerHTML = '<strong>' + esc(p.nome) + '</strong> <span class="ho-num">' + esc(p.cpf || '') + (p.documento ? ' · ' + esc(p.documento) : ' · <span style="color:#b45309;">sem documento para contrato</span>') + (p.email ? ' · ' + esc(p.email) : ' · <span style="color:#b45309;">sem e-mail</span>') + '</span>';
-                    d.onclick = function () { pfExtra(p); };
-                    sug.appendChild(d);
-                });
-                if (!sug.children.length) { var n = document.createElement('div'); n.className = 'vazio'; n.textContent = 'Ninguém com esse nome no cadastro de pessoas. Cadastre em Cadastros › Clientes (pessoa física) e volte.'; sug.appendChild(n); }
-                sug.style.display = 'block';
-            });
-        }, 250);
-    });
-    document.addEventListener('click', function (e) { if (!sug.contains(e.target) && e.target !== q) sug.style.display = 'none'; });
-})();
+}
+ctBuscaPessoa('pf-rbusca', 'pf-rsug', pfOutra, 'Cadastre em Cadastros › Clientes ou Avulsos (pessoa física) e volte.');
+ctBuscaPessoa('pf-pbusca', 'pf-psug', pfExtra, 'Cadastre em Cadastros › Clientes ou Avulsos (pessoa física) e volte.');
 // ---- resumo vivo ----
 function num(s) { s = String(s || '').trim(); if (!s) return 0; if (s.indexOf(',') >= 0) s = s.replace(/\./g, '').replace(',', '.'); return parseFloat(s) || 0; }
 function brl(v) { return 'R$ ' + (v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
