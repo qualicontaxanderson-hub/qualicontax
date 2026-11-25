@@ -143,7 +143,7 @@ def aceitar(token):
         flash('A validade desta proposta venceu. Fale com a Qualicontax para renovar.', 'danger')
         return redirect(url_for('proposta.ver', token=token))
     f = request.form
-    nome, cod = (f.get('nome') or '').strip(), (f.get('codigo') or '').strip()
+    nome, cod = ((o.get('solicitante_nome') or '').strip() or (f.get('nome') or '').strip()), (f.get('codigo') or '').strip()   # 25/11/2026: o nome é de quem pediu; o cliente não muda
     cpf = session.get('pc_%s' % o['id']) or ''                 # o CPF conferido no passo 2 (o cliente não digita o CPF inteiro)
     if cpf:
         cpf = '%s.%s.%s-%s' % (cpf[:3], cpf[3:6], cpf[6:9], cpf[9:])

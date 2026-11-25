@@ -1026,15 +1026,15 @@ def assinar_confirmar(token):
     if a['assinado_em']:
         return redirect(url_for('assinatura.assinar', token=token))
     f = request.form
-    nome, codigo = (f.get('nome') or '').strip(), (f.get('codigo') or '').strip()
+    nome, codigo = (a.get('nome') or '').strip(), (f.get('codigo') or '').strip()      # 25/11/2026: o nome é o de quem assina; não se digita
     cpf = session.get('ac_%s' % a['id']) or ''                 # o CPF conferido no passo 2 (quem assina não digita o CPF inteiro)
     if cpf:
         cpf = '%s.%s.%s-%s' % (cpf[:3], cpf[3:6], cpf[6:9], cpf[9:])
     elif _desafio(a):
         flash('Confirme primeiro os dígitos do CPF e peça o código.', 'danger')
         return redirect(url_for('assinatura.assinar', token=token))
-    if not f.get('aceito') or not nome or len(nome.split()) < 2:
-        flash('Digite seu nome completo e marque "li e aceito".', 'danger')
+    if not f.get('aceito') or not nome:
+        flash('Marque "li e aceito" para assinar.', 'danger')
         return redirect(url_for('assinatura.assinar', token=token))
     if not PrestContrato.conferir_codigo(a, codigo):
         flash('Código errado ou vencido. Peça outro código.', 'danger')

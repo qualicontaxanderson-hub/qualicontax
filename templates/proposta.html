@@ -83,7 +83,7 @@ input.cod { letter-spacing:8px; font-size:22px; text-align:center; font-family:m
             {% else %}
             <div class="as-passo"><span class="as-n">1</span><div style="flex:1;"><b>Leia a proposta</b> <span class="so-pc">ao lado</span><span class="so-cel">acima (e o PDF completo)</span>.</div></div>
             <div class="as-passo"><span class="as-n {{ 'ok' if codigo_pedido }}" id="n2">2</span><div style="flex:1;"><b>Confirme quem você é</b>
-                <div class="as-lbl">Seu nome completo</div><input class="c" name="nome" form="f-ace" value="{{ o.solicitante_nome or '' }}" required autocomplete="name">
+                <div class="as-lbl">Seu nome</div>{% if o.solicitante_nome %}<input class="c" name="nome" form="f-ace" value="{{ o.solicitante_nome }}" readonly style="background:#f8fafc;color:#334155" title="É quem pediu o serviço; não dá para mudar aqui"><div class="as-msg" style="margin-top:4px">É quem pediu o serviço. Não é você? Fale com a Qualicontax.</div>{% else %}<input class="c" name="nome" form="f-ace" value="" required autocomplete="name" placeholder="nome completo">{% endif %}
                 {% if desafio %}<div class="as-lbl">{{ 'Os 3 primeiros dígitos do seu CPF' if desafio == 'ini' else 'Os 2 últimos dígitos do seu CPF' }}</div>
                 <input class="c cod" id="cpf-parte" maxlength="{{ 3 if desafio == 'ini' else 2 }}" inputmode="numeric" placeholder="{{ '000' if desafio == 'ini' else '00' }}" autocomplete="off" style="max-width:160px; letter-spacing:12px;">
                 <div class="as-msg" style="margin-top:4px">Conferimos com o CPF dos sócios do cadastro. Nunca pedimos o CPF inteiro.</div>{% endif %}

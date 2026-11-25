@@ -79,7 +79,7 @@ input.cod { letter-spacing:8px; font-size:22px; text-align:center; font-family:m
             {% else %}
             <div class="as-passo"><span class="as-n">1</span><div style="flex:1;"><b>Leia o contrato</b> <span class="so-pc">ao lado</span><span class="so-cel">acima (o PDF completo)</span>.</div></div>
             <div class="as-passo"><span class="as-n {{ 'ok' if codigo_pedido }}" id="n2">2</span><div style="flex:1;"><b>Confirme quem você é</b>
-                <div class="as-lbl">Seu nome completo</div><input class="c" name="nome" form="f-ass" value="{{ a.nome }}" required autocomplete="name">
+                <div class="as-lbl">Seu nome</div><input class="c" name="nome" form="f-ass" value="{{ a.nome | nome_proprio }}" readonly style="background:#f8fafc;color:#334155" title="É quem assina pelo contrato; não dá para mudar aqui"><div class="as-msg" style="margin-top:4px">É quem assina neste contrato. Não é você? Fale com a Qualicontax.</div>
                 {% if desafio %}<div class="as-lbl">{{ 'Os 3 primeiros dígitos do seu CPF' if desafio == 'ini' else 'Os 2 últimos dígitos do seu CPF' }}</div>
                 <input class="c cod" id="cpf-parte" maxlength="{{ 3 if desafio == 'ini' else 2 }}" inputmode="numeric" placeholder="{{ '000' if desafio == 'ini' else '00' }}" autocomplete="off" style="max-width:160px; letter-spacing:12px;">
                 <div class="as-msg" style="margin-top:4px">Conferimos com o CPF de quem assina. Nunca pedimos o CPF inteiro.</div>{% endif %}
