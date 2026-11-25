@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Montar contrato - Comercial - Qualicontax{% endblock %}
+{% block title %}{{ 'Montar proposta' if modo == 'proposta' else 'Montar contrato' }} - Comercial - Qualicontax{% endblock %}
 
 {% block extra_css %}
 {% include 'financeiro/_tj_css.html' %}
@@ -76,7 +76,7 @@
 
 /* condições com vida (25/11/2026): reajuste azul, 13º roxo, atraso rosa; índice vem do cadastro numa caixa nossa */
 .ct-cond-grp { border-radius:14px; padding:12px 14px; margin-top:10px; background:var(--g-f); border:1px solid var(--g-b); }
-.ct-cond-grp.cg-azul { --g:#2563eb; --g-e:#1e40af; --g-f:#eff6ff; --g-b:#bfdbfe; } .ct-cond-grp.cg-roxo { --g:#7c3aed; --g-e:#5b21b6; --g-f:#f5f3ff; --g-b:#ddd6fe; } .ct-cond-grp.cg-rosa { --g:#db2777; --g-e:#9d174d; --g-f:#fdf2f8; --g-b:#fbcfe8; }
+.ct-cond-grp.cg-azul { --g:#2563eb; --g-e:#1e40af; --g-f:#eff6ff; --g-b:#bfdbfe; } .cg-verde { --g:#16a34a; --g-e:#166534; --g-f:#ecfdf3; --g-b:#bbf7d0; } .ct-cond-grp.cg-roxo { --g:#7c3aed; --g-e:#5b21b6; --g-f:#f5f3ff; --g-b:#ddd6fe; } .ct-cond-grp.cg-rosa { --g:#db2777; --g-e:#9d174d; --g-f:#fdf2f8; --g-b:#fbcfe8; }
 .ct-cond-lbl { font-size:11.5px; font-weight:800; text-transform:uppercase; letter-spacing:.06em; color:var(--g-e); display:flex; align-items:center; gap:7px; margin-bottom:9px; } .ct-cond-lbl i { color:var(--g); } .ct-cond-lbl small { text-transform:none; letter-spacing:0; font-weight:600; color:#64748b; font-size:12px; }
 .ct-cond-grp .ns-op { background:#fff; border-color:var(--g-b); } .ct-cond-grp .ns-op > i { color:var(--g); }
 .ct-cond-grp .ns-op.on { background:linear-gradient(135deg, var(--g), var(--g-e)); border-color:var(--g-e); color:#fff; box-shadow:0 8px 18px rgba(0,0,0,.12); } .ct-cond-grp .ns-op.on > i, .ct-cond-grp .ns-op.on b, .ct-cond-grp .ns-op.on small { color:#fff; }
@@ -228,6 +228,8 @@
 .ct-note { font-size:12px; color:#64748b; margin-top:6px; line-height:1.4; } .ct-note.ok { color:#15803d; }
 /* resumo à direita: ficha */
 .ct-ficha-tit { font-size:13px; font-weight:800; color:#0f3d2e; line-height:1.3; margin-bottom:10px; }
+.ct-ta { width:100%; box-sizing:border-box; border:1px solid #d7e3dc; border-radius:10px; padding:8px 10px; font:inherit; font-size:13px; line-height:1.45; resize:vertical; background:#fff; } .ct-ta:focus { outline:none; border-color:#16a34a; box-shadow:0 0 0 3px rgba(22,163,74,.12); }
+.ct-prop-areas { display:grid; grid-template-columns:repeat(3, minmax(0,1fr)); gap:10px; } @media (max-width:900px) { .ct-prop-areas { grid-template-columns:1fr; } }
 .ct-kpis { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:10px; }
 .ct-kpi { background:#f6faf7; border:1px solid #e3ece7; border-radius:12px; padding:9px 11px; min-width:0; }
 .ct-kpi small { display:block; font-size:10px; font-weight:800; letter-spacing:.06em; text-transform:uppercase; color:#64748b; }
@@ -257,8 +259,12 @@
 {% set tests = (dados.assinantes or []) | selectattr('papel', 'equalto', 'TESTEMUNHA') | list %}
 {% set assina_q = (dados.assina_qualicontax or '') | string %}
 <div class="cv-page ct-page">
-<form class="tj tx-ok" method="POST" action="{{ url_for('financeiro.contrato_salvar') }}" id="pf-form" autocomplete="off">
-<input type="hidden" name="contrato_id" value="{{ contrato.id if contrato else '' }}">
+{# 25/11/2026 — modo 'proposta': a MESMA tela monta a PROPOSTA DE SERVIÇOS (Anderson: "é como adiantamento do Contrato");
+   de_proposta: o contrato nasce de uma proposta aceita, com tudo preenchido #}
+{% set modo = modo | default('contrato') %}
+<form class="tj tx-ok" method="POST" action="{{ url_for('comercial.proposta_salvar') if modo == 'proposta' else url_for('financeiro.contrato_salvar') }}" id="pf-form" autocomplete="off">
+{% if modo == 'proposta' %}<input type="hidden" name="proposta_id" value="{{ contrato.id if contrato else '' }}">
+{% else %}<input type="hidden" name="contrato_id" value="{{ contrato.id if contrato else '' }}">{% if de_proposta %}<input type="hidden" name="proposta_id" value="{{ de_proposta.id }}">{% endif %}{% endif %}
 <input type="hidden" name="fin_contrato_id" value="{{ fin.id if fin else '' }}">
 <input type="hidden" name="inicio" id="ct-inicio" value="{{ ini }}">
 <input type="hidden" name="dia_vencimento" id="ct-dia" value="{{ dia }}">
@@ -276,18 +282,18 @@
   <div class="tj-cab-cli">
     <span class="tj-avatar"><i class="fas fa-file-contract"></i></span>
     <div class="tj-quem">
-      <div class="tj-quem-l1"><span class="tj-num">{{ ('rascunho ' ~ (contrato.numero or contrato.id)) if contrato else 'novo' }}</span><b>{{ 'Alterar o rascunho do contrato' if contrato else 'Montar contrato de prestação de serviços' }}</b></div>
-      <div class="tj-quem-l2"><span><i class="fas fa-file-signature"></i> nasce do cadastro · o escritório aprova · cada parte assina pelo link</span><span id="ct-sub" hidden></span></div>
+      <div class="tj-quem-l1"><span class="tj-num">{{ ('rascunho ' ~ (contrato.numero or contrato.id)) if contrato else 'novo' }}</span><b>{% if modo == 'proposta' %}{{ 'Alterar o rascunho da proposta' if contrato else 'Montar proposta de serviços' }}{% elif de_proposta %}Converter a proposta {{ de_proposta.numero }} em contrato{% else %}{{ 'Alterar o rascunho do contrato' if contrato else 'Montar contrato de prestação de serviços' }}{% endif %}</b></div>
+      <div class="tj-quem-l2"><span><i class="fas fa-file-signature"></i> {% if modo == 'proposta' %}nasce do cadastro · o escritório aprova · você dispara e o cliente aceita pelo link{% elif de_proposta %}tudo veio da proposta aceita · confira, salve e siga para aprovação e assinatura{% else %}nasce do cadastro · o escritório aprova · cada parte assina pelo link{% endif %}</span><span id="ct-sub" hidden></span></div>
     </div>
   </div>
   <div class="tj-cab-val"><span class="tj-tag" id="ct-cab-nome">{{ emp.nome_razao_social if emp else 'escolha a empresa' }}</span><b id="ct-prev-val">R$ 0,00</b><small id="ct-prev-sub">honorários por mês · vence dia {{ dia }}</small></div>
-  <a class="tj-x" href="{{ url_for('financeiro.contratos') }}" title="Voltar para a lista"><i class="fas fa-xmark"></i></a>
+  <a class="tj-x" href="{{ url_for('comercial.propostas') if modo == 'proposta' else url_for('financeiro.contratos') }}" title="Voltar para a lista"><i class="fas fa-xmark"></i></a>
 </header>
 <div class="tj-corpo">
 <div class="tj-col1">
 
   {# ── 1. partes do contrato: cartão da empresa e cartão de quem assina (24/11/2026) ── #}
-  <section class="tj-sec c-verde"><h4><i class="fas fa-handshake"></i> Partes do contrato <small>a empresa e quem assina por ela · dados do cadastro</small></h4>
+  <section class="tj-sec c-verde"><h4><i class="fas fa-handshake"></i> {{ 'Partes da proposta' if modo == 'proposta' else 'Partes do contrato' }} <small>{{ 'a empresa e para quem vai a proposta · dados do cadastro' if modo == 'proposta' else 'a empresa e quem assina por ela · dados do cadastro' }}</small></h4>
     <div class="ct-partes">
       <div class="ct-parte">
         <div class="pt-rot"><i class="fas fa-building"></i> Contratante</div>
@@ -324,7 +330,7 @@
       <input type="hidden" name="rep_email" id="rep_email" value="{{ e0.rep_email if e0 else '' }}"><input type="hidden" name="rep_celular" id="rep_celular" value="{{ e0.rep_celular if e0 else '' }}">
       <input type="hidden" id="rep_pf" value="{{ (emp.socios[0].pf_cliente_id if emp and emp.socios and not contrato else '') or '' }}">
       <div class="ct-parte p-pessoa" id="ct-rep-card">
-        <div class="pt-rot"><i class="fas fa-user-pen"></i> Quem assina pela contratante</div>
+        <div class="pt-rot"><i class="fas fa-user-pen"></i> {{ 'Para quem vai a proposta (A/C)' if modo == 'proposta' else 'Quem assina pela contratante' }}</div>
         <div class="pt-top"><span class="pt-av" id="ct-rep-av">?</span><div class="pt-id"><b id="ct-rep-nome">—</b><small id="ct-rep-cargo"></small></div></div>
         <div class="pt-linhas" id="ct-rep-tx"></div>
         <div class="pt-acoes"><a href="#" onclick="ctEscolha(); return false;"><i class="fas fa-arrows-rotate"></i> Trocar</a><a id="ct-rep-link" href="#" target="_blank" rel="noopener"><i class="fas fa-pen"></i> Alterar no cadastro</a><a href="#" onclick="location.reload(); return false;" title="já alterou no cadastro? recarrega esta tela"><i class="fas fa-rotate"></i> Atualizar</a></div>
@@ -334,7 +340,7 @@
       <input type="hidden" name="extra_nome" id="extra_nome" value="{{ ex.nome or '' }}"><input type="hidden" name="extra_cpf" id="extra_cpf" value="{{ ex.cpf or '' }}">
       <input type="hidden" name="extra_cargo" id="extra_cargo" value="{{ ex.cargo or 'representante autorizado(a)' }}"><input type="hidden" name="extra_documento" id="extra_documento" value="{{ ex.documento or '' }}">
       <input type="hidden" name="extra_email" id="extra_email" value="{{ ex.email or '' }}"><input type="hidden" name="extra_celular" id="extra_celular" value="{{ ex.celular or '' }}"><input type="hidden" id="extra_pf" value="{{ ex.pf_cliente_id or '' }}">
-      <div class="ct-parte ct-parte-mais" id="ct-extra-vazio" {{ 'hidden' if ex.nome }} onclick="ctExtraModo(document.querySelector('#ct-extra-ops [data-v=&quot;1&quot;]'))"><i class="fas fa-user-plus"></i><b>Mais alguém assina?</b><small>procurador, autorizado, quem responde pela outra empresa do grupo</small></div>
+      <div class="ct-parte ct-parte-mais" id="ct-extra-vazio" {{ 'hidden' if ex.nome }} onclick="ctExtraModo(document.querySelector('#ct-extra-ops [data-v=&quot;1&quot;]'))"><i class="fas fa-user-plus"></i><b>{{ 'Mais alguém recebe a proposta?' if modo == 'proposta' else 'Mais alguém assina?' }}</b><small>procurador, autorizado, quem responde pela outra empresa do grupo</small></div>
       <div class="ct-parte p-extra" id="ct-extra-card" {{ '' if ex.nome else 'hidden' }}>
         <div class="pt-rot"><i class="fas fa-user-plus"></i> Também assina pela contratante</div>
         <div class="pt-top"><span class="pt-av" id="ct-extra-av">?</span><div class="pt-id"><b id="ct-extra-nome">—</b><small id="ct-extra-cargo"></small></div></div>
@@ -346,7 +352,7 @@
 
     {# escolha de quem assina: abre em "Trocar" #}
     <div class="ct-escolha" id="ct-escolha" hidden>
-      <div class="pt-rot" style="margin:14px 0 8px"><i class="fas fa-arrows-rotate"></i> Quem assina pela contratante</div>
+      <div class="pt-rot" style="margin:14px 0 8px"><i class="fas fa-arrows-rotate"></i> {{ 'Para quem vai a proposta (A/C)' if modo == 'proposta' else 'Quem assina pela contratante' }}</div>
       <div class="ns-ops ct-ops3" id="ct-socios">
         {% if emp %}{% for s in emp.socios %}<button type="button" class="ns-op {{ 'on' if (rep0 and loop.first and not contrato) or (e0 and e0.rep_cpf and s.cpf and e0.rep_cpf == s.cpf) }}" onclick='pfSocio({{ s.nome | tojson }}, {{ (s.cpf or "") | tojson }}, {{ (s.email or "") | tojson }}, {{ (s.celular or "") | tojson }}, {{ (s.documento or "") | tojson }}, {{ (s.cargo or "") | tojson }}, this, {{ (s.pf_cliente_id or 0) | tojson }})'>{% if not s.documento %}<span class="ns-op-tag" style="background:#fef3c7;color:#b45309">sem documento</span>{% endif %}<i class="fas fa-user-tie"></i><b>{{ s.nome | nome_proprio }}</b><small>{{ s.cargo or ('administrador' if s.responsavel else 'sócio') }}{% if s.cpf %} · CPF {{ s.cpf }}{% endif %}</small></button>{% endfor %}
         {% for s in emp.contatos %}<button type="button" class="ns-op" onclick='pfSocio({{ s.nome | tojson }}, "", {{ (s.email or "") | tojson }}, {{ (s.celular or "") | tojson }}, "", {{ (s.cargo or "") | tojson }}, this, 0)'><i class="fas fa-address-card"></i><b>{{ s.nome | nome_proprio }}</b><small>{{ s.cargo or 'contato da empresa' }}</small></button>{% endfor %}{% endif %}
@@ -441,7 +447,37 @@
   </section>
 
   {# ── 5. cláusulas e assinatura pela Qualicontax: frase de leitura, abre em Alterar ── #}
-  <section class="tj-sec c-roxo"><h4 class="ct-abre" onclick="ctAbre(event, 'ct-cla-body')" title="Clique para alterar"><i class="fas fa-scale-balanced"></i> Cláusulas e assinatura <small>{{ contratada.razao | nome_proprio }} · CNPJ {{ contratada.cnpj }}{% if contratada.crc %} · CRC {{ contratada.crc }}{% endif %}</small><button type="button" class="ct-alt" data-alvo="ct-cla-body" onclick="ctToggle('ct-cla-body', this)"><i class="fas fa-pen"></i> Alterar</button></h4>
+  {% if modo == 'proposta' %}
+  {# ── texto da proposta (25/11/2026): validade, A/C, o que está incluído em cada área, outras considerações e extraordinários — textos da casa ── #}
+  <section class="tj-sec c-verde" id="ct-prop"><h4><i class="fas fa-file-lines"></i> Texto da proposta <small>validade, A/C e os textos da casa · um item por linha, mexa se precisar</small></h4>
+    <input type="hidden" name="prop_validade" id="ct-propval" value="{{ prop.validade_dias or 15 }}">
+    <div class="ct-cond-duas">
+      <div class="ct-cond-grp cg-verde">
+        <div class="ct-cond-lbl"><i class="fas fa-hourglass-half"></i> Validade da proposta</div>
+        <div class="ns-ops ct-ops4" id="ct-propvals">{% for d in PS.VALIDADES %}<button type="button" data-v="{{ d }}" class="ns-op {{ 'on' if (prop.validade_dias or 15)|int == d }}" onclick="ctSeg(this, 'ct-propval')"><b>{{ d }} dias</b><small>a contar do disparo</small></button>{% endfor %}</div>
+      </div>
+      <div class="ct-cond-grp cg-azul">
+        <div class="ct-cond-lbl"><i class="fas fa-user-group"></i> A/C (para quem vai) e segmento</div>
+        <div class="ns-campos">
+          <div class="ns-campo"><label>A/C · nomes separados por vírgula</label><input type="text" name="prop_ac" class="ns-in ct-in-cor" value="{{ prop.ac | join(', ') }}" placeholder="ex.: Bruna, Paulo e Eurípedes" oninput="ctResumo()"></div>
+          <div class="ns-campo"><label>Segmento do cliente (entra na última consideração)</label><input type="text" name="prop_segmento" class="ns-in ct-in-cor" value="{{ prop.segmento or '' }}" placeholder="ex.: combustíveis" oninput="ctResumo()"></div>
+        </div>
+      </div>
+    </div>
+    <div class="ct-cond-grp cg-agua" style="margin-top:10px">
+      <div class="ct-cond-lbl"><i class="fas fa-list-check"></i> O que está incluído em cada área <small style="font-weight:600; text-transform:none; letter-spacing:0; color:#64748b">· só as áreas marcadas em Serviços saem na proposta</small></div>
+      <div class="ct-prop-areas">
+        {% for k, v in AREAS.items() %}<div class="ns-campo"><label>{{ PS.TITULO_AREA.get(k, v[0]) | nome_proprio }}</label><textarea class="ct-ta" name="prop_itens_{{ k }}" rows="5">{{ (prop.itens[k] if prop.itens and prop.itens[k] else PS.ITENS_PADRAO[k]) | join('\n') }}</textarea></div>{% endfor %}
+      </div>
+    </div>
+    <div class="ct-cond-duas" style="margin-top:10px">
+      <div class="ct-cond-grp cg-roxo"><div class="ct-cond-lbl"><i class="fas fa-circle-info"></i> Outras considerações</div><textarea class="ct-ta" name="prop_consideracoes" rows="6">{{ prop.consideracoes | join('\n') }}</textarea></div>
+      <div class="ct-cond-grp cg-ambar"><div class="ct-cond-lbl"><i class="fas fa-receipt"></i> Serviços extraordinários <small style="font-weight:600; text-transform:none; letter-spacing:0; color:#64748b">· cobrados à parte ou só as taxas: escolha em Cláusulas</small></div><textarea class="ct-ta" name="prop_extras" rows="6">{{ prop.extras | join('\n') }}</textarea></div>
+    </div>
+  </section>
+  {% endif %}
+
+  <section class="tj-sec c-roxo"><h4 class="ct-abre" onclick="ctAbre(event, 'ct-cla-body')" title="Clique para alterar"><i class="fas fa-scale-balanced"></i> {{ 'Condições do contrato e quem assina' if modo == 'proposta' else 'Cláusulas e assinatura' }} <small>{{ contratada.razao | nome_proprio }} · CNPJ {{ contratada.cnpj }}{% if contratada.crc %} · CRC {{ contratada.crc }}{% endif %}</small><button type="button" class="ct-alt" data-alvo="ct-cla-body" onclick="ctToggle('ct-cla-body', this)"><i class="fas fa-pen"></i> Alterar</button></h4>
     <div class="ct-frase ct-abre" id="ct-cla-sum" onclick="ctAbre(event, 'ct-cla-body')" title="Clique para alterar"></div>
     {% if not contratada.crc %}<div class="ct-note" style="color:#b45309"><i class="fas fa-triangle-exclamation"></i> A Qualicontax está sem CRC no cadastro (cliente nº 1).</div>{% endif %}
     <div class="ct-body" id="ct-cla-body" hidden>
@@ -491,19 +527,25 @@
   <section class="tj-sec c-verde">
     <h4><i class="fas fa-bolt"></i> O que fazer</h4>
     <button type="submit" class="tj-acao prim" id="ct-salvar"><i class="fas fa-floppy-disk"></i><span><b>Salvar rascunho e ver o PDF</b><small>você confere o PDF antes de qualquer envio</small></span></button>
-    <a class="tj-acao" href="{{ url_for('financeiro.contratos') }}"><i class="fas fa-arrow-left"></i><span><b>Voltar sem salvar</b><small>nada é gravado</small></span></a>
+    <a class="tj-acao" href="{{ url_for('comercial.propostas') if modo == 'proposta' else url_for('financeiro.contratos') }}"><i class="fas fa-arrow-left"></i><span><b>Voltar sem salvar</b><small>nada é gravado</small></span></a>
     <div class="ct-msg" id="ct-msg"></div>
   </section>
   <section class="tj-sec c-azul">
-    <h4><i class="fas fa-eye"></i> Como fica o contrato</h4>
+    <h4><i class="fas fa-eye"></i> {{ 'Como fica a proposta' if modo == 'proposta' else 'Como fica o contrato' }}</h4>
     <div class="ct-ficha-tit" id="ct-ficha-tit"></div><div class="ct-kpis" id="ct-kpis"></div><div class="ns-res" id="ct-res"></div>
   </section>
   <section class="tj-sec c-roxo">
     <h4><i class="fas fa-route"></i> O que acontece depois</h4>
     <div class="oc-passos">
+      {% if modo == 'proposta' %}
+      <div class="oc-passo"><i class="fas fa-stamp"></i><span><b>Aprovação.</b> A proposta fica aguardando aprovação do escritório.</span></div>
+      <div class="oc-passo"><i class="fas fa-paper-plane"></i><span><b>Disparo.</b> Você dispara: cada pessoa do A/C recebe o link por e-mail (e pelo WhatsApp, se quiser) e você acompanha.</span></div>
+      <div class="oc-passo"><i class="fas fa-file-contract"></i><span><b>Aceite e contrato.</b> O cliente aceita com código; você converte em contrato com tudo já preenchido.</span></div>
+      {% else %}
       <div class="oc-passo"><i class="fas fa-stamp"></i><span><b>Aprovação.</b> O contrato fica aguardando aprovação; aprovado, o honorário passa a valer{% if carteira_pct %} e a comissão de carteira nasce{% endif %}.</span></div>
       <div class="oc-passo"><i class="fas fa-envelope"></i><span><b>Assinatura.</b> Cada assinante recebe o link por e-mail e assina com código.</span></div>
       <div class="oc-passo"><i class="fas fa-file-signature"></i><span><b>Assinado.</b> O contrato fica guardado na empresa, com quem assinou e quando.</span></div>
+      {% endif %}
     </div>
   </section>
 </div>
@@ -790,6 +832,7 @@ function brl(v) { return 'R$ ' + (v || 0).toLocaleString('pt-BR', { minimumFract
 function val(n) { var e = document.querySelector('[name=' + n + ']'); return e ? e.value : ''; }
 function segTx(id) { var b = document.querySelector('#' + id + ' button.on'); if (!b) return ''; var t = b.querySelector('b'); return (t || b).textContent.trim(); }
 function F(k, v) { return '<span>' + k + '<b>' + esc(v) + '</b></span>'; }
+var MODO = {{ (modo | default('contrato')) | tojson }};
 function ctResumo() {
     var emps = Array.prototype.map.call(document.querySelectorAll('#pf-emps .ct-emp .nome'), function (x) { return x.textContent; });
     var apelido = val('apelido'), rep = val('rep_nome'), repEmail = val('rep_email'), extra = val('extra_nome');
@@ -798,7 +841,7 @@ function ctResumo() {
     var v = num(val('valor')), dia = $('ct-dia').value, ini = $('ct-inicio').value;
     var q = SIGNQ[$('ct-assq').value] || SIGNQ[Object.keys(SIGNQ)[0]] || {};
     var tests = Array.prototype.map.call(document.querySelectorAll('#ct-testes button.on'), function (b) { return b.textContent.replace(/do cliente/, '').trim().split(' ')[0]; });
-    var titulo = (areas.indexOf('Contabilidade') >= 0 ? 'Contrato de prestação de serviços contábeis' : (areas.length === 1 ? 'Contrato de prestação de serviços de ' + areas[0].toLowerCase() : 'Contrato de prestação de serviços'));
+    var titulo = MODO === 'proposta' ? 'Proposta de serviços' : (areas.indexOf('Contabilidade') >= 0 ? 'Contrato de prestação de serviços contábeis' : (areas.length === 1 ? 'Contrato de prestação de serviços de ' + areas[0].toLowerCase() : 'Contrato de prestação de serviços'));
     var rt = $('ct-reaj').value, reajDet = rt === 'ESCALONADO' ? val('reajuste_escala') : ((rt === 'INDICE' || rt === 'DATA_PROPRIA') ? val('reajuste_indice') : '');
     var reaj = segTx('ct-reajs') + (reajDet ? ' · ' + reajDet : '') + (rt === 'DATA_PROPRIA' && val('reajuste_mes') ? ' · em ' + val('reajuste_mes') : '');
     var lin = ctLinhas(), pag = lin.filter(function (x) { return x.sit === 'PAGA'; }), via = lin.filter(function (x) { return x.sit === 'VIA_GRUPO'; }), sem = lin.filter(function (x) { return x.sit === 'SEM_MOVIMENTO'; }), semSit = lin.filter(function (x) { return !x.sit; });
@@ -809,7 +852,8 @@ function ctResumo() {
     var faltas = [];
     if (!emps.length) faltas.push('a empresa');
     if (rede && semSit.length) faltas.push('como paga cada empresa da rede'); else if (rede && !pag.length) faltas.push('uma empresa que paga'); else if (rede && pag.length > 1 && pag.some(function (p) { return !p.val; })) faltas.push('o valor de cada pagante'); if (!rep || !repEmail) faltas.push('quem assina e o e-mail'); if (rep && !val('rep_cargo')) faltas.push('em que qualidade assina'); if (extra && !val('extra_email')) faltas.push('o e-mail do outro assinante');
-    if (!areas.length && !extras) faltas.push('os serviços'); if (!v) faltas.push('o valor'); if (!ini) faltas.push('a data de início');
+    if (!areas.length && !extras) faltas.push('os serviços'); if (!v) faltas.push('o valor'); if (!ini && MODO !== 'proposta') faltas.push('a data de início');
+    if (MODO === 'proposta' && !val('prop_ac').trim()) faltas.push('para quem vai (A/C)');
     // frases de leitura (condições e cláusulas)
     var prox = ctProxTxt();
     $('ct-cond-sum').innerHTML = F('Reajuste', reaj.toLowerCase()) + (prox ? F('Próximo', prox) : '') + F('13º', segTx('ct-decs').toLowerCase()) + F('Multa', val('multa') + '%') + F('Juros', val('juros') + '% ao mês');

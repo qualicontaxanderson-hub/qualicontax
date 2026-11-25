@@ -322,6 +322,20 @@ MAPA = {
     'financeiro.contrato_nota':                     'financeiro.contratos.montar',     # anotação na linha do tempo do contrato (23/11/2026)
     'financeiro.contrato_aprovar':                  'financeiro.lancamentos.aprovar',  # Anderson ou Alessandra
     'financeiro.contrato_reprovar':                 'financeiro.lancamentos.aprovar',
+    # --- Comercial: PROPOSTAS DE SERVIÇOS (25/11/2026): quem monta contrato monta proposta; aprovar é de quem aprova ---
+    'comercial.propostas':                          'financeiro.contratos.montar',
+    'comercial.proposta_novo':                      'financeiro.contratos.montar',
+    'comercial.proposta_editar':                    'financeiro.contratos.montar',
+    'comercial.proposta_salvar':                    'financeiro.contratos.montar',
+    'comercial.proposta_ver':                       'financeiro.contratos.montar',
+    'comercial.proposta_pdf':                       'financeiro.contratos.montar',
+    'comercial.proposta_nota':                      'financeiro.contratos.montar',
+    'comercial.proposta_pedir_aprovacao':           'financeiro.contratos.montar',
+    'comercial.proposta_enviar':                    'financeiro.contratos.montar',
+    'comercial.proposta_cancelar':                  'financeiro.contratos.montar',
+    'comercial.proposta_converter':                 'financeiro.contratos.montar',
+    'comercial.proposta_aprovar':                   'financeiro.lancamentos.aprovar',
+    'comercial.proposta_reprovar':                  'financeiro.lancamentos.aprovar',
     'financeiro.lote_emitir':              'financeiro.lote.incluir',
     'financeiro.lote_status':              'financeiro.lote',
     'financeiro.lote_reabrir':             'financeiro.lote.reabrir',

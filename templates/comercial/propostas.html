@@ -1,0 +1,171 @@
+{% extends "base.html" %}
+{% block title %}Propostas de serviços - Comercial - Qualicontax{% endblock %}
+
+{% block extra_css %}
+{# 24/11/2026 — Anderson: "está horrível e não tem que aparecer nenhum cadastro" e "os contratos é para aparecer somente no
+   COMERCIAL". Mesmo molde da lista de Contratos (comercial/orcamentos.html): abas KPI, cartões tx-c, busca; a empresa é
+   escolhida na caixa (CaixaCliente) ao clicar em Novo contrato — nunca numa lista solta de cadastros. Mudou lá? Mude aqui. #}
+{% include 'financeiro/_lanc_tx_css.html' %}
+<style>{% include 'clientes/_pk_css.html' %}
+.oc-btn-novo { display:inline-flex; align-items:center; gap:12px; padding:8px 20px 8px 8px; border-radius:16px; border:0; background:#fff; color:#0f3d2e; font:inherit; cursor:pointer;
+  box-shadow:0 12px 28px rgba(0,0,0,.22); transition:transform .15s ease, box-shadow .15s ease; text-align:left; }
+.oc-btn-novo:hover { transform:translateY(-1px); box-shadow:0 16px 32px rgba(0,0,0,.26); }
+.oc-btn-novo .mais { width:40px; height:40px; border-radius:12px; background:linear-gradient(135deg,#22c55e,#15803d); color:#fff; display:inline-flex; align-items:center; justify-content:center; font-size:16px; flex-shrink:0; }
+.oc-btn-novo .tx { display:flex; flex-direction:column; line-height:1.15; } .oc-btn-novo .tx b { font-size:15px; font-weight:800; } .oc-btn-novo .tx small { font-size:11.5px; color:#64748b; font-weight:600; }
+.tx-a-perd { --cor:#475569; --cor-e:#1e293b; --fundo:#f5f7fa; } .tx-a-fut { --cor:#7c3aed; --cor-e:#5b21b6; --fundo:#f5f3ff; } .tx-a-tod { --cor:#0f3d2e; --cor-e:#0b2b20; --fundo:#eef6f1; }
+.tx-abas.oc-abas { grid-template-columns:repeat(6, minmax(0,1fr)); } .tx-a-abe { --cor:#2563eb; --cor-e:#1e40af; --fundo:#eff6ff; } .tx-a-rec { --cor:#16a34a; --cor-e:#166534; --fundo:#ecfdf3; } .tx-a-atr { --cor:#f97316; --cor-e:#c2410c; --fundo:#fff4ec; }
+.oc-faixa { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:14px; } .oc-faixa .tx-busca { margin-left:auto; }
+.oc-grade { display:grid; grid-template-columns:repeat(auto-fill, minmax(330px, 1fr)); gap:12px; margin-bottom:22px; }
+.oc-c { padding-bottom:12px; cursor:pointer; }
+.oc-c .tx-c-top { margin:-12px -14px 0 -16px; padding:9px 14px 9px 16px; background:linear-gradient(135deg, var(--cor) 0%, var(--cor-e) 100%); border-radius:13px 13px 0 0; }
+.oc-c .tx-c-nome { color:#fff; white-space:normal; line-height:1.25; font-size:14.5px; } .oc-c .tx-c-num { background:#fff; color:var(--cor-e); }
+.oc-c .tx-c-meio { margin-top:10px; align-items:flex-start; }
+.oc-c .tx-c-val { color:var(--cor-e); font-size:22px; } .oc-c .tx-c-val small { font-size:11.5px; font-weight:700; color:#64748b; } .oc-c .tx-c-desc { font-size:13px; color:#64748b; font-weight:600; }
+.oc-c .tx-c-st { background:var(--cor-f); border:1px solid var(--cor-b); color:var(--cor-e); border-radius:99px; padding:3px 9px; font-size:12.5px; font-weight:800; white-space:nowrap; display:inline-flex; align-items:center; gap:5px; }
+.oc-c .tx-c-st i { font-size:11.5px; }
+.oc-c .hp-itens { margin-top:9px; display:flex; flex-direction:column; gap:3px; }
+.oc-c .hp-it { display:flex; justify-content:space-between; gap:10px; font-size:13.5px; color:#475569; } .oc-c .hp-it span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0; }
+.oc-c .hp-it b { font-weight:700; color:#334155; font-variant-numeric:tabular-nums; white-space:nowrap; }
+.oc-c .hp-linha { display:flex; align-items:center; gap:6px; flex-wrap:wrap; margin-top:10px; padding-top:10px; border-top:1px dashed #e2e8f0; }
+.oc-chip { display:inline-flex; align-items:center; gap:5px; font-size:12.5px; font-weight:700; color:#64748b; background:#f1f5f4; border-radius:99px; padding:3px 9px; white-space:nowrap; }
+.oc-chip.quem { background:#f5f3ff; color:#6d28d9; } .oc-chip.venc { background:#fef2f2; color:#b91c1c; } .oc-chip.ok { background:#dcfce7; color:#166534; } .oc-chip.azul { background:#eff6ff; color:#1d4ed8; } .oc-chip.amb { background:#fef3c7; color:#b45309; }
+.oc-c .ct-ass { margin-top:10px; } .oc-c .ct-ass .b { height:6px; background:#f1f5f9; border-radius:99px; overflow:hidden; } .oc-c .ct-ass .b i { display:block; height:100%; background:var(--cor); }
+.oc-c .ct-ass small { display:flex; justify-content:space-between; font-size:13px; color:#64748b; margin-top:4px; font-weight:600; } .oc-c .ct-ass small b { color:#334155; }
+.oc-c .hp-ac { display:flex; gap:6px; margin-top:10px; }
+.oc-c .hp-ac a { flex:1; height:32px; border-radius:9px; font:inherit; font-size:13.5px; font-weight:800; border:1px solid #e2e8f0; background:#fff; color:#475569; display:inline-flex; align-items:center; justify-content:center; gap:6px; cursor:pointer; text-decoration:none; }
+.oc-c .hp-ac .prim { background:var(--cor); border-color:var(--cor); color:#fff; }
+.oc-vazio { background:#fff; border:1px dashed #cbd5e1; border-radius:18px; padding:40px 20px; text-align:center; color:#475569; }
+.oc-vazio .ic { width:62px; height:62px; border-radius:18px; background:#ecfdf3; color:#16a34a; display:inline-flex; align-items:center; justify-content:center; font-size:24px; margin-bottom:12px; }
+.oc-vazio b { display:block; font-size:16px; color:#0f172a; margin-bottom:4px; }
+.oc-vazio.nada { display:none; padding:26px 20px; }
+@media (max-width:900px) { .tx-abas.oc-abas { grid-template-columns:1fr 1fr; } .oc-grade { grid-template-columns:minmax(0,1fr); } .oc-faixa .tx-busca { margin-left:0; width:100%; } .oc-btn-novo { width:100%; } }
+</style>
+{% endblock %}
+
+{% block content %}
+{% include 'comercial/_nav_comercial.html' %}
+{# PROPOSTAS DE SERVIÇOS (25/11/2026) — mesmo molde da lista de Contratos (financeiro/contratos.html). Mudou lá? Mude aqui. #}
+<div class="tx">
+<div class="ef-hero"><div class="ef-hero-inner ef-hero-head">
+  <div><h1 class="ef-hero-title">Propostas de serviços</h1><p class="ef-hero-sub">Montada aqui e aprovada pelo escritório; quem montou dispara ao cliente e acompanha. Aceita, vira contrato com tudo preenchido</p></div>
+  <div class="ef-hero-actions"><button type="button" class="oc-btn-novo" onclick="ctNovo()"><span class="mais"><i class="fas fa-plus"></i></span><span class="tx"><b>Nova proposta</b><small>escolha a empresa ou o grupo; o resto vem do cadastro</small></span></button></div>
+</div></div>
+
+<div class="ef-body">
+  {% set abas = [('RASCUNHO', 'tx-a-perd', 'fa-pen-ruler', 'Rascunhos', 'ainda não pedidas'), ('APROVACAO', 'tx-a-atr', 'fa-stamp', 'Para aprovar' if aprov else 'Em aprovação', 'esperando o escritório'),
+                 ('APROVADO', 'tx-a-abe', 'fa-paper-plane', 'Aprovadas', 'disparar ao cliente'), ('ENVIADO', 'tx-a-tod', 'fa-hourglass-half', 'Com o cliente', 'aguardando o aceite'),
+                 ('ACEITO', 'tx-a-rec', 'fa-file-signature', 'Aceitas', 'converter em contrato'), ('CONVERTIDO', 'tx-a-fut', 'fa-file-contract', 'Convertidas', 'viraram contrato')] %}
+  <div class="tx-abas oc-abas">
+    {% for st, cls, ico, rot, sub in abas %}
+    <button type="button" class="tx-aba {{ cls }}{{ ' on' if aba == st }}" data-p="{{ st }}"><span class="tx-aba-ico"><i class="fas {{ ico }}"></i></span>
+      <span class="tx-aba-txt"><span class="tx-aba-lbl">{{ rot }}</span><span class="tx-aba-val">{{ cont[st][0] }}</span>
+      <span class="tx-aba-sub">{% if cont[st][1] %}{{ cont[st][1] | format_currency }}/mês · {% endif %}{{ sub }}</span></span></button>
+    {% endfor %}
+  </div>
+
+  <div class="oc-faixa">
+    <div class="tx-filtros" id="ctFil">
+      <button type="button" class="tx-f{{ ' on' if not aba }}" data-v="">Todas <b>{{ lista|length }}</b></button>
+      {% if cont['RECUSADO'][0] %}<button type="button" class="tx-f" data-v="RECUSADO"><i class="fas fa-thumbs-down" style="font-size:10px"></i> Recusadas <b>{{ cont['RECUSADO'][0] }}</b></button>{% endif %}
+      {% if cont['CANCELADO'][0] %}<button type="button" class="tx-f" data-v="CANCELADO"><i class="fas fa-ban" style="font-size:10px"></i> Canceladas <b>{{ cont['CANCELADO'][0] }}</b></button>{% endif %}
+      {% if aprov and pessoas|length > 1 %}{% for uid, nome in pessoas.items() | sort(attribute='1') %}<button type="button" class="tx-f" data-q="{{ uid }}"><i class="fas fa-user" style="font-size:10px"></i> {{ nome.split(' ')[0] }}</button>{% endfor %}{% endif %}
+    </div>
+    <div class="tx-busca"><i class="fas fa-magnifying-glass"></i><input type="search" id="ctBusca" placeholder="Buscar empresa, grupo, número ou quem montou"></div>
+  </div>
+
+  {% if not lista %}
+  <div class="oc-vazio"><span class="ic"><i class="fas fa-file-lines"></i></span><b>Nenhuma proposta ainda</b>
+    A primeira nasce aqui: escolha a empresa (ou várias, para um grupo), confira o que veio do cadastro, ajuste os textos e mande para aprovação. Aprovada, você dispara e o cliente aceita pelo link.
+    <div style="margin-top:14px"><button type="button" class="oc-btn-novo" onclick="ctNovo()"><span class="mais"><i class="fas fa-plus"></i></span><span class="tx"><b>Nova proposta</b><small>leva um minuto</small></span></button></div></div>
+  {% endif %}
+  <div class="oc-vazio nada" id="ctNada"><b>Nenhuma proposta aqui</b>Troque a aba ou limpe a busca.</div>
+
+  <div class="oc-grade" id="ctGrade">
+  {% for c in lista %}
+    {% set ver = url_for('comercial.proposta_ver', pid=c.id) %}
+    <div class="tx-c oc-c {{ c.cls }}" data-st="{{ c.status }}" data-quem="{{ c.criado_por }}" data-b="{{ c.numero or '' }} {{ c.numero_cliente or '' }} {{ c.nome_razao_social }} {{ c.destino }} {{ c.criado_por_nome or '' }}" onclick="location.href='{{ ver }}'">
+      <div class="tx-c-top"><span class="tx-c-num">{{ c.numero or ('nº ' ~ c.id) }}</span><span class="tx-c-nome" title="{{ c.nome_razao_social }}">{{ c.destino | upper }}{% if c.n_empresas > 1 %} <small style="opacity:.85">· {{ c.n_empresas }} empresas</small>{% endif %}</span></div>
+      <div class="tx-c-meio">
+        <div><div class="tx-c-val">{% if c.valor %}{{ c.valor | format_currency }} <small>/ mês</small>{% else %}<small>honorários a definir</small>{% endif %}</div>
+          <div class="tx-c-desc">Proposta de serviços · válida até {{ c.validade.strftime('%d/%m') }}{% if c.ac %} · A/C {{ c.ac }}{% endif %}</div></div>
+        <span class="tx-c-st"><i class="fas {{ c.ico }}"></i> {{ {'RASCUNHO': 'Rascunho', 'APROVACAO': 'Para aprovar' if aprov else 'Em aprovação', 'APROVADO': 'Aprovada', 'ENVIADO': 'Com o cliente', 'ACEITO': 'Aceita', 'RECUSADO': 'Recusada', 'CONVERTIDO': 'Convertida', 'CANCELADO': 'Cancelada'}[c.status] }}</span>
+      </div>
+      <div class="hp-itens">
+        {% for a in c.areas[:3] %}<div class="hp-it"><span>{{ a }}</span><b></b></div>{% endfor %}
+        {% if c.areas|length + c.extras|length > 3 %}<div class="hp-it"><span>+ {{ c.areas|length + c.extras|length - 3 }} serviço{{ 's' if c.areas|length + c.extras|length - 3 != 1 }}</span><b></b></div>{% elif c.extras %}{% for e in c.extras[:3 - c.areas|length] %}<div class="hp-it"><span>{{ e | nome_proprio }}</span><b>específico</b></div>{% endfor %}{% endif %}
+        {% if not c.areas and not c.extras %}<div class="hp-it"><span style="color:#94a3b8">serviços ainda não escolhidos</span><b></b></div>{% endif %}
+      </div>
+      {% if c.status in ('ENVIADO', 'ACEITO', 'CONVERTIDO') %}
+      <div class="ct-ass"><div class="b"><i style="width:{{ 50 if c.status == 'ENVIADO' else 100 }}%"></i></div>
+        <small><span>{% if c.status == 'ENVIADO' %}disparada em <b>{{ c.enviado_em.strftime('%d/%m/%Y') if c.enviado_em else '—' }}</b>{% elif c.aceite_em %}aceita em <b>{{ c.aceite_em.strftime('%d/%m/%Y') }}</b>{% else %}aceita{% endif %}</span><span>{% if c.status == 'ENVIADO' %}válida até <b>{{ c.validade.strftime('%d/%m/%Y') }}</b>{% elif c.contrato and c.contrato.contrato_numero %}contrato <b>{{ c.contrato.contrato_numero }}</b>{% else %}&nbsp;{% endif %}</span></small></div>
+      {% endif %}
+      <div class="hp-linha">
+        {% if c.grupo_n > 1 %}<span class="oc-chip"><i class="fas fa-layer-group"></i> grupo de {{ c.grupo_n }}</span>{% endif %}
+        {% if c.status == 'APROVACAO' %}<span class="oc-chip amb"><i class="fas fa-stamp"></i> {{ 'confira e aprove' if aprov else 'com o escritório' }}</span>
+        {% elif c.status == 'APROVADO' %}<span class="oc-chip ok"><i class="fas fa-paper-plane"></i> pronta para disparar</span>
+        {% elif c.status == 'ENVIADO' and c.vencida %}<span class="oc-chip venc"><i class="fas fa-hourglass-end"></i> validade vencida</span>
+        {% elif c.status == 'ACEITO' %}<span class="oc-chip ok"><i class="fas fa-arrow-right"></i> converter em contrato</span>
+        {% elif c.status == 'RECUSADO' and c.recusa_motivo %}<span class="oc-chip venc" title="{{ c.recusa_motivo }}"><i class="fas fa-thumbs-down"></i> {{ c.recusa_motivo[:28] }}{{ '…' if c.recusa_motivo|length > 28 }}</span>
+        {% elif c.status == 'CANCELADO' and c.cancel_motivo %}<span class="oc-chip venc" title="{{ c.cancel_motivo }}"><i class="fas fa-ban"></i> {{ c.cancel_motivo[:28] }}{{ '…' if c.cancel_motivo|length > 28 }}</span>{% endif %}
+        <span class="oc-chip quem"><i class="fas fa-user"></i> {{ (c.criado_por_nome or '').split(' ')[0] }} · {{ c.criado_em.strftime('%d/%m') }}</span>
+      </div>
+      <div class="hp-ac">
+        <a href="{{ ver }}" onclick="event.stopPropagation()"><i class="fas fa-folder-open"></i> Abrir</a>
+        <a href="{{ url_for('comercial.proposta_pdf', pid=c.id) }}" target="_blank" onclick="event.stopPropagation()"><i class="fas fa-file-pdf"></i> PDF</a>
+        {% if c.status == 'RASCUNHO' %}<a class="prim" href="{{ url_for('comercial.proposta_editar', pid=c.id) }}" onclick="event.stopPropagation()"><i class="fas fa-pen"></i> Alterar</a>
+        {% elif c.status == 'APROVACAO' and aprov %}<a class="prim" href="{{ ver }}" onclick="event.stopPropagation()"><i class="fas fa-check"></i> Aprovar</a>
+        {% elif c.status == 'APROVADO' %}<a class="prim" href="{{ ver }}" onclick="event.stopPropagation()"><i class="fas fa-paper-plane"></i> Disparar</a>
+        {% elif c.status == 'ENVIADO' %}<a class="prim" href="{{ ver }}" onclick="event.stopPropagation()"><i class="fab fa-whatsapp"></i> Links</a>
+        {% elif c.status == 'ACEITO' %}<a class="prim" href="{{ ver }}" onclick="event.stopPropagation()"><i class="fas fa-file-contract"></i> Converter</a>
+        {% elif c.status == 'CONVERTIDO' and c.contrato and c.contrato.contrato_id %}<a class="prim" href="{{ url_for('financeiro.contrato_ver', cid=c.contrato.contrato_id) }}" onclick="event.stopPropagation()"><i class="fas fa-file-contract"></i> Contrato</a>{% endif %}
+      </div>
+    </div>
+  {% endfor %}
+  </div>
+</div>
+</div>
+<script id="ctCliJ" type="application/json">{{ clientes_json | safe }}</script>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/caixa_cliente.js') }}"></script>
+<script>
+(function () {
+  var CLI = JSON.parse(document.getElementById('ctCliJ').textContent);
+  var $ = function (id) { return document.getElementById(id); };
+  function semAc(s) { return String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase(); }
+  var st = {{ aba | tojson }}, fil = '', quem = '', q = '';
+  function aplicar() {
+    var n = 0, cards = document.querySelectorAll('#ctGrade .oc-c');
+    cards.forEach(function (c) {
+      var ok = (!st || c.dataset.st === st) && (!q || semAc(c.dataset.b).indexOf(q) >= 0) && (!quem || c.dataset.quem === quem);
+      if (ok && fil) ok = c.dataset.st === fil;
+      c.style.display = ok ? '' : 'none'; if (ok) n++;
+    });
+    $('ctNada').style.display = (cards.length && !n) ? 'block' : 'none';
+  }
+  document.querySelectorAll('.oc-abas .tx-aba').forEach(function (b) {
+    b.addEventListener('click', function () {
+      st = b.classList.contains('on') ? '' : b.dataset.p; document.querySelectorAll('.oc-abas .tx-aba').forEach(function (x) { x.classList.toggle('on', x === b && !!st); });
+      $('ctFil').querySelectorAll('.tx-f[data-v]').forEach(function (x) { x.classList.toggle('on', x.dataset.v === '' && !st); });
+      try { var u = new URL(location.href); if (st) u.searchParams.set('aba', st); else u.searchParams.delete('aba'); history.replaceState(null, '', u); } catch (e) {}
+      aplicar();
+    });
+  });
+  $('ctFil').addEventListener('click', function (e) {
+    var b = e.target.closest('.tx-f'); if (!b) return;
+    if (b.dataset.q !== undefined) { quem = b.classList.contains('on') ? '' : b.dataset.q; this.querySelectorAll('.tx-f[data-q]').forEach(function (x) { x.classList.toggle('on', x === b && !!quem); }); }
+    else { fil = b.dataset.v; if (!fil) { st = ''; document.querySelectorAll('.oc-abas .tx-aba').forEach(function (x) { x.classList.remove('on'); }); } this.querySelectorAll('.tx-f[data-v]').forEach(function (x) { x.classList.toggle('on', x === b); }); }
+    aplicar();
+  });
+  $('ctBusca').addEventListener('input', function () { q = semAc(this.value); aplicar(); });
+  if (st) aplicar();
+  window.ctNovo = function () {
+    if (!window.CaixaCliente) return;
+    CaixaCliente.abrir({ clientes: CLI, varios: true, titulo: 'Empresa da proposta', sub: {{ ('%d empresas e avulsos sem proposta no ar · toque em uma, ou em várias para uma proposta ao grupo' % n_prontas) | tojson }},
+      onUsar: function (cs) { if (!cs || !cs.length) return; var mais = cs.slice(1).map(function (x) { return x.id; }).join(','); location.href = '/comercial/propostas/novo?cliente_id=' + cs[0].id + (mais ? '&mais=' + mais : ''); } });
+  };
+  {% if request.args.get('novo') %}setTimeout(function () { ctNovo(); }, 150);{% endif %}
+})();
+</script>
+{% endblock %}

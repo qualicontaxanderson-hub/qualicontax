@@ -516,9 +516,19 @@ def _cobranca_do_contrato(c, avisos):
     return mudou
 
 
-def _form_ctx(cliente_id=None, fin_contrato_id=None, contrato=None, mais=None):
-    """O que a tela do formulário precisa: empresa(s), sócios, honorários, testemunhas, signatários da Qualicontax."""
-    d = (contrato or {}).get('dados') or {}
+def _dados_da_proposta(p):
+    """A proposta aceita vira o ponto de partida do contrato (25/11/2026): mesmos dados, com os assinantes do contrato de volta."""
+    d = dict(p.get('dados') or {})
+    d['assinantes'] = d.get('assinantes_contrato') or []
+    d.pop('titulo', None); d.pop('aprovacao', None); d.pop('pedido_aprovacao', None); d.pop('reprovado', None); d.pop('notas', None); d.pop('cancelado', None)
+    d['inicio'] = date.today().isoformat()
+    return d
+
+
+def _form_ctx(cliente_id=None, fin_contrato_id=None, contrato=None, mais=None, proposta=None):
+    """O que a tela do formulário precisa: empresa(s), sócios, honorários, testemunhas, signatários da Qualicontax.
+    ``proposta``: o contrato nasce de uma proposta de serviços aceita, com tudo preenchido."""
+    d = _dados_da_proposta(proposta) if proposta else ((contrato or {}).get('dados') or {})
     emp = None
     if d.get('empresas'):
         emp = PrestContrato.empresa(d['empresas'][0]['cliente_id'])
@@ -556,7 +566,7 @@ def _form_ctx(cliente_id=None, fin_contrato_id=None, contrato=None, mais=None):
             'contratada': PrestContrato.contratada(), 'rep0': rep0, 'emps_ini': emps_ini,
             'indices': [dict(i) for i in ReajusteIndice.listar(so_ativos=True)],
             'testemunhas': PrestContrato.testemunhas_disponiveis(), 'hoje': date.today(),
-            'carteira_pct': float(pct) if pct else None}
+            'carteira_pct': float(pct) if pct else None, 'de_proposta': proposta}
 
 
 @financeiro.route('/comercial/contratos/socios-iguais')
@@ -623,6 +633,14 @@ def contratos():
 def contrato_novo():
     """Só a partir de um cadastro completo: sem cliente_id, ou com pendência em A CADASTRAR, volta para a lista."""
     cid = request.args.get('cliente_id', type=int)
+    pid = request.args.get('proposta_id', type=int)
+    if pid:                                   # converter a proposta de serviços (25/11/2026): o formulário abre preenchido
+        p = PrestContrato.get(pid)
+        if not p or p.get('tipo') != 'PROPOSTA' or p['status'] not in ('ACEITO', 'APROVADO', 'ENVIADO'):
+            flash('Só proposta aceita (ou aprovada) vira contrato.', 'warning')
+            return redirect(url_for('comercial.propostas'))
+        _so_meu_ou_aprov(p)
+        return render_template('financeiro/contrato_form.html', **_form_ctx(proposta=p))
     if not cid:
         flash('O contrato nasce do cadastro: clique em Novo contrato e escolha a empresa. Nada é digitado do zero.', 'warning')
         return redirect(url_for('financeiro.contratos'))
@@ -664,9 +682,15 @@ def contrato_salvar():
             PrestContrato.atualizar(cid, dados)
             registrar('escrita.alterou_contrato_prestacao', 'financeiro', tabela='prest_contratos', registro_id=cid, depois={'empresa': dados['empresas'][0]['razao']})
         else:
-            cid = PrestContrato.criar(dados['empresas'][0]['cliente_id'], dados, current_user.id, fin_contrato_id=f.get('fin_contrato_id', type=int))
+            pid = f.get('proposta_id', type=int)
+            if pid:
+                dados['de_proposta'] = {'id': pid, 'numero': (PrestContrato.get(pid) or {}).get('numero')}
+            cid = PrestContrato.criar(dados['empresas'][0]['cliente_id'], dados, current_user.id, fin_contrato_id=f.get('fin_contrato_id', type=int), anterior_id=pid)
             registrar('escrita.criou_contrato_prestacao', 'financeiro', tabela='prest_contratos', registro_id=cid,
-                      depois={'empresa': dados['empresas'][0]['razao'], 'valor': dados['valor'], 'areas': dados['areas']})
+                      depois={'empresa': dados['empresas'][0]['razao'], 'valor': dados['valor'], 'areas': dados['areas'], 'proposta_id': pid})
+            if pid:                            # a proposta fica CONVERTIDA e aponta para o contrato (25/11/2026)
+                from routes.comercial_propostas import marcar_convertida
+                marcar_convertida(pid, PrestContrato.get(cid))
         flash('Rascunho salvo. Confira o PDF e %s.' % ('envie para assinatura' if _aprovador() else 'envie para aprovação'), 'success')
         return redirect(url_for('financeiro.contrato_ver', cid=cid))
     except ValueError as e:

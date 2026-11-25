@@ -1,0 +1,301 @@
+{% extends "base.html" %}
+{# Janela da PROPOSTA DE SERVIÇOS (25/11/2026) — mesmo molde da janela do contrato (contrato_ver.html): cabeçalho na cor do
+   status, o caminho em seis passos, KPIs e duas colunas: a proposta e o PDF | o que fazer, quem recebe, linha do tempo. #}
+
+{% block title %}Proposta {{ p.numero or p.id }} - Comercial - Qualicontax{% endblock %}
+
+{% block extra_css %}
+{% include 'financeiro/_tj_css.html' %}
+<style>
+{% include 'clientes/_pk_css.html' %}
+.pk.pk-peq { width:min(560px, 96vw); top:18vh; } .pk.pk-peq .pk-quem span { white-space:normal; line-height:1.4; }
+.pk.pk-rubro { --cor:#dc2626; --cor-e:#991b1b; --cor-f:#fef2f2; --cor-b:#fecaca; } .pk.pk-roxo { --cor:#7c3aed; --cor-e:#5b21b6; --cor-f:#f5f3ff; --cor-b:#ddd6fe; } .pk.pk-ambar { --cor:#d97706; --cor-e:#92400e; --cor-f:#fffbeb; --cor-b:#fde68a; }
+.pk-peq .pk-pe .pk-ok.rubro { background:linear-gradient(135deg,#dc2626,#991b1b); }
+.pk-opcoes { display:flex; flex-wrap:wrap; gap:6px; margin:12px 18px 0; } .pk-opc { border:1px solid #e2e8f0; background:#fff; color:#475569; border-radius:99px; padding:7px 12px; font:inherit; font-size:12.5px; font-weight:700; cursor:pointer; } .pk-opc.on { background:var(--cor); border-color:var(--cor); color:#fff; }
+.pk-peq .pk-motivo { box-sizing:border-box; border:1px solid #d7e3dc; border-radius:10px; padding:9px 12px; font:inherit; font-size:13.5px; min-height:70px; resize:vertical; margin:12px 18px 0; width:calc(100% - 36px); }
+.cv-page { margin:14px 0 24px; }
+.cv-page .tj { border-radius:20px; overflow:hidden; background:#f3f6f4; border:1px solid #e3ece7; height:auto; }
+.cv-page .tj-cab { padding-right:26px; }
+.cv-page .tj-corpo { overflow:visible; grid-template-rows:auto; align-items:start; grid-template-columns:minmax(0, 1.7fr) minmax(330px, 1fr); }
+.cv-page .tj-sec { overflow:visible; } .cv-page .tj-tl { overflow:visible; flex:none; } .cv-page .tj-tl li small { white-space:normal; } .cv-page .tj-quem-l2 code { font-family:inherit; }
+.cv-doc, .cv-lado { display:flex; flex-direction:column; gap:12px; min-width:0; }
+.cv-volta { display:inline-flex; align-items:center; gap:6px; font-size:13px; font-weight:700; color:#15803d; text-decoration:none; margin:10px 0 0; } .cv-volta:hover { text-decoration:underline; }
+.cv-passos { list-style:none; margin:0; padding:12px 22px 10px; display:grid; grid-template-columns:repeat(6, 1fr); gap:0; background:#fff; border-bottom:1px solid var(--linha); }
+.cv-passos li { position:relative; display:flex; flex-direction:column; align-items:center; text-align:center; gap:5px; padding:0 6px; min-width:0; }
+.cv-passos li::before { content:''; position:absolute; top:15px; left:-50%; width:100%; height:3px; background:#e2e8f0; z-index:0; } .cv-passos li:first-child::before { display:none; }
+.cv-passos li.feito::before { background:#16a34a; } .cv-passos li.atual::before { background:linear-gradient(90deg, #16a34a, var(--cor)); }
+.cv-passos li > i { position:relative; z-index:1; width:32px; height:32px; border-radius:99px; border:3px solid #e2e8f0; background:#fff; color:#94a3b8; display:inline-flex; align-items:center; justify-content:center; font-size:12px; }
+.cv-passos li.feito > i { border-color:#16a34a; background:#16a34a; color:#fff; } .cv-passos li.atual > i { border-color:var(--cor); background:var(--cor); color:#fff; box-shadow:0 0 0 5px var(--cor-f); }
+.cv-passos li b { display:block; font-size:12.5px; color:#0f172a; line-height:1.2; } .cv-passos li.fut b { color:#94a3b8; font-weight:600; } .cv-passos li.atual b { color:var(--cor-e); }
+.cv-passos li small { display:block; font-size:11px; color:#64748b; line-height:1.25; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:100%; } .cv-passos li.fut small { color:#cbd5e1; } .cv-passos li.atual small { color:var(--cor-e); font-weight:700; }
+.cv-passos .cv-canc { grid-column:1 / -1; justify-self:center; margin-top:4px; display:inline-flex; align-items:center; gap:6px; font-size:12px; font-weight:800; color:#b91c1c; background:#fef2f2; border:1px solid #fecaca; border-radius:99px; padding:4px 12px; }
+.tj-acao { display:flex; align-items:center; gap:12px; width:100%; text-align:left; border:1px solid #e2e8f0; background:#fff; border-radius:14px; padding:10px 12px; font:inherit; cursor:pointer; margin-bottom:8px; color:#0f172a; text-decoration:none; }
+.tj-acao > i { width:36px; height:36px; border-radius:11px; background:#f1f5f4; color:#475569; display:inline-flex; align-items:center; justify-content:center; font-size:14px; flex-shrink:0; }
+.tj-acao span { display:flex; flex-direction:column; line-height:1.2; min-width:0; } .tj-acao b { font-size:13.5px; } .tj-acao small { color:#64748b; font-size:11.5px; }
+.tj-acao.prim { background:linear-gradient(135deg, var(--cor), var(--cor-e)); border-color:var(--cor-e); color:#fff; } .tj-acao.prim > i { background:rgba(255,255,255,.2); color:#fff; } .tj-acao.prim small { color:rgba(255,255,255,.85); }
+.tj-acao.rubro > i { background:#fef2f2; color:#b91c1c; } .tj-acao:hover { border-color:#9fc9b3; }
+.cv-h4 { display:flex; align-items:center; gap:8px; flex-wrap:wrap; } .cv-h4 .tj-bts { margin-left:auto; }
+.tj-bts { display:flex; gap:6px; flex-wrap:wrap; } .tj-bts a, .tj-bts button { height:34px; border-radius:9px; font:inherit; font-size:12.5px; font-weight:800; border:1px solid #e2e8f0; background:#fff; color:#475569; display:inline-flex; align-items:center; gap:6px; padding:0 12px; cursor:pointer; text-decoration:none; }
+.cv-kpis { display:grid; grid-template-columns:repeat(4, 1fr); gap:8px; margin-bottom:12px; }
+.cv-kpi { border-radius:12px; padding:10px 12px; color:#fff; min-width:0; } .cv-kpi small { display:block; font-size:10px; font-weight:800; letter-spacing:.06em; text-transform:uppercase; opacity:.95; }
+.cv-kpi b { display:block; font-size:17px; line-height:1.25; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; } .cv-kpi span { font-size:11px; opacity:.88; display:block; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.cv-kpi.k1 { background:linear-gradient(135deg,#16a34a,#166534); } .cv-kpi.k2 { background:linear-gradient(135deg,#2563eb,#1e40af); } .cv-kpi.k3 { background:linear-gradient(135deg,#f97316,#c2410c); } .cv-kpi.k4 { background:linear-gradient(135deg,#7c3aed,#5b21b6); }
+.cv-lbl { display:block; font-size:11px; font-weight:800; color:#64748b; text-transform:uppercase; letter-spacing:.05em; margin:12px 0 4px; } .cv-lbl:first-child { margin-top:0; }
+.cv-tx { font-size:13px; color:#0f172a; line-height:1.45; } .cv-tx small { color:#64748b; }
+.cv-duo { display:grid; grid-template-columns:1fr 1fr; gap:0 18px; }
+.cv-emp { display:flex; align-items:center; gap:10px; padding:7px 0; border-bottom:1px solid #f1f5f4; font-size:13px; }
+.cv-emp .sg { width:28px; height:28px; border-radius:8px; background:var(--cor-f); color:var(--cor-e); display:inline-flex; align-items:center; justify-content:center; font-weight:800; font-size:12px; flex-shrink:0; }
+.cv-emp > div { flex:1; min-width:0; } .cv-emp b { display:block; font-size:13.5px; } .cv-emp small { color:#64748b; font-size:12px; display:block; } .cv-emp em { font-style:normal; font-weight:800; white-space:nowrap; font-variant-numeric:tabular-nums; }
+.cv-sit { border-radius:99px; padding:3px 10px; font-size:11.5px; display:inline-flex; align-items:center; gap:5px; } .cv-sit i { font-size:10px; }
+.cv-sit.s-paga { background:#dcfce7; color:#15803d; } .cv-sit.s-via_grupo { background:#dbeafe; color:#1d4ed8; } .cv-sit.s-sem_movimento { background:#ffedd5; color:#b45309; }
+.cv-srv { border:1px solid #e3ece7; border-radius:10px; background:#f6faf7; margin-bottom:6px; } .cv-srv summary { list-style:none; cursor:pointer; display:flex; align-items:center; gap:8px; padding:8px 11px; font-size:13px; font-weight:800; color:#0f3d2e; }
+.cv-srv summary::-webkit-details-marker { display:none; } .cv-srv summary > i:first-child { color:#16a34a; } .cv-srv summary small { color:#64748b; font-weight:600; } .cv-srv summary .cv-ab { margin-left:auto; color:#94a3b8; font-size:11px; transition:transform .15s; }
+.cv-srv[open] summary .cv-ab { transform:rotate(180deg); } .cv-srv ul { margin:0; padding:0 12px 10px 28px; font-size:12.5px; color:#334155; line-height:1.45; } .cv-srv ul li { margin:2px 0; }
+.cv-cls { display:grid; grid-template-columns:repeat(3, 1fr); gap:8px; } .cv-cl { background:#f8fafc; border:1px solid #eef2f6; border-radius:10px; padding:8px 11px; min-width:0; }
+.cv-cl small { display:block; font-size:10px; font-weight:800; letter-spacing:.05em; text-transform:uppercase; color:#64748b; } .cv-cl b { display:block; font-size:13px; color:#0f172a; line-height:1.3; } .cv-cl b em { font-style:normal; font-weight:600; color:#64748b; }
+.cv-prox { font-size:12.5px; color:#475569; background:var(--cor-f); border:1px solid var(--cor-b); border-radius:10px; padding:8px 11px; margin-bottom:10px; line-height:1.45; } .cv-prox b { color:var(--cor-e); } .cv-prox i { color:var(--cor); margin-right:4px; }
+.cv-pdf { width:100%; height:780px; border:1px solid #e2e8f0; border-radius:12px; background:#f1f5f9; }
+.cv-ass { display:flex; flex-direction:column; gap:8px; } .cv-a { border:1px solid #e2e8f0; border-radius:12px; padding:9px 10px; background:#fff; } .cv-a-l { display:flex; gap:10px; align-items:center; }
+.cv-av { width:36px; height:36px; border-radius:50%; display:inline-flex; align-items:center; justify-content:center; font-size:14px; flex-shrink:0; background:#f1f5f9; color:#94a3b8; } .cv-av.ok { background:#dcfce7; color:#15803d; } .cv-av.esp { background:#fef3c7; color:#b45309; }
+.cv-a-t { flex:1; min-width:0; } .cv-a-t b { display:block; font-size:13.5px; line-height:1.2; } .cv-a-t small { display:block; font-size:11.5px; color:#64748b; margin-top:1px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.cv-a-t small.ok { color:#15803d; font-weight:700; } .cv-a-t small.esp { color:#b45309; font-weight:700; } .cv-a-t small.falta { color:#b91c1c; font-weight:700; }
+.cv-a-bts { display:grid; grid-template-columns:repeat(3, 1fr); gap:6px; margin-top:8px; }
+.cv-a-bts a, .cv-a-bts button { height:38px; border-radius:9px; border:1px solid #e2e8f0; background:#fff; color:#475569; font:inherit; font-size:11.5px; font-weight:800; display:inline-flex; align-items:center; justify-content:center; gap:6px; cursor:pointer; text-decoration:none; padding:0 6px; }
+.cv-a-bts .wa { color:#15803d; border-color:#bbf7d0; background:#f0fdf4; } .cv-a-bts .wa i { font-size:15px; } .cv-a-bts a.wa.abrir { background:#16a34a; color:#fff; border-color:#16a34a; } .cv-a-bts .wa.off { opacity:.45; cursor:default; }
+.cv-fx { background:#fff; border:1px solid #e2e8f0; border-radius:12px; padding:9px 12px; font-size:12.5px; color:#475569; margin-top:10px; line-height:1.5; } .cv-fx b { color:#0f172a; } .cv-fx code { font-family:ui-monospace, Menlo, monospace; font-size:10.5px; }
+@media (max-width:1100px) { .cv-page .tj-corpo { grid-template-columns:1fr; } .cv-kpis { grid-template-columns:1fr 1fr; } }
+@media (max-width:900px) {
+  .cv-pdf { height:60vh; } .cv-a-bts { grid-template-columns:1fr 1fr; } .cv-a-bts > :last-child { grid-column:1 / -1; }
+  .cv-passos { grid-template-columns:repeat(6, 1fr); padding:10px 4px 8px; } .cv-passos li { padding:0 1px; } .cv-passos li b { font-size:10px; } .cv-passos li small { display:none; } .cv-passos li > i { width:24px; height:24px; font-size:9px; } .cv-passos li::before { top:11px; }
+  .cv-duo { grid-template-columns:1fr; } .cv-cls { grid-template-columns:1fr 1fr; }
+  .cv-doc, .cv-lado { display:contents; } .cv-sec-acoes { order:-2; } .cv-sec-ass { order:-1; } .cv-sec-tl { order:1; } .cv-h4 .tj-bts { margin-left:0; width:100%; }
+}
+</style>
+{% endblock %}
+
+{% block content %}
+{% include 'comercial/_nav_comercial.html' %}
+{% set d = p.dados %}{% set emp = d.empresas[0] %}
+{% set doc = (emp.cnpj or '') | replace('.', '') | replace('/', '') | replace('-', '') %}
+{% macro dh(s) %}{% if s %}{{ s[8:10] }}/{{ s[5:7] }}/{{ s[2:4] }} {{ s[11:16] }}{% endif %}{% endmacro %}
+{% macro dia(s) %}{% if s %}{{ s[8:10] }}/{{ s[5:7] }}/{{ s[:4] }}{% endif %}{% endmacro %}
+{% set pode = meu or aprov %}
+{% set sem_email = dest | rejectattr('email') | list %}
+<a class="cv-volta" href="{{ url_for('comercial.propostas') }}"><i class="fas fa-arrow-left"></i> Propostas de serviços</a>
+<div class="cv-page">
+<div class="tj {{ cls }}">
+  <header class="tj-cab">
+    <div class="tj-cab-cli">
+      <span class="tj-avatar">{{ (emp.razao or '?')[:2] | upper }}</span>
+      <div class="tj-quem">
+        <div class="tj-quem-l1"><span class="tj-num">nº {{ p.numero or p.id }}</span><b title="{{ m.destino }}">{{ m.destino | upper }}</b></div>
+        <div class="tj-quem-l2">
+          {% if doc %}<code data-copiar data-copiar-rotulo="CPF/CNPJ" title="Clique para copiar">{{ doc | format_cnpj if doc|length == 14 else (doc | format_cpf if doc|length == 11 else doc) }}</code>{% endif %}
+          {% if emp.numero %}<span class="tj-chip">cliente nº {{ emp.numero }}</span>{% endif %}
+          {% if d.empresas | length > 1 %}<span class="tj-chip"><i class="fas fa-building"></i> grupo · {{ d.empresas | length }} empresas</span>{% endif %}
+          <span><i class="fas fa-user"></i> A/C {{ m.ac_txt or emp.rep_nome | nome_proprio }}</span>
+          <a href="{{ url_for('clientes.detalhes', id=emp.cliente_id) }}" target="_blank"><i class="fas fa-arrow-up-right-from-square"></i> cadastro</a>
+        </div>
+      </div>
+    </div>
+    <div class="tj-cab-val"><span class="tj-tag"><i class="fas {{ ico }}"></i> {{ ROTULO[p.status] }}</span><b>{{ m.total_txt }}</b>
+      <small>por mês · dia {{ d.dia_vencimento }} · válida até {{ m.validade_ate.strftime('%d/%m/%Y') }}</small></div>
+  </header>
+
+  {% set ordem = ['RASCUNHO', 'APROVACAO', 'APROVADO', 'ENVIADO', 'ACEITO', 'CONVERTIDO'] %}
+  {% set atual = ordem.index(p.status) if p.status in ordem else (4 if p.status == 'RECUSADO' else -1) %}
+  <ol class="cv-passos">
+    <li class="{{ 'feito' if atual > 0 else ('atual' if atual == 0 else 'fut') }}"><i class="fas fa-pen-ruler"></i><div><b>Montada</b><small>{{ (p.criado_por_nome or '').split(' ')[0] }} · {{ p.criado_em.strftime('%d/%m/%y') }}</small></div></li>
+    <li class="{{ 'feito' if atual > 1 else ('atual' if atual == 1 else 'fut') }}"><i class="fas fa-stamp"></i><div><b>Para aprovar</b><small>{% if atual == 1 %}aguardando{% elif d.pedido_aprovacao and atual > 1 %}pedido em {{ dia(d.pedido_aprovacao.em)[:5] }}{% elif d.aprovacao and atual > 1 %}aprovada direto{% elif d.reprovado and atual == 0 %}devolvida{% else %}&nbsp;{% endif %}</small></div></li>
+    <li class="{{ 'feito' if atual > 2 else ('atual' if atual == 2 else 'fut') }}"><i class="fas fa-circle-check"></i><div><b>Aprovada</b><small>{% if d.aprovacao %}{{ (d.aprovacao.nome or '').split(' ')[0] }} · {{ dia(d.aprovacao.em)[:5] }}{% elif atual > 2 %}sem aprovação{% else %}&nbsp;{% endif %}</small></div></li>
+    <li class="{{ 'feito' if atual > 3 else ('atual' if atual == 3 else 'fut') }}"><i class="fas fa-paper-plane"></i><div><b>Com o cliente</b><small>{% if p.enviado_em %}disparada {{ p.enviado_em.strftime('%d/%m/%y') }}{% if atual == 3 %} · até {{ m.validade_ate.strftime('%d/%m') }}{% endif %}{% else %}&nbsp;{% endif %}</small></div></li>
+    <li class="{{ 'feito' if atual > 4 else ('atual' if atual == 4 else 'fut') }}"><i class="fas {{ 'fa-thumbs-down' if p.status == 'RECUSADO' else 'fa-file-signature' }}"></i><div><b>{{ 'Recusada' if p.status == 'RECUSADO' else 'Aceita' }}</b><small>{% if aceite %}{{ (aceite.nome or '').split(' ')[0] | nome_proprio }} · {{ aceite.em.strftime('%d/%m/%y') }}{% elif recusa %}{{ recusa.em_txt[:5] }}{% else %}&nbsp;{% endif %}</small></div></li>
+    <li class="{{ 'atual' if atual == 5 else 'fut' }}"><i class="fas fa-file-contract"></i><div><b>Convertida</b><small>{% if d.convertido %}contrato {{ d.convertido.contrato_numero }}{% else %}&nbsp;{% endif %}</small></div></li>
+    {% if p.status == 'CANCELADO' %}<li class="cv-canc"><i class="fas fa-ban"></i> Cancelada{% if p.cancelado_em %} em {{ p.cancelado_em.strftime('%d/%m/%Y') }}{% endif %}{% if d.cancelado %} por {{ (d.cancelado.nome or '').split(' ')[0] }}{% if d.cancelado.motivo %} · “{{ d.cancelado.motivo }}”{% endif %}{% endif %}</li>{% endif %}
+  </ol>
+
+  <div class="tj-kpis">
+    <div><i class="fas fa-user-pen"></i><div><dt>Montada por</dt><dd>{{ p.criado_por_nome or '—' }}</dd><small>{{ p.criado_em.strftime('%d/%m/%Y %H:%M') }}</small></div></div>
+    <div><i class="fas fa-stamp"></i><div><dt>Aprovação</dt><dd>{% if d.aprovacao %}{{ d.aprovacao.nome or 'aprovada' }}{% elif p.status == 'APROVACAO' %}aguardando{% elif p.status == 'RASCUNHO' %}ainda não pedida{% else %}—{% endif %}</dd><small>{% if d.aprovacao %}{{ dh(d.aprovacao.em) }}{% elif p.status == 'APROVACAO' %}aguardando aprovação{% elif d.reprovado %}devolvida por {{ d.reprovado.por.split(' ')[0] }}{% else %}&nbsp;{% endif %}</small></div></div>
+    <div><i class="fas fa-paper-plane"></i><div><dt>Com o cliente</dt><dd>{% if aceite %}aceita{% elif recusa %}recusada{% elif p.enviado_em %}aguardando{% else %}ainda não{% endif %}</dd><small>{% if aceite %}por {{ aceite.nome | nome_proprio }} em {{ aceite.em.strftime('%d/%m/%Y %H:%M') }}{% elif recusa %}em {{ recusa.em_txt }}{% elif p.enviado_em %}links enviados em {{ p.enviado_em.strftime('%d/%m/%Y %H:%M') }}{% elif sem_email %}{{ sem_email | length }} sem e-mail{% else %}ninguém recebeu o link ainda{% endif %}</small></div></div>
+    <div><i class="fas fa-hourglass-half"></i><div><dt>Validade</dt><dd>{{ m.validade_ate.strftime('%d/%m/%Y') }}</dd><small>{{ m.validade_dias }} dias{% if vencida and p.status == 'ENVIADO' %} · <b style="color:#b91c1c">venceu</b>{% endif %}</small></div></div>
+    <div><i class="fas fa-file-contract"></i><div><dt>Contrato</dt><dd>{% if contrato %}{{ contrato.numero }}{% else %}ainda não{% endif %}</dd><small>{% if contrato %}{{ {'RASCUNHO': 'rascunho', 'APROVACAO': 'aguardando aprovação', 'APROVADO': 'aprovado', 'ENVIADO': 'aguardando assinatura', 'ASSINADO': 'assinado', 'CANCELADO': 'cancelado'}.get(contrato.status, contrato.status) }}{% else %}nasce da proposta aceita{% endif %}</small></div></div>
+  </div>
+
+  <div class="tj-corpo">
+    <div class="cv-doc">
+      <section class="tj-sec">
+        <h4 class="cv-h4"><i class="fas fa-file-lines"></i> Proposta de serviços
+          <div class="tj-bts">
+            <a href="{{ url_for('comercial.proposta_pdf', pid=p.id) }}" target="_blank"><i class="fas fa-eye"></i> Abrir o PDF</a>
+            <a href="{{ url_for('comercial.proposta_pdf', pid=p.id, baixar=1) }}"><i class="fas fa-download"></i> Baixar</a>
+            {% if p.status == 'RASCUNHO' and pode %}<a href="{{ url_for('comercial.proposta_editar', pid=p.id) }}"><i class="fas fa-pen"></i> Alterar o rascunho</a>{% endif %}
+          </div></h4>
+        <div class="cv-kpis">
+          <div class="cv-kpi k1"><small>Honorários</small><b>{{ m.total_txt }}</b><span>por mês{% if m.por_empresa %} · soma das pagantes{% endif %}</span></div>
+          <div class="cv-kpi k2"><small>Vencimento</small><b>dia {{ d.dia_vencimento }}</b><span>de cada mês</span></div>
+          <div class="cv-kpi k3"><small>Validade</small><b>{{ m.validade_ate.strftime('%d/%m/%Y') }}</b><span>{{ m.validade_dias }} dias a partir do disparo</span></div>
+          <div class="cv-kpi k4"><small>Reajuste</small><b>{{ m.reajuste_curto | capitalize }}</b><span>{{ m.reajuste }}</span></div>
+        </div>
+        <div class="cv-duo">
+          <div>
+            <span class="cv-lbl">Empresa{{ 's' if d.empresas | length > 1 }}</span>
+            {% for e in d.empresas %}<div class="cv-emp"><span class="sg">{{ loop.index }}</span><div><b>{{ e.razao }}</b><small>{{ 'CPF' if (e.cnpj or '') | replace('.', '') | replace('-', '') | length == 11 else 'CNPJ' }} {{ e.cnpj }}{% if e.numero %} · cliente nº {{ e.numero }}{% endif %}</small></div>{% if d.empresas | length > 1 %}{% set sit = e.situacao or 'PAGA' %}<em class="cv-sit s-{{ sit | lower }}">{% if sit == 'PAGA' %}<i class="fas fa-coins"></i> paga{% if d.valores_por_empresa and e.valor %} {{ brl(e.valor) }}{% endif %}{% elif sit == 'VIA_GRUPO' %}<i class="fas fa-people-group"></i> via grupo{% else %}<i class="fas fa-circle-pause"></i> sem movimento{% endif %}</em>{% endif %}</div>{% endfor %}
+          </div>
+          <div>
+            <span class="cv-lbl">Para quem vai (A/C)</span>
+            {% for a in dest %}<div class="cv-tx"><b>{{ a.nome | nome_proprio }}</b>{% if loop.first and emp.rep_cargo %}, {{ emp.rep_cargo }}{% elif not loop.first and d.assinante_extra %}, {{ d.assinante_extra.cargo }}{% endif %}<br><small>{{ a.email or 'SEM E-MAIL' }}{% if a.fone %} · {{ a.fone }}{% endif %}</small></div>{% endfor %}
+            {% for n in m.ac %}{% if n | upper not in (dest | map(attribute='nome') | map('upper') | list) %}<div class="cv-tx"><b>{{ n | nome_proprio }}</b><br><small>citado no A/C, sem link</small></div>{% endif %}{% endfor %}
+            <span class="cv-lbl">Pela Qualicontax</span>
+            <div class="cv-tx"><b>{{ (d.assina.nome if d.assina else '—') | nome_proprio }}</b>{% if d.assina and d.assina.cargo %}, {{ d.assina.cargo }}{% endif %}</div>
+          </div>
+        </div>
+        <span class="cv-lbl">O que está incluído</span>
+        {% for titulo, itens in m.blocos %}<details class="cv-srv"><summary><i class="fas fa-circle-check"></i> {{ titulo | nome_proprio }} <small>· {{ itens | length }} itens</small><i class="fas fa-chevron-down cv-ab"></i></summary><ul>{% for it in itens %}<li>{{ it }}</li>{% endfor %}</ul></details>{% endfor %}
+        {% if m.consideracoes %}<details class="cv-srv"><summary><i class="fas fa-circle-info" style="color:#2563eb"></i> Outras considerações <small>· {{ m.consideracoes | length }} itens</small><i class="fas fa-chevron-down cv-ab"></i></summary><ul>{% for it in m.consideracoes %}<li>{{ it }}</li>{% endfor %}</ul></details>{% endif %}
+        {% if m.extras %}<details class="cv-srv"><summary><i class="fas fa-receipt" style="color:#b45309"></i> Serviços extraordinários <small>· {{ 'mediante orçamento prévio' if m.extras_cobrados else 'só as taxas' }}</small><i class="fas fa-chevron-down cv-ab"></i></summary><ul>{% for it in m.extras %}<li>{{ it }}</li>{% endfor %}</ul></details>{% endif %}
+        <span class="cv-lbl">Condições que vão para o contrato</span>
+        <div class="cv-cls">
+          <div class="cv-cl"><small>13º honorário</small><b>{{ {'COBRADO': 'cobrado em nov e dez', 'UNICA': 'dezembro, parcela única', 'ISENTO': 'isento'}.get(d.decimo, d.decimo) }}</b></div>
+          <div class="cv-cl"><small>Multa e juros por atraso</small><b>{{ d.multa | string | replace('.', ',') }}% <em>+ {{ d.juros | string | replace('.', ',') }}% ao mês</em></b></div>
+          <div class="cv-cl"><small>Aviso prévio</small><b>{{ d.aviso_previo }} dias</b></div>
+          <div class="cv-cl"><small>LGPD</small><b>{{ 'com cláusula' if d.lgpd else 'sem cláusula' }}</b></div>
+          <div class="cv-cl"><small>Foro</small><b>{{ d.foro }}</b></div>
+          <div class="cv-cl"><small>Início</small><b>na assinatura do contrato</b></div>
+        </div>
+      </section>
+      <section class="tj-sec">
+        <h4><i class="fas fa-file-pdf"></i> A proposta em PDF <small>· {% if aceite %}com o registro do aceite{% elif p.status == 'ENVIADO' %}é o que o cliente vê{% else %}como o cliente vai ver{% endif %}</small></h4>
+        <iframe class="cv-pdf" src="{{ url_for('comercial.proposta_pdf', pid=p.id) }}#toolbar=0&view=FitH" title="PDF da proposta" loading="lazy"></iframe>
+      </section>
+    </div>
+
+    <div class="cv-lado">
+      <section class="tj-sec tj-sec-acoes cv-sec-acoes">
+        <h4><i class="fas fa-bolt"></i> O que fazer</h4>
+        {% if p.status == 'RASCUNHO' and pode %}
+          <div class="cv-prox"><i class="fas fa-arrow-right"></i> <b>Próximo passo:</b> conferir o PDF e {{ 'aprovar ou disparar para o cliente' if aprov else 'mandar para aprovação' }}.</div>
+          {% if aprov %}
+          <button type="button" class="tj-acao prim" onclick="ctAcao(this)" data-url="{{ url_for('comercial.proposta_aprovar', pid=p.id) }}" data-titulo="Aprovar a proposta nº {{ p.numero or p.id }}?" data-texto="Honorários de {{ m.total_txt }} por mês para {{ m.destino }}. Aprovada, é só disparar para o cliente.{% if d.grupo and d.grupo.autorizacao_necessaria %} Você também AUTORIZA a proposta em grupo com sócios diferentes.{% endif %}" data-ok="Aprovar" data-icone="fa-check" data-cor="pk-verde"><i class="fas fa-check"></i><span><b>Aprovar</b><small>depois é só disparar para o cliente</small></span></button>
+          <button type="button" class="tj-acao" onclick="ctAcao(this)" data-url="{{ url_for('comercial.proposta_enviar', pid=p.id) }}" data-titulo="Disparar sem aprovar?" data-texto="Cada pessoa do A/C recebe o link por e-mail e o PDF fica congelado como está.{% if sem_email %} Falta e-mail de {{ sem_email | map(attribute='nome') | join(', ') }}: não vai dar.{% endif %}" data-ok="Disparar" data-icone="fa-paper-plane" data-cor="pk-ambar"><i class="fas fa-paper-plane"></i><span><b>Disparar para o cliente</b><small>sem passar pela aprovação</small></span></button>
+          {% else %}
+          <button type="button" class="tj-acao prim" onclick="ctAcao(this)" data-url="{{ url_for('comercial.proposta_pedir_aprovacao', pid=p.id) }}" data-titulo="Mandar para aprovação?" data-texto="A proposta fica aguardando aprovação. Aprovada, você recebe aviso e dispara para o cliente." data-ok="Mandar para aprovação" data-icone="fa-paper-plane" data-cor="pk-verde"><i class="fas fa-paper-plane"></i><span><b>Mandar para aprovação</b><small>o escritório confere e você recebe aviso</small></span></button>
+          {% endif %}
+          <a class="tj-acao" href="{{ url_for('comercial.proposta_editar', pid=p.id) }}"><i class="fas fa-pen"></i><span><b>Alterar o rascunho</b><small>empresas, A/C, serviços, honorários e textos</small></span></a>
+        {% elif p.status == 'APROVACAO' %}
+          {% if aprov %}
+          <div class="cv-prox"><i class="fas fa-arrow-right"></i> <b>Próximo passo:</b> conferir e aprovar, ou devolver para {{ (p.criado_por_nome or 'quem montou').split(' ')[0] }} acertar.</div>
+          <button type="button" class="tj-acao prim" onclick="ctAcao(this)" data-url="{{ url_for('comercial.proposta_aprovar', pid=p.id) }}" data-titulo="Aprovar a proposta nº {{ p.numero or p.id }}?" data-texto="Honorários de {{ m.total_txt }} por mês para {{ m.destino }}.{% if d.grupo and d.grupo.autorizacao_necessaria %} Você também AUTORIZA a proposta em grupo com sócios diferentes.{% endif %}" data-ok="Aprovar" data-icone="fa-check" data-cor="pk-verde"><i class="fas fa-check"></i><span><b>Aprovar</b><small>{{ (p.criado_por_nome or 'quem montou').split(' ')[0] }} dispara para o cliente</small></span></button>
+          <button type="button" class="tj-acao rubro" onclick="ctAcao(this)" data-url="{{ url_for('comercial.proposta_reprovar', pid=p.id) }}" data-titulo="Devolver a proposta para acertar?" data-texto="Volta para {{ p.criado_por_nome or 'quem montou' }} corrigir. Diga o que está errado." data-motivo="o que precisa acertar (obrigatório)" data-opcoes="Valor dos honorários errado|Faltou serviço|Texto das considerações|A/C errado|Dados do cadastro incompletos" data-ok="Devolver" data-icone="fa-rotate-left" data-cor="pk-rubro"><i class="fas fa-rotate-left"></i><span><b>Devolver para acertar</b><small>volta para correção, com o motivo</small></span></button>
+          {% else %}
+          <div class="cv-prox"><i class="fas fa-hourglass-half"></i> <b>Aguardando aprovação.</b> Você recebe um e-mail quando sair; aprovada, o botão de disparar aparece aqui.</div>
+          {% endif %}
+        {% elif p.status == 'APROVADO' and pode %}
+          {% if sem_email %}<div class="tj-aviso tj-aviso-erro"><i class="fas fa-triangle-exclamation"></i> <b>Falta e-mail</b> de {{ sem_email | map(attribute='nome') | join(', ') | nome_proprio }}. Quem recebe a proposta precisa de e-mail; complete no cadastro e monte de novo.</div>
+          {% else %}
+          <div class="cv-prox"><i class="fas fa-arrow-right"></i> <b>Próximo passo:</b> disparar para o cliente. A validade de {{ m.validade_dias }} dias conta do disparo.</div>
+          <button type="button" class="tj-acao prim" onclick="ctAcao(this)" data-url="{{ url_for('comercial.proposta_enviar', pid=p.id) }}" data-titulo="Disparar a proposta?" data-texto="{{ dest | length }} pessoa{{ 's' if dest | length != 1 }} recebe{{ 'm' if dest | length != 1 }} o link por e-mail e o PDF fica congelado como está. Depois você também pode mandar o link pelo WhatsApp." data-ok="Disparar" data-icone="fa-paper-plane" data-cor="pk-verde"><i class="fas fa-paper-plane"></i><span><b>Disparar para o cliente</b><small>{{ dest | length }} pessoa{{ 's' if dest | length != 1 }} recebe{{ 'm' if dest | length != 1 }} o link por e-mail</small></span></button>
+          {% endif %}
+        {% elif p.status == 'ENVIADO' and pode %}
+          <div class="cv-prox"><i class="fas fa-hourglass-half"></i> <b>Com o cliente{% if vencida %} · validade vencida{% endif %}.</b> Pelo WhatsApp é mais rápido: os botões estão em cada pessoa, abaixo. Aceita, aparece aqui o botão de converter.</div>
+          <form method="POST" action="{{ url_for('comercial.proposta_enviar', pid=p.id) }}"><button type="submit" class="tj-acao"><i class="fas fa-envelope"></i><span><b>Reenviar o e-mail</b><small>para quem ainda não respondeu</small></span></button></form>
+          <button type="button" class="tj-acao" onclick="ctAcao(this)" data-url="{{ url_for('comercial.proposta_converter', pid=p.id) }}" data-titulo="Converter em contrato antes do aceite?" data-texto="Use se o cliente já deu o ok por fora. O Montar contrato abre preenchido com tudo da proposta." data-ok="Converter" data-icone="fa-file-contract" data-cor="pk-ambar"><i class="fas fa-file-contract"></i><span><b>Converter em contrato</b><small>o cliente aceitou por fora</small></span></button>
+        {% elif p.status == 'ACEITO' and pode %}
+          <div class="cv-prox"><i class="fas fa-arrow-right"></i> <b>Aceita por {{ (aceite.nome if aceite else '') | nome_proprio }}.</b> Agora é converter: o Montar contrato abre com tudo preenchido; você confere, salva e segue para aprovação e assinatura.</div>
+          <form method="POST" action="{{ url_for('comercial.proposta_converter', pid=p.id) }}"><button type="submit" class="tj-acao prim"><i class="fas fa-file-contract"></i><span><b>Converter em contrato</b><small>empresas, serviços, honorários e condições já preenchidos</small></span></button></form>
+        {% elif p.status == 'RECUSADO' %}
+          <div class="tj-aviso tj-aviso-erro"><i class="fas fa-thumbs-down"></i> <b>Recusada por {{ (recusa.nome if recusa else 'o cliente') | nome_proprio }}</b>{% if recusa and recusa.motivo %}: “{{ recusa.motivo }}”{% endif %}. Dá para montar outra proposta pela lista.</div>
+        {% elif p.status == 'CONVERTIDO' %}
+          <div class="tj-ok"><i class="fas fa-circle-check"></i> <b>Convertida em contrato.</b>{% if contrato %} <a href="{{ url_for('financeiro.contrato_ver', cid=contrato.id) }}">Abrir o contrato {{ contrato.numero }}</a>{% endif %}</div>
+        {% elif p.status == 'CANCELADO' %}
+          <div class="tj-aviso"><i class="fas fa-ban"></i> Cancelada{% if p.cancelado_em %} em {{ p.cancelado_em.strftime('%d/%m/%Y') }}{% endif %}{% if d.cancelado %} por {{ d.cancelado.nome }}{% endif %}. Dá para montar outra pela lista.</div>
+        {% endif %}
+        {% if (p.status in ('RASCUNHO', 'APROVACAO') and pode) or (p.status in ('APROVADO', 'ENVIADO', 'ACEITO') and aprov) %}
+        <button type="button" class="tj-acao" style="margin-top:6px" onclick="ctAcao(this)" data-url="{{ url_for('comercial.proposta_cancelar', pid=p.id) }}" data-titulo="Cancelar a proposta nº {{ p.numero or p.id }}?" data-texto="Ela sai do caminho e fica guardada como cancelada, com o motivo.{% if p.status == 'ENVIADO' %} O link do cliente para de funcionar.{% endif %}" data-motivo="escreva o motivo (obrigatório)" data-opcoes="Cliente desistiu|Dados errados: vou montar outra|Proposta duplicada|Cliente não respondeu|Mudou o valor ou os serviços" data-ok="Cancelar a proposta" data-icone="fa-ban" data-cor="pk-rubro" data-voltar="Deixar como está"><i class="fas fa-ban"></i><span><b>Cancelar proposta</b><small>com o motivo · não apaga: fica no histórico</small></span></button>
+        {% endif %}
+        {% if d.reprovado and p.status == 'RASCUNHO' %}<div class="tj-aviso tj-aviso-erro"><i class="fas fa-rotate-left"></i> <b>Devolvida por {{ d.reprovado.por }}</b>{% if d.reprovado.motivo %}: “{{ d.reprovado.motivo }}”{% endif %}. Acerte e mande de novo para aprovação.</div>{% endif %}
+        {% if d.grupo and d.grupo.autorizacao_necessaria %}<div class="tj-aviso" style="background:{{ '#f0fdf4' if d.autorizacao else '#fff7ed' }}; color:{{ '#166534' if d.autorizacao else '#9a3412' }}"><i class="fas {{ 'fa-circle-check' if d.autorizacao else 'fa-triangle-exclamation' }}"></i> <b>Grupo com sócios diferentes</b> ({{ d.grupo.detalhe }}). {% if d.autorizacao %}Autorizado por {{ d.autorizacao.nome }} em {{ dia(d.autorizacao.em) }}.{% else %}A aprovação do escritório autoriza e fica registrada.{% endif %}</div>{% endif %}
+        {% if p.pdf_sha256 %}<div class="cv-fx"><b>Impressão digital do PDF disparado</b><br><code>{{ p.pdf_sha256[:32] }}…</code><br>É o que o cliente vê e aceita; se o documento mudasse, o aceite não bateria.</div>{% endif %}
+      </section>
+
+      <section class="tj-sec cv-sec-ass">
+        <h4><i class="fas fa-users"></i> Quem recebe <small>· {{ dest | length }} pessoa{{ 's' if dest | length != 1 }}</small></h4>
+        <div class="cv-ass">
+        {% for a in dest %}
+          <div class="cv-a">
+            <div class="cv-a-l"><span class="cv-av {{ 'ok' if a.assinado_em else ('esp' if p.status == 'ENVIADO' else '') }}"><i class="fas {{ 'fa-check' if a.assinado_em else ('fa-clock' if p.status == 'ENVIADO' else 'fa-user') }}"></i></span>
+              <div class="cv-a-t"><b>{{ a.nome | nome_proprio }}</b><small>{% if a.cpf %}CPF {{ a.cpf }} · {% endif %}{{ a.email or 'SEM E-MAIL' }}</small>
+                {% if a.assinado_em %}<small class="ok">aceitou em {{ a.assinado_em.strftime('%d/%m/%Y %H:%M') }} · IP {{ a.assinado_ip }}</small>
+                {% elif not a.email %}<small class="falta">sem e-mail: não dá para enviar o link</small>
+                {% elif a.aviso_enviado_em %}<small class="esp">link enviado em {{ a.aviso_enviado_em.strftime('%d/%m %H:%M') }} · ainda não respondeu</small>
+                {% else %}<small>ainda não recebeu o link</small>{% endif %}</div></div>
+            {% if a.texto_wa %}
+            <div class="cv-a-bts">
+              <button type="button" data-copiar="{{ a.link }}" data-copiar-rotulo="Link da proposta" title="Copiar só o link"><i class="fas fa-link"></i> Link</button>
+              <button type="button" class="wa" data-texto="{{ a.texto_wa }}" onclick="ctCopiar(this.dataset.texto)" title="Copia a mensagem pronta, com o link, para colar no WhatsApp"><i class="fab fa-whatsapp"></i> Copiar texto</button>
+              {% if a.wa_link %}<a class="wa abrir" href="{{ a.wa_link }}" target="_blank" title="Abre a conversa de {{ a.fone }} com a mensagem pronta"><i class="fab fa-whatsapp"></i> Abrir</a>
+              {% else %}<span class="wa off" title="sem celular no cadastro: copie o texto e cole na conversa"><i class="fab fa-whatsapp"></i> sem celular</span>{% endif %}
+            </div>
+            {% endif %}
+          </div>
+        {% endfor %}
+        </div>
+        {% if p.status == 'ENVIADO' %}<p class="tj-regra"><i class="fas fa-circle-info"></i> O e-mail já foi. Pelo WhatsApp é mais rápido: copie o texto pronto ou abra a conversa; o link é o mesmo. Basta uma pessoa aceitar.</p>{% endif %}
+      </section>
+
+      <section class="tj-sec tj-sec-tl cv-sec-tl">
+        <h4><i class="fas fa-timeline"></i> Linha do tempo</h4>
+        <ol class="tj-tl">
+          {% for e in eventos %}
+          <li class="{{ e.cls }}"><i class="fas {{ e.ico }}"></i><div><b>{{ e.texto }}</b>{% if e.det %}<small>{{ e.det }}</small>{% endif %}</div><time>{{ e.quando.strftime('%d/%m/%y %H:%M') }}</time></li>
+          {% endfor %}
+          {% if p.status == 'RASCUNHO' %}<li class="fut"><i class="fas fa-arrow-right"></i><div><b>Próximo: conferir o PDF e {{ 'aprovar ou disparar' if aprov else 'mandar para aprovação' }}</b></div><time></time></li>
+          {% elif p.status == 'APROVACAO' %}<li class="tj-laranja fut"><i class="fas fa-hourglass-half"></i><div><b>Aguardando aprovação</b><small>o escritório confere e aprova</small></div><time></time></li>
+          {% elif p.status == 'APROVADO' %}<li class="tj-verde fut"><i class="fas fa-arrow-right"></i><div><b>Próximo: disparar para o cliente</b><small>cada pessoa do A/C recebe o link por e-mail</small></div><time></time></li>
+          {% elif p.status == 'ENVIADO' %}<li class="tj-azul fut"><i class="fas fa-hourglass-half"></i><div><b>Aguardando a resposta do cliente</b><small>até {{ m.validade_ate.strftime('%d/%m/%Y') }}</small></div><time></time></li>
+          {% elif p.status == 'ACEITO' %}<li class="tj-verde fut"><i class="fas fa-arrow-right"></i><div><b>Próximo: converter em contrato</b></div><time></time></li>{% endif %}
+        </ol>
+        <form method="POST" action="{{ url_for('comercial.proposta_nota', pid=p.id) }}" class="tj-form"><label>Anotar <small>· só a equipe vê</small></label>
+          <div><input name="texto" maxlength="400" placeholder="ex.: cliente pediu para ver depois do dia 10" required autocomplete="off"><button type="submit"><i class="fas fa-comment"></i> Anotar</button></div></form>
+      </section>
+    </div>
+  </div>
+</div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+  function esc(s) { var d = document.createElement('div'); d.textContent = s == null ? '' : String(s); return d.innerHTML; }
+  window.ctCopiar = function (t) { if (window.qcxCopiar && qcxCopiar.copiar) { qcxCopiar.copiar(t); return; } navigator.clipboard.writeText(t); };
+  window.ctPost = function (url, dados) {
+    var f = document.createElement('form'); f.method = 'POST'; f.action = url; f.style.display = 'none';
+    Object.keys(dados || {}).forEach(function (k) { var i = document.createElement('input'); i.name = k; i.value = dados[k]; f.appendChild(i); });
+    document.body.appendChild(f); f.submit();
+  };
+  window.ctPergunta = function (o) {
+    var f = document.createElement('div'); f.className = 'pk-fundo'; f.style.zIndex = 1400;
+    f.innerHTML = '<div class="pk pk-peq ' + (o.cor || 'pk-roxo') + '" role="alertdialog" aria-modal="true"><header class="pk-cab"><span class="pk-av"><i class="fas ' + (o.icone || 'fa-question') + '"></i></span>'
+      + '<div class="pk-quem"><b>' + esc(o.titulo) + '</b><span>' + esc(o.texto || '') + '</span></div><button type="button" class="pk-x" title="Fechar (Esc)"><i class="fas fa-xmark"></i></button></header>'
+      + (o.opcoes ? '<div class="pk-opcoes">' + o.opcoes.map(function (x) { return '<button type="button" class="pk-opc">' + esc(x) + '</button>'; }).join('') + '</div>' : '')
+      + (o.motivo ? '<textarea class="pk-motivo" placeholder="' + esc(o.motivo) + '" maxlength="400"></textarea>' : '')
+      + '<footer class="pk-pe"><div class="pk-pe-info">' + esc(o.info || '') + '</div><button type="button" class="pk-canc">' + esc(o.voltar || 'Voltar') + '</button><button type="button" class="pk-ok' + (o.cor === 'pk-rubro' ? ' rubro' : '') + '"><i class="fas ' + (o.okIcone || 'fa-check') + '"></i> ' + esc(o.ok || 'Confirmar') + '</button></footer></div>';
+    document.body.appendChild(f);
+    function fechar(sim) { document.removeEventListener('keydown', tecla, true); var m = (f.querySelector('.pk-motivo') || {}).value || ''; f.remove(); if (sim) { if (o.exigeMotivo && !m.trim()) { ctPergunta(Object.assign({}, o, { info: 'Escreva o motivo para continuar.' })); return; } if (o.onOk) o.onOk(m.trim()); } }
+    function tecla(e) { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); fechar(false); } }
+    document.addEventListener('keydown', tecla, true);
+    f.querySelector('.pk-x').addEventListener('click', function () { fechar(false); }); f.querySelector('.pk-canc').addEventListener('click', function () { fechar(false); });
+    f.querySelector('.pk-ok').addEventListener('click', function () { fechar(true); }); f.addEventListener('mousedown', function (e) { if (e.target === f) fechar(false); });
+    var ta = f.querySelector('.pk-motivo'); if (ta) ta.focus(); else f.querySelector('.pk-ok').focus();
+    f.querySelectorAll('.pk-opc').forEach(function (b) { b.addEventListener('click', function () { f.querySelectorAll('.pk-opc').forEach(function (x) { x.classList.toggle('on', x === b); }); if (ta) { ta.value = b.textContent; ta.focus(); } }); });
+  };
+  window.ctAcao = function (bt) {
+    var d = bt.dataset;
+    ctPergunta({ titulo: d.titulo, texto: d.texto, motivo: d.motivo || null, exigeMotivo: !!d.motivo, opcoes: d.opcoes ? d.opcoes.split('|') : null,
+                 cor: d.cor || 'pk-roxo', icone: d.icone || 'fa-question', ok: d.ok || 'Confirmar', okIcone: d.icone || 'fa-check', voltar: d.voltar || 'Voltar',
+                 onOk: function (m) { ctPost(d.url, d.motivo ? { motivo: m } : {}); } });
+  };
+})();
+</script>
+{% endblock %}

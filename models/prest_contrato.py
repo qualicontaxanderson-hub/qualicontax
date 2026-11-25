@@ -286,12 +286,12 @@ class PrestContrato:
 
     # ---------------- gravação ----------------
     @staticmethod
-    def gerar_numero():
+    def gerar_numero(prefixo='CTR'):
         """CTR-XXXXXX, no mesmo molde do orçamento (ORC-XXXXXX): seis caracteres aleatórios sem letras ambíguas (0/O, 1/I),
         único na tabela. Era QC-, que confundia com o número dos boletos (24/11/2026, Anderson: "numeração igual aos orçamentos")."""
         alfabeto = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
         for _ in range(20):
-            n = 'CTR-' + ''.join(secrets.choice(alfabeto) for _ in range(6))
+            n = prefixo + '-' + ''.join(secrets.choice(alfabeto) for _ in range(6))      # PRP- para a proposta de serviços (25/11/2026)
             if not execute_query('SELECT 1 FROM prest_contratos WHERE numero = %s', (n,), fetch=True):
                 return n
         raise RuntimeError('não consegui um número livre')
@@ -302,7 +302,7 @@ class PrestContrato:
         cid = execute_query(
             """INSERT INTO prest_contratos (numero, cliente_id, fin_contrato_id, tipo, anterior_id, titulo, dados, criado_por)
                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)""",
-            (PrestContrato.gerar_numero(), cliente_id, fin_contrato_id, tipo, anterior_id, titulo[:120], json.dumps(dados, ensure_ascii=False, default=str), criado_por), fetch=False)
+            (PrestContrato.gerar_numero('PRP' if tipo == 'PROPOSTA' else 'CTR'), cliente_id, fin_contrato_id, tipo, anterior_id, titulo[:120], json.dumps(dados, ensure_ascii=False, default=str), criado_por), fetch=False)
         PrestContrato._gravar_empresas(cid, dados)
         PrestContrato._gravar_assinantes(cid, dados)
         return cid
@@ -354,7 +354,7 @@ class PrestContrato:
         return c
 
     @staticmethod
-    def prontas():
+    def prontas(tipo='CONTRATO'):
         """Empresas que PODEM receber contrato. Era "só cadastro completo" (06/11/2026); em 24/11/2026 o Anderson, vendo
         só 9 de 600 na caixa ("não estou entendendo por que está aparecendo só algumas sugestões"), mandou abrir: todo
         cliente ATIVO com número e todo avulso, sem contrato ENVIADO/ASSINADO. O que faltar no cadastro (sócio, endereço)
@@ -368,13 +368,14 @@ class PrestContrato:
                       (SELECT fc.valor FROM fin_contratos fc WHERE fc.cliente_id = c.id AND fc.situacao = 'ATIVO' AND fc.empresa_id = 2
                         ORDER BY fc.id DESC LIMIT 1) AS valor,
                       (SELECT COUNT(*) FROM socios_clientes s WHERE s.cliente_id = c.id AND s.ativo = 1) AS n_socios,
-                      (SELECT COUNT(*) FROM prest_contratos p WHERE p.status = 'RASCUNHO'
+                      (SELECT COUNT(*) FROM prest_contratos p WHERE p.status = 'RASCUNHO' AND COALESCE(p.tipo, 'CONTRATO') = %s
                          AND (p.cliente_id = c.id OR p.id IN (SELECT contrato_id FROM prest_contrato_empresas e WHERE e.cliente_id = c.id))) AS n_rascunhos
                  FROM clientes c
                 WHERE ((c.avulso = 0 AND c.numero_cliente IS NOT NULL AND c.situacao = 'ATIVO') OR c.avulso = 1)
-                  AND NOT EXISTS (SELECT 1 FROM prest_contratos p WHERE p.status IN ('ENVIADO', 'ASSINADO')
+                  AND NOT EXISTS (SELECT 1 FROM prest_contratos p WHERE p.status IN (%s, %s) AND COALESCE(p.tipo, 'CONTRATO') = %s
                                      AND (p.cliente_id = c.id OR p.id IN (SELECT contrato_id FROM prest_contrato_empresas e WHERE e.cliente_id = c.id)))
-                ORDER BY c.avulso, CAST(c.numero_cliente AS UNSIGNED), c.nome_razao_social""", fetch=True) or []
+                ORDER BY c.avulso, CAST(c.numero_cliente AS UNSIGNED), c.nome_razao_social""",
+            (tipo, 'ENVIADO', 'ACEITO' if tipo == 'PROPOSTA' else 'ASSINADO', tipo), fetch=True) or []
         return {'lista': rows, 'pendentes_empresas': 0, 'pendentes_avulsos': 0}
 
     @staticmethod
@@ -397,8 +398,9 @@ class PrestContrato:
         return out
 
     @staticmethod
-    def listar(status=None, cliente_id=None):
-        cond, params = [], []
+    def listar(status=None, cliente_id=None, tipo='CONTRATO'):
+        """tipo: CONTRATO (padrão) ou PROPOSTA — a proposta de serviços mora na mesma tabela (25/11/2026)."""
+        cond, params = ["COALESCE(p.tipo, 'CONTRATO') = %s"], [tipo]
         if status:
             cond.append('p.status = %s'); params.append(status)
         if cliente_id:
@@ -426,7 +428,7 @@ class PrestContrato:
         """O contrato ASSINADO vigente da empresa (condição da comissão de honorários)."""
         return execute_query(
             """SELECT p.id, p.assinado_em FROM prest_contratos p
-                WHERE p.status = 'ASSINADO' AND (p.cliente_id = %s OR p.id IN (SELECT contrato_id FROM prest_contrato_empresas WHERE cliente_id = %s))
+                WHERE p.status = 'ASSINADO' AND COALESCE(p.tipo, 'CONTRATO') = 'CONTRATO' AND (p.cliente_id = %s OR p.id IN (SELECT contrato_id FROM prest_contrato_empresas WHERE cliente_id = %s))
                 ORDER BY p.assinado_em DESC LIMIT 1""", (cliente_id, cliente_id), fetch=True, fetch_one=True)
 
     @staticmethod

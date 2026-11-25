@@ -37,6 +37,14 @@
             <p class="ef-card-desc">Proposta para cliente ou avulso: aprovada aqui, aceita pelo cliente no link e cobrada no Financeiro</p>
         </a>
         {% endif %}
+        {% if pode_rota('comercial.propostas') %}
+        <a href="{{ url_for('comercial.propostas') }}" class="ef-card">
+            <div class="ef-card-ico" style="background:#fef3c7;color:#b45309;"><i class="fas fa-file-lines"></i></div>
+            <h3 class="ef-card-title">Propostas de serviços</h3>
+            <div class="ef-card-num" data-counter="propostas"></div>
+            <p class="ef-card-desc">Montada aqui e aprovada; você dispara ao cliente, ele aceita pelo link e a proposta vira contrato com tudo preenchido</p>
+        </a>
+        {% endif %}
         {% if pode_rota('financeiro.contratos') %}
         <a href="{{ url_for('financeiro.contratos') }}" class="ef-card">
             <div class="ef-card-ico" style="background:#ede9fe;color:#6d28d9;"><i class="fas fa-file-contract"></i></div>

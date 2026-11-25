@@ -147,13 +147,21 @@ def _home_payload():
     counters['orcamentos'] = len(andamento) if orcs else ''
     try:
         from models.prest_contrato import PrestContrato
-        ctr = execute_query('SELECT status, COUNT(*) n FROM prest_contratos GROUP BY status', fetch=True) or []
+        ctr = execute_query("SELECT status, COUNT(*) n FROM prest_contratos WHERE COALESCE(tipo, 'CONTRATO') = 'CONTRATO' GROUP BY status", fetch=True) or []
         rot = {'RASCUNHO': 'Rascunhos', 'APROVACAO': 'Para aprovar', 'APROVADO': 'Aprovados', 'ENVIADO': 'Aguardando assinatura', 'ASSINADO': 'Assinados', 'CANCELADO': 'Cancelados'}
         cm = {r['status']: int(r['n']) for r in ctr}
         li = [{'rotulo': rot.get(k, k), 'valor': cm[k]} for k in ('APROVACAO', 'ENVIADO', 'ASSINADO', 'APROVADO', 'RASCUNHO') if cm.get(k)]
         if li:
             cards.append({'tipo': 'lista', 'icone': 'fa-file-contract', 'titulo': 'Contratos de prestação', 'itens': li, 'trend': {'tipo': 'neutro', 'rotulo': 'hoje'}})
         counters['contratos'] = (cm.get('APROVACAO', 0) + cm.get('ENVIADO', 0)) or ''
+        # propostas de serviços (25/11/2026)
+        pr = execute_query("SELECT status, COUNT(*) n FROM prest_contratos WHERE tipo = 'PROPOSTA' GROUP BY status", fetch=True) or []
+        rp = {'RASCUNHO': 'Rascunhos', 'APROVACAO': 'Para aprovar', 'APROVADO': 'Aprovadas', 'ENVIADO': 'Com o cliente', 'ACEITO': 'Aceitas', 'RECUSADO': 'Recusadas', 'CONVERTIDO': 'Convertidas', 'CANCELADO': 'Canceladas'}
+        pm = {r['status']: int(r['n']) for r in pr}
+        lp = [{'rotulo': rp.get(k, k), 'valor': pm[k]} for k in ('APROVACAO', 'APROVADO', 'ENVIADO', 'ACEITO', 'CONVERTIDO', 'RASCUNHO') if pm.get(k)]
+        if lp:
+            cards.append({'tipo': 'lista', 'icone': 'fa-file-lines', 'titulo': 'Propostas de serviços', 'itens': lp, 'trend': {'tipo': 'neutro', 'rotulo': 'hoje'}})
+        counters['propostas'] = (pm.get('APROVACAO', 0) + pm.get('ENVIADO', 0) + pm.get('ACEITO', 0)) or ''
     except Exception:
         logger.exception('[comercial] home: contratos')
     try:
