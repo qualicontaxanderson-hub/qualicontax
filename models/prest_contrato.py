@@ -502,27 +502,27 @@ class PrestContrato:
             else:
                 partes.append('%s, residente e domiciliado(a) à %s, inscrito(a) no CPF nº %s, neste ato representado(a) por seu(sua) %s, %s, portador(a) %s e CPF nº %s, '
                               'ora e doravante denominado(a) de %s.' % (e['razao'], e['endereco'], e['cnpj'], e.get('rep_cargo') or 'procurador(a)',
-                                                                       e['rep_nome'], e.get('rep_documento') or 'de documento de identidade', e.get('rep_cpf') or '', apelido))
+                                                                       nome_proprio(e['rep_nome']), e.get('rep_documento') or 'de documento de identidade', e.get('rep_cpf') or '', apelido))
         elif len(empresas) == 1:
             e = empresas[0]
             partes.append('%s, estabelecida à %s, devidamente inscrita no CNPJ nº %s, neste ato representada por seu %s, %s, portador(a) %s e CPF nº %s, '
                           'ora e doravante denominada de %s.' % (e['razao'], e['endereco'], e['cnpj'], e.get('rep_cargo') or 'sócio administrador',
-                                                                e['rep_nome'], e.get('rep_documento') or 'de documento de identidade', e.get('rep_cpf') or '', apelido))
+                                                                nome_proprio(e['rep_nome']), e.get('rep_documento') or 'de documento de identidade', e.get('rep_cpf') or '', apelido))
         else:
             lista = '; '.join('%s, estabelecida à %s, devidamente inscrita no %s nº %s' % (e['razao'], e['endereco'], 'CPF' if _pf(e) else 'CNPJ', e['cnpj']) for e in empresas)
             e = empresas[0]
             partes.append('%s; neste ato representadas por seu %s, %s, portador(a) %s e CPF nº %s, ora e doravante denominadas em conjunto de %s.'
-                          % (lista, e.get('rep_cargo') or 'sócio administrador', e['rep_nome'], e.get('rep_documento') or 'de documento de identidade',
+                          % (lista, e.get('rep_cargo') or 'sócio administrador', nome_proprio(e['rep_nome']), e.get('rep_documento') or 'de documento de identidade',
                              e.get('rep_cpf') or '', apelido))
         ex = dados.get('assinante_extra')
         if ex and ex.get('nome'):
             partes[-1] = partes[-1].rstrip('.') + ', e ainda por %s, %s, portador(a) %s e CPF nº %s, devidamente autorizado(a) a assinar o presente instrumento.' % (
-                ex['nome'], ex.get('cargo') or 'representante autorizado(a)', ex.get('documento') or 'de documento de identidade', ex.get('cpf') or '')
+                nome_proprio(ex['nome']), ex.get('cargo') or 'representante autorizado(a)', ex.get('documento') or 'de documento de identidade', ex.get('cpf') or '')
         qc = dados.get('contratada') or PrestContrato.contratada()
         q = dados.get('assina') or PrestContrato.signatarios_qualicontax().get(str(dados.get('assina_qualicontax'))) or SIGNATARIOS_QUALICONTAX['albert']
         partes.append('%s, estabelecida à %s, devidamente inscrita no CNPJ nº %s%s, neste ato representada por seu %s, %s, portador(a) %s e CPF nº %s, '
                       'ora e doravante denominada de QUALICONTAX.' % (qc['razao'], qc['endereco'], qc['cnpj'], (', CRC nº ' + qc['crc']) if qc.get('crc') else '',
-                                                                      q['cargo'], q['nome'], q.get('documento') or 'de documento de identidade', q['cpf']))
+                                                                      q['cargo'], nome_proprio(q['nome']), q.get('documento') or 'de documento de identidade', q['cpf']))
         titulo = dados.get('titulo') or PrestContrato.titulo_de(dados)
         preambulo = 'Celebram entre si um %s, nos seguintes termos:' % titulo
         # ---- cláusulas ----

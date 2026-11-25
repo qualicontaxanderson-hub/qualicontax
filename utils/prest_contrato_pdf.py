@@ -20,6 +20,7 @@ from reportlab.lib.styles import ParagraphStyle
 from reportlab.lib.units import cm
 from reportlab.lib.utils import ImageReader
 from reportlab.platypus import KeepTogether, PageBreak, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+from utils.texto import nome_proprio
 
 from models.prest_contrato import QUALICONTAX, brl
 
@@ -197,14 +198,14 @@ def _capa(m, registro, numero, st):
     if len(emps) > 4:
         q1.append(Paragraph('e mais %d empresa(s), listadas no contrato' % (len(emps) - 4), st['mi']))
     rep = f['representante']
-    q2 = [Paragraph('QUEM ASSINA PELA CONTRATANTE', st['k']), Paragraph(_esc(rep['nome']), st['nome']),
+    q2 = [Paragraph('QUEM ASSINA PELA CONTRATANTE', st['k']), Paragraph(_esc(_pessoa(rep['nome'])), st['nome']),
           Paragraph(_esc(' · '.join(x for x in (rep.get('cargo'), ('CPF ' + rep['cpf']) if rep.get('cpf') else '') if x)), st['mi'])]
     if f.get('extra'):
         ex = f['extra']
-        q2 += [Spacer(1, 4), Paragraph(_esc(ex['nome']), st['nome']),
+        q2 += [Spacer(1, 4), Paragraph(_esc(_pessoa(ex['nome'])), st['nome']),
                Paragraph(_esc(' · '.join(x for x in (ex.get('cargo') or 'representante autorizado(a)', ('CPF ' + ex['cpf']) if ex.get('cpf') else '') if x)), st['mi'])]
     q = f['assina']
-    q3 = [Paragraph('PELA QUALICONTAX', st['k']), Paragraph(_esc(q.get('nome')), st['nome']), Paragraph(_esc(q.get('cargo') or ''), st['mi']),
+    q3 = [Paragraph('PELA QUALICONTAX', st['k']), Paragraph(_esc(_pessoa(q.get('nome'))), st['nome']), Paragraph(_esc(q.get('cargo') or ''), st['mi']),
           Paragraph(_esc(_nome_curto(qc.get('razao'))) + ((' · CRC %s' % _esc(qc['crc'])) if qc.get('crc') else ''), st['mi'])]
     t3 = Table([[q1, q2, q3]], colWidths=[LW * .40, LW * .32, LW * .28])
     t3.setStyle(TableStyle([('BACKGROUND', (0, 0), (-1, -1), _FUNDO), ('BOX', (0, 0), (-1, -1), 0.6, _LINHA2), ('LINEBEFORE', (1, 0), (-1, -1), 0.6, _LINHA2),
@@ -244,7 +245,7 @@ def _capa(m, registro, numero, st):
     if registro:
         linhas = [Paragraph('✔ Contrato assinado eletronicamente', st['ace_t'])]
         for a in registro:
-            linhas.append(Paragraph('<b>%s</b> · %s · em <b>%s</b>' % (_esc(a.get('assinado_nome') or a.get('nome')), PAPEL.get(a['papel'], a['papel']).lower(),
+            linhas.append(Paragraph('<b>%s</b> · %s · em <b>%s</b>' % (_esc(_pessoa(a.get('assinado_nome') or a.get('nome'))), PAPEL.get(a['papel'], a['papel']).lower(),
                                                                        a['assinado_em'].strftime('%d/%m/%Y às %H:%M')), st['ace']))
         linhas.append(Paragraph('Identidade confirmada por código enviado ao e-mail de cada pessoa · registro completo na última página', st['mi']))
         bloco = Table([[linhas]], colWidths=[LW]); bloco.setStyle(_caixa(_FUNDO2, _VERDE3, pad=12))
@@ -263,6 +264,12 @@ def _capa(m, registro, numero, st):
 
 
 # ───────────────────────── assinaturas ─────────────────────────
+def _pessoa(nome):
+    """Nome de pessoa sempre em maiúsculas e minúsculas (25/11/2026 — Anderson: "continuou os nomes diferentes"): o cadastro
+    guarda FERNANDA COSTA BORBA e os usuários Albert Antunes Vieira; no PDF saem iguais. Empresas continuam em maiúsculas."""
+    return nome_proprio(nome or '')
+
+
 def _linhas_empresas_assina(a, st):
     """Rede (25/11/2026): uma linha por empresa pela qual a pessoa assina; avisa quando ela não consta no quadro de sócios."""
     out = []
@@ -278,7 +285,7 @@ def _cartao_assinatura(a, feito, st, razao_contratada=None):
     """Um assinante em cartão: situação, nome, CPF, papel/empresa e data."""
     papel = {'CONTRATANTE': ('Contratante' if a.get('empresas_assina') else (a.get('empresa') or 'Contratante')), 'CONTRATADA': _nome_curto(razao_contratada or QUALICONTAX['razao']), 'TESTEMUNHA': 'Testemunha'}.get(a['papel'], '')
     linhas = [Paragraph('✔ ASSINADO ELETRONICAMENTE' if feito else 'ASSINATURA ELETRÔNICA', st['card_st_ok'] if feito else st['card_st_wait']), Spacer(1, 3),
-              Paragraph(_esc(feito.get('assinado_nome') if feito else a.get('nome') or ''), st['card_nome'])]
+              Paragraph(_esc(_pessoa(feito.get('assinado_nome') if feito else a.get('nome') or '')), st['card_nome'])]
     sub = ' · '.join(x for x in (('CPF ' + (a.get('cpf') or '')) if a.get('cpf') else '', papel) if x)
     linhas.append(Paragraph(_esc(sub), st['card_sub']))
     linhas += _linhas_empresas_assina(a, st)
@@ -347,7 +354,7 @@ def gerar_pdf(montado, registro=None, rodape=None, numero=None):
         cards = []
         for a in registro:
             linhas = [Paragraph(' · '.join(x for x in (PAPEL.get(a['papel'], a['papel']).upper(), _esc(a.get('empresa') or (_nome_curto(qc.get('razao')) if a['papel'] == 'CONTRATADA' else ''))) if x), st['card_st_ok']),
-                      Spacer(1, 3), Paragraph(_esc(a.get('assinado_nome') or a.get('nome')), st['card_nome']),
+                      Spacer(1, 3), Paragraph(_esc(_pessoa(a.get('assinado_nome') or a.get('nome'))), st['card_nome']),
                       Paragraph(_esc(' · '.join(x for x in (('CPF ' + (a.get('assinado_cpf') or a.get('cpf') or '')) if (a.get('assinado_cpf') or a.get('cpf')) else '', a.get('email') or '') if x)), st['card_sub'])]
             linhas += _linhas_empresas_assina(a, st)
             linhas.append(Paragraph(_esc('%s · IP %s' % (a['assinado_em'].strftime('%d/%m/%Y às %H:%M:%S'), a.get('assinado_ip') or '')), st['card_sub']))
