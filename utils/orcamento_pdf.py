@@ -155,6 +155,10 @@ def gerar_pdf(o, itens, link=None, data_doc=None):
     mi = [x for x in (_doc(o.get('cliente_doc')), o.get('cliente_email')) if x]
     if mi:
         para.append(Paragraph(_esc(' · '.join(mi)), st['mi']))
+    for nome in (o.get('empresas_mais') or []):           # mais de uma empresa (25/11/2026)
+        para.append(Paragraph(_esc('+ ' + nome), st['mi']))
+    if o.get('empresa_nova_nome'):
+        para.append(Paragraph(_esc('Empresa a abrir: ' + o['empresa_nova_nome']), st['mi']))
     sol = [Paragraph('SOLICITADO POR', st['k'])]
     if o.get('solicitante_nome'):
         sol.append(Paragraph(_esc(o['solicitante_nome']), st['nome']))

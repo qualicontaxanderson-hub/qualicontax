@@ -25,7 +25,9 @@ def _doc(d):
 def _base(o, titulo, eyebrow, saudacao, intro):
     doc = _doc(o.get('cliente_doc'))
     resp = o.get('criado_por_nome') or 'Qualicontax'
-    return {'titulo': titulo, 'eyebrow': eyebrow, 'data_txt': date.today().strftime('%d/%m/%Y'), 'cliente_nome': o['cliente_nome'], 'cliente_doc': doc,
+    n_mais = len(o.get('empresas_mais') or [])
+    return {'titulo': titulo, 'eyebrow': eyebrow, 'data_txt': date.today().strftime('%d/%m/%Y'),
+            'cliente_nome': o['cliente_nome'] + ((' e mais %d empresa%s' % (n_mais, 's' if n_mais > 1 else '')) if n_mais else ''), 'cliente_doc': doc,
             'cliente_rotulo': 'Empresa' if doc.startswith('CNPJ') else 'Cliente', 'saudacao': saudacao, 'intro': intro,
             'kpis': [], 'itens': [], 'total': '', 'botao': None, 'passos': [], 'codigo': '', 'aviso': '', 'anexos_txt': '',
             'slogan': SLOGAN, 'rodape': 'Enviado por %s, da Qualicontax Assessoria Contábil. Em caso de dúvida, responda este e-mail.' % resp}

@@ -47,6 +47,11 @@
 .oc-emp-bt .sg { width:36px; height:36px; border-radius:10px; background:#dcfce7; color:#15803d; font-weight:900; font-size:12px; display:inline-flex; align-items:center; justify-content:center; flex:0 0 auto; }
 .oc-emp-bt .tx { flex:1; min-width:0; display:flex; flex-direction:column; line-height:1.2; } .oc-emp-bt .tx b { font-size:14px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; } .oc-emp-bt .tx small { color:#64748b; font-size:11.5px; }
 .oc-emp-bt > i { color:#94a3b8; }
+/* quem pediu só pelos contatos (25/11/2026): bloco no molde "E-mails da cobrança" da caixa de Lançamentos */
+.ns-mail { margin-top:10px; border:1px solid #cfe3d7; border-radius:12px; padding:9px 12px 10px; background:#f6fbf8; } .ns-mail[hidden] { display:none; } .ns-mail-h { display:flex; align-items:center; gap:8px; font-size:11.5px; font-weight:800; text-transform:uppercase; letter-spacing:.04em; color:#0f3d2e; flex-wrap:wrap; } .ns-mail-h i { color:#16a34a; } .ns-mail-h small { margin-left:auto; text-transform:none; letter-spacing:0; font-weight:600; color:#64748b; font-size:11.5px; text-align:right; } .ns-mail-l { display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; } .ns-mail-l span, .ns-mail-l label { display:inline-flex; align-items:center; gap:7px; border:1.5px solid #bfe3cc; background:#fff; border-radius:999px; padding:5px 11px 5px 8px; font-size:12.5px; cursor:pointer; max-width:100%; min-width:0; } .ns-mail-l label input { margin:0; accent-color:#16a34a; flex:0 0 auto; } .ns-mail-l span i { color:#16a34a; font-size:12px; } .ns-mail-l span b, .ns-mail-l label b { font-weight:700; color:#0f172a; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0; } .ns-mail-l span small, .ns-mail-l label small { color:#64748b; white-space:nowrap; } .ns-mail-l label.off { opacity:.5; border-style:dashed; } .ns-mail.red { background:#fef2f2; border-color:#fecaca; } .ns-mail.red .ns-mail-h, .ns-mail.red .ns-mail-h i { color:#991b1b; } .ns-mail-txt { font-size:12.5px; color:#7f1d1d; margin-top:6px; line-height:1.45; } .ns-mail-txt.amb { color:#92400e; } .ns-mail-f { display:grid; grid-template-columns:1.1fr 1.4fr .9fr; gap:8px; margin-top:8px; } .ns-mail-f .ns-in { height:36px; font-size:13px; } .ns-mail-ac { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-top:8px; } .ns-mail-ac .ns-bt { padding:7px 12px; font-size:12.5px; border-radius:10px; } .ns-mail-ac .ns-bt.prim { font-size:12.5px; padding:8px 14px; box-shadow:none; } .ns-mail-ac a { font-size:12.5px; font-weight:700; color:#15803d; text-decoration:none; } .ns-mail-ac a:hover { text-decoration:underline; } .ns-mail-ok { font-size:12.5px; color:#15803d; font-weight:700; margin-top:6px; } @media (max-width:980px) { .ns-mail-f { grid-template-columns:minmax(0,1fr); } }
+.oc-sol-l { display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; } .oc-sol-l button { border:1px solid #d7e3dc; background:#fff; border-radius:12px; padding:7px 11px; font:inherit; font-size:12.5px; text-align:left; cursor:pointer; display:flex; flex-direction:column; gap:1px; min-width:0; color:#0f172a; }
+.oc-sol-l button b { font-size:13px; } .oc-sol-l button small { color:#64748b; font-size:11.5px; } .oc-sol-l button.on { border-color:#16a34a; background:#ecfdf3; box-shadow:0 0 0 2px #bbf7d0; } .oc-sol-l button.on b { color:#166534; }
+.oc-sol-l button:disabled { opacity:.55; cursor:not-allowed; } .oc-sol-l button:disabled small { color:#b91c1c; }
 .oc-itens { display:flex; flex-direction:column; gap:8px; }
 .oc-it { display:grid; grid-template-columns:minmax(0,1fr) 72px 150px 34px; gap:8px; align-items:center; }
 .oc-it .oc-sv-bt { display:flex; align-items:center; gap:9px; min-height:46px; padding:4px 10px 4px 6px; text-align:left; cursor:pointer; border:1px dashed #c4b5fd; border-radius:11px; background:#faf8ff; font:inherit; color:inherit; min-width:0; }
@@ -117,7 +122,7 @@
   <div class="oc-grade" id="ocGrade">
   {% for o in lista %}
     <div class="tx-c oc-c {{ o.cls }}" data-st="{{ 'APROVADO' if o.status == 'ACEITO' else o.status }}" data-quem="{{ o.criado_por }}" data-venc="{{ 1 if o.vencido else 0 }}" data-b="{{ o.numero }} {{ o.cliente_nome }} {{ o.titulo or '' }} {% for i in o.itens %}{{ i.descricao }} {% endfor %}" onclick="ocAbrir({{ o.id }})">
-      <div class="tx-c-top"><span class="tx-c-num">{{ o.numero }}</span><span class="tx-c-nome" title="{{ o.cliente_nome }}">{{ o.cliente_nome }}</span></div>
+      <div class="tx-c-top"><span class="tx-c-num">{{ o.numero }}</span><span class="tx-c-nome" title="{{ o.cliente_nome }}{% if o.empresas_mais %} · {{ o.empresas_mais | join(', ') }}{% endif %}">{{ o.cliente_nome }}{% if o.empresas_mais %} <small style="opacity:.85">+ {{ o.empresas_mais | length }} empresa{{ 's' if o.empresas_mais | length > 1 }}</small>{% endif %}</span></div>
       <div class="tx-c-meio">
         <div><div class="tx-c-val">{{ o.total | float | format_currency }}</div>
           <div class="tx-c-desc">{{ o.itens|length }} serviço{{ 's' if o.itens|length != 1 }}{% if o.titulo %} · {{ o.titulo }}{% endif %}{% if o.validade %} · válido até {{ o.validade.strftime('%d/%m') }}{% endif %}</div></div>
@@ -129,6 +134,7 @@
       </div>
       <div class="hp-linha">
         {% if o.cliente_avulso %}<span class="oc-chip">avulso</span>{% endif %}
+        {% if o.empresa_nova_nome %}<span class="oc-chip" title="empresa a abrir: {{ o.empresa_nova_nome }}"><i class="fas fa-seedling"></i> {{ o.empresa_nova_nome[:24] }}{{ '…' if o.empresa_nova_nome|length > 24 }}</span>{% endif %}
         {% if o.interno %}<span class="oc-chip"><i class="fas fa-lock"></i> controle interno</span>{% elif o.aceito_em %}<span class="oc-chip" style="background:#dcfce7; color:#166534"><i class="fas fa-file-signature"></i> aceito {{ o.aceito_em.strftime('%d/%m') }}</span>{% elif o.enviado_em %}<span class="oc-chip" style="background:#eff6ff; color:#1d4ed8"><i class="fas fa-envelope"></i> enviado {{ o.enviado_em.strftime('%d/%m') }}</span>{% endif %}
         {% if o.solicitante_nome %}<span class="oc-chip" title="quem pediu, do lado do cliente"><i class="fas fa-user-tag"></i> {{ o.solicitante_nome.split(' ')[0] }}</span>{% endif %}
         {% if o.como %}<span class="oc-chip"><i class="fas {{ 'fa-file-invoice-dollar' if o.como == 'BOLETO_NOTA' else ('fa-barcode' if o.como == 'BOLETO' else 'fa-calendar-plus') }}"></i> {{ COMO[o.como] }}{% if o.parcelas and o.parcelas > 1 %} · {{ o.parcelas }}x{% endif %}</span>{% endif %}
@@ -155,7 +161,7 @@
 {# ── caixa Novo orçamento (molde da Nova cobrança) ── #}
 <div class="pk-fundo" id="ocNovoFundo" hidden>
   <form class="ns" id="ocForm" method="POST" action="{{ url_for('comercial.orcamento_novo') }}" autocomplete="off">
-    <input type="hidden" name="orcamento_id" id="ocId" value=""><input type="hidden" name="cliente_id" id="ocCli" value="">{# ids dos campos escondidos NÃO podem ser iguais aos nomes das funções: no onclick, o nome resolve para o campo do form (ocComo virava o input) #}<input type="hidden" name="como" id="ocComoIn" value="BOLETO_NOTA">
+    <input type="hidden" name="orcamento_id" id="ocId" value=""><input type="hidden" name="cliente_id" id="ocCli" value=""><input type="hidden" name="empresas_mais" id="ocMais" value="">{# ids dos campos escondidos NÃO podem ser iguais aos nomes das funções: no onclick, o nome resolve para o campo do form (ocComo virava o input) #}<input type="hidden" name="como" id="ocComoIn" value="BOLETO_NOTA">
     <input type="hidden" name="parcelas" id="ocParc" value="1"><input type="hidden" name="comissao_tipo" id="ocCtIn" value="PADRAO"><input type="hidden" name="validade_dias" id="ocVal" value="15"><input type="hidden" name="acao" id="ocAcao" value="rascunho"><input type="hidden" name="interno" id="ocInterno" value="0">
     <header class="ns-cab"><span class="ns-logo"><img src="{{ url_for('static', filename='images/logo.png') }}" alt="Qualicontax"></span>
       <div class="ns-tit"><b id="ocTit">Novo orçamento</b><span>escolha a empresa, os serviços e os valores · depois vai para aprovação</span></div>
@@ -164,16 +170,16 @@
     <div class="ns-g">
       <div class="ns-f">
         <section class="ns-b"><div class="ns-h"><i class="fas fa-building"></i> Empresa <em>cliente cadastrado ou avulso</em></div>
-          <button type="button" class="oc-emp-bt" id="ocEmpBt" onclick="ocEmpAbrir()"><span class="sg"><i class="fas fa-building"></i></span><span class="tx"><b>Escolher a empresa</b><small>busque por nome, número ou CNPJ/CPF · avulsos também aparecem</small></span><i class="fas fa-chevron-right"></i></button></section>
+          <button type="button" class="oc-emp-bt" id="ocEmpBt" onclick="ocEmpAbrir()"><span class="sg"><i class="fas fa-building"></i></span><span class="tx"><b>Escolher a empresa</b><small>busque por nome, número ou CNPJ/CPF · toque em várias para um orçamento ao grupo</small></span><i class="fas fa-chevron-right"></i></button></section>
         <section class="ns-b"><div class="ns-h"><i class="fas fa-paper-plane"></i> Para quem é <em>o cliente aceita pelo link, ou fica só no nosso controle</em></div>
           <div class="ns-ops svn-ops2" id="ocIntOps" style="grid-template-columns:repeat(2, minmax(0,1fr))">
             <button type="button" class="ns-op on" data-v="0" onclick="ocIntSet(this)"><i class="fas fa-file-signature"></i><b>Para o cliente aceitar</b><small>vai por e-mail com o PDF; o cliente aceita pelo link com código, e fica registrado quem e quando</small></button>
             <button type="button" class="ns-op" data-v="1" onclick="ocIntSet(this)"><i class="fas fa-lock"></i><b>Só controle interno</b><small>não vai a ninguém assinar: registra o serviço, aprova e segue para execução e cobrança</small></button></div></section>
-        <section class="ns-b" id="ocSolSec"><div class="ns-h"><i class="fas fa-user"></i> Quem pediu o serviço <em>do lado do cliente · vai no PDF e recebe o código de aceite</em></div>
-          <div class="oc-chips" id="ocSolChips" style="margin-bottom:8px"></div>
-          <div class="oc-sol"><input class="ns-in" name="solicitante_nome" id="ocSolNome" maxlength="120" placeholder="Nome de quem pediu" oninput="ocResumo()" style="text-transform:none">
-            <input class="ns-in" name="solicitante_email" id="ocSolEmail" type="email" maxlength="160" placeholder="e-mail" style="text-transform:none">
-            <input class="ns-in" name="solicitante_fone" id="ocSolFone" maxlength="40" placeholder="celular" inputmode="tel"></div></section>
+        <section class="ns-b" id="ocSolSec"><div class="ns-h"><i class="fas fa-user"></i> Quem pediu o serviço <em>um contato da empresa com e-mail · vai no PDF e recebe o código de aceite</em></div>
+          <input type="hidden" name="solicitante_nome" id="ocSolNome" value=""><input type="hidden" name="solicitante_email" id="ocSolEmail" value=""><input type="hidden" name="solicitante_fone" id="ocSolFone" value="">
+          <div class="ns-mail" id="ocSol" hidden></div></section>
+        <section class="ns-b" id="ocNovaSec" hidden><div class="ns-h"><i class="fas fa-seedling"></i> Empresa nova <em>pessoa física pedindo abertura de empresa: o nome nasce como avulso ligado ao CPF</em></div>
+          <input class="ns-in" name="empresa_nova_nome" id="ocNova" maxlength="160" placeholder="Nome da empresa que vai ser aberta" oninput="ocResumo()"></section>
         <section class="ns-b"><div class="ns-h"><i class="fas fa-list-check"></i> Serviços <em>do catálogo; o valor sugerido vem preenchido</em></div>
           <div class="oc-itens" id="ocItens"></div>
           <button type="button" class="oc-add" onclick="ocItemAdd()" style="margin-top:8px"><i class="fas fa-plus"></i> Mais um serviço</button></section>
@@ -213,10 +219,12 @@
 </div>
 <script id="ocCliJ" type="application/json">{{ clientes_json | safe }}</script>
 <script id="ocSrvJ" type="application/json">{{ servicos_json | safe }}</script>
+{% with ct_solto=True, cliente=None, socios=[] %}{% include 'clientes/_contato_modal.html' %}{% endwith %}{# 25/11/2026: a janela "Adicionar contato" da ficha, dentro da caixa do orçamento #}
 {% endblock %}
 
 {% block extra_js %}
 <script src="{{ url_for('static', filename='js/caixa_cliente.js') }}"></script>
+<script src="{{ url_for('static', filename='js/contato_sugere.js') }}"></script>{# a janela "Adicionar contato" sugere o contato pelo celular/nome (25/11/2026) #}
 <script src="{{ url_for('static', filename='js/caixa_servico.js') }}"></script>
 <script>
 (function () {
@@ -314,9 +322,10 @@
     $('ocForm').reset(); $('ocId').value = ''; $('ocCli').value = ''; $('ocTit').textContent = 'Novo orçamento';
     ocEmpPinta(null); $('ocItens').innerHTML = ''; ocItemAdd();
     ocComo(document.querySelector('#ocOps .ns-op[data-v=BOLETO_NOTA]')); ocParcela(document.querySelector('#ocParcs [data-v="1"]')); ocCt(document.querySelector('#ocSeg [data-v=PADRAO]')); ocValidade(document.querySelector('#ocVals [data-v="15"]'));
-    ocIntSet(document.querySelector('#ocIntOps .ns-op[data-v="0"]')); $('ocSolChips').innerHTML = '';
+    ocIntSet(document.querySelector('#ocIntOps .ns-op[data-v="0"]')); ocSolZera(); $('ocMais').value = ''; $('ocNova').value = '';
     if (dados) {
-      ocIntSet(document.querySelector('#ocIntOps .ns-op[data-v="' + (dados.interno ? 1 : 0) + '"]')); $('ocSolNome').value = dados.solicitante_nome || ''; $('ocSolEmail').value = dados.solicitante_email || ''; $('ocSolFone').value = dados.solicitante_fone || ''; ocSolChips(dados.cliente_id);
+      ocIntSet(document.querySelector('#ocIntOps .ns-op[data-v="' + (dados.interno ? 1 : 0) + '"]')); $('ocSolNome').value = dados.solicitante_nome || ''; $('ocSolEmail').value = dados.solicitante_email || ''; $('ocSolFone').value = dados.solicitante_fone || ''; ocSolCarrega(dados.cliente_id);
+      $('ocMais').value = (dados.empresas_mais || []).join(','); $('ocNova').value = dados.empresa_nova_nome || ''; ocSolPre = dados.solicitante_email || ''; ocSolCarrega(dados.cliente_id);
       $('ocId').value = dados.id; $('ocTit').textContent = 'Alterar orçamento'; $('ocCli').value = dados.cliente_id; ocEmpPinta(CLI.find(function (c) { return String(c.id) === String(dados.cliente_id); }));
       $('ocItens').innerHTML = ''; (dados.itens || []).forEach(function (i) { ocItemAdd(i); });
       if (dados.como) ocComo(document.querySelector('#ocOps .ns-op[data-v=' + dados.como + ']'));
@@ -329,14 +338,62 @@
   };
   window.ocNovoFechar = function () { $('ocNovoFundo').hidden = true; document.body.style.overflow = trava || ''; };
   window.ocIntSet = function (b) { if (!b) return; $('ocInterno').value = b.dataset.v; document.querySelectorAll('#ocIntOps .ns-op').forEach(function (x) { x.classList.toggle('on', x === b); }); $('ocSolSec').hidden = b.dataset.v === '1'; ocResumo(); };
-  function ocSolChips(cid) {
-    var box = $('ocSolChips'); box.innerHTML = '';
-    if (!cid) return;
-    fetch('/comercial/orcamentos/contatos/' + cid, { credentials: 'same-origin' }).then(function (r) { return r.json(); }).then(function (cs) {
-      box.innerHTML = cs.map(function (c, i) { return '<button type="button" class="sol" data-i="' + i + '"><i class="fas fa-user" style="font-size:10px"></i> ' + esc(c.nome) + (c.cargo ? ' <small>· ' + esc(c.cargo) + '</small>' : '') + '</button>'; }).join('') + (cs.length ? '' : '<small style="color:#64748b">esta empresa não tem contatos cadastrados: digite abaixo</small>');
-      box.querySelectorAll('button').forEach(function (b) { b.addEventListener('click', function () { var c = cs[parseInt(b.dataset.i, 10)]; $('ocSolNome').value = c.nome; $('ocSolEmail').value = c.email || ''; $('ocSolFone').value = c.fone || ''; box.querySelectorAll('button').forEach(function (x) { x.classList.toggle('on', x === b); }); ocResumo(); }); });
-      if (cs.length === 1 && !$('ocSolNome').value) box.querySelector('button').click();
-    }).catch(function () {});
+  // ── quem pediu: só contato com e-mail (25/11/2026 — Anderson: "não pode aparecer opção para digitar") ──
+  var ocSolCid = null, ocSolDados = null, ocSolPre = '';
+  function ocSolZera() { ocSolCid = null; ocSolDados = null; ocSolPre = ''; $('ocSolNome').value = ''; $('ocSolEmail').value = ''; $('ocSolFone').value = ''; var b = $('ocSol'); b.hidden = true; b.innerHTML = ''; }
+  function ocSolCarrega(cid) {
+    var box = $('ocSol');
+    if (!cid) { ocSolZera(); return; }
+    if (String(cid) === String(ocSolCid)) return;
+    ocSolCid = cid; $('ocSolNome').value = ''; $('ocSolEmail').value = ''; $('ocSolFone').value = '';
+    box.hidden = false; box.className = 'ns-mail'; box.innerHTML = '<div class="ns-mail-h"><i class="fas fa-user"></i> Quem pediu o serviço <small><i class="fas fa-spinner fa-spin"></i> conferindo os contatos…</small></div>';
+    fetch('/comercial/orcamentos/contatos/' + cid, { credentials: 'same-origin' }).then(function (r) { return r.json(); }).then(function (d) {
+      if (String(cid) !== String(ocSolCid)) return;
+      ocSolPinta(d);
+    }).catch(function () { box.innerHTML = '<div class="ns-mail-h"><i class="fas fa-user"></i> Quem pediu o serviço <small>não consegui conferir os contatos</small></div><div class="ns-mail-ac"><button type="button" class="ns-bt" onclick="ocSolRecarrega()"><i class="fas fa-rotate"></i> conferir de novo</button></div>'; });
+  }
+  function ocSolPinta(d, aviso) {
+    var box = $('ocSol'); ocSolDados = d;
+    var lista = (d.contatos || []).slice();
+    if (d.pf && d.pessoa) lista.unshift({ nome: d.pessoa.nome, cargo: 'a própria pessoa', email: d.pessoa.email || '', fone: d.pessoa.fone || '', principal: true });
+    var com = lista.filter(function (c) { return c.email; });
+    var ac = '<div class="ns-mail-ac"><button type="button" class="ns-bt prim" onclick="ocSolContato()"><i class="fas fa-user-plus"></i> Adicionar contato</button>'
+           + '<a href="' + esc(d.cadastro || '#') + '" target="_blank" rel="noopener"><i class="fas fa-arrow-up-right-from-square"></i> abrir o cadastro</a> '
+           + '<button type="button" class="ns-bt" onclick="ocSolRecarrega()"><i class="fas fa-rotate"></i> conferir de novo</button></div>';
+    if (com.length) {
+      box.className = 'ns-mail';
+      var h = '<div class="ns-mail-h"><i class="fas fa-user"></i> Quem pediu o serviço <small>toque no contato · o e-mail vem do cadastro</small></div><div class="oc-sol-l">';
+      lista.forEach(function (c, i) {
+        h += '<button type="button" data-i="' + i + '"' + (c.email ? '' : ' disabled title="sem e-mail no cadastro: não pode pedir"') + '><b>' + esc(c.nome) + (c.cargo ? ' <span style="font-weight:600;color:#64748b">· ' + esc(c.cargo) + '</span>' : '') + '</b><small>' + (c.email ? esc(c.email) + (c.fone ? ' · ' + esc(c.fone) : '') : 'sem e-mail no cadastro') + '</small></button>';
+      });
+      h += '</div>' + (aviso ? '<div class="ns-mail-ok"><i class="fas fa-circle-check"></i> ' + esc(aviso) + '</div>' : '');
+      box.innerHTML = h + ac;
+      box.querySelectorAll('.oc-sol-l button').forEach(function (b) { b.addEventListener('click', function () { ocSolEscolhe(lista[parseInt(b.dataset.i, 10)], b); }); });
+      var pre = ocSolPre ? com.filter(function (c) { return c.email === ocSolPre; })[0] : null;
+      var alvo = pre || (com.length === 1 ? com[0] : null);
+      if (alvo) { var idx = lista.indexOf(alvo); ocSolEscolhe(alvo, box.querySelector('.oc-sol-l button[data-i="' + idx + '"]')); }
+    } else {
+      box.className = 'ns-mail red';
+      box.innerHTML = '<div class="ns-mail-h"><i class="fas fa-triangle-exclamation"></i> Ninguém com e-mail para pedir</div>'
+        + '<div class="ns-mail-txt">' + esc(d.nome) + ' não tem contato com e-mail. Quem pede o serviço recebe o orçamento e o código de aceite por e-mail, então o orçamento não segue. Inclua o contato (botão abaixo) e ele aparece aqui.</div>' + ac;
+    }
+    ocResumo();
+  }
+  function ocSolEscolhe(c, bt) {
+    $('ocSolNome').value = c.nome; $('ocSolEmail').value = c.email || ''; $('ocSolFone').value = c.fone || '';
+    document.querySelectorAll('#ocSol .oc-sol-l button').forEach(function (x) { x.classList.toggle('on', x === bt); });
+    ocResumo();
+  }
+  window.ocSolRecarrega = function (aviso) { var cid = $('ocCli').value; if (!cid) return; ocSolCid = null; ocSolCarrega(cid); };
+  window.ocSolContato = function () {        // a mesma janela "Adicionar contato" da ficha, para a empresa escolhida
+    var cid = $('ocCli').value, d = ocSolDados; if (!cid || typeof contatoAbrirPara !== 'function') return;
+    var cli = CLI.find(function (c) { return String(c.id) === String(cid); }) || { id: cid, nome: d ? d.nome : '' };
+    contatoAbrirPara({ id: cid, nome: cli.nome, pf: d && d.pf ? { nome: d.pessoa ? d.pessoa.nome : cli.nome, email: d.pessoa ? d.pessoa.email : '', celular: d.pessoa ? d.pessoa.fone : '' } : null, socios: (d && d.socios) || [], aoSalvar: function (r) {
+      ocSolCid = null; fetch('/comercial/orcamentos/contatos/' + cid, { credentials: 'same-origin' }).then(function (x) { return x.json(); }).then(function (dd) { ocSolCid = cid; ocSolPre = (r && r.email) || ocSolPre; ocSolPinta(dd, (r && r.msg) || 'Contato gravado no cadastro.'); });
+    } });
+  };
+  function ocTemAbertura() {
+    return Array.prototype.some.call(document.querySelectorAll('#ocItens .oc-it'), function (r) { var s = SRVI[r.querySelector('[name=item_servico_id]').value]; return s && String(s.nome || '').toUpperCase().indexOf('ABERTURA DE EMPRESA') === 0; });
   }
   $('ocNovoFundo').addEventListener('mousedown', function (e) { if (e.target === this) ocNovoFechar(); });
   document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && !$('ocNovoFundo').hidden && !document.querySelector('.pk-fundo.pk-sobre')) ocNovoFechar(); });
@@ -347,11 +404,18 @@
     if (!c) { bt.classList.remove('cheio'); bt.querySelector('.sg').innerHTML = '<i class="fas fa-building"></i>'; bt.querySelector('b').textContent = 'Escolher a empresa'; bt.querySelector('small').textContent = 'busque por nome, número ou CNPJ/CPF · avulsos também aparecem'; return; }
     bt.classList.add('cheio'); bt.querySelector('.sg').textContent = sigla(c.nome); bt.querySelector('b').textContent = c.nome;
     bt.querySelector('small').textContent = (c.av ? 'avulso' : ('cliente nº ' + (c.num || '—'))) + (c.doc ? ' · ' + c.doc : '') + (c.mensal ? ' · mensalidade ' + brl(c.mensal) : ' · sem honorários mensais');
+    var nm = ($('ocMais').value || '').split(',').filter(Boolean).length;           // mais de uma empresa (25/11/2026)
+    if (nm) bt.querySelector('b').textContent = c.nome + ' + ' + nm + ' empresa' + (nm > 1 ? 's' : '');
   }
   window.ocEmpAbrir = function () {
     if (!window.CaixaCliente) return;
-    CaixaCliente.abrir({ clientes: CLI, atual: $('ocCli').value, titulo: 'Empresa do orçamento', sub: 'cliente cadastrado ou avulso · é para ela que o orçamento vai', z: 1300,
-      onUsar: function (c) { if (!c) return; $('ocCli').value = c.id; ocEmpPinta(c); ocSolChips(c.id); ocResumo(); var bm = document.querySelector('#ocOps .ns-op[data-v=MENSAL]'); bm.classList.toggle('sem', !c.mensal); if (!c.mensal && $('ocComoIn').value === 'MENSAL') ocComo(document.querySelector('#ocOps .ns-op[data-v=BOLETO_NOTA]')); } });
+    var atual = $('ocCli').value;
+    CaixaCliente.abrir({ clientes: CLI, atual: atual, varios: true, titulo: 'Empresa do orçamento', sub: 'cliente cadastrado ou avulso · toque em uma, ou em várias para um orçamento ao grupo (a 1ª recebe a cobrança)', z: 1300,
+      onUsar: function (cs) {
+        if (!cs) return; if (!Array.isArray(cs)) cs = [cs]; if (!cs.length) return;
+        var c = cs[0]; $('ocCli').value = c.id; $('ocMais').value = cs.slice(1).map(function (x) { return x.id; }).join(','); ocEmpPinta(c); ocSolCarrega(c.id); ocResumo();
+        var bm = document.querySelector('#ocOps .ns-op[data-v=MENSAL]'); bm.classList.toggle('sem', !c.mensal); if (!c.mensal && $('ocComoIn').value === 'MENSAL') ocComo(document.querySelector('#ocOps .ns-op[data-v=BOLETO_NOTA]'));
+      } });
   };
 
   // itens
@@ -414,7 +478,9 @@
       + '<div class="oc-res-it" style="border:0"><span>comissão pedida</span><b style="color:#6d28d9">' + esc(rc) + '</b></div>';
     $('ocPrevTot').textContent = brl(tot); $('ocPrevSub').textContent = n ? (n + ' serviço' + (n > 1 ? 's' : '') + ' · ' + { BOLETO_NOTA: 'boleto + nota', BOLETO: 'só boleto', MENSAL: 'na mensalidade' }[como] + (parc > 1 ? ' · ' + parc + 'x' : '')) : 'nenhum serviço ainda';
     if (!cli) falta = 'Escolha a empresa.'; else if (!n && !falta) falta = 'Ponha ao menos um serviço com valor.'; else if ((ct === 'PCT' || ct === 'FIXO') && !cv) falta = falta || 'Diga quanto é a comissão pedida.';
-    if (!falta && $('ocInterno').value !== '1' && !$('ocSolNome').value.trim()) falta = 'Diga quem pediu o serviço (ou marque "Só controle interno").';
+    if (!falta && $('ocInterno').value !== '1' && !$('ocSolEmail').value.trim()) falta = $('ocSol').classList.contains('red') ? 'Sem contato com e-mail: inclua o contato que pediu o serviço (botão "Adicionar contato").' : 'Toque no contato que pediu o serviço (ou marque "Só controle interno").';
+    var abert = !!(cli && cli.pf && ocTemAbertura()); $('ocNovaSec').hidden = !abert;      // PF + Abertura de empresa → nome da empresa nova (25/11/2026)
+    if (!falta && abert && !$('ocNova').value.trim()) falta = 'Abertura de empresa para pessoa física: diga o nome da empresa nova.';
     if (!falta && como === 'MENSAL' && cli && !cli.mensal) falta = 'Esta empresa não tem honorários mensais: cobre com boleto.';
     var msg = $('ocMsg'); msg.textContent = falta || ('Pronto: ' + n + ' serviço' + (n > 1 ? 's' : '') + ', ' + brl(tot) + '.'); msg.classList.toggle('ok', !falta);
     $('ocSalvar').disabled = !cli; $('ocEnviar').disabled = !!falta;

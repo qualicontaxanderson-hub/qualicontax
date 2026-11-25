@@ -270,7 +270,7 @@ MAPA = {
     'financeiro.lancamento_cancelar':      'financeiro.lancamentos.excluir',
     'financeiro.lancamento_editar':        'financeiro.lancamentos.incluir',
     'financeiro.lancamento_cliente_emails': 'financeiro.lancamentos.incluir',  # 25/11/2026: quem recebe a cobrança, na caixa do pedido (e os dados da janela de contato)
-    'clientes.novo_contato':                'financeiro.lancamentos.incluir',  # 25/11/2026: a janela "Adicionar contato" aberta de dentro da caixa de Lançamentos  # corrigir o próprio pedido antes da aprovação (25/11/2026); a rota confere o dono
+    'clientes.novo_contato':                ('financeiro.lancamentos.incluir', 'comercial.orcamentos.incluir'),   # 25/11/2026: também de dentro da caixa do orçamento
     'financeiro.comissoes_fechar':         'financeiro.lancamentos',
     'financeiro.fechamento_pagar':         'financeiro.lancamentos.aprovar',
     'financeiro.lancamento_minha_pix':     'financeiro.lancamentos',          # a própria chave Pix (17/11/2026)

@@ -56,7 +56,14 @@ def _clientes():
     linhas = execute_query("""SELECT c.id, c.numero_cliente AS num, c.nome_razao_social AS nome, c.cpf_cnpj AS doc, COALESCE(c.avulso, 0) AS av,
                                      (SELECT SUM(k.valor) FROM fin_contratos k WHERE k.cliente_id = c.id AND k.ativo = 1) AS mensal
                                 FROM clientes c WHERE COALESCE(c.situacao, 'ATIVO') <> 'INATIVO' ORDER BY c.nome_razao_social""", fetch=True) or []
-    return [{'id': c['id'], 'num': str(c['num'] or ''), 'nome': c['nome'], 'doc': c['doc'] or '', 'av': bool(c['av']), 'mensal': float(c['mensal'] or 0)} for c in linhas]
+    return [{'id': c['id'], 'num': str(c['num'] or ''), 'nome': c['nome'], 'doc': c['doc'] or '', 'av': bool(c['av']), 'mensal': float(c['mensal'] or 0),
+             'pf': len(''.join(ch for ch in (c['doc'] or '') if ch.isdigit())) == 11} for c in linhas]
+
+
+def _nome_cli(o):
+    """Nome da empresa nos textos; com mais empresas, "X e mais 2 empresas" (25/11/2026)."""
+    n = len(o.get('empresas_mais') or [])
+    return o['cliente_nome'] + ((' e mais %d empresa%s' % (n, 's' if n > 1 else '')) if n else '')
 
 
 def _comissao_padrao():
@@ -71,7 +78,7 @@ def _texto_whatsapp(o, itens, link):
     """O texto pronto para colar no WhatsApp, no molde da cobrança (Anderson: "quero poder mandar assim para o cliente")."""
     quem = (' ' + o['solicitante_nome'].split(' ')[0].title()) if o.get('solicitante_nome') else ''
     linhas = ['Olá%s! Aqui é da *Qualicontax*. 😊' % (',' + quem if quem else ''), '',
-              'Segue o orçamento *%s* para a *%s*%s.' % (o['numero'], o['cliente_nome'], (' — %s' % o['titulo']) if o.get('titulo') else ''), '']
+              'Segue o orçamento *%s* para a *%s*%s.' % (o['numero'], _nome_cli(o), (' — %s' % o['titulo']) if o.get('titulo') else ''), '']
     for i in itens:
         linhas.append('📌 %s – R$ %s%s' % (i['descricao'], _brl(i['valor_total']), '' if i['emite_nota'] else ' (taxa repassada)'))
     linhas.append('💰 *Total: R$ %s*%s' % (_brl(o['total']), (' · em %dx' % o['parcelas']) if o.get('parcelas') and o['parcelas'] > 1 else ''))
@@ -90,7 +97,7 @@ def _texto_financeiro(o, itens, lanc):
     quem = (o.get('criado_por_nome') or '').split(' ')[0].title()
     linhas = ['Oi! %s aqui. 🙂' % quem if quem else 'Oi!', '',
               'Serviço feito, pode aprovar a cobrança? 🙏', '',
-              '🏢 *%s*' % o['cliente_nome'], '📄 Orçamento *%s*%s' % (o['numero'], (' — ' + o['titulo']) if o.get('titulo') else '')]
+              '🏢 *%s*' % _nome_cli(o), '📄 Orçamento *%s*%s' % (o['numero'], (' — ' + o['titulo']) if o.get('titulo') else '')]
     for i in itens:
         linhas.append('📌 %s – R$ %s' % (i['descricao'], _brl(i['valor_total'])))
     linhas.append('💰 *Total: R$ %s*' % _brl(o['total']))
@@ -286,16 +293,34 @@ def orcamento_dados(oid):
                     'comissao_tipo': o['comissao_tipo'] or 'PADRAO', 'comissao_valor': float(o['comissao_valor'] or 0),
                     'validade': o['validade'].isoformat() if o['validade'] else '', 'observacao': o['observacao'] or '', 'nota_interna': o['nota_interna'] or '',
                     'solicitante_nome': o.get('solicitante_nome') or '', 'solicitante_email': o.get('solicitante_email') or '', 'solicitante_fone': o.get('solicitante_fone') or '', 'interno': int(o.get('interno') or 0),
+                    'empresas_mais': o.get('empresas_mais_ids') or [], 'empresa_nova_nome': o.get('empresa_nova_nome') or '',
                     'itens': [{'servico_id': i['servico_id'], 'descricao': i['descricao'], 'qtd': float(i['quantidade']), 'valor': float(i['valor_unitario'])} for i in Orcamento.itens(oid)]})
 
 
 @comercial.route('/comercial/orcamentos/contatos/<int:cid>')
 @permission_required(VER)
 def orcamento_contatos(cid):
-    """Contatos do cliente, para escolher o solicitante na caixa (quem pediu o serviço do lado do cliente)."""
+    """Contatos do cliente para o "Quem pediu" da caixa (25/11/2026 — Anderson: só e-mails de contato, sem digitar; sem e-mail,
+    incluir o contato pela janela). Devolve também os sócios (PJ) ou a própria pessoa (PF) para a janela "Adicionar contato"."""
+    c = execute_query('SELECT id, nome_razao_social AS nome, tipo_pessoa, cpf_cnpj, email, celular FROM clientes WHERE id = %s', (cid,), fetch=True, fetch_one=True)
+    if not c:
+        return jsonify({'ok': False, 'erro': 'Empresa não encontrada.'}), 404
+    pf = c['tipo_pessoa'] == 'PF' or len(''.join(ch for ch in (c['cpf_cnpj'] or '') if ch.isdigit())) == 11
     rows = execute_query("""SELECT nome, cargo, email, COALESCE(NULLIF(celular, ''), telefone) AS fone, principal FROM contatos_clientes
                                WHERE cliente_id = %s AND COALESCE(ativo, 1) = 1 ORDER BY principal DESC, nome""", (cid,), fetch=True) or []
-    return jsonify([{'nome': r['nome'], 'cargo': r['cargo'] or '', 'email': r['email'] or '', 'fone': r['fone'] or '', 'principal': bool(r['principal'])} for r in rows])
+    from utils.cobranca_email import email_falso
+    contatos = [{'nome': r['nome'], 'cargo': r['cargo'] or '', 'email': (r['email'] or '').strip().lower() if (r['email'] and '@' in r['email'] and not email_falso(r['email'])) else '',
+                 'fone': r['fone'] or '', 'principal': bool(r['principal'])} for r in rows]
+    pessoa = None
+    if pf:                                   # pessoa física: ela mesma é quem pede, com o e-mail dela (se for de verdade)
+        em = (c.get('email') or '').strip().lower()
+        pessoa = {'nome': c['nome'], 'email': em if (em and '@' in em and not email_falso(em)) else '', 'fone': c.get('celular') or ''}
+    from models.socio_cliente import SocioCliente
+    from utils.texto import nome_proprio as np
+    socios = [] if pf else [{'nome': s.get('nome') or '', 'nome_proprio': np(s.get('nome') or ''), 'cargo': s.get('qualificacao') or 'Sócio',
+                             'email': s.get('email') or '', 'telefone': s.get('telefone') or ''} for s in (SocioCliente.get_by_cliente(cid) or [])]
+    return jsonify({'ok': True, 'nome': c['nome'], 'pf': pf, 'contatos': contatos, 'pessoa': pessoa, 'socios': socios,
+                    'cadastro': url_for('clientes.detalhes', id=cid) + '#contatos'})
 
 
 # ───────────────────────── montar e alterar ─────────────────────────
@@ -367,7 +392,7 @@ def orcamento_aprovar(oid):
     Orcamento.mudar(oid, 'APROVADO', current_user, 'aprovado', 'Aprovado por %s' % current_user.nome, aprovado_por=current_user.id, aprovado_em='NOW()', motivo=None)
     registrar('escrita.aprovou_orcamento', 'comercial', tabela='com_orcamentos', registro_id=oid, depois={'total': str(o['total'])})
     _avisar_dono(o, 'Orçamento %s aprovado' % o['numero'], 'O orçamento %s (%s, R$ %s) foi aprovado por %s. Agora é mandar ao cliente e, feito o serviço, mandar para a cobrança.'
-                 % (o['numero'], o['cliente_nome'], _brl(o['total']), current_user.nome))
+                 % (o['numero'], _nome_cli(o), _brl(o['total']), current_user.nome))
     flash('Orçamento %s aprovado.' % o['numero'], 'success')
     return _volta(oid)
 
@@ -386,7 +411,7 @@ def orcamento_reprovar(oid):
     Orcamento.mudar(oid, 'REPROVADO', current_user, 'reprovado', 'Reprovado por %s: %s' % (current_user.nome, motivo), motivo=motivo)
     registrar('escrita.reprovou_orcamento', 'comercial', tabela='com_orcamentos', registro_id=oid, depois={'motivo': motivo})
     _avisar_dono(o, 'Orçamento %s voltou para correção' % o['numero'], 'O orçamento %s (%s) foi reprovado por %s. Motivo: %s. Corrija e mande de novo para aprovação.'
-                 % (o['numero'], o['cliente_nome'], current_user.nome, motivo))
+                 % (o['numero'], _nome_cli(o), current_user.nome, motivo))
     flash('Orçamento %s devolvido para correção.' % o['numero'], 'success')
     return _volta(oid)
 
@@ -593,7 +618,7 @@ def _avisar_aprovadores(o):
                                       WHERE pp.permissao_codigo = %s))""",   # pelo PERFIL (24/11/2026)
                          (APROVAR,), fetch=True) or []
     _avisar([r['email'] for r in rows], 'Orçamento %s para aprovar' % o['numero'],
-            '%s mandou o orçamento %s (%s, R$ %s) para aprovação.\n\nAbra Comercial › Orçamentos › Para aprovar.' % (current_user.nome, o['numero'], o['cliente_nome'], _brl(o['total'])))
+            '%s mandou o orçamento %s (%s, R$ %s) para aprovação.\n\nAbra Comercial › Orçamentos › Para aprovar.' % (current_user.nome, o['numero'], _nome_cli(o), _brl(o['total'])))
 
 
 def _brl(v):

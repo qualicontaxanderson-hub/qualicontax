@@ -61,7 +61,7 @@ input.cod { letter-spacing:8px; font-size:22px; text-align:center; font-family:m
 <div class="as-wrap">
     <div class="as-card">
         <div class="as-res">
-            <div><div class="l">Para</div><div class="v">{{ o.cliente_nome }}</div></div>
+            <div><div class="l">Para</div><div class="v">{{ o.cliente_nome }}{% if o.empresas_mais %} <small>+ {{ o.empresas_mais | length }} empresa{{ 's' if o.empresas_mais | length > 1 }}</small>{% endif %}{% if o.empresa_nova_nome %} <small>· empresa a abrir: {{ o.empresa_nova_nome }}</small>{% endif %}</div></div>
             {% if o.titulo %}<div><div class="l">Assunto</div><div class="v"><small>{{ o.titulo }}</small></div></div>{% endif %}
             <div><div class="l">Total</div><div class="v">{{ o.total | float | format_currency }}{% if o.parcelas and o.parcelas > 1 %} <small>em {{ o.parcelas }}x</small>{% endif %}</div></div>
             <div><div class="l">Validade</div><div class="v">{{ o.validade.strftime('%d/%m/%Y') if o.validade else 'sem prazo' }}</div></div>

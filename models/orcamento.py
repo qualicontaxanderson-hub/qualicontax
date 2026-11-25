@@ -7,6 +7,7 @@ pessoa manda ao cliente; feito o serviço, ela manda para a cobrança e o lança
 com a linha do tempo inteira. Tabelas: com_orcamentos, com_orcamento_itens, com_orcamento_eventos.
 """
 import hashlib
+import logging
 import secrets
 from datetime import date, datetime, timedelta
 from decimal import Decimal, InvalidOperation
@@ -54,7 +55,11 @@ def _d(v):
 
 class Orcamento:
     SELECT = """SELECT o.*, c.nome_razao_social AS cliente_nome, c.numero_cliente AS cliente_num, c.cpf_cnpj AS cliente_doc,
-                       COALESCE(c.avulso, 0) AS cliente_avulso, c.email AS cliente_email, c.telefone AS cliente_fone,
+                       COALESCE(c.avulso, 0) AS cliente_avulso, c.email AS cliente_email, c.telefone AS cliente_fone, c.tipo_pessoa AS cliente_tipo,
+                       (SELECT GROUP_CONCAT(e.cliente_id ORDER BY e.ordem) FROM com_orcamento_empresas e WHERE e.orcamento_id = o.id AND e.cliente_id <> o.cliente_id) AS empresas_mais_csv,
+                       (SELECT GROUP_CONCAT(cl.nome_razao_social ORDER BY e.ordem SEPARATOR '|') FROM com_orcamento_empresas e JOIN clientes cl ON cl.id = e.cliente_id
+                         WHERE e.orcamento_id = o.id AND e.cliente_id <> o.cliente_id) AS empresas_mais_nomes,
+                       (SELECT a.nome_razao_social FROM clientes a WHERE a.id = o.empresa_nova_id) AS empresa_nova_cliente,
                        u.nome AS criado_por_nome, u.email AS criado_por_email, u.telefone AS criado_por_fone, a.nome AS aprovado_por_nome
                   FROM com_orcamentos o
                   JOIN clientes c ON c.id = o.cliente_id
@@ -64,11 +69,21 @@ class Orcamento:
     # ---------------- leitura ----------------
     @staticmethod
     def get(oid):
-        return execute_query(Orcamento.SELECT + ' WHERE o.id = %s', (oid,), fetch=True, fetch_one=True)
+        return Orcamento._enriquece(execute_query(Orcamento.SELECT + ' WHERE o.id = %s', (oid,), fetch=True, fetch_one=True))
+
+    @staticmethod
+    def _enriquece(o):
+        """25/11/2026: as outras empresas do orçamento (além da 1ª, que é a da cobrança) prontas para as telas."""
+        if not o:
+            return o
+        o['empresas_mais_ids'] = [int(x) for x in (o.get('empresas_mais_csv') or '').split(',') if str(x).strip().isdigit()]
+        o['empresas_mais'] = [x for x in (o.get('empresas_mais_nomes') or '').split('|') if x]
+        o['n_empresas'] = 1 + len(o['empresas_mais'])
+        return o
 
     @staticmethod
     def por_token(token):
-        return execute_query(Orcamento.SELECT + ' WHERE o.token = %s', (token,), fetch=True, fetch_one=True)
+        return Orcamento._enriquece(execute_query(Orcamento.SELECT + ' WHERE o.token = %s', (token,), fetch=True, fetch_one=True))
 
     @staticmethod
     def listar(empresa_id=2, criado_por=None, status=None):
@@ -79,6 +94,8 @@ class Orcamento:
             sql += ' AND o.status = %s'; p.append(status)
         sql += ' ORDER BY o.id DESC'
         linhas = execute_query(sql, tuple(p), fetch=True) or []
+        for l in linhas:
+            Orcamento._enriquece(l)
         if linhas:
             ids = ','.join(str(l['id']) for l in linhas)
             itens = execute_query('SELECT * FROM com_orcamento_itens WHERE orcamento_id IN (%s) ORDER BY orcamento_id, ordem, id' % ids, fetch=True) or []
@@ -152,23 +169,69 @@ class Orcamento:
         interno = 1 if f.get('interno') == '1' else 0
         if not interno and not sol:
             raise ValueError('Diga quem pediu o serviço do lado do cliente (o solicitante). Se for só controle interno, marque essa opção.')
+        if not interno and not sol_email:              # 25/11/2026 — Anderson: só e-mail de contato cadastrado, nada digitado
+            raise ValueError('Quem pediu o serviço precisa ter e-mail no cadastro: escolha um contato com e-mail ou inclua o contato.')
+        # mais de uma empresa (25/11/2026 — Anderson: "igual temos no contrato"): a 1ª fica em cliente_id (é dela a cobrança)
+        mais = []
+        for x in (f.get('empresas_mais') or '').split(','):
+            if x.strip().isdigit() and int(x) != cid and int(x) not in mais:
+                mais.append(int(x))
+        nova = ' '.join((f.get('empresa_nova_nome') or '').split())[:160].upper() or None
         return {'cliente_id': cid, 'titulo': ' '.join((f.get('titulo') or '').split())[:160] or None, 'como': como, 'parcelas': parcelas,
-                'comissao_tipo': ct, 'comissao_valor': cv, 'validade': validade,
+                'comissao_tipo': ct, 'comissao_valor': cv, 'validade': validade, 'empresas_mais': mais, 'empresa_nova_nome': nova,
                 'solicitante_nome': sol, 'solicitante_email': sol_email, 'solicitante_fone': sol_fone, 'interno': interno,
                 'observacao': (f.get('observacao') or '').strip()[:4000].upper() or None,
                 'nota_interna': (f.get('nota_interna') or '').strip()[:2000] or None}
 
     @staticmethod
+    def _abertura_pf(cliente_id, itens):
+        """Cliente pessoa física pedindo "Abertura de empresa": o orçamento precisa do nome da empresa nova (25/11/2026)."""
+        c = execute_query('SELECT tipo_pessoa, cpf_cnpj FROM clientes WHERE id = %s', (cliente_id,), fetch=True, fetch_one=True) or {}
+        pf = c.get('tipo_pessoa') == 'PF' or len(''.join(ch for ch in (c.get('cpf_cnpj') or '') if ch.isdigit())) == 11
+        if not pf or not itens:
+            return False
+        ids = [int(i['servico_id']) for i in itens if i.get('servico_id')]
+        if not ids:
+            return False
+        rows = execute_query('SELECT nome FROM nfse_servicos WHERE id IN (%s)' % ','.join('%s' for _ in ids), tuple(ids), fetch=True) or []
+        return any((r['nome'] or '').strip().upper().startswith('ABERTURA DE EMPRESA') for r in rows)
+
+    @staticmethod
+    def _avulso_abertura(d, usuario):
+        """O nome da empresa nova vira um avulso ligado ao CPF (função da sessão do cadastro; enquanto não existir, fica só o nome)."""
+        if not d.get('empresa_nova_nome'):
+            return None
+        try:
+            from models.cliente import Cliente
+            fn = getattr(Cliente, 'criar_avulso_abertura', None)
+            if fn:
+                return fn(d['cliente_id'], d['empresa_nova_nome'], getattr(usuario, 'id', None))
+        except Exception as e:
+            logging.getLogger(__name__).warning('[orcamento] avulso da empresa nova: %s', e)
+        return None
+
+    @staticmethod
+    def _gravar_empresas(oid, cliente_id, mais):
+        execute_query('DELETE FROM com_orcamento_empresas WHERE orcamento_id = %s', (oid,), fetch=False)
+        for n, cid in enumerate([cliente_id] + [x for x in (mais or []) if x != cliente_id], 1):
+            execute_query('INSERT IGNORE INTO com_orcamento_empresas (orcamento_id, cliente_id, ordem) VALUES (%s, %s, %s)', (oid, cid, n), fetch=False)
+
+    @staticmethod
     def criar(f, usuario, empresa_id=2):
         d = Orcamento._dados_do_form(f)
         itens = Orcamento._itens_do_form(f)
+        if Orcamento._abertura_pf(d['cliente_id'], itens) and not d['empresa_nova_nome']:
+            raise ValueError('Abertura de empresa para pessoa física: diga o nome da empresa nova.')
         total = sum((i['valor_total'] for i in itens), Decimal('0'))
+        nova_id = Orcamento._avulso_abertura(d, usuario)
         oid = execute_query("""INSERT INTO com_orcamentos (empresa_id, numero, cliente_id, titulo, status, validade, como, parcelas, comissao_tipo,
-                                   comissao_valor, total, observacao, nota_interna, token, criado_por, solicitante_nome, solicitante_email, solicitante_fone, interno)
-                               VALUES (%s, %s, %s, %s, 'RASCUNHO', %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
+                                   comissao_valor, total, observacao, nota_interna, token, criado_por, solicitante_nome, solicitante_email, solicitante_fone, interno,
+                                   empresa_nova_nome, empresa_nova_id)
+                               VALUES (%s, %s, %s, %s, 'RASCUNHO', %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
                             (empresa_id, novo_numero(), d['cliente_id'], d['titulo'], d['validade'], d['como'], d['parcelas'], d['comissao_tipo'],
                              d['comissao_valor'], total, d['observacao'], d['nota_interna'], secrets.token_urlsafe(24)[:40], usuario.id,
-                             d['solicitante_nome'], d['solicitante_email'], d['solicitante_fone'], d['interno']), fetch=False)
+                             d['solicitante_nome'], d['solicitante_email'], d['solicitante_fone'], d['interno'], d['empresa_nova_nome'], nova_id), fetch=False)
+        Orcamento._gravar_empresas(oid, d['cliente_id'], d['empresas_mais'])
         Orcamento._gravar_itens(oid, itens)
         Orcamento.evento(oid, 'criado', 'Orçamento montado: %d serviço%s, total R$ %s' % (len(itens), 's' if len(itens) != 1 else '', _brl(total)), usuario)
         return oid
@@ -185,16 +248,20 @@ class Orcamento:
             raise ValueError('Este orçamento não pode mais ser alterado: cancele-o e monte outro.')
         d = Orcamento._dados_do_form(f)
         itens = Orcamento._itens_do_form(f)
+        if Orcamento._abertura_pf(d['cliente_id'], itens) and not d['empresa_nova_nome']:
+            raise ValueError('Abertura de empresa para pessoa física: diga o nome da empresa nova.')
         total = sum((i['valor_total'] for i in itens), Decimal('0'))
+        nova_id = o.get('empresa_nova_id') if (o.get('empresa_nova_id') and o.get('empresa_nova_nome') == d['empresa_nova_nome']) else Orcamento._avulso_abertura(d, usuario)
         execute_query("""UPDATE com_orcamentos SET cliente_id = %s, titulo = %s, validade = %s, como = %s, parcelas = %s, comissao_tipo = %s,
                              comissao_valor = %s, total = %s, observacao = %s, nota_interna = %s, status = 'RASCUNHO', motivo = NULL,
-                             solicitante_nome = %s, solicitante_email = %s, solicitante_fone = %s, interno = %s,
+                             solicitante_nome = %s, solicitante_email = %s, solicitante_fone = %s, interno = %s, empresa_nova_nome = %s, empresa_nova_id = %s,
                              aprovado_por = NULL, aprovado_em = NULL, enviado_em = NULL, enviado_para = NULL, pdf_sha256 = NULL,
                              codigo_hash = NULL, codigo_enviado_em = NULL, codigo_para = NULL, codigo_tentativas = 0,
                              aceito_em = NULL, aceito_nome = NULL, aceito_cpf = NULL, aceito_email = NULL, aceito_ip = NULL, aceito_agente = NULL, aceito_hash = NULL,
                              feito_em = NULL, lancamento_id = NULL WHERE id = %s""",
                       (d['cliente_id'], d['titulo'], d['validade'], d['como'], d['parcelas'], d['comissao_tipo'], d['comissao_valor'], total,
-                       d['observacao'], d['nota_interna'], d['solicitante_nome'], d['solicitante_email'], d['solicitante_fone'], d['interno'], oid), fetch=False)
+                       d['observacao'], d['nota_interna'], d['solicitante_nome'], d['solicitante_email'], d['solicitante_fone'], d['interno'], d['empresa_nova_nome'], nova_id, oid), fetch=False)
+        Orcamento._gravar_empresas(oid, d['cliente_id'], d['empresas_mais'])
         execute_query('DELETE FROM com_orcamento_itens WHERE orcamento_id = %s', (oid,), fetch=False)
         Orcamento._gravar_itens(oid, itens)
         extra = ''
