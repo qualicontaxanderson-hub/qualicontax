@@ -758,6 +758,58 @@ def ramo_novo():
     return redirect(volta + '#r%d' % rid)
 
 
+@financeiro.route('/financeiro/servicos/ramo/<int:rid>/editar', methods=['POST'])
+@permission_required(PERM)
+def ramo_editar(rid):
+    """Alterar o ramo pelo lápis do cartão (25/11/2026 — Anderson: "Aqui tem que aparecer para editar tb"): nome, onde entra e a
+    mensalidade sugerida; acao=inativar tira o ramo das listas (as empresas que o têm continuam com ele)."""
+    if not _admin():
+        abort(403)
+    from models.ramo_atividade import RamoAtividade, SEGMENTO_NOME
+    from utils.texto import nome_ramo
+    r = RamoAtividade.get_by_id(rid)
+    if not r:
+        abort(404)
+    f = request.form
+    volta = url_for('financeiro.servicos', aba='ramos')
+    if f.get('acao') == 'inativar':
+        RamoAtividade.update(rid, r['nome'], r.get('descricao'), 'INATIVO', r.get('tipo_pessoa'), r.get('segmento'))
+        registrar('escrita.inativou_ramo', 'cadastros', tabela='ramos_atividade', registro_id=rid,
+                  antes={'nome': r['nome'], 'situacao': 'ATIVO'}, depois={'nome': r['nome'], 'situacao': 'INATIVO', 'origem': 'financeiro_servicos'})
+        flash('Ramo "%s" inativado: saiu das listas; as empresas que o têm continuam com ele. Para voltar, crie de novo com o mesmo nome.' % r['nome'], 'success')
+        return redirect(volta)
+    nome = nome_ramo(f.get('nome'))[:100]
+    seg = (f.get('segmento') or '').strip().upper()
+    tipo = 'PF' if seg == 'PF' else 'PJ'
+    seg = None if tipo == 'PF' else seg
+    if not nome:
+        flash('Dê um nome ao ramo.', 'danger')
+        return redirect(volta + '#r%d' % rid)
+    if tipo == 'PJ' and seg not in SEGMENTO_NOME:
+        flash('Escolha onde o ramo entra: Comércio, Prestação de serviços, Locação, Indústria ou Pessoa física.', 'danger')
+        return redirect(volta + '#r%d' % rid)
+    try:
+        vp = (f.get('valor') or '').strip()
+        valor = _dec(vp) if vp else None
+        if valor is not None and valor <= 0:
+            valor = None
+    except (ValueError, InvalidOperation):
+        flash('Mensalidade inválida para "%s".' % nome, 'danger')
+        return redirect(volta + '#r%d' % rid)
+    outro = execute_query('SELECT id, nome FROM ramos_atividade WHERE UPPER(TRIM(nome)) = %s AND id <> %s LIMIT 1', (nome.upper(), rid), fetch=True, fetch_one=True)
+    if outro:
+        flash('Já existe outro ramo chamado "%s".' % outro['nome'], 'danger')
+        return redirect(volta + '#r%d' % rid)
+    antes = {'nome': r['nome'], 'tipo_pessoa': r.get('tipo_pessoa'), 'segmento': r.get('segmento'), 'mensalidade_sugerida': str(r.get('mensalidade_sugerida') or '')}
+    RamoAtividade.update(rid, nome, r.get('descricao'), 'ATIVO', tipo, seg)
+    RamoAtividade.set_mensalidade(rid, valor)
+    depois = {'nome': nome, 'tipo_pessoa': tipo, 'segmento': seg, 'mensalidade_sugerida': str(valor or '')}
+    if depois != antes:
+        registrar('escrita.alterou_ramo', 'cadastros', tabela='ramos_atividade', registro_id=rid, antes=antes, depois=dict(depois, origem='financeiro_servicos'))
+    flash('Ramo "%s" alterado%s.' % (nome, (': mensalidade sugerida de R$ %s' % ('{:,.2f}'.format(valor)).replace(',', 'X').replace('.', ',').replace('X', '.')) if valor else ', sem mensalidade sugerida'), 'success')
+    return redirect(volta + '#r%d' % rid)
+
+
 @financeiro.route('/financeiro/servicos/novo', methods=['POST'])
 @permission_required(PERM)
 def servico_novo():

@@ -214,6 +214,9 @@
 .rm-novo-c i { width:38px; height:38px; border-radius:12px; background:#fef3c7; display:inline-flex; align-items:center; justify-content:center; font-size:15px; } .rm-novo-c b { font-size:14.5px; } .rm-novo-c small { color:#b45309; font-size:12px; }
 .rm-novo-c:hover { border-color:#f59e0b; background:#fef3c7; }
 .rm-c.oculto { display:none; }
+.rm-ed { width:30px; height:30px; border-radius:9px; border:1px solid #e6eeea; background:#fff; color:#94a3b8; cursor:pointer; display:inline-flex; align-items:center; justify-content:center; font-size:12px; flex-shrink:0; }
+.rm-ed:hover { color:#b45309; border-color:#fcd34d; background:#fffbeb; }
+.rmn-inat { color:#b91c1c; border-color:#fecaca; margin-right:auto; } .rmn-inat:hover { background:#fef2f2; }
 #rmNovoFundo[hidden] { display:none; } .rmn.ns { width:min(820px, calc(100vw - 32px)); } .rmn-g { grid-template-columns:1fr; }
 .svn.rmn .ns-g { grid-template-columns:minmax(0,1fr); }      /* sem a coluna da prévia: a caixa é só o formulário */
 .svn.rmn .ns-ops.rmn-ops { grid-template-columns:repeat(3, minmax(0,1fr)); } .rmn-ops .ns-op small { white-space:normal; }
@@ -289,7 +292,8 @@
       <form class="rm-c rg-c{{ ' com' if r.sugestao }}" id="r{{ r.id }}" method="POST" action="{{ url_for('financeiro.ramo_mensalidade') }}" data-b="{{ r.nome }} {{ SEG.get(r.segmento, '') }}">
         <input type="hidden" name="ramo_id" value="{{ r.id }}">
         <div class="rm-top"><span class="rg-av"><i class="fas {{ 'fa-store' if r.segmento == 'COMERCIO' else ('fa-industry' if r.segmento == 'INDUSTRIA' else ('fa-key' if r.segmento == 'LOCACAO' else 'fa-briefcase')) }}"></i></span>
-          <div><b>{{ r.nome }}</b><small>{{ SEG.get(r.segmento, 'outros') }} · {{ r.n_empresas }} empresa{{ 's' if r.n_empresas != 1 }}</small></div></div>
+          <div><b>{{ r.nome }}</b><small>{{ SEG.get(r.segmento, 'outros') }} · {{ r.n_empresas }} empresa{{ 's' if r.n_empresas != 1 }}</small></div>
+          <button type="button" class="rm-ed" title="Alterar o ramo (nome, onde entra, mensalidade) ou inativar" onclick="rmEditar(this)" data-id="{{ r.id }}" data-nome="{{ r.nome }}" data-seg="{{ 'PF' if r.tipo_pessoa == 'PF' else (r.segmento or '') }}" data-n="{{ r.n_empresas }}" data-valor="{{ '{:,.2f}'.format(r.sugestao | float).replace(',', 'X').replace('.', ',').replace('X', '.') if r.sugestao else '' }}"><i class="fas fa-pen"></i></button></div>
         <div class="rm-val{{ '' if r.sugestao else ' sem' }}">{{ (r.sugestao | format_currency) if r.sugestao else 'sem mensalidade sugerida' }}</div>
         <div class="rm-form"><span class="rg-rs"><i class="pre">R$</i><input class="rg-in rg-din" name="valor" inputmode="numeric" placeholder="0,00" autocomplete="off" value="{{ '{:,.2f}'.format(r.sugestao | float).replace(',', 'X').replace('.', ',').replace('X', '.') if r.sugestao else '' }}" title="mensalidade sugerida por mês: digite só os números, os centavos entram sozinhos"></span>
           <button class="rg-ok"><i class="fas fa-check"></i> Salvar</button></div>
@@ -455,7 +459,7 @@
             <small>digite os centavos: 162100 vira 1.621,00 · ao montar o contrato, o ramo aparece com esse valor</small></div></section>
       </div>
     </div>
-    <footer class="ns-pe"><div class="ns-pe-info" id="rmnMsg">Dê um nome ao ramo e escolha onde entra.</div><button type="button" class="ns-bt" onclick="rmNovoFechar()">Cancelar</button><button type="submit" class="ns-bt prim" id="rmnCriar" disabled><i class="fas fa-check"></i> Criar o ramo</button></footer>
+    <footer class="ns-pe"><div class="ns-pe-info" id="rmnMsg">Dê um nome ao ramo e escolha onde entra.</div><button type="button" class="ns-bt rmn-inat" id="rmnInativar" hidden onclick="rmInativar()"><i class="fas fa-ban"></i> Inativar</button><button type="button" class="ns-bt" onclick="rmNovoFechar()">Cancelar</button><button type="submit" class="ns-bt prim" id="rmnCriar" disabled><i class="fas fa-check"></i> Criar o ramo</button></footer>
   </form>
 </div>
 
@@ -560,10 +564,33 @@
   }
 
   // ── NOVO RAMO (25/11/2026): mesma caixa do Novo serviço, mais curta ──
-  var rmNovoTrava;
-  window.rmNovoAbrir = function () {
+  var rmNovoTrava, RM_NOVO_URL = {{ url_for('financeiro.ramo_novo') | tojson }}, RM_EDIT_URL = {{ url_for('financeiro.ramo_editar', rid=0) | tojson }};
+  function rmAbrirCaixa() {
     var fd = document.getElementById('rmNovoFundo'); fd.hidden = false; rmNovoTrava = document.body.style.overflow; document.body.style.overflow = 'hidden';
     document.addEventListener('keydown', rmNovoTecla, true); rmnPrev(); setTimeout(function () { fd.querySelector('[name=nome]').focus(); }, 50);
+  }
+  window.rmNovoAbrir = function () {                     // modo novo: caixa limpa
+    var f = document.getElementById('rmNovoForm'); f.action = RM_NOVO_URL; f.reset(); f.querySelector('[name=segmento]').value = '';
+    f.querySelectorAll('.rmn-ops .ns-op').forEach(function (b) { b.classList.remove('on'); });
+    f.querySelector('.ns-tit b').textContent = 'Novo ramo de atividade'; f.querySelector('.ns-tit span').textContent = 'entra na caixa "Ramo de atividade" da ficha e aqui, com a mensalidade sugerida';
+    document.getElementById('rmnCriar').innerHTML = '<i class="fas fa-check"></i> Criar o ramo'; document.getElementById('rmnInativar').hidden = true;
+    rmAbrirCaixa();
+  };
+  // 25/11/2026 — Anderson: "Aqui tem que aparecer para editar tb": o lápis do cartão abre a mesma caixa preenchida
+  window.rmEditar = function (bt) {
+    var d = bt.dataset, f = document.getElementById('rmNovoForm');
+    f.action = RM_EDIT_URL.replace('/ramo/0/', '/ramo/' + d.id + '/');
+    f.querySelector('[name=nome]').value = d.nome; f.querySelector('[name=segmento]').value = d.seg; f.querySelector('[name=valor]').value = d.valor || '';
+    f.querySelectorAll('.rmn-ops .ns-op').forEach(function (b) { b.classList.toggle('on', b.dataset.v === d.seg); });
+    f.querySelector('.ns-tit b').textContent = 'Alterar o ramo'; f.querySelector('.ns-tit span').textContent = (d.n === '1' ? '1 empresa tem' : d.n + ' empresas têm') + ' este ramo: mudar o nome ou onde entra vale para todas';
+    document.getElementById('rmnCriar').innerHTML = '<i class="fas fa-check"></i> Salvar'; var bi = document.getElementById('rmnInativar'); bi.hidden = false; bi.dataset.nome = d.nome; bi.dataset.n = d.n;
+    rmAbrirCaixa();
+  };
+  window.rmInativar = function () {
+    var bi = document.getElementById('rmnInativar'), n = parseInt(bi.dataset.n || '0', 10);
+    pergunta({ titulo: 'Inativar o ramo "' + bi.dataset.nome + '"?', cor: 'pk-rubro', icone: 'fa-ban', ok: 'Inativar', okIcone: 'fa-ban',
+               texto: 'Ele some daqui e da caixa "Ramo de atividade" da ficha.' + (n ? ' As ' + n + ' empresa' + (n === 1 ? '' : 's') + ' que já o têm continuam com ele no cadastro.' : '') + ' Para voltar, é só criar de novo com o mesmo nome.',
+               onOk: function () { var f = document.getElementById('rmNovoForm'), i = document.createElement('input'); i.type = 'hidden'; i.name = 'acao'; i.value = 'inativar'; f.appendChild(i); f.submit(); } });
   };
   window.rmNovoFechar = function () { var fd = document.getElementById('rmNovoFundo'); fd.hidden = true; document.body.style.overflow = rmNovoTrava || ''; document.removeEventListener('keydown', rmNovoTecla, true); };
   function rmNovoTecla(e) { if (e.key === 'Escape' && document.querySelectorAll('.pk-fundo:not([hidden])').length === 1) { e.preventDefault(); rmNovoFechar(); } }

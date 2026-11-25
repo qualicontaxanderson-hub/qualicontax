@@ -20,11 +20,13 @@
 .hp-btn i { color:#16a34a; }
 .hp-btn2 { background:rgba(255,255,255,.14); color:#fff; box-shadow:none; border:1px solid rgba(255,255,255,.35); font-size:13.5px; padding:10px 14px; }
 .hp-btn2 i { color:#bbf7d0; }
-.hp-comp { display:inline-flex; align-items:center; gap:4px; background:rgba(255,255,255,.14); border:1px solid rgba(255,255,255,.35); border-radius:14px; padding:4px; color:#fff; }
-.hp-comp a { width:34px; height:34px; display:inline-flex; align-items:center; justify-content:center; color:#fff; text-decoration:none; border-radius:10px; }
-.hp-comp a:hover { background:rgba(255,255,255,.18); }
-.hp-comp span { padding:0 8px; line-height:1.1; text-align:center; } .hp-comp small { display:block; font-size:10px; font-weight:800; letter-spacing:.08em; text-transform:uppercase; opacity:.8; }
-.hp-comp b { font-size:16px; }
+/* 25/11/2026 — Anderson: "onde é a COMPETÊNCIA dá uma alterada de cor para ficar mais visível": bloco branco com borda âmbar e o mês grande */
+.hp-comp { display:inline-flex; align-items:center; gap:4px; background:#fff; border:2px solid #f59e0b; border-radius:14px; padding:4px; color:#0f3d2e; box-shadow:0 8px 20px rgba(0,0,0,.18); }
+.hp-comp a { width:36px; height:36px; display:inline-flex; align-items:center; justify-content:center; color:#b45309; text-decoration:none; border-radius:10px; font-size:15px; }
+.hp-comp a:hover { background:#fff7ed; }
+.hp-comp span { padding:0 10px; line-height:1.1; text-align:center; } .hp-comp small { display:block; font-size:10px; font-weight:800; letter-spacing:.08em; text-transform:uppercase; color:#92400e; }
+.hp-comp b { font-size:20px; color:#b45309; font-variant-numeric:tabular-nums; }
+.hp-compt { color:#b45309; font-weight:800; }
 
 /* faixa dos bancos */
 .hp-bancos { display:flex; align-items:stretch; gap:12px; margin:0 0 20px; flex-wrap:wrap; }
@@ -305,7 +307,7 @@ span.hp-bco, span.hp-nf { cursor:default; }
   <div class="tx-c-top"><span class="tx-c-num">{{ l.numero or '—' }}</span><span class="tx-c-nome" title="{{ l.empresa }}">{{ l.empresa }}</span></div>
   <div class="tx-c-meio">
     <div><div class="tx-c-val">{{ (l.atual.valor if l.atual else l.total) | float | format_currency }}</div>
-      <div class="tx-c-desc">{% if f == 'emitir' %}a emitir · competência {{ competencia.strftime('%m/%Y') }}{% elif f == 'erro' %}a cobrança não saiu{% elif f == 'pagas' %}pago{% elif f == 'atrasadas' %}em atraso{% else %}emitida · aguardando{% endif %}</div></div>
+      <div class="tx-c-desc">{% if f == 'emitir' %}a emitir · <b class="hp-compt">competência {{ competencia.strftime('%m/%Y') }}</b>{% elif f == 'erro' %}a cobrança não saiu{% elif f == 'pagas' %}pago{% elif f == 'atrasadas' %}em atraso{% else %}emitida · aguardando{% endif %}</div></div>
     <div class="hp-venc">{{ 'venceu' if f == 'pagas' else 'vence' }}<b>{{ (l.atual.venc if l.atual else l.vencimento).strftime('%d/%m/%Y') }}</b>{% if l.venc_mes and not l.atual %}<small class="hp-so" title="data escolhida só para esta cobrança; o contrato continua no dia {{ l.contrato.dia_vencimento }}">só {{ competencia.strftime('%m/%Y') }}</small>{% endif %}</div>
   </div>
   <div class="hp-itens">
