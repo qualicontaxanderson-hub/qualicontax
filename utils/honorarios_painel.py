@@ -162,6 +162,41 @@ def painel(competencia, empresa_id=EMPRESA_QUALICONTAX):
         if fase in ('emitir', 'erro') and l['banco']:
             por_banco[l['banco']['id']]['n'] += 0 if e13 else 1
             por_banco[l['banco']['id']]['valor'] += l['total']
+    # 25/11/2026 — Anderson: "quando os meninos lançarem no Lançamento uma despesa que é incluída no Honorário, aparecer
+    # no Honorários uma janelinha ROXA": o que a equipe lançou para esta mensalidade. Aprovado entra na cobrança (já está
+    # nos itens); aguardando aprovação só avisa (não soma) — quem aprova precisa aprovar antes de emitir.
+    from models.fin_lancamento import FinLancamento
+    pend = defaultdict(list)
+    # Pedido parcelado ainda não aprovado: a divisão só acontece na aprovação, então aqui mostra SÓ a parcela deste mês
+    # (Anderson, 25/11/2026: "o Auto Posto Xingu é parcelado e está aparecendo 1.500,00; está tudo programado para ir
+    # 500,00 em cada mês?"). As datas escolhidas (parcelas_datas) ou mês a mês a partir da competência do pedido.
+    for p in FinLancamento.listar(empresa_id, status='LANCADO', destino='MENSAL', origem=('SERVICO', 'DESCONTO'), limite=2000):
+        n = int(p.get('parcelas') or 1)
+        if n > 1 and not p.get('parcela'):
+            datas = [date.fromisoformat(x) for x in (p.get('parcelas_datas') or '').split(',') if x]
+            if len(datas) != n:
+                datas = [mes_seguinte(p['competencia']) if k else p['competencia'] for k in range(n)]
+                for k in range(2, n):
+                    datas[k] = mes_seguinte(datas[k - 1])
+            datas = [d.replace(day=1) for d in datas]
+            if competencia not in datas:
+                continue
+            k = datas.index(competencia)
+            base = (_d(p['valor_total']) / n).quantize(Decimal('0.01'), rounding='ROUND_DOWN')
+            valor = _d(p['valor_total']) - base * (n - 1) if k == 0 else base
+            nome = '%s (parcela %d/%d)' % (p['descricao'] or p['servico_nome'], k + 1, n)
+        elif p['competencia'] != competencia:
+            continue
+        else:
+            valor, nome = _d(p['valor_total']), p['descricao'] or p['servico_nome']
+        pend[p['cliente_id']].append({'nome': nome, 'origem': p.get('origem'), 'id': p['id'],
+                                      'valor': -valor if p.get('origem') == 'DESCONTO' else valor,
+                                      'por': p.get('lancado_por_nome') or ''})
+    for l in linhas:
+        l['lancs'] = [] if l.get('tipo') == 'DECIMO' else [i for i in l['itens'] if i.get('lancamento_id')]
+        l['v_lanc'] = sum((_d(i['valor']) for i in l['lancs']), Decimal('0'))
+        l['pendentes'] = [] if l.get('tipo') == 'DECIMO' else pend.get(l['cliente_id'], [])
+        l['v_pend'] = sum((x['valor'] for x in l['pendentes']), Decimal('0'))
     # 19/11/2026 — Anderson: "não queria dois painéis, queria só um e quando emitir emite os dois": a parcela do 13º em
     # boleto próprio fica DENTRO do cartão da empresa (l['dec13']); marcar a empresa emite a mensalidade e a parcela.
     dec = {l['cliente_id']: l for l in linhas if l.get('tipo') == 'DECIMO'}
@@ -180,4 +215,6 @@ def painel(competencia, empresa_id=EMPRESA_QUALICONTAX):
             # 18/11/2026: quadro "Nota fiscal" ao lado dos bancos (Anderson: "um retângulo que mostre o que é com e sem NF")
             'v_nota': sum((l['total'] for l in linhas if l['nota']), Decimal('0')),
             'v_so_boleto': sum((l['total'] for l in linhas if not l['nota']), Decimal('0')),
+            'n_lanc': sum(1 for l in linhas if l['lancs']), 'v_lanc': sum((l['v_lanc'] for l in linhas), Decimal('0')),
+            'n_pend': sum(len(l['pendentes']) for l in linhas), 'v_pend': sum((l['v_pend'] for l in linhas), Decimal('0')),
             'devendo_valor': sum((x['valor'] - x['pago'] for l in devendo for x in l['atrasos']), Decimal('0'))}

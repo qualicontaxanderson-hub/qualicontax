@@ -244,6 +244,7 @@ MAPA = {
     'financeiro.recebimento_excluir':      'financeiro.recebimento.excluir',
     'financeiro.recebimento_excluir_lote': 'financeiro.recebimento.excluir',
     # Honorários (06/11/2026): a permissão nasce sem perfil — só admin até marcar em Perfis
+    'financeiro.honorarios_relatorio':     'financeiro.honorarios',           # PDF de conferência da cobrança do mês (25/11/2026)
     'financeiro.honorarios':               'financeiro.honorarios',
     'financeiro.honorarios_json':          'financeiro.honorarios',
     'financeiro.honorarios_salvar':        'financeiro.honorarios.alterar',

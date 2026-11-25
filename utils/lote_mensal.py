@@ -64,10 +64,11 @@ def itens_da_empresa(contrato, competencia, itens_contrato=None, lancamentos=Non
     for l in lancamentos:
         if l.get('origem') == 'DESCONTO':          # 19/11/2026: desconto lançado pela equipe, aprovado — linha negativa
             itens.append({'origem': 'desconto', 'servico_id': None, 'nome': l['descricao'] or 'Desconto',
-                          'valor': str(-_d(l['valor_total'])), 'lancamento_id': l['id'], 'abate_de': l.get('desc_lancamento_id')})
+                          'valor': str(-_d(l['valor_total'])), 'lancamento_id': l['id'], 'abate_de': l.get('desc_lancamento_id'),
+                          'por': l.get('lancado_por_nome') or ''})
             continue
         itens.append({'origem': 'lancamento', 'servico_id': l['servico_id'], 'nome': l['descricao'] or l['servico_nome'],
-                      'valor': str(_d(l['valor_total'])), 'lancamento_id': l['id']})
+                      'valor': str(_d(l['valor_total'])), 'lancamento_id': l['id'], 'por': l.get('lancado_por_nome') or ''})
     return itens
 
 

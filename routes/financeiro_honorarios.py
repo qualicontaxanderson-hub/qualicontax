@@ -215,6 +215,33 @@ def _bancos_cobranca():
         return []
 
 
+@financeiro.route('/financeiro/honorarios/relatorio')
+@permission_required(PERM)
+def honorarios_relatorio():
+    """PDF de conferência da cobrança do mês (25/11/2026 — Anderson: "como eu conseguirei consultar o que estaremos
+    cobrando do AUTO POSTO XINGU e de todas as outras empresas?... um relatório em PDF... com logo do banco e tudo
+    mais"). Parte do mesmo painel da tela, com os filtros dela (quadro aberto, banco, nota, grupo, 13º, lançamentos,
+    valor e busca). Desenho em utils/relatorio_honorarios.py."""
+    import os
+    from io import BytesIO
+    from zoneinfo import ZoneInfo
+    from flask import send_file
+    from utils import honorarios_painel as HP, relatorio_honorarios as RH
+    comp = _competencia_painel()
+    P = HP.painel(comp)
+    f = RH.ler_filtros(request.args)
+    linhas, filtros = RH.filtrar(P, f)
+    agora = datetime.now(ZoneInfo('America/Sao_Paulo'))
+    logo = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'static', 'images', 'logo.png')
+    pdf = RH.gerar_pdf({'competencia': comp, 'venc_mes': P['venc_mes'], 'linhas': linhas, 'bancos': P['bancos'], 'filtros': filtros,
+                        'gerado_em': agora.strftime('%d/%m/%Y %H:%M'), 'gerado_por': getattr(current_user, 'nome', '') or '',
+                        'logo_path': logo if os.path.exists(logo) else None})
+    registrar('leitura.exportou_arquivo', 'financeiro', tabela='fin_contratos',
+              depois={'relatorio': 'Cobrança de honorários %s' % comp.strftime('%m/%Y'), 'formato': 'pdf', 'empresas': len(linhas), 'filtros': ' · '.join(filtros)[:400]})
+    nome = 'honorarios-%s-%s.pdf' % (comp.strftime('%Y-%m'), agora.strftime('%Y-%m-%d-%H%M'))
+    return send_file(BytesIO(pdf), as_attachment=request.args.get('baixar') == '1', download_name=nome, mimetype='application/pdf')
+
+
 @financeiro.route('/financeiro/honorarios/<int:cid>/json')
 @permission_required(PERM)
 def honorarios_json(cid):

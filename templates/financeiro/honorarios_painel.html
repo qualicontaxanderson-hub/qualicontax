@@ -217,6 +217,15 @@ span.hp-bco, span.hp-nf { cursor:default; }
 .hp-13-bl .t b { color:#4c1d95; } .hp-13-bl .v { margin-left:auto; color:#4c1d95; font-size:13px; }
 .hp-13-bl.pagas { background:#f0fdf4; border-color:#bbf7d0; color:#166534; } .hp-13-bl.pagas .t b, .hp-13-bl.pagas .v { color:#166534; }
 .hp-13-bl.atrasadas, .hp-13-bl.erro { background:#fef2f2; border-color:#fecaca; color:#991b1b; } .hp-13-bl.atrasadas .v, .hp-13-bl.erro .v { color:#991b1b; }
+/* 25/11/2026 — lançamentos da equipe nesta mensalidade: aprovados em roxo (entram na cobrança); aguardando aprovação em âmbar (não somam) */
+.hp-lan-bl { display:flex; flex-direction:column; gap:4px; font-size:12px; color:#5b21b6; background:#f5f3ff; border:1px solid #ddd6fe; border-radius:9px; padding:7px 9px; margin:8px 0 2px; }
+.hp-lan-t { display:flex; align-items:center; gap:6px 8px; flex-wrap:wrap; } .hp-lan-t .t { color:#6d28d9; font-size:11px; } .hp-lan-t .v { margin-left:auto; color:#4c1d95; font-size:13px; font-weight:800; white-space:nowrap; }
+.hp-lan-it { display:flex; justify-content:space-between; gap:8px; align-items:flex-start; border-top:1px dashed #ddd6fe; padding-top:4px; }
+.hp-lan-it > span { min-width:0; display:flex; flex-direction:column; color:#4c1d95; font-weight:600; line-height:1.25; } .hp-lan-it small { color:#7c3aed; font-weight:500; font-size:10.5px; }
+.hp-lan-it > b { white-space:nowrap; color:#4c1d95; font-variant-numeric:tabular-nums; }
+.hp-lan-it.desc > b, .hp-lan-it.desc > span { color:#15803d; } .hp-lan-it.desc small { color:#16a34a; }
+.hp-lan-it.pend > span, .hp-lan-it.pend > b { color:#6d28d9; } .hp-lan-it.pend small { color:#8b5cf6; } .hp-lan-it.pend > b { opacity:.8; }
+.hp-lan-bl.so-pend { border-style:dashed; border-color:#c4b5fd; } .hp-lan-bl .hp-lan-et { font-size:10px; font-weight:800; color:#6d28d9; background:#ede9fe; border:1px dashed #c4b5fd; border-radius:6px; padding:1px 6px; white-space:nowrap; }
 @media (max-width:900px) { .hp-filtros { margin-left:0; width:100%; } .hp-legenda .dir { margin-left:0; } }
 /* 25/11/2026: "Alterar" as marcadas — vencimento, banco e honorários; só esta cobrança ou sempre */
 .hp-so { display:inline-block; font-size:10px; font-weight:800; color:#7c3aed; background:#f5f3ff; border:1px dashed #a78bfa; border-radius:99px; padding:1px 7px; margin-top:2px; }
@@ -290,7 +299,7 @@ span.hp-bco, span.hp-nf { cursor:default; }
 {% set d13 = l.dec13 %}
 {% set marca = l.pendente and pode_emitir %}
 {% set muda = f in ('emitir', 'erro') and pode_esc %}
-<div class="tx-c hp-c {{ cls }}{{ ' marcavel' if marca }}" data-dec13="{{ 1 if (d13 and d13.pendente) else 0 }}" data-banco="{{ l.banco.id if l.banco else '' }}" data-nota="{{ 1 if l.nota else 0 }}" data-v="{{ ((l.total if f in ('emitir', 'erro') else 0) + (d13.total if (d13 and d13.pendente) else 0)) | float }}" data-cli="{{ l.cliente_id }}" data-venc="{{ l.vencimento.isoformat() if l.vencimento else '' }}" data-grupo="{{ l.grupo or '' }}" data-dec="{{ 1 if l.decimo else 0 }}" data-hon="{{ l.honorarios if l.honorarios is not none else '' }}" data-dia="{{ l.contrato.dia_vencimento or '' }}"
+<div class="tx-c hp-c {{ cls }}{{ ' marcavel' if marca }}" data-dec13="{{ 1 if (d13 and d13.pendente) else 0 }}" data-banco="{{ l.banco.id if l.banco else '' }}" data-nota="{{ 1 if l.nota else 0 }}" data-v="{{ ((l.total if f in ('emitir', 'erro') else 0) + (d13.total if (d13 and d13.pendente) else 0)) | float }}" data-cli="{{ l.cliente_id }}" data-venc="{{ l.vencimento.isoformat() if l.vencimento else '' }}" data-grupo="{{ l.grupo or '' }}" data-dec="{{ 1 if l.decimo else 0 }}" data-lan="{{ 'pend' if l.pendentes else ('1' if l.lancs else '0') }}" data-hon="{{ l.honorarios if l.honorarios is not none else '' }}" data-dia="{{ l.contrato.dia_vencimento or '' }}"
      data-busca="{{ l.numero or '' }} {{ l.empresa }} {{ l.contrato.nome_fantasia or '' }} {{ l.contrato.cpf_cnpj or '' }} {{ l.grupo or '' }}"{% if marca %} onclick="hpMarcar(event, this)"{% endif %}>
   {% if marca %}<input type="checkbox" name="cliente" value="{{ l.cliente_id }}" hidden form="hpForm"><span class="hp-ck"><i class="fas fa-check"></i></span>{% endif %}
   <div class="tx-c-top"><span class="tx-c-num">{{ l.numero or '—' }}</span><span class="tx-c-nome" title="{{ l.empresa }}">{{ l.empresa }}</span></div>
@@ -300,9 +309,17 @@ span.hp-bco, span.hp-nf { cursor:default; }
     <div class="hp-venc">{{ 'venceu' if f == 'pagas' else 'vence' }}<b>{{ (l.atual.venc if l.atual else l.vencimento).strftime('%d/%m/%Y') }}</b>{% if l.venc_mes and not l.atual %}<small class="hp-so" title="data escolhida só para esta cobrança; o contrato continua no dia {{ l.contrato.dia_vencimento }}">só {{ competencia.strftime('%m/%Y') }}</small>{% endif %}</div>
   </div>
   <div class="hp-itens">
-    {% for i in l.itens %}<div class="hp-it{{ ' dec' if i.origem == 'decimo' else (' lan' if i.origem == 'lancamento' else (' desc' if i.origem == 'desconto' else '')) }}">
+    {% for i in l.itens if not i.lancamento_id %}<div class="hp-it{{ ' dec' if i.origem == 'decimo' else (' lan' if i.origem == 'lancamento' else (' desc' if i.origem == 'desconto' else '')) }}">
       <span>{% if i.origem == 'decimo' %}<i class="fas fa-gift"></i>{% elif i.origem == 'lancamento' %}<i class="fas fa-plus"></i>{% elif i.origem == 'desconto' %}<i class="fas fa-tag"></i>{% endif %}{{ i.nome }}{% if i.origem == 'honorarios' and l.hon_mes %} <small class="hp-so" title="valor só desta cobrança; no contrato é {{ l.hon_contrato | float | format_currency }}">só {{ competencia.strftime('%m/%Y') }}</small>{% endif %}</span><b>{% if i.origem == 'desconto' %}− {{ (i.valor | float | abs) | format_currency }}{% else %}{{ i.valor | float | format_currency }}{% endif %}</b></div>{% endfor %}
   </div>
+  {% if l.lancs or l.pendentes %}
+  {# 25/11/2026 — Anderson: "aparecer no Honorários uma janelinha ROXA" com o que a equipe lançou para esta mensalidade #}
+  <div class="hp-lan-bl{{ ' so-pend' if not l.lancs }}" title="Lançamentos da equipe (Financeiro › Lançamentos) para a mensalidade de {{ competencia.strftime('%m/%Y') }}">
+    <div class="hp-lan-t"><span class="hp-13"><i class="fas fa-plus"></i> Lançamentos</span>{% if l.lancs %}<span class="t">aprovados · entram nesta cobrança</span>{% else %}<span class="hp-lan-et" title="Ainda não entra nesta cobrança: aprove em Lançamentos"><i class="fas fa-hourglass-half"></i> aguardando aprovação</span>{% endif %}{% if l.lancs %}<b class="v">{{ '−' if l.v_lanc < 0 }} {{ (l.v_lanc | float | abs) | format_currency }}</b>{% endif %}</div>
+    {% for i in l.lancs %}<div class="hp-lan-it{{ ' desc' if i.origem == 'desconto' }}"><span>{{ i.nome }}<small>{{ 'desconto' if i.origem == 'desconto' else 'serviço' }}{% if i.por %} · pedido por {{ i.por.split()[0] }}{% endif %}</small></span><b>{% if i.origem == 'desconto' %}− {{ (i.valor | float | abs) | format_currency }}{% else %}{{ i.valor | float | format_currency }}{% endif %}</b></div>{% endfor %}
+    {% for p in l.pendentes %}<div class="hp-lan-it pend"><span><i class="fas fa-hourglass-half"></i> {{ p.nome }}<small>aguardando aprovação{% if p.por %} · pedido por {{ p.por.split()[0] }}{% endif %} · aprove em Lançamentos para entrar</small></span><b>{% if p.valor < 0 %}− {{ (p.valor | float | abs) | format_currency }}{% else %}{{ p.valor | float | format_currency }}{% endif %}</b></div>{% endfor %}
+  </div>
+  {% endif %}
   {% if f == 'erro' %}{% set mf = motivo_nfse(l.feito.erro) if motivo_nfse is defined else {} %}<div class="hp-err"><i class="fas fa-triangle-exclamation"></i> {% if mf and mf.texto %}<b>{{ mf.texto }}</b>{% if mf.fazer %}<br>{{ mf.fazer }}{% endif %}{% else %}{{ l.feito.erro or 'A nota ou o boleto não saíram.' }}{% endif %} Corrija e emita de novo.</div>{% endif %}
   <div class="hp-linha">
     {% if l.banco %}
@@ -391,12 +408,13 @@ span.hp-bco, span.hp-nf { cursor:default; }
   {# 18/11/2026 — Anderson: "melhore essas caixas de filtro": a mesma barra de refino de Cobranças (tx-refino) #}
   <div class="tx-refino hp-refino" id="hpRefino">
     <i class="fas fa-sliders"></i>
-    {% for dim, ico, rot in [('banco', 'fa-building-columns', 'Banco'), ('nota', 'fa-file-invoice', 'Nota fiscal'), ('grupo', 'fa-layer-group', 'Grupo'), ('dec', 'fa-gift', '13º'), ('valor', 'fa-coins', 'Valor')] %}
+    {% for dim, ico, rot in [('banco', 'fa-building-columns', 'Banco'), ('nota', 'fa-file-invoice', 'Nota fiscal'), ('grupo', 'fa-layer-group', 'Grupo'), ('dec', 'fa-gift', '13º'), ('lan', 'fa-plus', 'Lançamentos'), ('valor', 'fa-coins', 'Valor')] %}
     <div class="tx-ref hp-ref" data-dim="{{ dim }}"><button type="button"><i class="fas {{ ico }} ico"></i><span class="hp-ref-t"><small>{{ rot }}</small><b class="hp-ref-v">Todos</b></span><i class="fas fa-chevron-down"></i></button><div class="tx-ref-pop"></div></div>
     {% endfor %}
     <label class="hp-ref-busca"><i class="fas fa-magnifying-glass"></i><input type="search" id="hpBuscaG" name="q" placeholder="Buscar empresa, nº, CNPJ ou grupo" oninput="hpFiltrar()" onkeydown="hpBuscaTecla(event)" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" inputmode="search" enterkeyhint="search"></label>
     <button type="button" class="tx-ref-limpar" id="hpRefLimpar" onclick="hpLimpar()"><i class="fas fa-xmark"></i> Limpar</button>
     <span class="hp-links">
+      {% if pode_rota('financeiro.honorarios_relatorio') %}<a href="{{ url_for('financeiro.honorarios_relatorio', competencia=competencia.strftime('%Y-%m')) }}" onclick="hpRelatorio(); return false" title="PDF de conferência: o que vai ser cobrado de cada empresa nesta competência, com os filtros da tela"><i class="fas fa-file-pdf" style="color:#b91c1c"></i> Relatório PDF</a>{% endif %}
       <a href="{{ url_for('financeiro.honorarios', aba='com') }}" title="Lista de contratos"><i class="fas fa-list"></i> Contratos <b>{{ resumo.n or 0 }}</b></a>
       <a href="{{ url_for('financeiro.honorarios', aba='sem') }}" title="Empresas sem honorários"><i class="fas fa-building-circle-xmark"></i> Sem honorários <b>{{ resumo.sem_contrato or 0 }}</b></a>
       <a href="{{ url_for('financeiro.honorarios', aba='pendentes') }}"{% if resumo.pendentes %} class="al"{% endif %} title="Aguardando aprovação"><i class="fas fa-stamp"></i> Aprovar <b>{{ resumo.pendentes or 0 }}</b></a>
@@ -519,6 +537,14 @@ var URL_ESC = "{{ url_for('financeiro.honorarios_escolha') if pode_rota('finance
 var URL_PADRAO = "{{ url_for('financeiro.honorarios_banco_padrao') if pode_rota('financeiro.honorarios_banco_padrao') else '' }}";
 var URL_COB = "{{ url_for('financeiro.titulo_cobranca', titulo_id=999999999) }}";
 var COMP = "{{ competencia.strftime('%Y-%m') }}";
+var URL_REL = "{{ url_for('financeiro.honorarios_relatorio') }}";
+function hpRelatorio() {      // 25/11/2026: o PDF sai com os mesmos filtros da tela e o quadro aberto
+  var p = new URLSearchParams(); p.set('competencia', COMP);
+  var pa = hpPainelAtivo(); p.set('fase', pa && pa.dataset ? pa.dataset.p : 'emitir');
+  for (var d in F) if (F[d].length) p.set(d, F[d].join('|'));
+  var q = ((document.getElementById('hpBuscaG') || {}).value || '').trim(); if (q) p.set('q', q);
+  window.open(URL_REL + '?' + p.toString(), '_blank');
+}
 document.querySelectorAll('.tx-aba').forEach(function (a) {
   a.addEventListener('click', function () {
     document.querySelectorAll('.tx-aba').forEach(function (x) { x.classList.toggle('on', x === a); });
@@ -528,7 +554,7 @@ document.querySelectorAll('.tx-aba').forEach(function (a) {
 function brl(v) { return v.toLocaleString('pt-BR', {style: 'currency', currency: 'BRL'}); }
 /* filtros (18/11/2026): Banco, Nota, Grupo, 13º, Valor + busca — a mesma barra de refino de Cobranças.
    Cada dimensão aceita mais de uma opção; o painel ativo mostra só quem passa em TODAS; o resumo diz quantas e quanto. */
-var F = {banco: [], nota: [], grupo: [], dec: [], valor: []};
+var F = {banco: [], nota: [], grupo: [], dec: [], lan: [], valor: []};
 var HP_BANCOS = {{ painel.bancos | map(attribute='nome') | list | tojson }};
 var HP_BANCO_ID = {{ painel.bancos | map(attribute='id') | list | tojson }};
 var HP_BANCO_LOGO = [{% for b in painel.bancos %}{{ (logo_banco(b.cod, tam=20, titulo=b.nome) | string) | tojson }}{{ ',' if not loop.last }}{% endfor %}];
@@ -536,7 +562,7 @@ var HP_FAIXAS = [['ate500', 'até R$ 500', 0, 500], ['500a1000', 'R$ 500 a 1.000
 function hpFaixa(v) { for (var i = 0; i < HP_FAIXAS.length; i++) { if (v > HP_FAIXAS[i][2] && v <= HP_FAIXAS[i][3]) return HP_FAIXAS[i][0]; } return v <= 0 ? 'ate500' : 'mais2000'; }
 function hpValor(c, dim) {
   if (dim === 'banco') return c.dataset.banco; if (dim === 'nota') return c.dataset.nota; if (dim === 'grupo') return c.dataset.grupo || '(sem grupo)';
-  if (dim === 'dec') return c.dataset.dec; if (dim === 'valor') return hpFaixa(parseFloat(c.dataset.v || 0)); return '';
+  if (dim === 'dec') return c.dataset.dec; if (dim === 'lan') return c.dataset.lan || '0'; if (dim === 'valor') return hpFaixa(parseFloat(c.dataset.v || 0)); return '';
 }
 function hpPassa(c, menos) {
   for (var dim in F) { if (dim === menos || !F[dim].length) continue; if (F[dim].indexOf(hpValor(c, dim)) < 0) return false; }
@@ -559,10 +585,11 @@ function hpRotulo(dim, v) {
   if (dim === 'banco') { var i = HP_BANCO_ID.indexOf(parseInt(v, 10)); return i >= 0 ? HP_BANCOS[i] : 'sem banco'; }
   if (dim === 'nota') return v === '1' ? 'Nota + boleto' : 'Só boleto';
   if (dim === 'dec') return v === '1' ? 'Com 13º' : 'Sem 13º';
+  if (dim === 'lan') return v === 'pend' ? 'Aguardando aprovação' : (v === '1' ? 'Com lançamentos' : 'Sem lançamentos');
   if (dim === 'valor') { var f = HP_FAIXAS.filter(function (x) { return x[0] === v; })[0]; return f ? f[1] : v; }
   return v;
 }
-var HP_DIM_NOME = {banco: 'Banco', nota: 'Nota', grupo: 'Grupo', dec: '13º', valor: 'Valor'};
+var HP_DIM_NOME = {banco: 'Banco', nota: 'Nota', grupo: 'Grupo', dec: '13º', lan: 'Lançamentos', valor: 'Valor'};
 function hpOpcoes(dim) {
   // opções com contagem e soma, contadas no painel ativo e respeitando os OUTROS filtros (como em Cobranças)
   var p = hpPainelAtivo(), m = {};
