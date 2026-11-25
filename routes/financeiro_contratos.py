@@ -720,15 +720,74 @@ def _esc_html(s):
     return str(s or '').replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
 
 
+# ---------------------------------------------------------------- e-mails do contrato
+# 25/11/2026 — Anderson: "e-mail HORRÍVEL, reformular". Os três e-mails do contrato (convite para assinar, código e via
+# assinada) saem no mesmo molde dos e-mails de cobrança e orçamento (templates/emails/orcamento.html): logo, faixa verde
+# com a empresa, saudação, números grandes, botão, passos numerados, slogan e rodapé.
+PAPEL_TXT = {'CONTRATANTE': 'contratante', 'CONTRATADA': 'pela Qualicontax', 'TESTEMUNHA': 'testemunha'}
+PAPEL_INTRO = {'CONTRATANTE': 'como <b>contratante</b>', 'CONTRATADA': 'pela Qualicontax, como <b>contratada</b>', 'TESTEMUNHA': 'como <b>testemunha</b>'}   # 25/11/2026, Anderson: "dá uma frisada nas palavras"
+
+
+def _doc_txt(doc):
+    dig = re.sub(r'\D', '', doc or '')
+    return ('CPF ' + format_cpf(dig)) if len(dig) == 11 else (('CNPJ ' + format_cnpj(dig)) if len(dig) == 14 else (doc or ''))
+
+
+def _email_contrato(c, **extra):
+    """(html, cabeçalho) do e-mail de um contrato no molde da casa; ``extra`` completa ou troca as partes (saudacao, intro,
+    kpis, botao, passos, aviso, codigo, anexos_txt, rodape)."""
+    from utils.cobranca_email import _env
+    dd = c['dados']; emps = dd.get('empresas') or []; emp = emps[0] if emps else {}
+    numero = c.get('numero') or str(c['id'])
+    d = {'empresa': 'Qualicontax', 'data_txt': date.today().strftime('%d/%m/%Y'), 'eyebrow': 'Assinatura eletrônica · contrato nº %s' % numero,
+         'titulo': nome_proprio(c['titulo'] or 'Contrato de prestação de serviços'),
+         'cliente_rotulo': 'Contratante' + ((' · e mais %d empresa%s da rede' % (len(emps) - 1, 's' if len(emps) > 2 else '')) if len(emps) > 1 else ''),
+         'cliente_nome': nome_proprio(emp.get('razao') or ''), 'cliente_doc': _doc_txt(emp.get('cnpj')),
+         'saudacao': 'Olá!', 'intro': '', 'codigo': '', 'kpis': [], 'itens': [], 'total': '', 'botao': None, 'passos': [], 'aviso': '', 'anexos_txt': '',
+         'slogan': 'a EMPRESA é sua, a PARCERIA é NOSSA',
+         'rodape': 'Enviado por Qualicontax Assessoria Contábil. Em caso de dúvida, responda este e-mail. Se não reconhece este documento, pode ignorar.'}
+    d.update(extra)
+    return _env().get_template('orcamento.html').render(d=d), d
+
+
+def _quem_assina(c):
+    ass = PrestContrato.assinantes(c['id'])
+    partes = []
+    for a in ass:
+        partes.append('%s (<b>%s</b>%s)' % (_esc_html(nome_proprio(a['nome'])), PAPEL_TXT.get(a['papel'], a['papel'].lower()), ' · já assinou' if a.get('assinado_em') else ''))
+    from markupsafe import Markup
+    return Markup('Assinam este contrato: ' + '; '.join(partes) + '.') if partes else ''
+
+
 def _email_assinatura(a, c, link):
-    emp = c['dados']['empresas'][0]['razao']
-    html = ('<p>Olá, %s.</p><p>A <b>Qualicontax</b> enviou para sua assinatura eletrônica o documento <b>%s</b> (%s), contrato nº <b>%s</b>.</p>'
-            '<p><a href="%s" style="background:#15803d;color:#fff;padding:10px 18px;border-radius:8px;text-decoration:none;">Ver e assinar o contrato</a></p>'
-            '<p>Ao abrir o link, você verá o contrato completo, pedirá um código de 6 dígitos (que chega neste e-mail) e confirmará com seu nome e CPF. '
-            'Leva menos de dois minutos.</p><p style="color:#64748b;font-size:12px;">Se não reconhece este documento, ignore este e-mail.</p>'
-            % (_esc_html(a['nome']), _esc_html(c['titulo'].title()), _esc_html(emp), _esc_html(c.get('numero') or ''), link))
-    texto = 'Olá, %s. A Qualicontax enviou para sua assinatura eletrônica o documento %s (%s). Abra o link para ver e assinar: %s' % (a['nome'], c['titulo'].title(), emp, link)
-    return _enviar([a['email']], 'Assinatura: %s – %s' % (c['titulo'].title(), emp), html, texto)
+    dd = c['dados']; emp = (dd.get('empresas') or [{}])[0]
+    primeiro = nome_proprio((a.get('nome') or '').split()[0]) if (a.get('nome') or '').strip() else ''
+    from markupsafe import Markup
+    papel = PAPEL_INTRO.get(a['papel'], 'como <b>' + _esc_html(a['papel'].lower()) + '</b>')
+    kpis = [('Contrato nº', c.get('numero') or str(c['id']))]
+    try:
+        if float(_dec_str(dd.get('valor'))) > 0:
+            kpis.append(('Honorários mensais', brl(_dec_str(dd.get('valor')))))
+    except (TypeError, ValueError):
+        pass
+    inicio = _data(dd.get('inicio'))
+    if inicio:
+        kpis.append(('Início', inicio.strftime('%d/%m/%Y')))
+    html, d = _email_contrato(
+        c, saudacao=('Olá, %s!' % primeiro) if primeiro else 'Olá!',
+        intro=Markup('A Qualicontax preparou o contrato acima e ele está pronto para a sua assinatura eletrônica, %s. '
+                     'Não precisa imprimir nem reconhecer firma: leva menos de dois minutos, pelo celular ou pelo computador.' % papel),
+        kpis=kpis, botao=('Ver e assinar o contrato', link),
+        passos=[('Abra o contrato.', 'Toque no botão acima e leia o documento completo; dá para baixar o PDF ali mesmo.'),
+                ('Peça o código.', 'Ao tocar em Assinar, um código de 6 dígitos chega neste mesmo e-mail e vale por 30 minutos.'),
+                ('Confirme.', 'Digite o código, o seu nome e o seu CPF. Quando todos assinarem, a via assinada chega por e-mail para cada um.')],
+        aviso=_quem_assina(c),
+        rodape='Enviado por Qualicontax Assessoria Contábil. O link deste e-mail é pessoal e só serve para você: não repasse. '
+               'Em caso de dúvida, responda este e-mail. Se não reconhece este documento, pode ignorar.')
+    sem_tags = lambda t: re.sub(r'<[^>]+>', '', str(t))          # a versão só texto do e-mail vai sem o negrito
+    texto = '\n'.join([d['eyebrow'], d['titulo'] + ' · ' + d['cliente_nome'], '', d['saudacao'], sem_tags(d['intro']), '',
+                       'Ver e assinar o contrato: ' + link, ''] + ['%d. %s %s' % (i + 1, t, x) for i, (t, x) in enumerate(d['passos'])] + ['', sem_tags(d['aviso']), '', d['rodape']])
+    return _enviar([a['email']], 'Para assinar: %s · %s' % (d['titulo'], d['cliente_nome']), html, texto)
 
 
 @financeiro.route('/comercial/contratos/<int:cid>/enviar', methods=['POST'])
@@ -943,9 +1002,11 @@ def assinar_codigo(token):
     if _s is not None and _s < 60:      # relógio do banco (app em UTC)
         return jsonify({'ok': False, 'erro': 'Código enviado há menos de um minuto. Confira a caixa de entrada e o spam.'}), 429
     codigo = PrestContrato.gerar_codigo(a['id'])
-    html = ('<p>Seu código para assinar o <b>%s nº %s</b>:</p><p style="font-size:28px;letter-spacing:6px;font-weight:800;">%s</p>'
-            '<p>Vale por 30 minutos. Se não foi você, ignore.</p>' % (c['titulo'].capitalize(), c.get('numero') or c['id'], codigo))
-    ok, err = _enviar([a['email']], 'Código de assinatura: %s' % codigo, html, 'Seu código para assinar: %s (vale 30 minutos).' % codigo)
+    primeiro = nome_proprio((a.get('nome') or '').split()[0]) if (a.get('nome') or '').strip() else ''
+    html, d = _email_contrato(c, saudacao=('Olá, %s!' % primeiro) if primeiro else 'Olá!', codigo=codigo,
+                              intro='Aqui está o seu código para assinar o contrato acima. Volte à página do contrato e digite os 6 dígitos.',
+                              rodape='Enviado por Qualicontax Assessoria Contábil. O código vale por 30 minutos e só serve para você. Se não foi você que pediu, ignore este e-mail.')
+    ok, err = _enviar([a['email']], 'Seu código para assinar: %s' % codigo, html, 'Seu código para assinar o contrato nº %s: %s (vale 30 minutos).' % (c.get('numero') or c['id'], codigo))
     if not ok:
         return jsonify({'ok': False, 'erro': 'Não consegui enviar o e-mail: %s' % err}), 500
     return jsonify({'ok': True, 'email': _mascara(a['email'])})
@@ -1016,9 +1077,10 @@ def _concluir(c):
         PrestContrato.mudar_status(c['id'], 'ASSINADO', pdf_path=path)
     ass = PrestContrato.assinantes(c['id'])
     para = [a['email'] for a in ass if a.get('email')]
-    html = ('<p>O documento <b>%s</b> (%s) foi assinado eletronicamente por todas as partes. Segue a via assinada em anexo, com o registro das assinaturas.</p>'
-            % (c['titulo'].title(), emp.get('razao')))
-    _enviar(para, 'Contrato assinado – %s' % emp.get('razao'), html, 'Contrato assinado por todas as partes. Via em anexo.',
+    html, d = _email_contrato(c, eyebrow='Contrato assinado · nº %s' % (c.get('numero') or c['id']), saudacao='Olá!',
+                              intro='O contrato acima foi assinado eletronicamente por todas as partes. A via assinada, com o registro de cada assinatura, está em anexo neste e-mail. Guarde-a com você.',
+                              aviso=_quem_assina(c), anexos_txt='Em anexo: %s' % nome_arq)
+    _enviar(para, 'Contrato assinado · %s' % d['cliente_nome'], html, 'Contrato nº %s assinado por todas as partes. Via assinada em anexo (%s).' % (c.get('numero') or c['id'], nome_arq),
             anexos=[(nome_arq, pdf, 'application/pdf')])
     registrar('escrita.concluiu_contrato_prestacao', 'financeiro', tabela='prest_contratos', registro_id=c['id'],
               depois={'empresa': emp.get('razao'), 'dropbox': path, 'copias_para': para})
