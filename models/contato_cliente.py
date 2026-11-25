@@ -377,3 +377,15 @@ def _serialize_areas(areas):
         return None
     cleaned = [a.upper().strip() for a in areas if a and a.strip()]
     return json.dumps(cleaned, ensure_ascii=False) if cleaned else None
+
+
+def sql_resumo(departamento=None, alias='c'):
+    """Três subconsultas para listas de clientes: nome, e-mail e celular do CONTATO que vale (25/11/2026 — Anderson:
+    "da empresa CNPJ é só informativo mesmo... Sempre será o CONTATOS"). Ordem: contato do departamento pedido
+    (ex.: 8 Financeiro, 6 Comercial) → principal → o mais antigo. Cada campo pega o primeiro contato que o tem."""
+    dep = ('(EXISTS (SELECT 1 FROM contatos_departamentos dd WHERE dd.contato_id = kk.id AND dd.departamento_id = %d)) DESC, ' % int(departamento)) if departamento else ''
+    base = ("(SELECT kk.%s FROM contatos_clientes kk WHERE kk.cliente_id = " + alias + ".id AND kk.ativo = 1 AND %s "
+            "ORDER BY " + dep + "kk.principal DESC, kk.id LIMIT 1) AS %s")
+    return ',\n'.join([base % ('nome', '1 = 1', 'contato_nome'),
+                       base % ('email', "INSTR(COALESCE(kk.email, ''), '@') > 0", 'contato_email'),
+                       base % ('celular', "COALESCE(kk.celular, '') <> ''", 'contato_celular')])

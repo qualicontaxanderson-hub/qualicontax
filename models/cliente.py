@@ -1,5 +1,6 @@
 """Modelo de Cliente"""
 import re
+from models.contato_cliente import sql_resumo
 from utils.db_helper import execute_query
 from utils.acesso import filtrar_lista, sql_sem_ocultas
 
@@ -88,6 +89,7 @@ class Cliente:
                        u.nome AS criado_por_nome,
                        GROUP_CONCAT(DISTINCT g.nome ORDER BY g.nome SEPARATOR ', ') AS grupo_nome,
                        cert.cert_validade,
+{sql_resumo()},
                        MAX(ender.cidade) AS end_cidade,
                        MAX(ender.estado) AS end_uf,
                        GROUP_CONCAT(DISTINCT ra.nome ORDER BY ra.nome
@@ -244,9 +246,9 @@ class Cliente:
             elif busca_tipo == 'cpf_cnpj':
                 conditions.append("c.cpf_cnpj LIKE %s")
                 params.append(search_pattern)
-            elif busca_tipo == 'email':
-                conditions.append("c.email LIKE %s")
-                params.append(search_pattern)
+            elif busca_tipo == 'email':                  # 25/11/2026: o e-mail que vale é o dos contatos
+                conditions.append("(c.email LIKE %s OR EXISTS (SELECT 1 FROM contatos_clientes kx WHERE kx.cliente_id = c.id AND kx.ativo = 1 AND kx.email LIKE %s))")
+                params.extend([search_pattern, search_pattern])
             else:  # nome (default)
                 conditions.append("c.nome_razao_social LIKE %s")
                 params.append(search_pattern)
@@ -325,6 +327,7 @@ class Cliente:
                    c.porte_empresa, c.cnae_fiscal, c.cnae_fiscal_descricao, c.data_inicio_atividade, c.data_inicio_contrato, c.situacao, c.observacoes,
                    c.aberta_pela_casa, c.contabilidade_anterior_id, c.natureza_codigo, c.natureza_juridica,
                    cert.cert_validade,
+{sql_resumo()},
                    MAX(ender.cidade) AS end_cidade, MAX(ender.estado) AS end_uf,
                    GROUP_CONCAT(DISTINCT ra.nome ORDER BY ra.nome SEPARATOR ', ') as ramo_atividade_nome,
                    GROUP_CONCAT(DISTINCT g.nome ORDER BY g.nome SEPARATOR ', ') as grupo_nome

@@ -10,6 +10,7 @@ As pendências da empresa seguem a coluna ``pendencias`` da planilha de migraç�
 Insc. Estadual, Sócios, Financeiro/cobrança, Contato com e-mail) mais os obrigatórios do próprio app
 (grupo, celular, ramo, contador, origem).
 """
+from models.contato_cliente import sql_resumo
 from utils.db_helper import execute_query
 
 PENDENCIAS_EMPRESA = [
@@ -72,7 +73,8 @@ SELECT c.id, c.numero_cliente, c.nome_razao_social, c.nome_fantasia, c.cpf_cnpj,
        COALESCE(dc.n, 0) AS n_docs,
        COALESCE(iex.n_conf, 0) AS n_ie_conferir, COALESCE(iex.n_rural, 0) AS n_ie_rural,
        COALESCE(rr.n, 0) AS n_ramo_rural,
-       e.cidade, e.uf
+       e.cidade, e.uf,
+""" + sql_resumo() + """
   FROM clientes c
   LEFT JOIN (SELECT cliente_id, COUNT(*) AS n FROM socios_clientes WHERE ativo = 1 GROUP BY cliente_id) s ON s.cliente_id = c.id
   LEFT JOIN (SELECT cliente_id, COUNT(*) AS n,
@@ -100,7 +102,8 @@ SELECT c.id, c.nome_razao_social, c.cpf_cnpj, c.tipo_pessoa, c.situacao, c.email
        (SELECT COUNT(*) FROM contatos_clientes k3 WHERE k3.cliente_id = c.id AND k3.ativo = 1 AND (k3.celular IS NULL OR k3.celular = '')) AS n_contatos_sem_celular,
        (SELECT COUNT(*) FROM cliente_grupo_relacao g WHERE g.cliente_id = c.id) AS n_grupos,
        (SELECT COUNT(*) FROM cliente_ramo_atividade_relacao r WHERE r.cliente_id = c.id) AS n_ramos,
-       (SELECT COUNT(*) FROM clientes_inscricoes_estaduais i WHERE i.cliente_id = c.id AND i.conferir = 1) AS n_ie_conferir
+       (SELECT COUNT(*) FROM clientes_inscricoes_estaduais i WHERE i.cliente_id = c.id AND i.conferir = 1) AS n_ie_conferir,
+""" + sql_resumo() + """
   FROM clientes c
  WHERE c.avulso = 1
  ORDER BY c.nome_razao_social

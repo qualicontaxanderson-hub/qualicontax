@@ -8,7 +8,7 @@
 <article class="gc-card cli-card {% if inativo and not avulso %}cli-off{% endif %}{% if avulso %} cli-av{% endif %}" data-copiar-bloco data-copiar-titulo="{{ cliente.nome_razao_social }}"
          data-open-url="{{ url_for('clientes.detalhes', id=cliente.id) }}"
          data-id="{{ cliente.id }}" data-num="{{ cliente.numero_cliente or '' }}"
-         data-nome="{{ cliente.nome_razao_social }}" data-doc="{{ cliente.cpf_cnpj or '' }}" data-email="{{ cliente.email or '' }}"
+         data-nome="{{ cliente.nome_razao_social }}" data-doc="{{ cliente.cpf_cnpj or '' }}" data-email="{{ cliente.contato_email or cliente.email or '' }}"
          data-sit="{{ cliente.situacao }}" data-reg="{{ cliente.f_reg }}" data-segs="{{ cliente.f_segs }}"
          data-ramos="{{ cliente.f_ramos }}" data-grupos="{{ cliente.f_grupos }}" data-cert="{{ cliente.cert_nivel }}"
          data-local="{{ cliente.f_local }}" data-origem="{{ origem }}" data-nat="{{ '' if pf else (cliente.f_nat_fam or '-') }}" tabindex="0" role="button" title="Abrir a ficha do cliente">
@@ -32,8 +32,10 @@
     <div class="cli-grade">
         <div class="cli-campo"><span class="cli-rot">Insc. Estadual</span><b class="cli-val" data-copiar data-copiar-depois data-copiar-rotulo="Insc. Estadual">{{ cliente.inscricao_estadual or '—' }}</b></div>
         <div class="cli-campo"><span class="cli-rot">Insc. Municipal</span><b class="cli-val" data-copiar data-copiar-depois data-copiar-rotulo="Insc. Municipal">{{ cliente.inscricao_municipal or '—' }}</b></div>
-        <div class="cli-campo cli-campo-email"><span class="cli-rot">E-mail</span><span class="cli-val" title="{{ cliente.email or '' }}" data-copiar data-copiar-depois data-copiar-rotulo="E-mail">{{ cliente.email or '—' }}</span></div>
-        <div class="cli-campo"><span class="cli-rot">Celular</span><b class="cli-val" data-copiar data-copiar-depois data-copiar-rotulo="Celular">{{ cliente.celular or cliente.telefone or '—' }}</b></div>
+        {# 25/11/2026 — Anderson: o e-mail/celular do CNPJ é só informativo; o que vale é o do CONTATO (principal) #}
+        {% set ce = ('' if pf else cliente.contato_email) or cliente.email %}{% set cc = ('' if pf else cliente.contato_celular) or cliente.celular or cliente.telefone %}
+        <div class="cli-campo cli-campo-email"><span class="cli-rot">E-mail{% if not pf and ce %} <small style="font-weight:600;text-transform:none;letter-spacing:0;color:#94a3b8">{{ (cliente.contato_nome | nome_proprio) if cliente.contato_email else 'do CNPJ' }}</small>{% endif %}</span><span class="cli-val" title="{{ ce or '' }}" data-copiar data-copiar-depois data-copiar-rotulo="E-mail">{{ ce or '—' }}</span></div>
+        <div class="cli-campo"><span class="cli-rot">Celular{% if not pf and cc %} <small style="font-weight:600;text-transform:none;letter-spacing:0;color:#94a3b8">{{ 'do contato' if cliente.contato_celular else 'do CNPJ' }}</small>{% endif %}</span><b class="cli-val" data-copiar data-copiar-depois data-copiar-rotulo="Celular">{{ cc or '—' }}</b></div>
     </div>
 
     {% if cliente.f_grupo %}

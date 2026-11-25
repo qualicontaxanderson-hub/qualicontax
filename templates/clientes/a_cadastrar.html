@@ -61,8 +61,9 @@
             </div>
 
             <div class="cli-grade">
-                <div class="cli-campo cli-campo-email"><span class="cli-rot">E-mail</span><span class="cli-val">{{ c.email or '—' }}</span></div>
-                <div class="cli-campo"><span class="cli-rot">Celular</span><b class="cli-val">{{ c.celular or '—' }}</b></div>
+                {% set apf = c.tipo_pessoa == 'PF' %}{% set ce = ('' if apf else c.contato_email) or c.email %}{% set cc = ('' if apf else c.contato_celular) or c.celular %}
+                <div class="cli-campo cli-campo-email"><span class="cli-rot">E-mail{% if not apf and ce %} <small style="font-weight:600;text-transform:none;letter-spacing:0;color:#94a3b8">{{ (c.contato_nome | nome_proprio) if c.contato_email else 'do CNPJ' }}</small>{% endif %}</span><span class="cli-val">{{ ce or '—' }}</span></div>
+                <div class="cli-campo"><span class="cli-rot">Celular{% if not apf and cc %} <small style="font-weight:600;text-transform:none;letter-spacing:0;color:#94a3b8">{{ 'do contato' if c.contato_celular else 'do CNPJ' }}</small>{% endif %}</span><b class="cli-val">{{ cc or '—' }}</b></div>
                 {% if eh_avulso %}
                 <div class="cli-campo"><span class="cli-rot">Avulso desde</span><b class="cli-val">{{ c.avulso_em.strftime('%d/%m/%Y') if c.avulso_em else '—' }}</b></div>
                 {% else %}

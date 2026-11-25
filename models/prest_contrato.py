@@ -107,6 +107,13 @@ def _celular_da_pessoa(pf_cliente_id, cpf=None):
     return ''
 
 
+def _nome_chave(n):
+    """'José da Silva ' e 'JOSE DA SILVA' são a mesma pessoa: maiúsculas, sem acento, espaços simples."""
+    import unicodedata
+    t = unicodedata.normalize('NFKD', n or '').encode('ascii', 'ignore').decode()
+    return ' '.join(t.upper().split())
+
+
 def _cargo_do_socio(s):
     """'sócio administrador', 'sócia administradora', 'diretor'... a partir da qualificação do quadro (ou do responsável)."""
     q = (s.get('qualificacao') or '').strip().lower().replace('-', ' ').replace('  ', ' ')
@@ -191,22 +198,29 @@ class PrestContrato:
         if not c['socios'] and (c.get('tipo_pessoa') == 'PF' or len(''.join(ch for ch in (c.get('cpf_cnpj') or '') if ch.isdigit())) == 11):
             # pessoa física contratante: quem assina é ela mesma
             c['socios'] = [{'nome': c['nome_razao_social'], 'cpf': c.get('cpf_cnpj') or '', 'qualificacao': 'titular', 'responsavel': 1, 'email': '', 'pf_cliente_id': c['id']}]
+        # contatos da empresa, o do departamento Comercial (6) primeiro (25/11/2026 — Anderson: "Sempre será o CONTATOS (COMERCIAL)";
+        # o e-mail/celular do CNPJ é só informativo e não entra no contrato)
+        contatos_todos = execute_query("""SELECT id, nome, cargo, email, celular, principal,
+                                                  EXISTS (SELECT 1 FROM contatos_departamentos d WHERE d.contato_id = contatos_clientes.id AND d.departamento_id = 6) AS comercial
+                                             FROM contatos_clientes WHERE cliente_id = %s AND ativo = 1
+                                            ORDER BY comercial DESC, principal DESC, nome""", (cliente_id,), fetch=True) or []
         for s in c['socios']:                              # documento marcado para contrato, e-mail, celular e cargo vêm do cadastro PF do sócio
             pf = s.get('pf_cliente_id')
             s['documento'] = _doc_texto(Documentos.listar(pf)) if pf else ''
+            k = next((k for k in contatos_todos if _nome_chave(k.get('nome')) == _nome_chave(s.get('nome'))), None)   # o sócio também é contato: o contato manda
+            if k and (k.get('email') or '').strip():
+                s['email'] = k['email'].strip().lower()
             if not s.get('email'):
                 s['email'] = _email_da_pessoa(pf, s.get('cpf'))[0] or ''
-            s['celular'] = _celular_da_pessoa(pf, s.get('cpf'))
+            s['celular'] = (k.get('celular') or '').strip() if k and (k.get('celular') or '').strip() else _celular_da_pessoa(pf, s.get('cpf'))
             s['cargo'] = _cargo_do_socio(s)
         # quem assina pode ser um terceiro: os CONTATOS da empresa também viram atalho (Anderson, 06/11)
         # ramos de atividade da empresa, com a mensalidade sugerida de cada um (24/11/2026): o formulário do contrato oferece como sugestão de honorários
         from models.ramo_atividade import RamoAtividade
         c['ramos'] = [{'id': r['id'], 'nome': r['nome'], 'segmento': r.get('segmento') or '', 'sugestao': float(r['mensalidade_sugerida']) if r.get('mensalidade_sugerida') else 0.0}
                       for r in RamoAtividade.get_by_cliente(c['id'])]
-        c['contatos'] = execute_query("""SELECT id, nome, cargo, email, celular FROM contatos_clientes
-                                          WHERE cliente_id = %s AND ativo = 1 ORDER BY principal DESC, nome""", (cliente_id,), fetch=True) or []
-        nomes_socios = {(s.get('nome') or '').strip().upper() for s in c['socios']}
-        c['contatos'] = [k for k in c['contatos'] if (k.get('nome') or '').strip().upper() not in nomes_socios]   # quem já é sócio não repete como contato
+        nomes_socios = {_nome_chave(s.get('nome')) for s in c['socios']}
+        c['contatos'] = [k for k in contatos_todos if _nome_chave(k.get('nome')) not in nomes_socios]   # quem já é sócio não repete como contato
         return c
 
     @staticmethod

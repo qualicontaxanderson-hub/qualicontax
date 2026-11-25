@@ -30,7 +30,7 @@
         <dl class="nd-kv">
             <div class="nd-span"><dt>Nome</dt><dd>{{ (boleto.pagador_nome or '—') | nome_proprio }}{% if cliente %} <small class="nd-ajuda">· {{ 'nº ' ~ cliente.numero_cliente if cliente.numero_cliente else 'avulso' }} · <a href="{{ url_for('clientes.detalhes', id=cliente.id) }}">abrir cadastro</a></small>{% endif %}</dd></div>
             <div><dt>CPF/CNPJ</dt><dd><code class="nd-mono" data-copiar data-copiar-rotulo="Documento" title="Clique para copiar">{{ boleto.pagador_doc or '—' }}</code></dd></div>
-            <div><dt>E-mail</dt><dd>{{ boleto.pagador_email or (cliente.email if cliente else '') or '—' }}</dd></div>
+            <div><dt>E-mail</dt><dd>{{ boleto.pagador_email or (cliente.email_cobranca if cliente else '') or '—' }}</dd></div>
         </dl>
     </div>
 </section>
@@ -39,7 +39,7 @@
     <header><b><i class="fas fa-barcode"></i></b><span>Boleto</span><small>emitido {{ {'efi': 'pela Efí', 'bradesco': 'pelo Bradesco', 'cora': 'pelo Cora'}.get(boleto.provedor, 'pelo banco') }} sem nota fiscal</small></header>
     <div class="nf-card-body">
         {% set volta = url_for('financeiro.boleto_detalhe', boleto_id=boleto.id) ~ '#boleto' %}
-        {% set email_padrao = cliente.email if cliente else '' %}
+        {% set email_padrao = cliente.email_cobranca if cliente else '' %}
         {% include 'financeiro/_boleto_card.html' %}
     </div>
 </section>

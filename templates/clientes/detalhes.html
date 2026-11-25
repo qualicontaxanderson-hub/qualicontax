@@ -416,12 +416,12 @@
             <!-- CONTATO DA EMPRESA -->
             {% set cel_dig = (cliente.celular or '') | replace('(', '') | replace(')', '') | replace('-', '') | replace(' ', '') %}
             <section class="qb-b s4" id="contato-empresa" data-copiar-bloco>
-                <div class="qb-bh"><span class="qb-ico i-ciano"><i class="fas fa-phone"></i></span><h3>{% if pj %}Contato da empresa <span class="qb-h3-sub">(CNPJ)</span>{% else %}Contato da pessoa{% endif %}</h3>{{ selo(['celular', 'telefone_ruim'] + (['email'] if falta.avulso else [])) }}</div>
+                <div class="qb-bh"><span class="qb-ico i-ciano"><i class="fas fa-phone"></i></span><h3>{% if pj %}Contato da empresa <span class="qb-h3-sub">(CNPJ · só informativo: o que vale são os Contatos)</span>{% else %}Contato da pessoa{% endif %}</h3>{{ selo(['celular', 'telefone_ruim'] + (['email'] if falta.avulso else [])) }}</div>
                 {# 15/11/2026: celular obrigatório só na pessoa física; na empresa vale o do CONTATO #}
                 {{ campo('celular', 'Celular', cliente.celular, ancora='campo-celular', chave='celular', ph='(11) 98888-7777', ajuda=('DDD + número.' if pj else 'Obrigatório: DDD + número.'), mono=True) }}
                 {{ campo('telefone', 'Telefone', cliente.telefone, ancora='campo-telefone', chave='telefone_ruim', ph='(11) 3333-4444', mono=True) }}
                 {{ campo('email', 'E-mail', cliente.email, ancora='campo-email', chave=('email' if falta.avulso else ('contato' if not pj else '')), ph=('nome@empresa.com.br' if pj else 'nome@email.com'), ajuda=('No PJ é o e-mail do CNPJ; boletos e documentos vão para os e-mails dos CONTATOS.' if pj else '')) }}
-                {% if cliente.celular or cliente.email %}
+                {% if not pj and (cliente.celular or cliente.email) %}{# na empresa os botões ficam nos Contatos (25/11/2026) #}
                 <div class="qb-acoes-c" data-nocopiar>
                     {% if cel_dig %}<a class="i-verde" href="https://wa.me/55{{ cel_dig }}" target="_blank" rel="noopener"><i class="fab fa-whatsapp"></i>WhatsApp</a>
                     <a class="i-azul" href="tel:+55{{ cel_dig }}"><i class="fas fa-phone"></i>Ligar</a>{% endif %}

@@ -295,7 +295,8 @@
         {% if emp and emp.ramos %}<div class="pt-tags">{% for r in emp.ramos %}<span><i class="fas fa-tag"></i> {{ r.nome }}</span>{% endfor %}</div>{% endif %}
         <div class="pt-linhas">
           {% if emp and emp.endereco %}<div><i class="fas fa-location-dot"></i><span>{{ emp.endereco | nome_proprio }}</span></div>{% endif %}
-          {% if emp and emp.email %}<div><i class="fas fa-envelope"></i><span>{{ emp.email }}</span></div>{% endif %}
+          {# 25/11/2026 — Anderson: o e-mail do CNPJ é só informativo; aqui vão os CONTATOS (Comercial primeiro), além de quem assina #}
+          {% for k in (emp.contatos if emp else [])[:2] %}<div><i class="fas fa-user"></i><span>{{ k.nome | nome_proprio }}{% if k.cargo %} · {{ k.cargo | lower }}{% endif %}{% if k.comercial %} · Comercial{% endif %}{% if k.email or k.celular %} · {{ k.email or '' }}{% if k.email and k.celular %} · {% endif %}{{ k.celular or '' }}{% endif %}</span></div>{% endfor %}
         </div>
         <div class="pt-acoes">{% if emp %}<a href="{{ url_for('clientes.detalhes', id=emp.id) }}" target="_blank" rel="noopener"><i class="fas fa-up-right-from-square"></i> Cadastro</a>{% endif %}<a href="#" id="ct-juntar" onclick="ctJuntar(); return false;"><i class="fas fa-plus"></i> Juntar outra empresa da rede</a></div>
         <div class="ct-emps" id="pf-emps">

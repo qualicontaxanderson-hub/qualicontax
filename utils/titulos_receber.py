@@ -292,6 +292,9 @@ def montar(empresa_ids=None, mes=None, per=None):
     abe = q(f"""SELECT t.id, t.cliente_id, t.contraparte_doc, t.contraparte_nome, t.descricao, t.competencia,
                        t.vencimento, t.valor - t.valor_baixado AS v, t.valor_baixado, t.status, t.origem,
                        t.programacao_id, p.variavel AS prog_variavel, c.numero_cliente, c.celular,
+                       (SELECT kk.celular FROM contatos_clientes kk WHERE kk.cliente_id = c.id AND kk.ativo = 1 AND COALESCE(kk.celular, '') <> ''
+                         ORDER BY (EXISTS (SELECT 1 FROM contatos_departamentos dd WHERE dd.contato_id = kk.id AND dd.departamento_id = 8)) DESC, kk.principal DESC, kk.id
+                         LIMIT 1) AS contato_celular,
                        cat.nome AS categoria_nome
                   FROM fin_titulos t LEFT JOIN clientes c ON c.id = t.cliente_id
                   LEFT JOIN fin_programacoes p ON p.id = t.programacao_id
@@ -313,7 +316,7 @@ def montar(empresa_ids=None, mes=None, per=None):
                 'prog': 'v' if t['prog_variavel'] else ('f' if t['programacao_id'] else ''),
                 'cancelavel': t['status'] == 'aberto' and not t['valor_baixado'],
                 'excluivel': t['status'] == 'aberto' and not t['valor_baixado'] and t['origem'] == 'manual',
-                        'cel': _cel(t['celular']), 'msg': _msg_cobranca([t], t['v']),
+                        'cel': _cel(t.get('contato_celular') or t['celular']), 'msg': _msg_cobranca([t], t['v']),
                 'dias': (hoje - t['vencimento']).days}
 
     por_cli = defaultdict(list)
@@ -353,7 +356,7 @@ def montar(empresa_ids=None, mes=None, per=None):
                     'nome_full': ts[0]['contraparte_nome'] or '', 'doc': _digitos(ts[0]['contraparte_doc']),
                     'cliente_id': ts[0]['cliente_id'], 'v': total, 'valor': brl(total), 'qtd': len(venc),
                     'desde': _comp(venc[0]['competencia']), 'antigo': venc[0]['vencimento'].isoformat(),
-                    'cel': _cel(ts[0]['celular']), 'msg': _msg_cobranca(venc, total),
+                    'cel': _cel(ts[0].get('contato_celular') or ts[0]['celular']), 'msg': _msg_cobranca(venc, total),
                     'regua': [('v' if c in ab else ('p' if c in pagos.get(k, ()) else ''),
                                '%s/%d' % (MES[c[1]], c[0])) for c in comps],
                     'titulos': [item(t) for t in venc],

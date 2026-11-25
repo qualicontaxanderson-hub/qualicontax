@@ -587,6 +587,11 @@ def boleto_detalhe(boleto_id):
     if cid:
         cliente = execute_query('SELECT id, numero_cliente, nome_razao_social, cpf_cnpj, email, celular, telefone '
                                 'FROM clientes WHERE id = %s', (cid,), fetch=True, fetch_one=True)
+        if cliente:                                        # 25/11/2026: o e-mail que vale é o dos CONTATOS (Financeiro → principal → qualquer → CNPJ)
+            from utils.cobranca_email import destinatarios_cobranca
+            d = destinatarios_cobranca(cid, cliente.get('email')) or []
+            emails = [x if isinstance(x, str) else (x.get('email') or '') for x in d]
+            cliente['email_cobranca'] = ', '.join(e for e in emails if e)      # sem contato, fica vazio: o e-mail do CNPJ não entra
     return render_template('financeiro/boleto_detalhe.html', boleto=b, titulo=titulo, cliente=cliente,
                            SIT_BOLETO=SITUACOES, empresa_nome=mapa.get(b['empresa_id'], ''),
                            fin_empresas=emps, sel_empresas=sel, emp_mapa=mapa)
