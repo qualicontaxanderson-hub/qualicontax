@@ -155,7 +155,7 @@
         </div>
         <div class="tj-bts" style="margin-top:12px">
           <a href="{{ url_for('financeiro.contrato_pdf', cid=c.id) }}" target="_blank"><i class="fas fa-eye"></i> Abrir o PDF</a>
-          <a href="{{ url_for('financeiro.contrato_pdf', cid=c.id) }}" download="contrato_{{ c.numero or c.id }}.pdf"><i class="fas fa-download"></i> Baixar</a>
+          <a href="{{ url_for('financeiro.contrato_pdf', cid=c.id, baixar=1) }}"><i class="fas fa-download"></i> Baixar</a>
           {% if c.status == 'RASCUNHO' and pode %}<a href="{{ url_for('financeiro.contrato_editar', cid=c.id) }}"><i class="fas fa-pen"></i> Alterar o rascunho</a>{% endif %}
         </div>
         <iframe class="cv-pdf" src="{{ url_for('financeiro.contrato_pdf', cid=c.id) }}#toolbar=0&view=FitH" title="PDF do contrato" loading="lazy"></iframe>

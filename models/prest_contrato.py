@@ -44,7 +44,7 @@ AREAS = {
         'Elaboração de Balanço Patrimonial e demais Demonstrações Contábeis obrigatórias.']),
     'FISCAL': ('ESCRITA FISCAL', [          # 25/11/2026 — Anderson: "Contabilidade, Escrita Fiscal e Departamento Pessoal"
         'Orientação e controle de aplicação dos dispositivos legais vigentes, sejam federais, estaduais ou municipais;',
-        'Elaboração dos registros fiscais obrigatórios (EFD ICMS/IPI, GIA e outros), eletrônicos ou não, perante os órgãos municipais, '
+        'Elaboração dos registros fiscais obrigatórios (EFD ICMS/IPI, Contribuições, e outros), eletrônicos ou não, perante os órgãos municipais, '
         'estaduais e federais, bem como as demais obrigações que se fizerem necessárias; e',
         'Atendimento às demais exigências previstas na legislação, bem como aos eventuais procedimentos fiscais.']),
     'PESSOAL': ('DEPARTAMENTO PESSOAL', [

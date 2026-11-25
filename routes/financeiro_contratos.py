@@ -9,6 +9,7 @@ enviado ao e-mail dele. Ninguém assina sem e-mail.
 """
 import json
 import logging
+import re
 from datetime import date, datetime
 
 from flask import Blueprint, Response, abort, flash, jsonify, redirect, render_template, request, session, url_for
@@ -66,6 +67,37 @@ def _dec_str(raw):
 
 
 SITUACOES_REDE = ('PAGA', 'VIA_GRUPO', 'SEM_MOVIMENTO')
+
+
+_SUFIXOS = re.compile(r'\b(LTDA|ME|EPP|EIRELI|S/?A|SA|SS|SOCIEDADE SIMPLES|SOCIEDADE INDIVIDUAL DE ADVOCACIA|MEI|LIMITADA)\.?$', re.I)
+_CONECTIVOS = {'E', 'DE', 'DA', 'DO', 'DAS', 'DOS', '&'}
+
+
+def _parte_do_nome(c):
+    """"AR TRANSPORTES E LOGISTICA LTDA - ME" → "AR TRANSPORTES": a parte do nome que identifica a empresa
+    (apelido da rede quando há; senão as 3 primeiras palavras da razão social, sem LTDA/ME/EPP e sem sobrar "E")."""
+    d = c['dados']
+    nome = (d.get('apelido') or '').strip() or ((d.get('empresas') or [{}])[0].get('razao') or '')
+    nome = re.split(r'\s[–-]\s', nome)[0]
+    for _ in range(3):
+        nome = _SUFIXOS.sub('', nome).strip(' ,.-')
+    palavras = [p for p in nome.split() if p][:3]
+    while palavras and palavras[-1].upper() in _CONECTIVOS:
+        palavras.pop()
+    return ' '.join(palavras).upper() or 'CLIENTE'
+
+
+def _nome_arquivo(c, sufixo=''):
+    """Anderson (25/11/2026): "Contrato tem que sair como salvo: Contr. Prestação Qualicontax x PARTE DO NOME"."""
+    return 'Contr. Prestação Qualicontax x %s%s.pdf' % (_parte_do_nome(c), sufixo)
+
+
+def _disposition(nome, inline=True):
+    """Content-Disposition com acento: filename= só ASCII (navegador antigo) e filename*= em UTF-8 (RFC 5987)."""
+    import unicodedata
+    from urllib.parse import quote
+    ascii_ = unicodedata.normalize('NFKD', nome).encode('ascii', 'ignore').decode().replace('"', '')
+    return "%s; filename=\"%s\"; filename*=UTF-8''%s" % ('inline' if inline else 'attachment', ascii_, quote(nome))
 
 
 def _dig(s):
@@ -681,7 +713,7 @@ def contrato_pdf(cid):
     if not _ve(c):
         abort(404)
     b = _pdf_bytes(c)
-    return Response(b, mimetype='application/pdf', headers={'Content-Disposition': 'inline; filename="contrato_%s.pdf"' % (c.get('numero') or cid)})
+    return Response(b, mimetype='application/pdf', headers={'Content-Disposition': _disposition(_nome_arquivo(c), inline=not request.args.get('baixar'))})
 
 
 def _esc_html(s):
@@ -893,7 +925,7 @@ def assinar_pdf(token):
     a, c, erro = _assinante(token)
     if not a:
         abort(404)
-    return Response(_pdf_bytes(c), mimetype='application/pdf', headers={'Content-Disposition': 'inline; filename="contrato.pdf"'})
+    return Response(_pdf_bytes(c), mimetype='application/pdf', headers={'Content-Disposition': _disposition(_nome_arquivo(c))})
 
 
 @assinatura.route('/assinar/<token>/codigo', methods=['POST'])
@@ -968,8 +1000,7 @@ def _concluir(c):
     c = PrestContrato.get(c['id'])
     pdf = _pdf_bytes(c)
     emp = c['dados']['empresas'][0]
-    nome_arq = 'Contrato %s - %s - %s.pdf' % (c.get('numero') or c['id'], c['assinado_em'].strftime('%Y-%m-%d') if c.get('assinado_em') else date.today().isoformat(),
-                                             (emp.get('razao') or '')[:60].replace('/', '-'))
+    nome_arq = _nome_arquivo(c, ' - %s' % (c.get('numero') or c['id']))     # no Dropbox e no anexo o nº evita duas vias com o mesmo nome
     path = None
     try:
         from utils import dropbox_sync
