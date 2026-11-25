@@ -86,6 +86,7 @@
 .tx-c.adi { position:relative; } .tx-c.adi .lm-ck { top:10px; bottom:auto; } .lm-dica { margin-left:10px; font-style:normal; font-weight:600; color:#7c3aed; font-size:12px; text-transform:none; letter-spacing:0; }
 .lm-falha i { margin-right:4px; }
 .lm-ac .ok { background:#16a34a; border-color:#16a34a; color:#fff; } .lm-ac .no { color:#b91c1c; border-color:#fecaca; }
+.lm-ac .ed { color:#6d28d9; border-color:#ddd6fe; background:#f5f3ff; } .lm-ac .ed:hover { background:#ede9fe; }
 .lm-por { font-size:11.5px; color:#64748b; margin-top:6px; display:flex; align-items:center; gap:6px; } .lm-por i { color:#94a3b8; }
 .lm-ck { position:absolute; right:12px; bottom:12px; width:22px; height:22px; border-radius:7px; border:2px solid #c4b5fd; background:#fff; display:inline-flex;
   align-items:center; justify-content:center; color:#fff; font-size:11px; cursor:pointer; }
@@ -340,10 +341,11 @@
   {% if l.origem == 'DESCONTO' and l.desc_lancamento_id and fase == 'apr' %}
     <div class="lm-junto"><i class="fas fa-link"></i> Pedido junto com o lançamento nº {{ l.desc_lancamento_id }}: é aprovado, reprovado ou cancelado com ele.</div>
   {% elif fase == 'apr' and aprov %}
-    <div class="lm-ac"><button type="button" class="no" onclick="lmReprovar({{ l.id }})"><i class="fas fa-xmark"></i> Reprovar</button>
+    {# 25/11/2026 — Anderson: quem pediu tem o Editar até a aprovação; quem aprova também pode corrigir antes de aprovar #}
+    <div class="lm-ac">{% if l.ed and pode_rota('financeiro.lancamento_editar') %}<button type="button" class="ed" data-ed='{{ l.ed | tojson }}' onclick="nsEditar(JSON.parse(this.dataset.ed))" title="Alterar o pedido"><i class="fas fa-pen"></i> Editar</button>{% endif %}<button type="button" class="no" onclick="lmReprovar({{ l.id }})"><i class="fas fa-xmark"></i> Reprovar</button>
       <button type="button" class="ok" onclick="lmAprovar({{ l.id }})"><i class="fas fa-check"></i> Aprovar</button></div>
-  {% elif fase == 'apr' and l.lancado_por == eu.id and not l.carteira and pode_rota('financeiro.lancamento_cancelar') %}
-    <div class="lm-ac"><button type="button" class="no" onclick="lmCancelar({{ l.id }})"><i class="fas fa-ban"></i> Cancelar pedido</button></div>
+  {% elif fase == 'apr' and l.lancado_por == eu.id and not l.carteira and (pode_rota('financeiro.lancamento_cancelar') or (l.ed and pode_rota('financeiro.lancamento_editar'))) %}
+    <div class="lm-ac">{% if l.ed and pode_rota('financeiro.lancamento_editar') %}<button type="button" class="ed" data-ed='{{ l.ed | tojson }}' onclick="nsEditar(JSON.parse(this.dataset.ed))" title="Alterar o pedido"><i class="fas fa-pen"></i> Editar</button>{% endif %}{% if pode_rota('financeiro.lancamento_cancelar') %}<button type="button" class="no" onclick="lmCancelar({{ l.id }})"><i class="fas fa-ban"></i> Cancelar pedido</button>{% endif %}</div>
   {% elif l.titulo_id and not l.carteira and fase in ('cob', 'atr', 'pag') %}
     <div class="lm-ac"><button type="button" class="cob" onclick="event.stopPropagation(); lmCob({{ l.id }})"><i class="fas fa-barcode"></i> Cobrança</button></div>
   {% elif l.carteira and l.titulo_id and fase in ('cob', 'atr', 'pag') %}
@@ -430,6 +432,7 @@
             <span class="tx-c-st"><i class="fas {{ 'fa-xmark' if rep_ else 'fa-ban' }}"></i> {{ 'reprovado' if rep_ else 'cancelado' }}</span></div>
           {% if l.motivo %}<div class="lm-fc-m"><i class="fas fa-comment"></i><span>{{ l.motivo }}</span></div>{% endif %}
           {% if aprov and l.lancado_por_nome %}{% set pn = l.lancado_por_nome.split() %}<div class="lm-por lm-quem2" style="margin-top:9px" title="Quem pediu"><span class="av">{{ pn[0][:1] }}{{ pn[-1][:1] if pn | length > 1 else '' }}</span><span><small>pedido por</small> {{ pn[0] }}{{ ' ' ~ pn[-1] if pn | length > 1 else '' }}</span></div>{% endif %}
+          {% if rep_ and l.ed and pode_rota('financeiro.lancamento_editar') %}<div class="lm-ac"><button type="button" class="ok" data-ed='{{ l.ed | tojson }}' onclick="nsEditar(JSON.parse(this.dataset.ed))"><i class="fas fa-pen"></i> Corrigir e enviar de novo</button></div>{% endif %}
         </div>{% endfor %}</div>
     {% endif %}
   </div>
@@ -547,7 +550,7 @@
     <div class="ns-tit"><b>{{ 'Nova cobrança' if aprov else 'Nova solicitação de cobrança' }}</b><span>{{ (eu.nome or '').split()[0] }} · {{ 'emite agora ou inclui na mensalidade — sem passar por aprovação' if aprov else 'vai para aprovação de Anderson ou Alessandra' }}</span></div>
     <div class="ns-prev"><small>cliente vai pagar</small><b id="nsPv">R$ 0,00</b><span id="nsPc">escolha o serviço</span></div>
     <button type="button" class="ns-x" onclick="nsFechar()" title="Fechar (Esc)"><i class="fas fa-xmark"></i></button></header>
-  <form method="POST" action="{{ url_for('financeiro.lancamento_novo') }}" id="nsForm" style="display:contents">
+  <form method="POST" action="{{ url_for('financeiro.lancamento_novo') }}" data-novo="{{ url_for('financeiro.lancamento_novo') }}" id="nsForm" style="display:contents">
   <input type="hidden" name="como" id="nsComo" value="BOLETO_NOTA"><input type="hidden" name="comissao_tipo" id="nsCt" value="{{ 'SEM' if aprov else 'PADRAO' }}">
   {% if aprov %}<input type="hidden" name="emitir" value="1">{% endif %}
   <div class="ns-g"><div class="ns-f">
@@ -724,6 +727,7 @@
   };
   var URL_APROVAR = {{ url_for('financeiro.lancamento_aprovar', lid=999999) | tojson }}, URL_REPROVAR = {{ url_for('financeiro.lancamento_reprovar', lid=999999) | tojson }},
       URL_CANCELAR = {{ url_for('financeiro.lancamento_cancelar', lid=999999) | tojson }},
+      URL_EDITAR = {{ url_for('financeiro.lancamento_editar', lid=999999) | tojson }},
       URL_COBRAR = {{ url_for('financeiro.lancamento_cobrar', lid=999999) | tojson }},
       URL_CANCELAR_PEDIDO = {{ url_for('financeiro.fechamento_cancelar', fid=999999) | tojson }};
   function $(id) { return document.getElementById(id); }
@@ -1051,7 +1055,10 @@
       $('nsAviso').classList.add('red'); $('nsEnviar').disabled = true; return;
     }
     $('nsAviso').classList.remove('red'); $('nsEnviar').disabled = false;
-    if (D.aprovador) {      // quem aprova: tela única de emitir agora ou incluir no mensal
+    if (nsEd) {             // 25/11/2026: alterando um pedido — nada sai agora, ele volta para aprovação
+      $('nsAviso').innerHTML = 'Alterando o pedido <b>nº ' + nsEd.id + '</b>' + (nsEd.status === 'REPROVADO' ? ' (reprovado)' : '') + ': ao salvar, ele volta para <b>Aguardando aprovação</b> com os novos dados. Nada é emitido agora.';
+      $('nsEnviar').innerHTML = '<i class="fas fa-floppy-disk"></i> Salvar e enviar para aprovação';
+    } else if (D.aprovador) {      // quem aprova: tela única de emitir agora ou incluir no mensal
       $('nsAviso').innerHTML = como === 'MENSAL' ? 'Entra no boleto da mensalidade' + (comp ? ' de <b>' + comp.textContent + '</b>' : '') + ' e sai junto com o lote do mês.'
         : '<b>Sai agora:</b> ' + (como === 'BOLETO' ? 'o boleto é emitido' : 'a nota e o boleto são emitidos') + (pg ? ' <b>no nome de ' + esc(pg.nome) + '</b> e vão por e-mail aos contatos do Financeiro dela; o serviço fica registrado em ' + esc(c ? c.nome : 'na empresa') + '.' : ' e vão por e-mail aos contatos do Financeiro do cliente.');
       $('nsEnviar').innerHTML = como === 'MENSAL' ? '<i class="fas fa-calendar-plus"></i> Incluir na mensalidade' + (comp ? ' de ' + comp.textContent : '')
@@ -1089,7 +1096,7 @@
     CaixaServico.abrir({ servicos: D.servicos.map(function (s) { return { id: s.id, nome: s.nome, n: s.n || 0, valor_padrao: s.valor || null }; }), atual: { servico_id: tsServ.getValue() }, titulo: 'Serviço da cobrança',
       empresa: (cliente() || {}).nome || 'escolha o serviço', z: 1300, onUsar: function (e) { tsServ.setValue(e.servico_id || ''); if (e.complemento) $('nsDesc').value = e.descricao; } });
   };
-  var dtipo = '', dsobre = 'SERVICO';
+  var dtipo = '', dsobre = 'SERVICO', nsEd = null, NS_BT0 = null;      // nsEd: o pedido que está sendo alterado (25/11/2026)
   function descCampo() { return $(dtipo === 'PCT' ? 'nsDescPct' : 'nsDescValor'); }
   function setDesc(v) {
     dtipo = v; $('nsDescTipo').value = v;
@@ -1170,15 +1177,59 @@
             : (dtipo && !(dd.valor > 0)) ? 'Informe o valor do desconto.' : (dtipo && !dd.motivo) ? 'Diga o motivo do desconto.'
             : (como !== 'MENSAL' && !$('nsVenc').value) ? 'Informe o vencimento.' : ((ct === 'PCT' || ct === 'FIXO') && !num($('nsCv').value)) ? 'Informe a comissão.' : '';
       if (m) { e.preventDefault(); $('nsMsg').textContent = m; return; }
-      if (D.aprovador && como !== 'MENSAL' && !confirm('Emitir agora ' + ({ BOLETO_NOTA: 'a nota e o boleto', BOLETO: 'o boleto' }[como]) + ' de ' + brl(num($('nsValor').value)) + ' para ' + (cliente() || {}).nome + '?')) { e.preventDefault(); return; }
-      $('nsEnviar').disabled = true; $('nsEnviar').innerHTML = '<i class="fas fa-spinner fa-spin"></i> ' + (D.aprovador ? 'Emitindo…' : 'Enviando…');
+      if (!nsEd && D.aprovador && como !== 'MENSAL' && !confirm('Emitir agora ' + ({ BOLETO_NOTA: 'a nota e o boleto', BOLETO: 'o boleto' }[como]) + ' de ' + brl(num($('nsValor').value)) + ' para ' + (cliente() || {}).nome + '?')) { e.preventDefault(); return; }
+      $('nsEnviar').disabled = true; $('nsEnviar').innerHTML = '<i class="fas fa-spinner fa-spin"></i> ' + (nsEd ? 'Salvando…' : D.aprovador ? 'Emitindo…' : 'Enviando…');
     });
+  }
+  function dIso(d) { return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
+  function nsLimpar() {      // volta a caixa ao estado de "Nova solicitação"
+    nsEd = null; var f = $('nsForm'); f.action = f.dataset.novo;
+    var t = $('nsFundo').querySelector('.ns-tit'); if (t.dataset.b) { t.querySelector('b').textContent = t.dataset.b; t.querySelector('span').textContent = t.dataset.s; }
+    tsCli.clear(true); tsPag.clear(true); tsServ.clear(true);
+    $('nsValor').value = ''; $('nsDesc').value = ''; f.observacao.value = ''; $('nsCv').value = ''; $('nsParc').value = '1'; $('nsComp').selectedIndex = 0;
+    $('nsDescValor').value = ''; $('nsDescPct').value = ''; $('nsDescMotivo').value = ''; dsobre = 'SERVICO'; $('nsDescSobreIn').value = 'SERVICO';
+    $('nsDescSobre').querySelectorAll('button').forEach(function (b) { b.classList.toggle('on', b.dataset.v === 'SERVICO'); });
+    var amanha = new Date(); amanha.setDate(amanha.getDate() + 1); $('nsVenc').value = dIso(amanha);
+    $('nsSeg').querySelectorAll('button').forEach(function (b) { b.disabled = false; }); $('nsTrava').hidden = true;
+    if (NS_BT0) $('nsEnviar').innerHTML = NS_BT0; $('nsEnviar').disabled = false;
+    setDesc(''); setCt(D.aprovador ? 'SEM' : 'PADRAO'); setComo('BOLETO_NOTA');
   }
   window.nsAbrir = function () {
     if (typeof TomSelect === 'undefined') { alert('Não consegui carregar a caixa. Recarregue a página.'); return; }
     if (!tsCli) criar();
+    if (nsEd) nsLimpar();
     $('nsMsg').textContent = ''; setComo(como); setCt(ct);
     $('nsFundo').classList.add('on'); document.body.style.overflow = 'hidden';
+  };
+  // 25/11/2026 — Anderson: "quando o funcionário fizer um lançamento ele tem que ter o botão de edição até a aprovação
+  // e, mesmo que for revertida a aprovação, ele poderá editar novamente": a mesma caixa, já preenchida com o pedido.
+  window.nsEditar = function (ed) {
+    if (typeof TomSelect === 'undefined') { alert('Não consegui carregar a caixa. Recarregue a página.'); return; }
+    if (!tsCli) criar();
+    if (!NS_BT0) NS_BT0 = $('nsEnviar').innerHTML;
+    nsLimpar(); nsEd = ed;
+    var f = $('nsForm'); f.action = URL_EDITAR.replace('999999', ed.id);
+    var t = $('nsFundo').querySelector('.ns-tit'); if (!t.dataset.b) { t.dataset.b = t.querySelector('b').textContent; t.dataset.s = t.querySelector('span').textContent; }
+    t.querySelector('b').textContent = 'Alterar o pedido nº ' + ed.id;
+    t.querySelector('span').textContent = ed.status === 'REPROVADO' ? 'foi reprovado: corrija e envie de novo para aprovação' : 'ainda aguardando aprovação: corrija o que precisar';
+    tsCli.setValue(String(ed.cliente_id), true); tsPag.setValue(ed.pagador ? String(ed.pagador) : '', true);
+    tsServ.setValue(String(ed.servico_id));        // com o onChange: trava de comissão e de nota do serviço
+    var brn = function (v) { return (+v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); };
+    $('nsValor').value = ed.valor ? brn(ed.valor) : '';
+    $('nsDesc').value = ed.descricao || ''; f.observacao.value = ed.observacao || '';
+    if (ed.vencimento) $('nsVenc').value = ed.vencimento;
+    if (ed.competencia && $('nsComp').querySelector('option[value="' + ed.competencia + '"]')) $('nsComp').value = ed.competencia;
+    $('nsParc').value = String(ed.parcelas || 1);
+    $('nsCv').value = ed.cv ? String(ed.cv).replace('.', ',') : '';
+    if (!(servico() && servico().ct === 'SEM')) setCt(ed.ct || 'PADRAO');
+    if (ed.desc) { setDesc('FIXO'); $('nsDescValor').value = brn(ed.desc.valor); $('nsDescMotivo').value = ed.desc.motivo || ''; setDescSobre(ed.desc.sobre || 'SERVICO'); }
+    setComo(ed.como);       // chama resumo()
+    if (ed.parcelas > 1 && ed.datas && ed.datas.length === ed.parcelas) {      // as datas escolhidas das parcelas
+      var liq = Math.max(0, num($('nsValor').value) - desconto(num($('nsValor').value), cliente()).valor);
+      parcLinhas($('nsParcL'), ed.parcelas, liq, ed.como === 'MENSAL', ed.datas[0], ed.datas.join(','), ed.como === 'MENSAL' ? $('nsComp') : $('nsVenc'));
+      if (window.QCData) QCData.ligarTodos($('nsParcL'));
+    }
+    $('nsMsg').textContent = ''; $('nsFundo').classList.add('on'); document.body.style.overflow = 'hidden';
   };
   window.nsFechar = function () { $('nsFundo').classList.remove('on'); document.body.style.overflow = ''; };
   document.addEventListener('keydown', function (e) {

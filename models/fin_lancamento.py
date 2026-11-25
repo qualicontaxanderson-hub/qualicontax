@@ -193,6 +193,21 @@ class FinLancamento:
     def criar(empresa_id, cliente_id, servico_id, descricao, quantidade, valor_unitario, destino, lancado_por,
               vencimento=None, observacao=None, competencia=None, com_nota=None, comissao_tipo=None, comissao_valor=None,
               pagador_cliente_id=None):
+        q, vu, competencia, cv = FinLancamento._validar(empresa_id, destino, quantidade, valor_unitario, vencimento,
+                                                          competencia, comissao_tipo, comissao_valor)
+        return execute_query(
+            """INSERT INTO fin_lancamentos (empresa_id, cliente_id, servico_id, descricao, quantidade, valor_unitario,
+                   valor_total, destino, competencia, vencimento, observacao, lancado_por, com_nota,
+                   comissao_pedida_tipo, comissao_pedida_valor, pagador_cliente_id)
+               VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
+            (empresa_id, cliente_id, servico_id, (descricao or '')[:200], q, vu, (q * vu).quantize(Decimal('0.01')),
+             destino, competencia, vencimento, observacao, lancado_por,
+             None if com_nota is None else (1 if com_nota else 0), comissao_tipo, cv,
+             (pagador_cliente_id if destino == 'AVULSO' and pagador_cliente_id and int(pagador_cliente_id) != int(cliente_id) else None)), fetch=False)
+
+    @staticmethod
+    def _validar(empresa_id, destino, quantidade, valor_unitario, vencimento, competencia, comissao_tipo, comissao_valor):
+        """As regras de um pedido (criar e editar usam as mesmas). Devolve (quantidade, valor, competência, comissão)."""
         if destino not in DESTINOS:
             raise ValueError('Escolha se a cobrança é avulsa ou entra no mensal.')
         q = _d(quantidade or 1)
@@ -213,15 +228,35 @@ class FinLancamento:
             raise ValueError('Informe o % ou o valor da comissão.')
         if comissao_tipo == 'PCT' and cv > 100:
             raise ValueError('A comissão não pode passar de 100%.')
-        return execute_query(
-            """INSERT INTO fin_lancamentos (empresa_id, cliente_id, servico_id, descricao, quantidade, valor_unitario,
-                   valor_total, destino, competencia, vencimento, observacao, lancado_por, com_nota,
-                   comissao_pedida_tipo, comissao_pedida_valor, pagador_cliente_id)
-               VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
-            (empresa_id, cliente_id, servico_id, (descricao or '')[:200], q, vu, (q * vu).quantize(Decimal('0.01')),
-             destino, competencia, vencimento, observacao, lancado_por,
-             None if com_nota is None else (1 if com_nota else 0), comissao_tipo, cv,
-             (pagador_cliente_id if destino == 'AVULSO' and pagador_cliente_id and int(pagador_cliente_id) != int(cliente_id) else None)), fetch=False)
+        return q, vu, competencia, cv
+
+    @staticmethod
+    def editar(lid, cliente_id, servico_id, descricao, valor_unitario, destino, vencimento=None, observacao=None,
+               competencia=None, com_nota=None, comissao_tipo=None, comissao_valor=None, pagador_cliente_id=None,
+               parcelas=1, parcelas_datas=None, desconto=False):
+        """Quem pediu corrige o pedido enquanto ele aguarda aprovação ou depois de reprovado (25/11/2026 — Anderson:
+        "quando o funcionário fizer um lançamento ele tem que ter o botão de edição até a aprovação e, mesmo que for
+        revertida a aprovação, ele poderá editar novamente"). O pedido reprovado volta para "aguardando aprovação".
+        ``desconto=True`` edita a linha de desconto ligada ao pedido (só a rota faz isso)."""
+        l = FinLancamento.get(lid)
+        if not l or l['status'] not in ('LANCADO', 'REPROVADO'):
+            raise ValueError('Este pedido já foi aprovado: não dá mais para alterar.')
+        if (l.get('origem') == 'DESCONTO') != bool(desconto) or l.get('parcela'):
+            raise ValueError('Altere pelo pedido do serviço: o desconto vai junto.')
+        q, vu, competencia, cv = FinLancamento._validar(l['empresa_id'], destino, 1, valor_unitario, vencimento,
+                                                          competencia, comissao_tipo, comissao_valor)
+        n = max(1, min(int(parcelas or 1), 12))
+        execute_query(
+            """UPDATE fin_lancamentos SET cliente_id = %s, servico_id = %s, descricao = %s, quantidade = 1, valor_unitario = %s,
+                   valor_total = %s, destino = %s, competencia = %s, vencimento = %s, observacao = %s, com_nota = %s,
+                   comissao_pedida_tipo = %s, comissao_pedida_valor = %s, pagador_cliente_id = %s, parcelas = %s, parcelas_datas = %s,
+                   status = 'LANCADO', motivo = NULL, aprovado_por = NULL, aprovado_em = NULL
+             WHERE id = %s AND status IN ('LANCADO', 'REPROVADO')""",
+            (cliente_id, servico_id, (descricao or '')[:200], vu, (q * vu).quantize(Decimal('0.01')), destino, competencia,
+             vencimento, observacao, None if com_nota is None else (1 if com_nota else 0), comissao_tipo, cv,
+             (pagador_cliente_id if destino == 'AVULSO' and pagador_cliente_id and int(pagador_cliente_id) != int(cliente_id) else None),
+             n if n > 1 else None, ','.join(d.isoformat() for d in parcelas_datas) if (n > 1 and parcelas_datas) else None, lid), fetch=False)
+        return lid
 
     @staticmethod
     def comissao_calculada(l, tipo=None, valor=None, base=None):

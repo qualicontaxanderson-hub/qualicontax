@@ -232,6 +232,37 @@ def _carteira_cartoes(uid, nome, hoje):
     return cart
 
 
+def _dados_edicao(l, aprov):
+    """O que a caixa "Alterar o pedido" recebe (None = este cartão não se altera por aqui)."""
+    if l.get('carteira') or l.get('status') not in ('LANCADO', 'REPROVADO') or l.get('origem') == 'DESCONTO' or l.get('parcela') or l.get('orcamento_id'):
+        return None
+    if not aprov and l.get('lancado_por') != _eu().id:
+        return None
+    return {'id': l['id'], 'status': l['status'], 'cliente_id': l['cliente_id'], 'pagador': l.get('pagador_cliente_id') or '',
+            'servico_id': l['servico_id'], 'valor': float(l['valor_total'] or 0),
+            'como': 'MENSAL' if l['destino'] == 'MENSAL' else ('BOLETO_NOTA' if _sai_na_nota(l) else 'BOLETO'),
+            'vencimento': l['vencimento'].isoformat() if l.get('vencimento') else '', 'competencia': l['competencia'].isoformat() if l.get('competencia') else '',
+            'parcelas': int(l.get('parcelas') or 1), 'datas': [d for d in (l.get('parcelas_datas') or '').split(',') if d],
+            'descricao': l.get('descricao') or '', 'observacao': l.get('observacao') or '',
+            'ct': l.get('comissao_pedida_tipo') or 'PADRAO', 'cv': float(l['comissao_pedida_valor'] or 0) if l.get('comissao_pedida_valor') else 0,
+            'desc': None}
+
+
+def _descontos_na_edicao(ls):
+    """O desconto pedido junto, para a caixa de edição (uma consulta para todos os cartões)."""
+    ids = [l['id'] for l in ls if l.get('ed')]
+    if not ids:
+        return
+    rows = execute_query("SELECT desc_lancamento_id, valor_total, desc_sobre, observacao FROM fin_lancamentos WHERE origem = 'DESCONTO' "
+                         "AND status IN ('LANCADO', 'REPROVADO') AND desc_lancamento_id IN (%s) ORDER BY id" % ','.join(['%s'] * len(ids)), tuple(ids), fetch=True) or []
+    por = {}
+    for r in rows:
+        por.setdefault(r['desc_lancamento_id'], {'valor': float(r['valor_total'] or 0), 'sobre': r.get('desc_sobre') or 'SERVICO', 'motivo': r.get('observacao') or ''})
+    for l in ls:
+        if l.get('ed') and l['id'] in por:
+            l['ed']['desc'] = por[l['id']]
+
+
 @financeiro.route('/financeiro/lancamentos')
 @permission_required(PERM)
 def lancamentos():
@@ -257,6 +288,10 @@ def lancamentos():
     for l in grupos['apr']:      # quanto a comissão dá se aprovar como foi pedida (e se o serviço é travado)
         l['com_prev'] = float(FinLancamento.comissao_calculada(l)[1])
         l['com_trava'] = FinLancamento.servico_travado(l['servico_id'])
+    # 25/11/2026: quem pediu corrige o pedido até a aprovação e depois de reprovado — os dados para a caixa já preenchida
+    for l in grupos['apr'] + fora:
+        l['ed'] = _dados_edicao(l, aprov)
+    _descontos_na_edicao(grupos['apr'] + fora)
     for l in grupos['cob']:      # 18/11/2026: aprovado e sem título = a cobrança não saiu (nota rejeitada, boleto recusado)
         if _sem_cobranca(l):
             l['motivo_falha'] = _motivo_da_falha(l)
@@ -704,6 +739,48 @@ def servico_novo():
     return redirect(volta + '#s%s' % sid)
 
 
+def _pedido_do_form(f):
+    """Lê e confere o pedido da caixa (Nova solicitação e, desde 25/11/2026, Alterar o pedido): cliente, serviço, como
+    cobrar, valor, vencimento/competência, quem paga e o desconto. Levanta ValueError com a frase para a tela."""
+    cliente_id = f.get('cliente_id', type=int)
+    servico_id = f.get('servico_id', type=int)
+    como = f.get('como') or 'BOLETO_NOTA'
+    if como not in ('BOLETO_NOTA', 'BOLETO', 'MENSAL'):
+        raise ValueError('Escolha como cobrar.')
+    destino = 'MENSAL' if como == 'MENSAL' else 'AVULSO'
+    desc = _desconto_do_form(f)          # 19/11/2026: Desconto junto (sobre o serviço) ou só o desconto (na mensalidade)
+    if not cliente_id:
+        raise ValueError('Escolha o cliente.')
+    so_desconto = bool(desc and desc['sobre'] == 'MENSAL' and not servico_id)
+    if not servico_id and not so_desconto:
+        raise ValueError('Escolha o serviço.')
+    if desc and destino == 'AVULSO':
+        desc['sobre'] = 'SERVICO'             # avulso: o desconto é sempre sobre o serviço desta cobrança
+    if so_desconto and destino != 'MENSAL':
+        raise ValueError('Desconto na mensalidade só com "Incluir na mensalidade".')
+    s = execute_query('SELECT nome FROM nfse_servicos WHERE id = %s AND empresa_id = %s', (servico_id, EMP), fetch=True, fetch_one=True) if servico_id else None
+    if servico_id and not s:
+        raise ValueError('Serviço inválido.')
+    if destino == 'MENSAL' and not _contrato_ativo(cliente_id):
+        raise ValueError(SEM_MENSAL)
+    comp = _data(f.get('competencia')) if destino == 'MENSAL' else None
+    venc = _data(f.get('vencimento')) if destino == 'AVULSO' else None
+    valor = _dec(f.get('valor')) if servico_id else Decimal('0')
+    # 19/11/2026 — "Quem paga": outra empresa paga este serviço (só avulso). O serviço fica na dona; boleto e nota saem no nome de quem paga.
+    pagador = f.get('pagador_cliente_id', type=int) if destino == 'AVULSO' else None
+    if pagador and pagador != cliente_id:
+        if not execute_query("SELECT 1 FROM clientes WHERE id = %s AND COALESCE(situacao, 'ATIVO') <> 'INATIVO'", (pagador,), fetch=True):
+            raise ValueError('A empresa que paga não está no cadastro (ou está inativa).')
+    else:
+        pagador = None
+    dv = None
+    if desc:
+        dv = _valor_desconto(desc, valor if desc['sobre'] == 'SERVICO' else _mensal_de(cliente_id),
+                             'o serviço' if desc['sobre'] == 'SERVICO' else 'a mensalidade')
+    return {'cliente_id': cliente_id, 'servico_id': servico_id, 'como': como, 'destino': destino, 'desc': desc,
+            'so_desconto': so_desconto, 's': s, 'comp': comp, 'venc': venc, 'valor': valor, 'pagador': pagador, 'dv': dv}
+
+
 @financeiro.route('/financeiro/lancamentos/novo', methods=['POST'])
 @permission_required(PERM)
 def lancamento_novo():
@@ -711,41 +788,9 @@ def lancamento_novo():
     valor, vencimento e a comissão pedida. Nada sai agora: a cobrança é emitida na aprovação."""
     f = request.form
     try:
-        cliente_id = f.get('cliente_id', type=int)
-        servico_id = f.get('servico_id', type=int)
-        como = f.get('como') or 'BOLETO_NOTA'
-        if como not in ('BOLETO_NOTA', 'BOLETO', 'MENSAL'):
-            raise ValueError('Escolha como cobrar.')
-        destino = 'MENSAL' if como == 'MENSAL' else 'AVULSO'
-        desc = _desconto_do_form(f)          # 19/11/2026: Desconto junto (sobre o serviço) ou só o desconto (na mensalidade)
-        if not cliente_id:
-            raise ValueError('Escolha o cliente.')
-        so_desconto = bool(desc and desc['sobre'] == 'MENSAL' and not servico_id)
-        if not servico_id and not so_desconto:
-            raise ValueError('Escolha o serviço.')
-        if desc and destino == 'AVULSO':
-            desc['sobre'] = 'SERVICO'             # avulso: o desconto é sempre sobre o serviço desta cobrança
-        if so_desconto and destino != 'MENSAL':
-            raise ValueError('Desconto na mensalidade só com "Incluir na mensalidade".')
-        s = execute_query('SELECT nome FROM nfse_servicos WHERE id = %s AND empresa_id = %s', (servico_id, EMP), fetch=True, fetch_one=True) if servico_id else None
-        if servico_id and not s:
-            raise ValueError('Serviço inválido.')
-        if destino == 'MENSAL' and not _contrato_ativo(cliente_id):
-            raise ValueError(SEM_MENSAL)
-        comp = _data(f.get('competencia')) if destino == 'MENSAL' else None
-        venc = _data(f.get('vencimento')) if destino == 'AVULSO' else None
-        valor = _dec(f.get('valor')) if servico_id else Decimal('0')
-        # 19/11/2026 — "Quem paga": outra empresa paga este serviço (só avulso). O serviço fica na dona; boleto e nota saem no nome de quem paga.
-        pagador = f.get('pagador_cliente_id', type=int) if destino == 'AVULSO' else None
-        if pagador and pagador != cliente_id:
-            if not execute_query("SELECT 1 FROM clientes WHERE id = %s AND COALESCE(situacao, 'ATIVO') <> 'INATIVO'", (pagador,), fetch=True):
-                raise ValueError('A empresa que paga não está no cadastro (ou está inativa).')
-        else:
-            pagador = None
-        dv = None
-        if desc:
-            dv = _valor_desconto(desc, valor if desc['sobre'] == 'SERVICO' else _mensal_de(cliente_id),
-                                 'o serviço' if desc['sobre'] == 'SERVICO' else 'a mensalidade')
+        p = _pedido_do_form(f)
+        cliente_id, servico_id, como, destino, desc, so_desconto, s = p['cliente_id'], p['servico_id'], p['como'], p['destino'], p['desc'], p['so_desconto'], p['s']
+        comp, venc, valor, pagador, dv = p['comp'], p['venc'], p['valor'], p['pagador'], p['dv']
         lid = did = None
         n, datas = 1, None
         if servico_id:
@@ -1217,6 +1262,73 @@ def lancamento_cancelar(lid):
     except ValueError as e:
         flash(str(e), 'danger')
     return redirect(url_for('financeiro.lancamentos'))
+
+
+@financeiro.route('/financeiro/lancamentos/<int:lid>/editar', methods=['POST'])
+@permission_required(PERM)
+def lancamento_editar(lid):
+    """Alterar o pedido (25/11/2026 — Anderson: "quando o funcionário fizer um lançamento ele tem que ter o botão de
+    edição até a aprovação e, mesmo que for revertida a aprovação, ele poderá editar novamente"). Quem pediu (ou quem
+    aprova) corrige cliente, serviço, valor, como cobrar, datas, parcelas, desconto e comissão enquanto o pedido
+    aguarda aprovação ou depois de reprovado; salvo, ele volta para "aguardando aprovação". Nada é emitido aqui."""
+    l = _meu_ou_admin(FinLancamento.get(lid))
+    f = request.form
+    try:
+        if l['status'] not in ('LANCADO', 'REPROVADO'):
+            raise ValueError('Este pedido já foi aprovado: não dá mais para alterar.')
+        if l.get('origem') == 'DESCONTO':
+            raise ValueError('Altere pelo pedido do serviço: o desconto vai junto.')
+        if l.get('orcamento_id'):
+            raise ValueError('Este pedido veio de um orçamento: altere o orçamento no Comercial.')
+        p = _pedido_do_form(f)
+        if not p['servico_id']:
+            raise ValueError('Escolha o serviço.')
+        s, desc, dv, destino = p['s'], p['desc'], p['dv'], p['destino']
+        antes = {'empresa': l['nome_razao_social'], 'servico': l['servico_nome'], 'valor': str(l['valor_total']), 'como': _como(l),
+                 'vencimento': str(l['vencimento'] or ''), 'competencia': str(l['competencia'] or ''), 'parcelas': l.get('parcelas') or 1,
+                 'desconto': str(FinLancamento.desconto_total(lid) or ''), 'status': l['status'], 'motivo': l.get('motivo')}
+        n = _parcelas_do_form(f)
+        datas = _datas_parcelas(f, n, destino == 'MENSAL')
+        FinLancamento.editar(lid, p['cliente_id'], p['servico_id'], (f.get('descricao') or s['nome']).strip() or s['nome'], p['valor'], destino,
+                             vencimento=p['venc'], observacao=(f.get('observacao') or '').strip() or None, competencia=p['comp'],
+                             com_nota=None if destino == 'MENSAL' else (p['como'] == 'BOLETO_NOTA' and not _servico_sem_nota(p['servico_id'])),
+                             comissao_tipo='SEM' if FinLancamento.servico_travado(p['servico_id']) else (f.get('comissao_tipo') or 'PADRAO'),
+                             comissao_valor=None if FinLancamento.servico_travado(p['servico_id']) else (f.get('comissao_valor') or None),
+                             pagador_cliente_id=p['pagador'], parcelas=n, parcelas_datas=datas)
+        _marcar_pelo_admin(lid)
+        # o desconto pedido junto acompanha: corrige o que existe, cria se passou a ter, retira se saiu
+        vivos = FinLancamento.descontos_de(lid, status=('LANCADO', 'REPROVADO'))
+        if desc:
+            rot = ('Desconto s/ ' + (s['nome'] if desc['sobre'] == 'SERVICO' else 'a mensalidade')) + ' — ' + desc['motivo']
+            if vivos:
+                did = vivos[0]['id']
+                FinLancamento.editar(did, p['cliente_id'], vivos[0]['servico_id'], rot[:200], dv, destino, vencimento=p['venc'], observacao=desc['motivo'],
+                                     competencia=p['comp'], com_nota=None if destino == 'MENSAL' else False, comissao_tipo='SEM',
+                                     pagador_cliente_id=p['pagador'], parcelas=n, parcelas_datas=datas, desconto=True)
+                for d in vivos[1:]:
+                    execute_query("UPDATE fin_lancamentos SET status = 'CANCELADO', motivo = 'Pedido alterado' WHERE id = %s", (d['id'],), fetch=False)
+            else:
+                did = FinLancamento.criar(EMP, p['cliente_id'], FinLancamento.servico_desconto_id(EMP), rot[:200], Decimal('1'), dv, destino, l['lancado_por'],
+                                          vencimento=p['venc'], observacao=desc['motivo'], competencia=p['comp'],
+                                          com_nota=None if destino == 'MENSAL' else False, comissao_tipo='SEM', pagador_cliente_id=p['pagador'])
+                execute_query("UPDATE fin_lancamentos SET origem = 'DESCONTO', parcelas = %s, parcelas_datas = %s WHERE id = %s",
+                              (n if n > 1 else None, ','.join(d.isoformat() for d in datas) if (n > 1 and datas) else None, did), fetch=False)
+            execute_query("UPDATE fin_lancamentos SET desc_lancamento_id = %s, desc_sobre = %s WHERE id = %s", (lid, desc['sobre'], did), fetch=False)
+            _marcar_pelo_admin(did)
+        else:
+            for d in vivos:
+                execute_query("UPDATE fin_lancamentos SET status = 'CANCELADO', motivo = 'Desconto retirado ao alterar o pedido' WHERE id = %s", (d['id'],), fetch=False)
+        l2 = FinLancamento.get(lid)
+        registrar('escrita.alterou_lancamento', 'financeiro', tabela='fin_lancamentos', registro_id=lid, antes=antes,
+                  depois={'empresa': l2['nome_razao_social'], 'servico': l2['servico_nome'], 'valor': str(l2['valor_total']), 'como': _como(l2),
+                          'vencimento': str(l2['vencimento'] or ''), 'competencia': str(l2['competencia'] or ''), 'parcelas': n,
+                          'desconto': str(dv) if dv else None, 'quem_paga': l2.get('pagador_nome'), 'era': l['status'],
+                          'comissao_pedida': (l2.get('comissao_pedida_tipo') or '') + (' ' + str(l2['comissao_pedida_valor']) if l2.get('comissao_pedida_valor') else '')})
+        flash('Pedido nº %s alterado%s: %s · %s%s. Aguarda aprovação.' % (lid, ' e enviado de novo' if l['status'] == 'REPROVADO' else '', l2['nome_razao_social'], _como(l2),
+                                                                           (' · desconto de R$ %s' % dv) if dv else ''), 'success')
+    except (ValueError, InvalidOperation) as e:
+        flash(str(e) if isinstance(e, ValueError) else 'Valor inválido.', 'danger')
+    return redirect(url_for('financeiro.lancamentos', aba='apr'))
 
 
 # ---------------------------------------------------------------------------
