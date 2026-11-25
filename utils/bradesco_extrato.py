@@ -264,6 +264,8 @@ def candidatos(empresa_id, data, valor, cliente_ids):
                    WHERE t.empresa_id = %s AND t.tipo = 'R' AND t.status IN ('aberto', 'parcial')
                      AND ABS((t.valor - t.valor_baixado) - %s) < 0.005
                      AND t.vencimento BETWEEN %s AND %s AND t.cliente_id IN ({marks})
+                     AND NOT EXISTS (SELECT 1 FROM fin_boletos bo WHERE bo.titulo_id = t.id
+                                        AND bo.situacao IN ('new', 'waiting', 'unpaid'))
                    ORDER BY t.vencimento""",
               (empresa_id, valor, data - timedelta(days=JANELA_ANTES), data + timedelta(days=JANELA_DEPOIS), *cliente_ids))
 

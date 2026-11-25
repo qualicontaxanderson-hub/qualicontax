@@ -600,6 +600,7 @@ a.tx-c { text-decoration:none; color:inherit; }
 .tx-rel-txt small { font-size:11.5px; color:#64748b; font-weight:600; margin-top:2px; }
 .tx-rel-ico { font-size:20px; color:#dc2626; margin-left:4px; }
 @media (max-width:760px) { .tx-rel { width:100%; justify-content:flex-start; } .tx-rel-ico { margin-left:auto; } }
+.tx-dobro { display:inline-flex; align-items:center; gap:5px; margin-top:4px; font-size:10.5px; font-weight:800; color:#9a3412; background:#fff7ed; border:1px solid #fdba74; border-radius:99px; padding:2px 8px; }
 </style>
 
 {% set _q = {'emp': filtros.emp} if filtros.emp else {} %}
@@ -724,6 +725,7 @@ a.tx-c { text-decoration:none; color:inherit; }
       {% endif %}
       <div class="tx-busca"><i class="fas fa-magnifying-glass"></i><input type="search" placeholder="Cliente, número ou CNPJ"></div>
     </div>
+    {% set dobro = titulos_pagos_em_dobro(m.rec) %}
     {% for g in m.rec %}
     {{ cab(g, 'pagamento') }}
     <div class="tx-grade">
@@ -732,7 +734,7 @@ a.tx-c { text-decoration:none; color:inherit; }
            data-auto="{{ 1 if t.auto else 0 }}" data-busca="{{ t.num }} {{ t.nome_full }}"
            data-g="{{ t.grupos | join('|') }}" data-s="{{ t.serv }}" data-k="{{ t.comp }}" data-b="{{ t.bol }}" data-v="{{ t.v }}">
         <div class="tx-c-top"><span class="tx-c-num">{{ t.num }}</span><span class="tx-c-nome">{{ t.nome }}</span></div>
-        <div class="tx-c-meio"><div><div class="tx-c-val">{{ t.valor }}</div><div class="tx-c-desc">{{ t.desc }}</div></div>
+        <div class="tx-c-meio"><div><div class="tx-c-val">{{ t.valor }}</div><div class="tx-c-desc">{{ t.desc }}</div>{% if t.id in dobro %}<div class="tx-dobro" title="O banco recebeu este boleto mais de uma vez: o valor a mais está no Extrato como PAGO EM DOBRO, esperando decisão (adiantamento ou devolver)"><i class="fas fa-clone"></i> PAGO EM DOBRO · +{{ dobro[t.id] }}</div>{% endif %}</div>
           {# 16/11/2026 — Anderson: "não marcar EFI ou Bradesco e sim o icons": só o logo do banco onde caiu #}
           {% if t.app %}<span class="tx-c-st tx-c-bco" title="Boleto marcado como pago no app da Efí (o dinheiro não passou pela conta da Efí)">{{ logo_banco('364', '#94a3b8', 22, 'Efí') }}<i class="fas fa-mobile-screen-button"></i></span>{% elif t.auto %}<span class="tx-c-st tx-c-bco" title="Pagamento localizado no extrato do {{ t.banco }}">{{ logo_banco(t.banco, '#94a3b8', 22, t.banco) }}</span>{% else %}<span class="tx-c-st" title="Baixa sem linha do extrato amarrada"><i class="fas fa-hand"></i>manual</span>{% endif %}</div>
       </div>

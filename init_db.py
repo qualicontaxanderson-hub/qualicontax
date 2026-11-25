@@ -1900,6 +1900,27 @@ def _apply_migrations():
         if _c.get('cnt', 0) == 0:
             _migrate(f"ALTER TABLE fin_honorarios_escolhas ADD COLUMN {_col_name} {_col_def}")
 
+    # 25/11/2026 — pagamento em dobro do mesmo boleto (B2t pagou a 1/2 por Pix e pelo código de barras):
+    # o crédito a mais NÃO dá baixa em outra parcela; fica aqui até alguém decidir (adiantamento ou devolver).
+    _migrate("""
+        CREATE TABLE IF NOT EXISTS fin_pagamentos_duplicados (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            empresa_id INT NOT NULL,
+            lancamento_id INT NOT NULL,
+            boleto_id INT NULL,
+            titulo_id INT NULL,
+            cliente_id INT NULL,
+            valor DECIMAL(12,2) NOT NULL,
+            situacao VARCHAR(20) NOT NULL DEFAULT 'A_DECIDIR',
+            obs VARCHAR(255) NULL,
+            decidido_por INT NULL,
+            decidido_em DATETIME NULL,
+            criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE KEY uk_dup_lanc (lancamento_id),
+            KEY idx_dup_boleto (boleto_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    """)
+
     print("✓ Migrations concluídas")
 
 

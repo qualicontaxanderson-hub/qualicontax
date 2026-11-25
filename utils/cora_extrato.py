@@ -179,9 +179,9 @@ def _guardar(fin_conta_id, res):
 # ---------------------------------------------------------------------------
 # Baixa do crédito
 # ---------------------------------------------------------------------------
-def _boleto_da_linha(lanc, doc):
-    """O crédito é de UM boleto nosso do Cora? Mesma conta, mesmo valor, mesmo CPF/CNPJ do pagador, emitido até
-    a data da linha e ainda sem linha amarrada. Devolve o boleto (com baixa_id/lancamento_id) ou None."""
+def _boletos_da_linha(lanc, doc):
+    """Boletos nossos do Cora que podem ser deste crédito: mesma conta, mesmo valor, mesmo CPF/CNPJ do pagador e
+    emitidos até a data da linha. Cada um vem com a baixa feita PELO boleto (baixa_id/baixa_lanc), se já houve."""
     from utils.extrato_ingest import mesma_conta
     bs = _q("""SELECT b.*, fc.conta AS conta_fin, x.id AS baixa_id, x.lancamento_id AS baixa_lanc
                  FROM fin_boletos b
@@ -191,7 +191,7 @@ def _boleto_da_linha(lanc, doc):
                       AND x.referencia COLLATE utf8mb4_unicode_ci = CONCAT('cora:', b.charge_id) COLLATE utf8mb4_unicode_ci
                 WHERE b.provedor = 'cora' AND b.empresa_id = %s AND b.titulo_id IS NOT NULL
                   AND b.situacao IN ('new', 'waiting', 'unpaid', 'paid') AND ABS(b.valor - %s) < 0.005
-                  AND DATE(b.criado_em) <= %s AND (x.id IS NULL OR x.lancamento_id IS NULL)""",
+                  AND DATE(b.criado_em) <= %s""",
             (lanc['empresa_id'], Decimal(str(lanc['valor'])), lanc['data']))
     achados = [b for b in bs if mesma_conta(lanc['conta'], b['conta_fin'])
                and (not doc or not _num(b.get('pagador_doc')) or _num(b.get('pagador_doc')) == doc)]
@@ -199,7 +199,82 @@ def _boleto_da_linha(lanc, doc):
         exatos = [b for b in achados if _num(b.get('pagador_doc')) == doc]
         if exatos:
             achados = exatos
-    return achados[0] if len(achados) == 1 else None
+    return achados
+
+
+def _cora_do_boleto(b, cache):
+    from models.fin_cobranca import FinCobrancaConta
+    k = b['conta_cobranca_id']
+    if k not in cache:
+        cache[k], _ = FinCobrancaConta.cliente_cora(k)
+    return cache[k]
+
+
+def _pagamentos_no_cora(b, cache):
+    """Quantas vezes o Cora recebeu este boleto (payments com SUCCESS). O Cora aceita o mesmo boleto pago duas
+    vezes (Pix e código de barras): 25/11/2026, B2t pagou a 1/2 da abertura de empresa assim."""
+    j = _cora_do_boleto(b, cache).consultar(b['charge_id'])
+    return len([p for p in (j.get('payments') or []) if str(p.get('status') or '').upper() == 'SUCCESS'])
+
+
+def _decidir_pelo_boleto(lanc, doc, seco):
+    """O crédito é de um boleto nosso do Cora? Devolve (situação, detalhe) ou None quando nenhum boleto explica.
+    Ordem: (1) boleto já pago cuja baixa ainda não tem linha do extrato; (2) boleto em aberto que o CORA diz
+    que foi pago agora (nunca se dá baixa num boleto aberto só porque valor e pagador batem — 25/11/2026,
+    Anderson: "não pode baixa assim não, senão o boleto fica aberto"); (3) boleto pago mais de uma vez: o crédito
+    a mais vira PAGO EM DOBRO e espera decisão, sem baixar outra parcela."""
+    bs = _boletos_da_linha(lanc, doc)
+    if not bs:
+        return None
+    livres = [b for b in bs if b['situacao'] == 'paid' and not b.get('baixa_lanc')]
+    if len(livres) == 1:
+        return _baixar_pelo_boleto(lanc, livres[0], seco)
+    if len(livres) > 1:
+        return 'empate', {'nome': livres[0].get('pagador_nome'), 'motivo': '%d boletos pagos de mesmo valor' % len(livres)}
+    cache = {}
+    from utils.integrations.cora.client import situacao_da_consulta
+    pagos_agora = []
+    for b in [x for x in bs if x['situacao'] in ('new', 'waiting', 'unpaid')]:
+        try:
+            sit, _v, _d = situacao_da_consulta(_cora_do_boleto(b, cache).consultar(b['charge_id']))
+        except Exception:
+            logger.warning('[cora-extrato] consulta do boleto %s falhou', b.get('charge_id'))
+            continue
+        if sit == 'paid':
+            pagos_agora.append(b)
+    if len(pagos_agora) == 1:
+        return _baixar_pelo_boleto(lanc, pagos_agora[0], seco)
+    if len(pagos_agora) > 1:
+        return 'empate', {'nome': pagos_agora[0].get('pagador_nome'), 'motivo': '%d boletos pagos de mesmo valor' % len(pagos_agora)}
+    # pago em dobro: boleto pago, baixa já amarrada a OUTRA linha, e o Cora recebeu mais vezes do que as linhas que já explicam
+    dobro = []
+    for b in [x for x in bs if x['situacao'] == 'paid' and x.get('baixa_lanc') and x['baixa_lanc'] != lanc.get('id')]:
+        try:
+            n = _pagamentos_no_cora(b, cache)
+        except Exception:
+            logger.warning('[cora-extrato] pagamentos do boleto %s: consulta falhou', b.get('charge_id'))
+            continue
+        ja = int((_q('SELECT COUNT(*) n FROM fin_pagamentos_duplicados WHERE boleto_id = %s', (b['id'],), one=True) or {}).get('n') or 0)
+        if n >= 2 + ja:
+            dobro.append(b)
+    if len(dobro) == 1:
+        b = dobro[0]
+        det = {'titulo_id': b['titulo_id'], 'nome': b.get('pagador_nome'), 'boleto': b['charge_id']}
+        if seco or not lanc.get('id'):
+            return 'dobro', det
+        from utils.atividade import registrar_agente
+        cli = _q('SELECT cliente_id FROM fin_titulos WHERE id = %s', (b['titulo_id'],), one=True) or {}
+        _x("""INSERT IGNORE INTO fin_pagamentos_duplicados (empresa_id, lancamento_id, boleto_id, titulo_id, cliente_id, valor)
+               VALUES (%s, %s, %s, %s, %s, %s)""",
+           (lanc['empresa_id'], lanc['id'], b['id'], b['titulo_id'], cli.get('cliente_id'), Decimal(str(lanc['valor']))))
+        registrar_agente('escrita.pagamento_em_dobro', 'financeiro', None, _ATOR[0], _ATOR[1],
+                         tabela='fin_titulos', registro_id=b['titulo_id'],
+                         depois={'valor': str(lanc['valor']), 'data': str(lanc['data']), 'quem_pagou': b.get('pagador_nome'),
+                                 'lancamento_id': lanc['id'], 'boleto': b['charge_id'],
+                                 'como': 'o Cora recebeu o mesmo boleto mais de uma vez; o crédito a mais espera decisão (adiantamento ou devolver)'})
+        return 'dobro', det
+    # crédito de boleto que nenhum boleto explica: não vai pelo CPF/CNPJ para não baixar outra parcela
+    return 'empate', {'nome': bs[0].get('pagador_nome'), 'motivo': 'boleto pago que não casou'}
 
 
 def _baixar_pelo_boleto(lanc, b, seco):
@@ -249,6 +324,8 @@ def candidatos(empresa_id, data, valor, cliente_ids):
                    WHERE t.empresa_id = %s AND t.tipo = 'R' AND t.status IN ('aberto', 'parcial')
                      AND ABS((t.valor - t.valor_baixado) - %s) < 0.005
                      AND t.vencimento BETWEEN %s AND %s AND t.cliente_id IN ({marks})
+                     AND NOT EXISTS (SELECT 1 FROM fin_boletos bo WHERE bo.titulo_id = t.id
+                                        AND bo.situacao IN ('new', 'waiting', 'unpaid'))
                    ORDER BY t.vencimento""",
               (empresa_id, valor, data - timedelta(days=JANELA_ANTES), data + timedelta(days=JANELA_DEPOIS), *cliente_ids))
 
@@ -275,9 +352,11 @@ def baixar(lanc, seco=True):
     nome = nome_da_descricao(desc)
     if lanc.get('id') and _q('SELECT 1 x FROM fin_titulo_baixas WHERE lancamento_id = %s LIMIT 1', (lanc['id'],), one=True):
         return 'ja-amarrado', None
-    b = _boleto_da_linha(lanc, doc)                  # o boleto é a prova mais forte: vale seja qual for o texto
-    if b:                                            # (18/11: o Pix do boleto 232 veio com a Descrição do boleto, sem "recebida")
-        return _baixar_pelo_boleto(lanc, b, seco)
+    if lanc.get('id') and _q('SELECT 1 x FROM fin_pagamentos_duplicados WHERE lancamento_id = %s LIMIT 1', (lanc['id'],), one=True):
+        return 'dobro-ja', None
+    r = _decidir_pelo_boleto(lanc, doc, seco)        # o boleto é a prova mais forte: vale seja qual for o texto
+    if r:                                            # (18/11: o Pix do boleto 232 veio com a Descrição do boleto, sem "recebida")
+        return r
     if not e_recebimento(desc):
         return 'ignorado', None
     clis = clientes_pelo_documento(doc)
@@ -378,6 +457,8 @@ def rodar(seco=True, de=None, ate=None, fin_conta_id=None):
             linha = {'data': str(l['data']), 'valor': str(l['valor']), 'nome': (d or {}).get('nome') or nome_da_descricao(l.get('descricao'))}
             if s in ('baixado', 'baixaria', 'ja-baixado'):
                 res['baixados'].append(dict(linha, titulo_id=(d or {}).get('titulo_id'), como=s))
+            elif s == 'dobro':
+                res['pendentes'].append(dict(linha, motivo='pago em dobro', titulo_id=(d or {}).get('titulo_id')))
             elif s in ('empate', 'sem-titulo', 'sem-cadastro', 'erro'):
                 res['pendentes'].append(dict(linha, motivo=s))
         if not seco:

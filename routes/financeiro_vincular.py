@@ -220,6 +220,48 @@ def linhas_com_baixa(lancamentos):
     return {r['lancamento_id'] for r in rows}
 
 
+@financeiro.app_template_global('titulos_pagos_em_dobro')
+def titulos_pagos_em_dobro(grupos):
+    """{titulo_id: 'R$ x,xx' a mais} dos títulos da aba Recebidos cujo boleto foi pago mais de uma vez."""
+    ids = [t['id'] for g in (grupos or []) for t in (g.get('itens') or []) if t.get('id')]
+    if not ids:
+        return {}
+    try:
+        rs = _q(f"""SELECT titulo_id, SUM(valor) v FROM fin_pagamentos_duplicados
+                     WHERE titulo_id IN ({','.join(['%s'] * len(ids))}) GROUP BY titulo_id""", tuple(ids))
+    except Exception:
+        return {}
+    return {r['titulo_id']: 'R$ ' + ('{:,.2f}'.format(float(r['v'])).replace(',', 'X').replace('.', ',').replace('X', '.')) for r in rs}
+
+
+@financeiro.app_template_global('recebimentos_das_linhas')
+def recebimentos_das_linhas(lancamentos):
+    """25/11/2026 — Anderson: o crédito do boleto pago "tem que ligar automaticamente" e o pagamento repetido tem
+    de aparecer como "pago duplicado". Devolve {lanc_id: {'tipo': 'baixa'|'dobro', 'titulo_id', 'nome', 'texto'}}
+    para os créditos da tela, em duas consultas."""
+    ids = [l['id'] for l in (lancamentos or []) if float(l.get('valor') or 0) > 0]
+    if not ids:
+        return {}
+    marks = ','.join(['%s'] * len(ids))
+    out = {}
+    for r in _q(f"""SELECT x.lancamento_id, x.titulo_id, t.contraparte_nome AS nome, t.descricao, t.vencimento
+                      FROM fin_titulo_baixas x JOIN fin_titulos t ON t.id = x.titulo_id
+                     WHERE x.lancamento_id IN ({marks}) ORDER BY x.id""", tuple(ids)):
+        if r['lancamento_id'] not in out:
+            out[r['lancamento_id']] = {'tipo': 'baixa', 'titulo_id': r['titulo_id'], 'nome': r['nome'],
+                                       'texto': r['descricao'] or '', 'venc': r['vencimento']}
+    try:
+        dups = _q(f"""SELECT d.lancamento_id, d.titulo_id, d.situacao, t.contraparte_nome AS nome, t.descricao, t.vencimento
+                        FROM fin_pagamentos_duplicados d LEFT JOIN fin_titulos t ON t.id = d.titulo_id
+                       WHERE d.lancamento_id IN ({marks})""", tuple(ids))
+    except Exception:                       # tabela ainda não criada (antes da migração)
+        dups = []
+    for r in dups:
+        out[r['lancamento_id']] = {'tipo': 'dobro', 'titulo_id': r['titulo_id'], 'nome': r['nome'], 'situacao': r['situacao'],
+                                   'texto': r['descricao'] or '', 'venc': r['vencimento']}
+    return out
+
+
 # ---------------------------------------------------------------------------
 # A partir do título/boleto: achar o pagamento no extrato
 # ---------------------------------------------------------------------------
