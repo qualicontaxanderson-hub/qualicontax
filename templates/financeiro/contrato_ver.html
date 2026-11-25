@@ -146,7 +146,8 @@
           <div class="tj-it"><span>Vencimento</span><b>dia {{ d.dia_vencimento }}</b></div>
           <div class="tj-it"><span>Início</span><b>{{ dia(d.inicio) }}</b></div>
           <div class="tj-it"><span>13º honorário</span><b>{{ {'COBRADO': 'nov e dez', 'UNICA': 'dez, parcela única', 'ISENTO': 'isento'}.get(d.decimo, d.decimo) }}</b></div>
-          <div class="tj-it"><span>Reajuste</span><b>{% if d.reajuste_tipo == 'INDICE' %}{{ d.reajuste_indice or 'índice' }}{% if d.reajuste_mes %} em {{ d.reajuste_mes }}{% endif %}{% elif d.reajuste_tipo == 'SALARIO_MINIMO' %}salário mínimo{% elif d.reajuste_tipo == 'SEM' %}sem reajuste{% else %}{{ d.reajuste_tipo or '—' }}{% endif %}</b></div>
+          <div class="tj-it"><span>Reajuste</span><b>{% if d.reajuste_tipo == 'INDICE' %}{{ d.reajuste_indice or 'índice' }}{% if d.reajuste_mes %} em {{ d.reajuste_mes }}{% endif %}{% elif d.reajuste_tipo == 'SALARIO_MINIMO' %}salário mínimo{% elif d.reajuste_tipo == 'SEM' %}sem reajuste{% else %}{{ d.reajuste_tipo or '—' }}{% endif %}{% if d.reajuste_proximo and d.reajuste_tipo in ('SALARIO_MINIMO', 'INDICE', 'DATA_PROPRIA') %} <small style="color:#64748b; font-weight:600">· próximo em {{ d.reajuste_proximo[5:7] }}/{{ d.reajuste_proximo[:4] }}</small>{% endif %}</b></div>
+          <div class="tj-it"><span>Serviços extraordinários</span><b>{{ 'cobrados à parte' if d.get('extras_cobrados', True) else 'só as taxas' }}</b></div>
           <div class="tj-it"><span>Multa e juros por atraso</span><b>{{ d.multa | string | replace('.', ',') }}% + {{ d.juros | string | replace('.', ',') }}% ao mês</b></div>
           <div class="tj-it"><span>Aviso prévio</span><b>{{ d.aviso_previo }} dias</b></div>
           <div class="tj-it"><span>LGPD</span><b>{{ 'com cláusula' if d.lgpd else 'sem cláusula' }}</b></div>

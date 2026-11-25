@@ -83,6 +83,8 @@
 .ct-ops5 { grid-template-columns:repeat(5, minmax(0,1fr)); } .ct-ops5 .ns-op small, .ct-cond-grp .ct-ops3 .ns-op small { display:block; white-space:normal; line-height:1.3; overflow:visible; } .ct-cond-grp .ct-ops3 .ns-op b, .ct-ops5 .ns-op b { white-space:normal; overflow:visible; }
 .ct-cond-duas { display:grid; grid-template-columns:minmax(0,1.35fr) minmax(0,1fr); gap:10px; }
 .ct-cond-sub { font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:.05em; color:var(--g-e); margin:10px 0 6px; }
+.ct-prox { align-items:center; } .ct-prox button { border-color:var(--g-b); background:#fff; color:var(--g-e); } .ct-prox button.on { background:linear-gradient(135deg, var(--g), var(--g-e)); border-color:var(--g-e); color:#fff; }
+.ct-prox button small { font-weight:600; opacity:.8; margin-left:4px; } .ct-prox .ct-data { margin-left:4px; }
 .ct-meses button { border-color:var(--g-b); background:#fff; color:var(--g-e); text-transform:capitalize; min-width:46px; justify-content:center; } .ct-meses button.on { background:linear-gradient(135deg, var(--g), var(--g-e)); border-color:var(--g-e); color:#fff; }
 .ct-escala { border-color:var(--g-b); color:var(--g-e); font-weight:700; text-transform:none; } .ct-escala:focus { border-color:var(--g); box-shadow:0 0 0 3px rgba(37,99,235,.15); }
 .ct-idx { margin-top:10px; }
@@ -263,6 +265,8 @@
 <input type="hidden" name="decimo" id="ct-dec" value="{{ dec }}">
 <input type="hidden" name="aviso_previo" id="ct-aviso" value="{{ dados.aviso_previo or 30 }}">
 <input type="hidden" name="lgpd" id="ct-lgpd" value="{{ '1' if dados.lgpd or not contrato else '' }}">
+{% set exc = (dados.get('extras_cobrados', True) if dados else True) %}
+<input type="hidden" name="extras_cobrados" id="ct-extras" value="{{ '1' if exc else '' }}">
 <input type="hidden" name="assina_qualicontax" id="ct-assq" value="{{ assina_q }}">
 {% if carteira_pct %}<input type="hidden" name="carteira_para" id="ct-cart" value="{{ '1' if (dados.carteira) or not contrato else '0' }}">{% endif %}
 <div id="ct-tests"></div>
@@ -406,11 +410,16 @@
         <div class="ct-det" data-para="DATA_PROPRIA" {{ '' if reaj == 'DATA_PROPRIA' else 'hidden' }}>
           <input type="hidden" name="reajuste_mes" id="ct-mes" value="{{ dados.reajuste_mes or '' }}">
           <div class="ct-cond-sub">Em que mês</div>
-          <div class="ct-chips ct-meses" id="ct-meses">{% for m in ('janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro') %}<button type="button" data-v="{{ m }}" class="{{ 'on' if dados.reajuste_mes == m }}" onclick="ctSeg(this, 'ct-mes')">{{ m[:3] }}</button>{% endfor %}</div>
+          <div class="ct-chips ct-meses" id="ct-meses">{% for m in ('janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro') %}<button type="button" data-v="{{ m }}" class="{{ 'on' if dados.reajuste_mes == m }}" onclick="ctSeg(this, 'ct-mes'); ctProxNovo()">{{ m[:3] }}</button>{% endfor %}</div>
         </div>
         <div class="ct-det" data-para="ESCALONADO" {{ '' if reaj == 'ESCALONADO' else 'hidden' }}>
           <div class="ct-cond-sub">Como escalona</div>
           <input type="text" name="reajuste_escala" class="ns-in ct-escala" value="{{ dados.reajuste_escala or (dados.reajuste_indice if reaj == 'ESCALONADO' else '') or '' }}" placeholder="ex.: R$ 3.000 até junho de 2027, depois R$ 5.000" oninput="ctResumo()">
+        </div>
+        {# próximo reajuste já definido no contrato (25/11/2026 — Anderson: "a AR entrou agora, vai ser reajustada em 01/28, então já escolhemos e sai já sabendo") #}
+        <div class="ct-det" data-para="SALARIO_MINIMO INDICE DATA_PROPRIA" {{ '' if reaj in ('SALARIO_MINIMO', 'INDICE', 'DATA_PROPRIA') else 'hidden' }}>
+          <div class="ct-cond-sub">Próximo reajuste</div>
+          <div class="ct-chips ct-prox" id="ct-proxs"><span id="ct-proxs-chips"></span><span class="ct-data"><i class="fas fa-calendar-days"></i><input type="month" class="ns-in" id="ct-prox-txt" name="reajuste_proximo" value="{{ dados.reajuste_proximo or '' }}" min="2020-01" onchange="ctProxSug(); ctResumo()"></span></div>
         </div>
       </div>
       <div class="ct-cond-duas">
@@ -444,6 +453,11 @@
           <div class="ct-cond-lbl"><i class="fas fa-shield-halved"></i> Cláusula LGPD</div>
           <div class="ns-ops ct-ops2" id="ct-lgpds"><button type="button" data-v="1" class="ns-op {{ 'on' if dados.lgpd or not contrato }}" onclick="ctSeg(this, 'ct-lgpd')"><i class="fas fa-lock"></i><b>Com a cláusula</b><small>proteção de dados</small></button><button type="button" data-v="" class="ns-op {{ 'on' if contrato and not dados.lgpd }}" onclick="ctSeg(this, 'ct-lgpd')"><i class="fas fa-lock-open"></i><b>Sem</b><small>não entra no contrato</small></button></div>
         </div>
+      </div>
+      {# serviços extraordinários (25/11/2026 — Anderson: "alguns clientes querem pagar só as taxas e outros não importam") #}
+      <div class="ct-cond-grp cg-ambar">
+        <div class="ct-cond-lbl"><i class="fas fa-receipt"></i> Serviços extraordinários <small>o que não está no contrato e o cliente pedir</small></div>
+        <div class="ns-ops ct-ops2" id="ct-extras-ops"><button type="button" data-v="1" class="ns-op {{ 'on' if exc }}" onclick="ctSeg(this, 'ct-extras')"><i class="fas fa-receipt"></i><b>Cobrados à parte</b><small>com preço combinado antes</small></button><button type="button" data-v="" class="ns-op {{ 'on' if not exc }}" onclick="ctSeg(this, 'ct-extras')"><i class="fas fa-stamp"></i><b>Só as taxas</b><small>sem honorário extra; o cliente paga só taxas e custas</small></button></div>
       </div>
       <div class="ct-cond-grp cg-roxo">
         <div class="ct-cond-lbl"><i class="fas fa-gavel"></i> Foro, local e título</div>
@@ -624,7 +638,30 @@ function ctReaj(bt) {
     ctSeg(bt, 'ct-reaj'); var v = bt.dataset.v;
     document.querySelectorAll('.ct-det').forEach(function (d) { d.hidden = d.dataset.para.split(' ').indexOf(v) < 0; });
     if ((v === 'INDICE' || v === 'DATA_PROPRIA') && !$('ct-idx').value) ctIndiceCaixa();
+    ctProxNovo();
 }
+// ---- próximo reajuste: sugere o primeiro mês de reajuste depois de 12 meses de contrato (nov/26 → jan/28); o calendário aceita outro ----
+var MESES_PT = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
+function ctProxNovo() { var i = $('ct-prox-txt'); if (i && i.dataset.auto) i.value = ''; ctProxSug(); ctResumo(); }
+function ctProxSug() {
+    var box = $('ct-proxs-chips'), inp = $('ct-prox-txt'); if (!box) return;
+    var ini = $('ct-inicio').value, rt = $('ct-reaj').value, mes = rt === 'DATA_PROPRIA' ? (MESES_PT.indexOf($('ct-mes').value) + 1) : 1;
+    box.innerHTML = '';
+    if (!ini || !mes) return;
+    var y0 = parseInt(ini.slice(0, 4), 10), m0 = parseInt(ini.slice(5, 7), 10), cands = [], umAno = y0 * 12 + m0 + 12, padrao = null;
+    for (var y = y0; y <= y0 + 3 && cands.length < 3; y++) { if (y > y0 || mes > m0) cands.push(y); }
+    cands.forEach(function (y) { if (!padrao && y * 12 + mes >= umAno) padrao = y; });
+    if (inp.value && parseInt(inp.value.slice(5, 7), 10) !== mes) inp.value = '';   // a regra mudou de mês (julho → janeiro): sugere de novo
+    if (!inp.value && padrao) { inp.value = padrao + '-' + pad(mes); inp.dataset.auto = '1'; }
+    cands.forEach(function (y) {
+        var v = y + '-' + pad(mes), b = document.createElement('button'); b.type = 'button'; b.dataset.v = v;
+        b.className = (inp.value === v ? 'on' : '') + (y === padrao ? ' sug' : '');
+        b.innerHTML = MESES_PT[mes - 1].slice(0, 3) + '/' + y + (y === padrao ? ' <small>12 meses</small>' : '');
+        b.onclick = function () { inp.value = v; delete inp.dataset.auto; ctProxSug(); ctResumo(); };
+        box.appendChild(b);
+    });
+}
+function ctProxTxt() { var d = $('ct-prox-txt'); if (!d || d.closest('.ct-det').hidden || !d.value) return ''; return MESES_PT[parseInt(d.value.slice(5, 7), 10) - 1].slice(0, 3) + '/' + d.value.slice(0, 4); }
 // ---- índice de reajuste: vem do cadastro (Financeiro › Serviços › Índices de reajuste), escolhido numa caixa nossa ----
 var INDICES = {{ indices | tojson }};
 function ctIndice(i) {
@@ -650,7 +687,7 @@ function ctDiaOutro(inp) { var n = parseInt(inp.value.replace(/\D/g, ''), 10); i
 function ctServExtra() { var i = document.createElement('input'); i.type = 'text'; i.name = 'servico_extra'; i.className = 'ns-in'; i.placeholder = 'serviço específico, ex.: emissão de notas fiscais em nome da contratante'; i.addEventListener('input', ctResumo); $('pf-extras').appendChild(i); i.focus(); }
 // ---- início: chips ou dd/mm/aaaa ----
 function pad(n) { return (n < 10 ? '0' : '') + n; }
-function ctIniSet(iso, bt) { $('ct-inicio').value = iso; $('ct-ini-txt').value = iso; document.querySelectorAll('#ct-inis button').forEach(function (x) { x.classList.toggle('on', x === bt); }); ctResumo(); }
+function ctIniSet(iso, bt) { $('ct-inicio').value = iso; $('ct-ini-txt').value = iso; document.querySelectorAll('#ct-inis button').forEach(function (x) { x.classList.toggle('on', x === bt); }); ctProxNovo(); }
 function ctIni(bt) {
     var h = new Date(), d;
     if (bt.dataset.v === 'hoje') d = h; else if (bt.dataset.v === 'mes') d = new Date(h.getFullYear(), h.getMonth(), 1); else d = new Date(h.getFullYear(), h.getMonth() + 1, 1);
@@ -770,19 +807,20 @@ function ctResumo() {
     if (rede && semSit.length) faltas.push('como paga cada empresa da rede'); else if (rede && !pag.length) faltas.push('uma empresa que paga'); else if (rede && pag.length > 1 && pag.some(function (p) { return !p.val; })) faltas.push('o valor de cada pagante'); if (!rep || !repEmail) faltas.push('quem assina e o e-mail'); if (rep && !val('rep_cargo')) faltas.push('em que qualidade assina'); if (extra && !val('extra_email')) faltas.push('o e-mail do outro assinante');
     if (!areas.length && !extras) faltas.push('os serviços'); if (!v) faltas.push('o valor'); if (!ini) faltas.push('a data de início');
     // frases de leitura (condições e cláusulas)
-    $('ct-cond-sum').innerHTML = F('Reajuste', reaj.toLowerCase()) + F('13º', segTx('ct-decs').toLowerCase()) + F('Multa', val('multa') + '%') + F('Juros', val('juros') + '% ao mês');
-    $('ct-cla-sum').innerHTML = F('Aviso prévio', $('ct-aviso').value + ' dias') + F('LGPD', $('ct-lgpd').value ? 'com a cláusula' : 'sem') + F('Foro', val('foro')) + F('Assinado em', val('local'))
+    var prox = ctProxTxt();
+    $('ct-cond-sum').innerHTML = F('Reajuste', reaj.toLowerCase()) + (prox ? F('Próximo', prox) : '') + F('13º', segTx('ct-decs').toLowerCase()) + F('Multa', val('multa') + '%') + F('Juros', val('juros') + '% ao mês');
+    $('ct-cla-sum').innerHTML = F('Aviso prévio', $('ct-aviso').value + ' dias') + F('LGPD', $('ct-lgpd').value ? 'com a cláusula' : 'sem') + F('Serviços extras', $('ct-extras').value ? 'cobrados à parte' : 'só as taxas') + F('Foro', val('foro')) + F('Assinado em', val('local'))
         + F('Pela Qualicontax', q.nome || '') + F('Testemunha' + (tests.length > 1 ? 's' : ''), tests.length ? tests.join(' e ') : 'nenhuma');
     // ficha à direita
     var K = function (k, x, sub, falta) { return '<div class="ct-kpi"><small>' + k + '</small><b' + (falta ? ' class="falta"' : '') + '>' + esc(x) + '</b>' + (sub ? '<span>' + esc(sub) + '</span>' : '') + '</div>'; };
     $('ct-ficha-tit').textContent = titulo.toUpperCase();
     $('ct-kpis').innerHTML = K('Honorários', v ? brl(v) : 'a informar', 'por mês', !v) + K('Vencimento', dia ? 'dia ' + dia : '—', 'de cada mês')
-        + K('Início', ini ? ini.split('-').reverse().join('/') : 'a informar', '', !ini) + K('Reajuste', segTx('ct-reajs'), (reajDet || '') + (rt === 'DATA_PROPRIA' && val('reajuste_mes') ? (reajDet ? ' · ' : '') + val('reajuste_mes') : ''));
+        + K('Início', ini ? ini.split('-').reverse().join('/') : 'a informar', '', !ini) + K('Reajuste', segTx('ct-reajs'), (reajDet || '') + (rt === 'DATA_PROPRIA' && val('reajuste_mes') ? (reajDet ? ' · ' : '') + val('reajuste_mes') : '') + (prox ? ' · próximo ' + prox : ''));
     var L = function (k, x, falta) { return '<div><span>' + k + '</span><b' + (falta ? ' class="ct-falta"' : '') + '>' + esc(x || '—') + '</b></div>'; };
     var html = (rede ? L('Rede', emps.length + ' empresas' + (apelido ? ' · ' + apelido.toUpperCase() : '')) + L('Quem paga', pag.length ? pag.map(function (p) { return nomeProprio(p.nome); }).join(' e ') : 'a escolher', !pag.length)
         + (via.length || sem.length ? L('Sem cobrança', (via.length ? via.length + ' via grupo' : '') + (via.length && sem.length ? ' · ' : '') + (sem.length ? sem.length + ' sem movimento' : '')) : '') : '')
         + (extra ? L('Também assina', nomeProprio(extra) + ' · ' + (val('extra_cargo') || 'autorizado(a)'), !val('extra_email')) : '')
-        + L('13º', segTx('ct-decs')) + L('Multa / juros', val('multa') + '% · ' + val('juros') + '% ao mês') + L('Aviso prévio', $('ct-aviso').value + ' dias') + L('LGPD', $('ct-lgpd').value ? 'com a cláusula' : 'sem')
+        + L('13º', segTx('ct-decs')) + L('Multa / juros', val('multa') + '% · ' + val('juros') + '% ao mês') + L('Aviso prévio', $('ct-aviso').value + ' dias') + L('LGPD', $('ct-lgpd').value ? 'com a cláusula' : 'sem') + L('Serviços extras', $('ct-extras').value ? 'cobrados à parte' : 'só as taxas')
         + L('Foro', val('foro')) + L('Pela Qualicontax', q.nome || '') + L('Testemunhas', tests.length ? tests.join(' e ') : 'nenhuma')
         + ($('ct-cart') ? L('Carteira', $('ct-cart').value === '1' ? 'sim, {{ "%g" % carteira_pct if carteira_pct else "" }}%' : 'não') : '')
         + '<div class="ct-ok' + (faltas.length ? ' erro' : '') + '"><i class="fas ' + (faltas.length ? 'fa-circle-exclamation' : 'fa-circle-check') + '"></i><b>' + (faltas.length ? 'Falta: ' + faltas.join(', ') : 'Pronto para salvar o rascunho') + '</b></div>';
@@ -798,7 +836,7 @@ $('pf-form').addEventListener('submit', function (e) { if (!$('ct-inicio').value
 window.Dinheiro.ligar();
 ctTest.init = true; ctTestHidden();
 if (!$('ct-assq').value) { var f = document.querySelector('#ct-assq-ops .ns-op.on'); if (f) $('ct-assq').value = f.dataset.v; }
-ctIniMarca(); ctEmps();
+ctIniMarca(); ctProxSug(); ctEmps();
 (function () { var v = $('ct-idx').value; if (v) ctIndice(INDICES.filter(function (i) { return i.sigla === v; })[0] || { sigla: v, nome: v, descricao: 'índice fora do cadastro' }); })();
 if ($('extra_nome').value.trim()) { cardPessoa('extra_', 'ct-extra-link', 'Quem mais assina?'); }
 if ($('ct-sug') && !$('ct-valor').value.trim()) { var s0 = document.querySelector('#ct-sug input'); if (s0) ctSug(s0); }

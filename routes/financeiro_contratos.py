@@ -70,6 +70,12 @@ SITUACOES_REDE = ('PAGA', 'VIA_GRUPO', 'SEM_MOVIMENTO')
 
 def _dig(s):
     return ''.join(ch for ch in str(s or '') if ch.isdigit())
+
+
+def _mes_iso(v):
+    """'2028-01' (do input type=month) ou None."""
+    v = (v or '').strip()[:7]
+    return v if len(v) == 7 and v[:4].isdigit() and v[4] == '-' and v[5:7].isdigit() and 1 <= int(v[5:7]) <= 12 else None
 # como a situação da empresa no contrato vira a cobrança do cadastro (clientes.cobranca) na aprovação
 _COBRANCA_DA_REDE = {'PAGA': 'PROPRIA', 'VIA_GRUPO': 'VIA_GRUPO', 'SEM_MOVIMENTO': 'SEM_MOVIMENTO'}
 
@@ -196,6 +202,8 @@ def _ler_form(f):
         'sugestoes': [{'ramo_id': int(x.split('|')[0]), 'nome': x.split('|')[1][:60], 'valor': x.split('|')[2]} for x in f.getlist('sugestao_ramo') if x.count('|') == 2 and x.split('|')[0].isdigit()],
         'reajuste_tipo': rt, 'reajuste_indice': (f.get('reajuste_indice') or '').strip().upper() or None if rt in ('INDICE', 'DATA_PROPRIA') else None,
         'reajuste_mes': (f.get('reajuste_mes') or '').strip().lower() or None if rt == 'DATA_PROPRIA' else None,
+        'reajuste_proximo': _mes_iso(f.get('reajuste_proximo')) if rt in ('SALARIO_MINIMO', 'INDICE', 'DATA_PROPRIA') else None,
+        'extras_cobrados': bool(f.get('extras_cobrados')),
         'reajuste_escala': (f.get('reajuste_escala') or '').strip() or None if rt == 'ESCALONADO' else None,
         'decimo': f.get('decimo') if f.get('decimo') in ('COBRADO', 'UNICA', 'ISENTO') else 'COBRADO',
         'multa': (f.get('multa') or '10').strip(), 'juros': (f.get('juros') or '1').strip(), 'aviso_previo': int(f.get('aviso_previo') or 30),
@@ -442,6 +450,7 @@ def _honorario_do_contrato(c, aprovado_por):
                                 [{'descricao': 'Honorários contábeis', 'valor': valor}],
                                 decimo_tipo=_DECIMO.get(d.get('decimo'), 'DUAS'), reajuste_tipo=reaj,
                                 reajuste_obs=d.get('reajuste_escala') or d.get('reajuste_indice'), criado_por=c['criado_por'], aprovado_por=aprovado_por,
+                                proximo_reajuste=date(int(d['reajuste_proximo'][:4]), int(d['reajuste_proximo'][5:7]), 1) if d.get('reajuste_proximo') else None,
                                 observacao='Do contrato de prestação nº %s, aprovado no sistema' % (c.get('numero') or c['id']))
         criados.append(fid)
     return criados, avisos

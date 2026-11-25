@@ -590,6 +590,9 @@ class PrestContrato:
         reaj = reaj.format(indice=escala if rt == 'ESCALONADO' else (idx or 'índice combinado entre as partes'), mes=dados.get('reajuste_mes') or 'janeiro',
                            indice_txt=('pela variação acumulada do %s, ou de outro índice oficial que venha a substituí-lo' % idx) if idx
                            else 'pelo mesmo percentual de reajuste do salário mínimo nacional')
+        prox = _mes_extenso(dados.get('reajuste_proximo'))
+        if prox and rt in ('SALARIO_MINIMO', 'INDICE', 'DATA_PROPRIA'):
+            reaj += ' O primeiro reajuste será aplicado em %s.' % prox
         paras.append(reaj)
         paras.append('Os honorários pagos após a data acarretarão à %s o acréscimo de multa de %s%% (%s por cento), sem prejuízo de juros moratórios de %s%% '
                      '(%s por cento) ao mês ou fração.' % (apelido, dados.get('multa') or '10', _pct_extenso(dados.get('multa') or '10'),
@@ -605,7 +608,11 @@ class PrestContrato:
                                      'por conta do encerramento do Balanço Patrimonial e demais obrigações anuais.']))
         else:
             cl.append(('CLÁUSULA', ['Fica dispensada a cobrança do 13º honorário referente ao encerramento do Balanço Patrimonial e demais obrigações anuais.']))
-        cl.append(('CLÁUSULA', ['Todos os serviços extraordinários não contratados que forem necessários ou solicitados pela contratante serão cobrados à parte, com preços previamente convencionados.']))
+        if dados.get('extras_cobrados', True):
+            cl.append(('CLÁUSULA', ['Todos os serviços extraordinários não contratados que forem necessários ou solicitados pela contratante serão cobrados à parte, com preços previamente convencionados.']))
+        else:   # 25/11/2026 — Anderson: "alguns clientes querem pagar só as taxas"
+            cl.append(('CLÁUSULA', ['Os serviços extraordinários não contratados que forem necessários ou solicitados pela contratante não terão cobrança de honorários adicionais, '
+                                     'ficando a cargo da contratante apenas as taxas, emolumentos e custas cobradas por órgãos públicos e terceiros.']))
         cl.append(('CLÁUSULA', ['No caso de atraso no pagamento dos honorários, por período de 2 (dois) meses, a QUALICONTAX poderá rescindir o contrato, por motivo justificado, '
                                  'eximindo-se de qualquer responsabilidade a partir da data da rescisão.']))
         inicio = dados.get('inicio')
@@ -649,13 +656,17 @@ class PrestContrato:
         decimo_txt = {'COBRADO': '1 honorário mensal, em duas parcelas (novembro e dezembro)', 'UNICA': '1 honorário mensal, em dezembro'}.get(dados.get('decimo'), 'isento')
         resumo = [('Objeto', areas_txt or '—'), ('Honorários mensais', '%s, com vencimento todo dia %d' % (brl(valor), dia) + ((' · paga %s' % pagantes[0]['razao']) if len(empresas) > 1 and len(pagantes) == 1 else '')),
                   ('Início', inicio_d.strftime('%d/%m/%Y')), ('13º honorário', decimo_txt),
-                  ('Reajuste', {'SALARIO_MINIMO': 'salário mínimo, todo janeiro', 'INDICE': 'índice próprio', 'DATA_PROPRIA': 'data própria', 'SEM': 'de comum acordo', 'ESCALONADO': 'escalonado'}.get(dados.get('reajuste_tipo') or 'SALARIO_MINIMO')),
+                  ('Reajuste', {'SALARIO_MINIMO': 'salário mínimo, todo janeiro', 'INDICE': 'índice próprio', 'DATA_PROPRIA': 'data própria', 'SEM': 'de comum acordo', 'ESCALONADO': 'escalonado'}.get(dados.get('reajuste_tipo') or 'SALARIO_MINIMO')
+                   + ((' · próximo em %s' % prox) if prox and rt in ('SALARIO_MINIMO', 'INDICE', 'DATA_PROPRIA') else '')),
+                  ('Serviços extraordinários', 'cobrados à parte' if dados.get('extras_cobrados', True) else 'só as taxas'),
                   ('Aviso prévio', '%d dias' % aviso), ('Foro', dados.get('foro') or 'São Paulo/SP')]
         # ficha estruturada para a folha de rosto do PDF (23/11/2026: "PDF elegante como o do orçamento")
         rt = dados.get('reajuste_tipo') or 'SALARIO_MINIMO'
         reaj_curto = {'SALARIO_MINIMO': ('salário mínimo', 'todo janeiro'), 'INDICE': ('pelo %s' % (dados.get('reajuste_indice') or 'índice combinado'), 'anual'),
                       'DATA_PROPRIA': ('em %s' % (dados.get('reajuste_mes') or 'data própria'), dados.get('reajuste_indice') or 'salário mínimo'), 'SEM': ('de comum acordo', ''),
                       'ESCALONADO': ('escalonado', dados.get('reajuste_escala') or dados.get('reajuste_indice') or '')}.get(rt, ('de comum acordo', ''))
+        if prox and rt in ('SALARIO_MINIMO', 'INDICE', 'DATA_PROPRIA'):
+            reaj_curto = (reaj_curto[0], 'próximo em %s' % _mes_curto(dados.get('reajuste_proximo')))
         decimo_curto = {'COBRADO': ('em 2 parcelas', 'novembro e dezembro'), 'UNICA': ('em dezembro', '1 honorário mensal')}.get(dados.get('decimo'), ('isento', ''))
         e0 = empresas[0] if empresas else {}
         ficha = {'valor': valor, 'dia': dia, 'inicio': inicio_d, 'areas': [(AREAS[a][0], list(AREAS[a][1])) for a in areas],
@@ -664,6 +675,7 @@ class PrestContrato:
                  'multa': str(dados.get('multa') or '10').replace('.', ','), 'juros': str(dados.get('juros') or '1').replace('.', ','),
                  'valores_por_empresa': bool(len(empresas) > 1 and dados.get('valores_por_empresa') and len(pagantes) > 1),
                  'pagantes': [e['razao'] for e in pagantes], 'via_grupo': [e['razao'] for e in via], 'sem_movimento': [e['razao'] for e in sem],
+                 'extras_cobrados': bool(dados.get('extras_cobrados', True)), 'reajuste_proximo': dados.get('reajuste_proximo'),
                  'representante': {'nome': e0.get('rep_nome') or '', 'cargo': e0.get('rep_cargo') or '', 'cpf': e0.get('rep_cpf') or ''},
                  'extra': ex if (ex and ex.get('nome')) else None, 'assina': q, 'n_testemunhas': n_test}
         return {'titulo': titulo, 'partes': partes, 'preambulo': preambulo, 'clausulas': clausulas, 'fecho': fecho, 'local_data': local,
@@ -676,6 +688,25 @@ def _data(s):
         return datetime.strptime(s, '%Y-%m-%d').date() if s else None
     except Exception:
         return None
+
+
+_MESES_PT = ('janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro')
+
+
+def _mes_extenso(v):
+    """'2028-01' → 'janeiro de 2028'; vazio ou inválido → ''."""
+    try:
+        return '%s de %d' % (_MESES_PT[int(v[5:7]) - 1], int(v[:4])) if v and len(v) >= 7 else ''
+    except (ValueError, IndexError):
+        return ''
+
+
+def _mes_curto(v):
+    """'2028-01' → 'jan/2028'."""
+    try:
+        return '%s/%s' % (_MESES_PT[int(v[5:7]) - 1][:3], v[:4]) if v and len(v) >= 7 else ''
+    except (ValueError, IndexError):
+        return ''
 
 
 def _nomes(empresas):
