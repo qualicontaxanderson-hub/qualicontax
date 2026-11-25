@@ -955,7 +955,7 @@ body.ex-selecionando .ex-barra-lote { display:flex; }
                 </span>
                 {% elif rc and rc.tipo == 'dobro' %}
                 <span class="ex-rec dobro" title="O banco recebeu o mesmo boleto mais de uma vez. Este crédito NÃO deu baixa em outra parcela: decida se vira adiantamento ou se devolve.">
-                    <i class="fas fa-clone"></i> PAGO EM DOBRO · {{ rc.nome or '' }}{% if rc.texto %} · {{ rc.texto }}{% endif %}{% if rc.venc %} · venc. {{ rc.venc.strftime('%d/%m') }}{% endif %}{% if rc.situacao == 'A_DECIDIR' %} · a decidir{% endif %}
+                    <i class="fas fa-clone"></i> PAGO EM DOBRO · {{ rc.nome or '' }}{% if rc.texto %} · {{ rc.texto }}{% endif %}{% if rc.venc %} · venc. {{ rc.venc.strftime('%d/%m') }}{% endif %}{% if rc.usado %} · usado para pagar a cobrança{% if rc.usado.texto %} {{ rc.usado.texto }}{% endif %}{% if rc.usado.venc %} venc. {{ rc.usado.venc.strftime('%d/%m') }}{% endif %}{% elif rc.situacao == 'A_DECIDIR' %} · a decidir{% endif %}
                 </span>
                 {% endif %}
                 {% if l.categoria_id and l.conferir %}
@@ -1007,7 +1007,7 @@ body.ex-selecionando .ex-barra-lote { display:flex; }
                     {{ 'Trocar' if l.categoria_id else 'Classificar' }}
                 </button>
                 {% endif %}
-                {% if pode_vincular and l.valor > 0 and l.id not in com_baixa and not receb.get(l.id) and l.par_estado not in ('casado', 'suspeito', 'aprovado') %}
+                {% if pode_vincular and l.valor > 0 and l.id not in com_baixa and (receb.get(l.id) or {}).get('tipo') != 'baixa' and l.par_estado not in ('casado', 'suspeito', 'aprovado') %}
                 <a class="ex-btn-tag" href="{{ url_for('financeiro.vincular_pagamento', lanc_id=l.id) }}"
                    title="Pagamento de cliente: dar baixa no(s) título(s), tratar a diferença e tirar o boleto do banco">
                     <i class="fas fa-link"></i> Vincular a título

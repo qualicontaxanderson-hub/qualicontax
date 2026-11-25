@@ -150,6 +150,19 @@ def tirar_boletos_do_banco(titulo_id):
         b = FinBoleto.get(r['id'])
         if not b:
             continue
+        if b['provedor'] == 'cora':
+            # 25/11/2026 (B2t): no Cora "marcar como pago" é cancelar o boleto; 'settled' antes, como na Efí
+            FinBoleto.atualizar_situacao(b['id'], 'settled')
+            try:
+                from utils.cora_boletos import cancelar as cora_cancelar
+                cora_cancelar(b)
+                registrar('escrita.cancelou_boleto_cora', 'financeiro', tabela='fin_boletos', registro_id=b['id'],
+                          depois={'charge_id': b['charge_id'], 'titulo_id': titulo_id, 'como': 'pagamento vinculado do extrato'})
+            except Exception as exc:
+                logger.exception('[vincular] cancelar no Cora %s', b['charge_id'])
+                FinBoleto.atualizar_situacao(b['id'], b['situacao'])
+                avisos.append(f"O Cora não cancelou o boleto {FinBoleto.numero(b)} ({exc}). Cancele pela tela do boleto para o cliente não pagar de novo.")
+            continue
         if b['provedor'] != 'efi':
             avisos.append(f"O boleto {FinBoleto.numero(b)} é do {b['provedor'].capitalize()}: cancele lá para o cliente não pagar de novo.")
             continue
@@ -316,8 +329,9 @@ def recebimentos_das_linhas(lancamentos):
     except Exception:                       # tabela ainda não criada (antes da migração)
         dups = []
     for r in dups:
+        usado = out.get(r['lancamento_id']) if (out.get(r['lancamento_id']) or {}).get('tipo') == 'baixa' else None
         out[r['lancamento_id']] = {'tipo': 'dobro', 'titulo_id': r['titulo_id'], 'nome': r['nome'], 'situacao': r['situacao'],
-                                   'texto': r['descricao'] or '', 'venc': r['vencimento']}
+                                   'texto': r['descricao'] or '', 'venc': r['vencimento'], 'usado': usado}
     return out
 
 
@@ -493,6 +507,13 @@ def vincular_gravar(lanc_id):
                       'motivo': motivo or None, 'residuo_titulo_id': residuo_id,
                       'residuo_vencimento': str(venc_residuo) if venc_residuo else None})
 
+    # o crédito era PAGO EM DOBRO de outro boleto: usá-lo numa cobrança é a decisão "adiantamento"
+    try:
+        execute_query("""UPDATE fin_pagamentos_duplicados SET situacao = 'ADIANTAMENTO', decidido_por = %s, decidido_em = NOW(),
+                                obs = %s WHERE lancamento_id = %s AND situacao = 'A_DECIDIR'""",
+                      (current_user.id, ('usado para pagar o título ' + ', '.join(str(t['id']) for t in ts))[:255], lanc_id))
+    except Exception:
+        logger.exception('[vincular] marcar pago em dobro como adiantamento (linha %s)', lanc_id)
     msg = f'Pagamento de {_brl(pago)} vinculado a {len(ts)} título(s).'
     if dif > 0 and acao == 'desconto':
         msg += f' Desconto de {_brl(dif)}.'
