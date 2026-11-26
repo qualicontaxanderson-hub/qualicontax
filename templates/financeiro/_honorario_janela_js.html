@@ -1,0 +1,516 @@
+{# Janela do contrato de honorários (18/11/2026 "repaginar"), separada em 26/11/2026 para abrir também dentro do painel Honorários.
+   Usada por honorarios.html (lista antiga, convite, cadastrar) e honorarios_painel.html. Variáveis: bancos, servicos, grupos, DECIMO_TIPOS,
+   DECIMO_INICIOS, REAJUSTE_TIPOS, SERVICO_HONORARIOS, hoje, modo ('admin' no escritório). #}
+{# precisa de dinheiro.js, caixa_grupo.js, qc_data.js e caixa_servico.js carregados antes #}
+<script>
+var HO_SERVICOS = {{ servicos | tojson }};
+var HO_SERV_HON = {{ SERVICO_HONORARIOS }};
+function brl(v) { return 'R$ ' + (v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+function hoNum(s) { s = String(s || '').trim(); if (!s) return 0; if (s.indexOf(',') >= 0) s = s.replace(/\./g, '').replace(',', '.'); return parseFloat(s) || 0; }
+// ---- 18/11/2026 (repaginação): cartões de opção ligados aos campos de sempre, resumo à direita, encerrar dentro da janela ----
+var HO_MES = {{ hoje.month }};
+var HO_MESES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
+var HO_REAJ_ROT = {{ REAJUSTE_TIPOS | tojson }}, HO_DEC_ROT = {{ DECIMO_TIPOS | tojson }};
+function hoMarca(sel, v) { document.querySelectorAll(sel).forEach(function (b) { b.classList.toggle('on', String(b.dataset.v !== undefined ? b.dataset.v : (b.dataset.d !== undefined ? b.dataset.d : b.dataset.nf)) === String(v)); }); }
+function hoDia(d) { document.getElementById('ho-dia').value = d; hoSync(); hoResumo(); }
+function hoEmite(nf) { document.getElementById('ho-nfse').checked = !!nf; document.getElementById('ho-boleto').checked = true; hoSync(); hoResumo(); }
+function hoDecTipo(v) { document.getElementById('ho-decimo').value = v; hoDecimo(); hoResumo(); }
+function hoDecIni(v) { document.getElementById('ho-dec-inicio').value = v; hoDecimo(); hoResumo(); }
+function hoReaj(v) { document.getElementById('ho-reajuste').value = v; hoSync(); hoResumo(); }
+function hoBanco(v) { var b = document.getElementById('ho-banco'); if (b) { b.value = v; hoSync(); hoResumo(); } }
+function hoBancoNome() {
+    var b = document.getElementById('ho-banco'); if (!b) return '';
+    var op = document.querySelector('#ho-banco-ops .ns-op[data-v="' + b.value + '"]'); if (!op) return '';
+    return op.querySelector('b').textContent + (b.value ? '' : ' (' + op.querySelector('small').textContent.replace('hoje: ', '') + ')');
+}
+function hoSync() {
+    hoMarca('#ho-dias button', document.getElementById('ho-dia').value);
+    hoMarca('#ho-emite .ns-op', document.getElementById('ho-nfse').checked ? 1 : 0);
+    hoMarca('#ho-dec-ops .ns-op', document.getElementById('ho-decimo').value);
+    hoMarca('#ho-dec-ini-seg button', document.getElementById('ho-dec-inicio').value);
+    hoMarca('#ho-reaj-ops .ns-op', document.getElementById('ho-reajuste').value);
+    hoMarca('#ho-desc-seg button', document.getElementById('ho-desc-tipo').value);
+    if (document.getElementById('ho-banco')) hoMarca('#ho-banco-ops .ns-op', document.getElementById('ho-banco').value);
+}
+function hoIniciais(nome) { var p = String(nome || '').trim().split(/\s+/); return ((p[0] || '')[0] || '') + ((p.length > 1 ? p[p.length - 1] : '')[0] || ''); }
+function hoDataBr(s) { if (!s) return ''; var p = s.split('-'); return p.length === 3 ? p[2] + '/' + p[1] + '/' + p[0] : s; }
+function hoProxima(t, tipo, modo, ini, desde) {
+    // previsão da cobrança da competência atual: mensal + a parcela do 13º que cai nela
+    var comp = { m: HO_MES, y: HO_ANO }, vencM = comp.m === 12 ? 1 : comp.m + 1, vencY = comp.m === 12 ? comp.y + 1 : comp.y;
+    var dia = parseInt(document.getElementById('ho-dia').value, 10) || 10;
+    var base = ini || { y: HO_ANO, m: 1 };
+    if (modo === 'INTEIRO') base = { y: base.y, m: 1 }; else if (modo === 'PROXIMO') base = { y: base.y + 1, m: 1 }; else if (modo === 'DATA' && desde) base = desde;
+    var meses = base.y > HO_ANO ? 0 : (base.y < HO_ANO ? 12 : 13 - base.m), dec = 0;
+    if (tipo === 'UNICA' && comp.m === 11) dec = t * meses / 12;
+    else if (tipo === 'DUAS' && (comp.m === 10 || comp.m === 11)) dec = t * meses / 12 / 2;
+    // PROPRIO: nada na mensalidade — o 13º sai em boletos próprios, nas datas combinadas
+    return { comp: comp, venc: (dia < 10 ? '0' + dia : dia) + '/' + (vencM < 10 ? '0' + vencM : vencM) + '/' + vencY, dec: dec, total: t + dec };
+}
+function hoResumoLado(t) {
+    var $ = function (i) { return document.getElementById(i); };
+    var tipo = $('ho-decimo').value, modo = $('ho-dec-inicio').value, ini = hoData($('ho-inicio').value), desde = hoData($('ho-dec-desde').value);
+    var rt = $('ho-reajuste').value, prox = $('ho-prox').value, fim = $('ho-fim').value, dia = $('ho-dia').value, nf = $('ho-nfse').checked;
+    var ds = hoDesconto(t), liq = Math.round((t - ds.valor) * 100) / 100;
+    $('ho-prev').textContent = brl(liq); $('ho-prev-sub').textContent = (nf ? 'nota + boleto' : 'só boleto') + (dia ? ' · vence dia ' + dia : '') + (ds.valor ? ' · com desconto' : '');
+    $('ho-r-mensal').innerHTML = '<b>' + brl(liq) + '</b>' + (ds.valor ? ' <small>(' + brl(t) + ' − ' + brl(ds.valor) + (ds.pct ? ' = ' + ds.pct.toLocaleString('pt-BR') + '%' : '') + ')</small>' : '') + (document.querySelectorAll('#ho-itens tbody tr').length > 1 ? ' em ' + document.querySelectorAll('#ho-itens tbody tr').length + ' discriminações' : '');
+    $('ho-r-venc').textContent = dia ? 'dia ' + dia + ' do mês seguinte' : '—';
+    $('ho-r-emite').textContent = nf ? 'nota fiscal + boleto' : 'só boleto';
+    if ($('ho-r-banco')) $('ho-r-banco').textContent = hoBancoNome() || '—';
+    var decTxt = HO_DEC_ROT[tipo] || tipo; if (tipo !== 'NENHUM') { var r = hoProxima(t, tipo, modo, ini, desde); decTxt = decTxt.split(' (')[0]; }
+    $('ho-r-dec').textContent = decTxt;
+    var rj = HO_REAJ_ROT[rt] || rt; if (prox) rj += ' · próximo ' + hoDataBr(prox); $('ho-r-reaj').textContent = rj;
+    $('ho-r-vig').textContent = ($('ho-inicio').value ? 'desde ' + hoDataBr($('ho-inicio').value) : '—') + (fim ? ' até ' + hoDataBr(fim) : '');
+    var px = hoProxima(t, tipo, modo, ini, desde);
+    $('ho-px-comp').textContent = (px.comp.m < 10 ? '0' + px.comp.m : px.comp.m) + '/' + px.comp.y + ' · vence ' + px.venc;
+    $('ho-px-val').textContent = brl(px.total - ds.valor);
+    var linhas = []; document.querySelectorAll('#ho-itens tbody tr').forEach(function (tr) { var d = tr.querySelector('[name=item_desc]').value || 'Honorários', v = hoNum(tr.querySelector('[name=item_valor]').value); if (v) linhas.push('<span><i>' + d + '</i><b>' + brl(v) + '</b></span>'); });
+    if (ds.valor) linhas.push('<span class="desc"><i>Desconto mensal' + (ds.motivo ? ' · ' + ds.motivo : '') + '</i><b>− ' + brl(ds.valor) + '</b></span>');
+    if (px.dec) linhas.push('<span class="dec"><i>13º honorário (' + (tipo === 'DUAS' ? 'parcela' : 'parcela única') + ')</i><b>' + brl(px.dec) + '</b></span>');
+    $('ho-px-lin').innerHTML = linhas.join('');
+    var enc = document.getElementById('ho-enc'); if (enc) enc.style.display = $('ho-id').value ? 'block' : 'none';
+    // indicadores do topo
+    $('ho-k-mensal').textContent = brl(liq); $('ho-k-mensal-s').textContent = (nf ? 'nota + boleto' : 'só boleto') + (ds.valor ? ' · ' + brl(t) + ' − desconto' : '');
+    var base = ini || { y: HO_ANO, m: 1 }; if (modo === 'INTEIRO') base = { y: base.y, m: 1 }; else if (modo === 'PROXIMO') base = { y: base.y + 1, m: 1 }; else if (modo === 'DATA' && desde) base = desde;
+    var mesesDec = base.y > HO_ANO ? 0 : (base.y < HO_ANO ? 12 : 13 - base.m), dec13 = t * mesesDec / 12;
+    if (tipo === 'NENHUM') { $('ho-k-dec').textContent = 'não cobra'; $('ho-k-dec-s').textContent = 'sem 13º'; }
+    else { $('ho-k-dec').textContent = mesesDec ? brl(dec13) : 'a partir de ' + base.y; $('ho-k-dec-s').textContent = mesesDec ? (mesesDec + '/12 · ' + (tipo === 'DUAS' ? '2 parcelas' : tipo === 'UNICA' ? 'parcela única' : hoDpDatas().length + (hoDpDatas().length === 1 ? ' boleto próprio' : ' boletos próprios'))) : 'só no ano que vem'; }
+    if (prox) { var pp = hoData(prox); $('ho-k-reaj').textContent = HO_MESES[pp.m - 1] + '/' + pp.y; } else if (rt === 'SALARIO_MINIMO' && ini) { $('ho-k-reaj').textContent = 'jan/' + (ini.m === 1 ? ini.y + 1 : ini.y + 2); } else $('ho-k-reaj').textContent = rt === 'SEM' ? 'adiado' : '—';
+    $('ho-k-reaj-s').textContent = (HO_REAJ_ROT[rt] || '').toLowerCase();
+    // prévia de valor nos cartões do 13º
+    var pv = { UNICA: mesesDec ? brl(dec13) + ' em dez' : 'só no ano que vem', DUAS: mesesDec ? '2 × ' + brl(dec13 / 2) : 'só no ano que vem', PROPRIO: 'fora da mensalidade, nas datas combinadas', NENHUM: 'não cobra ou foi cancelado' };
+    document.querySelectorAll('#ho-dec-ops .ns-op').forEach(function (b) { var s = b.querySelector('small'); s.textContent = pv[b.dataset.v] || s.textContent; s.classList.toggle('prev', t > 0 && b.dataset.v !== 'NENHUM' && b.dataset.v !== 'PROPRIO'); });
+    var vt = $('ho-vig-txt'); if (vt) vt.innerHTML = ini ? '<i class="fas fa-calendar-check"></i> <b>' + hoMesesEntre(ini) + '</b>' + (fim ? ' · encerra em ' + hoDataBr(fim) : '') : '';
+}
+// ---- contexto do contrato (18/11/2026): cabeçalho, indicadores, como paga, quem recebe, reajustes, histórico ----
+var HO_EXTRA = null;
+function hoExtra(x) {
+    HO_EXTRA = x || null;
+    var $ = function (i) { return document.getElementById(i); };
+    var chips = [];
+    if (x) {
+        if (x.cpf_cnpj) chips.push('<span><i class="fas fa-id-card"></i> ' + x.cpf_cnpj + '</span>');
+        if (x.grupo_nome) chips.push('<span><i class="fas fa-layer-group"></i> ' + x.grupo_nome + '</span>');
+        if (x.plano) chips.push('<span>' + x.plano + '</span>');
+        if (x.situacao) chips.push('<span class="' + (x.situacao === 'ATIVO' ? 'ok' : 'al') + '">' + ({ATIVO: 'ativo', PENDENTE: 'aguardando aprovação', ENCERRADO: 'encerrado', REPROVADO: 'reprovado'}[x.situacao] || x.situacao) + '</span>');
+        if (x.conexa) chips.push('<span>veio do Conexa</span>');
+    }
+    $('ho-chips-cab').innerHTML = chips.join('');
+    // como paga
+    var bp = $('ho-b-paga');
+    if (x && x.meses && x.meses.length) {
+        bp.style.display = 'block';
+        var rot = {pago: 'pago', aberto: 'a vencer', atrasado: 'atrasado', parcial: 'pago em parte', sem: 'sem cobrança'};
+        $('ho-meses').innerHTML = x.meses.map(function (m, i) { return '<span class="hp-m ' + m.status + (i === x.meses.length - 1 ? ' atual' : '') + '" title="vencimento ' + m.mes + '/' + m.ano + ': ' + (i === x.meses.length - 1 && m.status === 'sem' ? 'a emitir' : rot[m.status]) + (m.valor ? ' · ' + brl(m.valor) : '') + '">' + m.mes[0].toUpperCase() + '<i></i></span>'; }).join('');
+        $('ho-paga-em').textContent = '12 meses';
+        var t = x.cobrados ? '<b>' + x.em_dia + ' de ' + x.cobrados + '</b> mensalidades pagas' + (x.em_dia === x.cobrados ? ' · em dia' : '') : 'ainda sem mensalidade cobrada por aqui';
+        if (x.atrasado > 0) t += '<span class="deve"><i class="fas fa-clock"></i> deve ' + brl(x.atrasado) + ' de meses anteriores</span>';
+        t += '<div class="ho-leg"><span><i style="background:#22c55e"></i>pago</span><span><i style="background:#3b82f6"></i>a vencer</span><span><i style="background:#ef4444"></i>atrasado</span><span><i style="background:repeating-linear-gradient(90deg,#fdba74 0 5px,#fed7aa 5px 10px)"></i>a emitir</span></div>';
+        $('ho-paga-txt').innerHTML = t;
+        var k4 = $('ho-k-atr'); k4.textContent = x.atrasado > 0 ? brl(x.atrasado) : 'nada'; $('ho-k-atr-s').textContent = x.atrasado > 0 ? 'mensalidades vencidas' : 'em dia'; k4.closest('.ho-kpi').classList.toggle('zero', !(x.atrasado > 0));
+    } else { bp.style.display = 'none'; $('ho-k-atr').textContent = '—'; $('ho-k-atr-s').textContent = 'sem histórico ainda'; $('ho-k-atr').closest('.ho-kpi').classList.add('zero'); }
+    // quem recebe
+    var bc = $('ho-b-cont');
+    if (x && x.contatos) {
+        bc.style.display = 'block'; $('ho-cont-em').textContent = x.contatos.length ? x.contatos.length + ' do Financeiro' : '';
+        $('ho-cont').innerHTML = x.contatos.length ? x.contatos.map(function (c) { return '<div><span class="av">' + hoIniciais(c.nome) + '</span><div style="min-width:0"><b>' + c.nome + '</b><small>' + c.email + '</small></div></div>'; }).join('')
+            : '<span class="vazio"><i class="fas fa-triangle-exclamation"></i> Nenhum contato do Financeiro com e-mail: o boleto vai para o e-mail do cadastro. Arrume nos Contatos da ficha.</span>';
+    } else bc.style.display = 'none';
+    // reajustes
+    var br = $('ho-b-reaj');
+    if (x && x.reajustes && x.reajustes.length) {
+        br.style.display = 'block'; $('ho-reaj-em').textContent = x.reajustes.length;
+        $('ho-reaj-lista').innerHTML = x.reajustes.map(function (r) { return '<div class="' + (r.desfeito ? 'des' : '') + '"><span>' + r.vigencia + '</span><span>' + (r.pct ? r.pct.toLocaleString('pt-BR') + '% · ' : '') + brl(r.antes) + ' → ' + brl(r.depois) + '</span><small>' + (r.desfeito ? 'desfeito' : (r.lote || '')) + '</small></div>'; }).join('');
+    } else br.style.display = 'none';
+    // histórico
+    var bh = $('ho-b-hist');
+    if (x && ((x.historico && x.historico.length) || x.criado_em)) {
+        bh.style.display = 'block';
+        var h = (x.historico || []).map(function (l) { return '<div><span>' + l.o_que + '</span><small>' + l.quando + (l.quem ? ' · ' + l.quem.split(' ')[0] : '') + '</small></div>'; });
+        if (!h.length && x.criado_em) h.push('<div><span>Cadastrado</span><small>' + x.criado_em + (x.criado_por ? ' · ' + x.criado_por.split(' ')[0] : '') + '</small></div>');
+        $('ho-hist').innerHTML = h.join('');
+    } else bh.style.display = 'none';
+}
+function hoAtalhos() {
+    var el = document.getElementById('ho-atalhos'); if (!el) return;
+    var ids = [1, 20, 17, 22, 21, 6], feitos = 0, html = '<span class="lbl">Adicionar:</span>';
+    ids.forEach(function (id) { var s = HO_SERVICOS.find(function (x) { return String(x.id) === String(id); }); if (s && feitos < 5) { feitos++; html += '<button type="button" onclick="hoAtalho(' + s.id + ')" title="' + s.nome.replace(/"/g, '&quot;') + '">+ ' + s.nome.split(' — ')[0].replace('Honorários contábeis', 'Honorários') + '</button>'; } });
+    el.innerHTML = html;
+}
+function hoAtalho(id) {   // 19/11/2026: o atalho preenche de verdade — serviço na linha, valor da rede quando houver, foco no valor
+    var s = HO_SERVICOS.find(function (x) { return String(x.id) === String(id); }); if (!s) return;
+    var trs = [].slice.call(document.querySelectorAll('#ho-itens tbody tr'));
+    var ja = trs.filter(function (tr) { return tr.querySelector('[name=item_servico]').value === String(s.id); })[0];
+    function pisca(tr) { tr.classList.add('ho-pisca'); setTimeout(function () { tr.classList.remove('ho-pisca'); }, 900); }
+    if (ja) { ja.querySelector('[name=item_valor]').focus(); pisca(ja); return; }
+    var sug = null; (window.HO_SUG || []).some(function (g) { return (g.itens || []).some(function (it) { if (String(it.servico_id) === String(s.id) && Number(it.valor) > 0) { sug = it.valor; return true; } return false; }); });
+    var vazia = trs.filter(function (tr) { return !tr.querySelector('[name=item_desc]').value && !tr.querySelector('[name=item_servico]').value; })[0];
+    if (vazia) {
+        vazia.querySelector('[name=item_servico]').value = s.id; vazia.querySelector('[name=item_desc]').value = s.nome; hoItemPinta(vazia);
+        var iv = vazia.querySelector('[name=item_valor]'); if (!hoNum(iv.value) && (sug || s.valor_padrao)) iv.value = Number(sug || s.valor_padrao).toLocaleString('pt-BR', { minimumFractionDigits: 2 });
+        hoSoma(); hoResumo(); iv.focus(); pisca(vazia); return;
+    }
+    pisca(hoAddItem(s.nome, sug || s.valor_padrao || '', s.id, 'valor')); hoResumo();
+}
+function hoSigla(nome) {
+    var p = String(nome || '').replace(/—.*$/, '').trim().split(/\s+/).filter(function (x) { return x.length > 2 || /^[A-Z0-9-]+$/.test(x); });
+    if (p.length === 1 && /^[A-Z0-9-]{2,5}$/.test(p[0])) return p[0].slice(0, 4);
+    return (((p[0] || '')[0] || '') + ((p[1] || '')[0] || '')).toUpperCase();
+}
+function hoCorDe(s) { var C = ['#0f766e', '#4f46e5', '#b45309', '#be123c', '#7c3aed', '#0369a1', '#15803d', '#c2410c'], h = 0; String(s).split('').forEach(function (c) { h = (h * 31 + c.charCodeAt(0)) >>> 0; }); return C[h % 8]; }
+function hoItemPinta(tr) {
+    var sid = tr.querySelector('[name=item_servico]').value, desc = tr.querySelector('[name=item_desc]').value, bt = tr.querySelector('.ho-it-bt');
+    var s = HO_SERVICOS.find(function (x) { return String(x.id) === String(sid); });
+    var sig = bt.querySelector('.ho-it-sig'), b = bt.querySelector('b'), sm = bt.querySelector('small');
+    bt.classList.remove('vazio', 'tem');
+    if (s) {
+        var comp = desc.indexOf(s.nome) === 0 ? desc.slice(s.nome.length).replace(/^\s*—\s*/, '') : (desc && desc !== s.nome ? desc : '');
+        sig.textContent = hoSigla(s.nome); sig.style.background = hoCorDe(s.nome.split(' — ')[0]); sig.style.color = '#fff';
+        b.textContent = s.nome; sm.textContent = comp ? comp : 'toque para trocar ou pôr um complemento'; bt.classList.add('tem');
+    } else if (desc) {
+        sig.textContent = 'TX'; sig.style.background = '#64748b'; sig.style.color = '#fff';
+        b.textContent = desc; sm.textContent = 'texto livre · toque para trocar'; bt.classList.add('tem');
+    } else {
+        sig.textContent = '?'; sig.style.background = ''; sig.style.color = '';
+        b.textContent = 'Escolher o serviço'; sm.textContent = 'toque para escolher'; bt.classList.add('vazio');
+    }
+}
+function hoItemEscolher(bt) {
+    var tr = bt.closest('tr'), sid = tr.querySelector('[name=item_servico]').value, desc = tr.querySelector('[name=item_desc]').value;
+    var s = HO_SERVICOS.find(function (x) { return String(x.id) === String(sid); });
+    var comp = s && desc.indexOf(s.nome) === 0 ? desc.slice(s.nome.length).replace(/^\s*—\s*/, '') : '';
+    if (!window.CaixaServico) return;
+    CaixaServico.abrir({ servicos: HO_SERVICOS, atual: { servico_id: sid, complemento: comp, texto: s ? '' : desc }, z: 1300,
+        empresa: document.getElementById('ho-cli-nome').textContent || 'escolha o serviço desta linha',
+        onUsar: function (e) {
+            tr.querySelector('[name=item_servico]').value = e.servico_id || ''; tr.querySelector('[name=item_desc]').value = e.descricao;
+            hoItemPinta(tr); hoResumo();
+            var v = tr.querySelector('[name=item_valor]'); if (!hoNum(v.value)) v.focus();
+        } });
+}
+function hoMesesEntre(ini) { if (!ini) return ''; var a = HO_ANO * 12 + HO_MES - (ini.y * 12 + ini.m); if (a < 1) return 'começa agora'; var y = Math.floor(a / 12), m = a % 12; return 'cliente há ' + (y ? y + (y === 1 ? ' ano' : ' anos') : '') + (y && m ? ' e ' : '') + (m ? m + (m === 1 ? ' mês' : ' meses') : ''); }
+function hoEncAbrir() { setTimeout(function () { if (window.QCData) QCData.pintarTodos(); }, 0); document.getElementById('ho-enc-box').style.display = 'flex'; document.getElementById('ho-enc-bt').style.display = 'none'; var d = document.getElementById('ho-enc-data'); if (!d.value) d.value = '{{ hoje.isoformat() }}'; d.focus(); }
+function hoEncFechar() { document.getElementById('ho-enc-box').style.display = 'none'; document.getElementById('ho-enc-bt').style.display = 'inline-flex'; }
+function hoEncConfirmar() {
+    var fim = document.getElementById('ho-enc-data').value, cid = document.getElementById('ho-id').value; if (!fim || !cid) return;
+    var f = document.getElementById('ho-form-encerrar'); f.action = '/financeiro/honorarios/' + cid + '/encerrar';
+    document.getElementById('ho-enc-fim').value = fim; f.submit();
+}
+function hoSoma() {
+    var t = 0; document.querySelectorAll('#ho-itens input[name=item_valor]').forEach(function (i) { t += hoNum(i.value); });
+    var d = hoDesconto(t);
+    document.getElementById('ho-total').innerHTML = d.valor ? '<small>' + brl(t) + ' − desconto ' + brl(d.valor) + ' = a cobrar</small> ' + brl(t - d.valor) : brl(t);
+}
+// ---- 19/11/2026: desconto mensal do contrato (fixo ou % sobre os honorários; o 13º segue o valor cheio) ----
+function hoDescTipo(v) { document.getElementById('ho-desc-tipo').value = v; hoDescPinta(); hoSoma(); hoResumo(); if (v) setTimeout(function () { hoDescCampo().focus(); }, 30); }
+function hoDescPinta() {
+    var t = document.getElementById('ho-desc-tipo').value; hoMarca('#ho-desc-seg button', t);
+    document.getElementById('ho-desc-campos').style.display = t ? 'grid' : 'none';
+    document.getElementById('ho-desc-un').textContent = t === 'PCT' ? '%' : 'R$';
+    // dois campos com o mesmo name: o de R$ tem a máscara de dinheiro; o de % é número simples. Só o visível vai no POST.
+    var vr = document.getElementById('ho-desc-valor'), vp = document.getElementById('ho-desc-pct');
+    vr.style.display = t === 'PCT' ? 'none' : ''; vr.disabled = t === 'PCT';
+    vp.style.display = t === 'PCT' ? '' : 'none'; vp.disabled = t !== 'PCT';
+}
+function hoDescCampo() { return document.getElementById(document.getElementById('ho-desc-tipo').value === 'PCT' ? 'ho-desc-pct' : 'ho-desc-valor'); }
+function hoDesconto(total) {
+    var t = document.getElementById('ho-desc-tipo').value; if (!t) return { tipo: '', valor: 0, pct: 0, motivo: '' };
+    var v = hoNum(hoDescCampo().value), base = 0;
+    document.querySelectorAll('#ho-itens tbody tr').forEach(function (tr) { if (String(tr.querySelector('[name=item_servico]').value) === String(HO_SERV_HON)) base += hoNum(tr.querySelector('[name=item_valor]').value); });
+    if (!base) base = total;
+    var d = t === 'PCT' ? Math.round(base * v) / 100 : v;
+    if (d > total) d = total;
+    return { tipo: t, valor: Math.round(d * 100) / 100, pct: t === 'PCT' ? v : 0, motivo: document.getElementById('ho-desc-motivo').value.trim() };
+}
+function hoAddItem(desc, valor, servico, foco) {
+    // 19/11/2026: a linha é um botão-campo do serviço (caixa nossa) + valor; item_desc/item_servico seguem escondidos (a rota não mudou)
+    var tb = document.querySelector('#ho-itens tbody'); var tr = document.createElement('tr');
+    tr.innerHTML = '<td class="ho-it-s"><button type="button" class="ns-in ho-it-bt" onclick="hoItemEscolher(this)"><span class="ho-it-sig"></span><span class="ho-it-tx"><b></b><small></small></span><i class="fas fa-chevron-right"></i></button>'
+        + '<input type="hidden" name="item_desc"><input type="hidden" name="item_servico"></td>'
+        + '<td class="ho-it-v"><input type="text" name="item_valor" class="form-control dinheiro" value="" placeholder="0,00" inputmode="decimal"></td>'
+        + '<td class="ho-it-x"><button type="button" class="btn btn-outline btn-sm" title="Tirar esta linha" onclick="this.closest(\'tr\').remove(); hoSoma(); hoResumo();"><i class="fas fa-times"></i></button></td>';
+    tb.appendChild(tr);
+    var s = HO_SERVICOS.find(function (x) { return String(x.id) === String(servico); });
+    tr.querySelector('[name=item_servico]').value = s ? s.id : '';
+    tr.querySelector('[name=item_desc]').value = desc || (s ? s.nome : '');
+    var iv = tr.querySelector('[name=item_valor]'); iv.value = valor ? Number(valor).toLocaleString('pt-BR', { minimumFractionDigits: 2 }) : '';
+    if (window.Dinheiro && window.Dinheiro.ligar) window.Dinheiro.ligar();
+    iv.addEventListener('input', hoSoma); iv.addEventListener('change', hoSoma);
+    hoItemPinta(tr); hoSoma();
+    if (foco === 'valor') iv.focus(); else if (foco === 'servico') hoItemEscolher(tr.querySelector('.ho-it-bt'));
+    return tr;
+}
+// ---- 19/11/2026: 13º em BOLETOS PRÓPRIOS (Anderson: a FAST paga o 13º em 3 parcelas, fora dos honorários) ----
+var HO_DP = null;   // o que o servidor sabe do 13º deste contrato: ano, parcelas pedidas/emitidas, se quem está logado pode emitir
+function hoDpDatas() { return [].map.call(document.querySelectorAll('#ho-dec-rows input[name=dec_data]'), function (i) { return i.value; }); }
+function hoIsoDe(d) { return d.getFullYear() + '-' + (d.getMonth() < 9 ? '0' : '') + (d.getMonth() + 1) + '-' + (d.getDate() < 10 ? '0' : '') + d.getDate(); }
+function hoIsoSoma(iso, k) { var p = iso.split('-'); var y = +p[0], m = +p[1] - 1 + k, d = +p[2]; y += Math.floor(m / 12); m = ((m % 12) + 12) % 12; d = Math.min(d, new Date(y, m + 1, 0).getDate()); return y + '-' + (m < 9 ? '0' : '') + (m + 1) + '-' + (d < 10 ? '0' : '') + d; }
+function hoDpPadrao() { var hoje = hoIsoDe(new Date()), dez = HO_ANO + '-12-20'; if (dez >= hoje) return dez; var d = new Date(); d.setDate(d.getDate() + 10); return hoIsoDe(d); }
+function hoDpAno() { var d = hoDpDatas()[0]; if (!d) return HO_ANO; var p = d.split('-'); return +p[0] - (+p[1] >= 7 ? 0 : 1); }
+function hoDpTotal() { var t = 0; document.querySelectorAll('#ho-itens input[name=item_valor]').forEach(function (i) { t += hoNum(i.value); }); return t; }
+function hoDpBase(t, ano) {   // 13º do ano, proporcional aos meses de casa — a mesma conta do resumo
+    var modo = document.getElementById('ho-dec-inicio').value, ini = hoData(document.getElementById('ho-inicio').value), desde = hoData(document.getElementById('ho-dec-desde').value);
+    var base = ini || { y: ano, m: 1 };
+    if (modo === 'INTEIRO') base = { y: base.y, m: 1 }; else if (modo === 'PROXIMO') base = { y: base.y + 1, m: 1 }; else if (modo === 'DATA' && desde) base = desde;
+    var meses = base.y > ano ? 0 : (base.y < ano ? 12 : 13 - base.m);
+    return { meses: meses, valor: Math.round(t * meses / 12 * 100) / 100 };
+}
+function hoDpReparte(total, n) { var c = Math.round(total * 100), b = Math.floor(c / n), out = []; for (var k = 0; k < n; k++) out.push(b / 100); out[0] = (c - b * (n - 1)) / 100; return out; }
+function hoDpN(n, datas) {
+    var atuais = datas || hoDpDatas(); n = Math.max(1, Math.min(6, n || 1));
+    var novas = []; for (var k = 0; k < n; k++) novas.push(atuais[k] || (k ? hoIsoSoma(novas[k - 1], 1) : hoDpPadrao()));
+    var box = document.getElementById('ho-dec-rows'); box.innerHTML = '';
+    novas.forEach(function (d, k) {
+        var r = document.createElement('div'); r.className = 'ho-dp-row';
+        r.innerHTML = '<span class="ho-dp-k">' + (k + 1) + 'ª</span><input type="date" name="dec_data" class="ns-in"><b class="ho-dp-v"></b>';
+        r.querySelector('input').value = d; box.appendChild(r);
+        if (window.QCData) QCData.ligar(r.querySelector('input'));
+    });
+    hoMarca('#ho-dp-n button', n); hoDpPinta(); hoResumo();
+}
+function hoDpPinta() {
+    var $ = function (i) { return document.getElementById(i); }, st = $('ho-dp-st'), ac = $('ho-dp-acao'); if (!st) return;
+    var datas = hoDpDatas(), n = datas.length, ano = hoDpAno(), b = hoDpBase(hoDpTotal(), ano), vals = hoDpReparte(b.valor, n || 1), dp = HO_DP;
+    document.querySelectorAll('#ho-dec-rows .ho-dp-v').forEach(function (e, k) { e.textContent = b.meses && b.valor ? brl(vals[k]) : '—'; });
+    // situação de cada parcela do ciclo atual, pelo que o contrato SALVO diz (o painel do mês é quem emite)
+    var html = '';
+    if (dp && dp.parcelas && dp.parcelas.length) {
+        html = '<div class="ho-dp-tit">13º de ' + dp.ano + ' · ' + brl(Number(dp.base)) + ' em ' + dp.parcelas.length + (dp.parcelas.length === 1 ? ' boleto' : ' boletos') + ' <small>pelo contrato salvo</small></div>';
+        dp.parcelas.forEach(function (p) {
+            html += '<div class="ho-dp-p"><span class="pill ' + p.st + '">' + p.rot + '</span><span>' + p.n + '/' + p.de + ' · vence ' + hoDataBr(p.vencimento) + '</span><b>' + brl(Number(p.valor)) + '</b>'
+                + (p.titulo_id ? '<a href="/financeiro/titulos?busca=' + encodeURIComponent($('ho-cli-nome').textContent) + '" target="_blank">ver em Cobranças</a>' : '') + '</div>';
+        });
+    }
+    st.innerHTML = html;
+    ac.innerHTML = '<span class="ho-dp-dica"><i class="fas fa-circle-info"></i> ' + (!$('ho-id').value ? 'Salve o contrato: cada parcela entra no painel do mês anterior ao vencimento, junto com a mensalidade, em boleto separado. ' : 'Cada parcela sai pelo painel do mês anterior ao vencimento, junto com a mensalidade, em boleto separado. ')
+        + 'Os dias repetem todo ano' + (b.meses && b.valor ? '' : '; pelo "Começa a cobrar" e o valor, não há 13º de ' + ano + ' a cobrar') + '.' + (dp && dp.parcelas && dp.parcelas.length && (datas.join() !== dp.ciclo.join()) ? ' <b>Datas alteradas: salve para valer.</b>' : '') + '</span>';
+}
+function hoDecimo() {
+    var tipo = document.getElementById('ho-decimo').value, ini = document.getElementById('ho-dec-inicio').value;
+    document.getElementById('ho-dec-box').style.display = tipo === 'PROPRIO' ? 'block' : 'none';
+    if (tipo === 'PROPRIO') { if (!document.querySelector('#ho-dec-rows input[name=dec_data]')) hoDpN(1); else hoDpPinta(); }
+    document.querySelectorAll('.ho-dec-on').forEach(function (e) { e.style.display = tipo === 'NENHUM' ? 'none' : 'block'; });
+    document.getElementById('ho-dec-desde-box').style.display = (tipo !== 'NENHUM' && ini === 'DATA') ? 'block' : 'none';
+    hoSync();
+}
+function hoLimpar() {
+    ['ho-id', 'ho-cliente-id', 'ho-cli-q', 'ho-fim', 'ho-prox', 'ho-reaj-obs', 'ho-dec-desde', 'ho-grupo', 'ho-banco', 'ho-desc-tipo', 'ho-desc-valor', 'ho-desc-pct', 'ho-desc-motivo', 'ho-desc-ate'].forEach(function (i) { var e = document.getElementById(i); if (e) e.value = ''; });
+    hoDescPinta();
+    document.querySelector('#ho-itens tbody').innerHTML = ''; document.getElementById('ho-dec-rows').innerHTML = ''; HO_DP = null;
+    document.getElementById('ho-chips').innerHTML = ''; document.getElementById('ho-rede').style.display = 'none'; document.getElementById('ho-grupo-aviso').style.display = 'none'; hoGrupoPinta(); if (window.QCData) QCData.pintarTodos();
+    document.getElementById('ho-dia').value = 10; document.getElementById('ho-inicio').value = '{{ hoje.strftime("%Y-%m") }}-01';
+    document.getElementById('ho-decimo').value = 'NENHUM'; document.getElementById('ho-dec-inicio').value = 'PROPORCIONAL'; document.getElementById('ho-reajuste').value = 'SALARIO_MINIMO';
+    document.getElementById('ho-nfse').checked = true; document.getElementById('ho-boleto').checked = true;
+    document.querySelectorAll('.ho-row-falta').forEach(function (r) { r.classList.remove('ho-row-falta'); });
+    if (document.getElementById('ho-enc-box')) hoEncFechar();
+    hoExtra(null); hoAtalhos();
+    hoDecimo(); hoResumo();
+}
+function hoSetCliente(id, nome, numero) {
+    document.getElementById('ho-cliente-id').value = id || '';
+    document.getElementById('ho-cli-nome').textContent = nome || ''; document.getElementById('ho-cli-num').textContent = numero ? 'nº ' + numero : '';
+    document.getElementById('ho-cli-av').textContent = hoIniciais(nome);
+    document.getElementById('ho-sub').textContent = id ? ((numero ? numero + ' · ' : '') + nome) : 'escolha a empresa';
+    document.getElementById('ho-cli').style.display = id ? 'flex' : 'none'; document.getElementById('ho-cli-busca').style.display = id ? 'none' : 'block';
+    document.getElementById('ho-row-cli').classList.remove('ho-row-falta');
+    if (id) hoSugestoes(id); else { document.getElementById('ho-chips').innerHTML = ''; document.getElementById('ho-rede').style.display = 'none'; }
+    hoResumo();
+}
+// ---- Grupo: a caixa da ficha do cliente (19/11/2026) no lugar do <select> ----
+var HO_GRUPOS = {{ grupos | map(attribute='nome') | list | tojson }}, HO_GRUPOS_ID = {{ grupos | map(attribute='id') | list | tojson }};
+var HO_PK_CORES = ['#0f766e', '#4f46e5', '#b45309', '#be123c', '#7c3aed', '#0369a1', '#15803d', '#c2410c'];
+function hoGrupoNome(id) { var i = HO_GRUPOS_ID.indexOf(parseInt(id, 10)); return i >= 0 ? HO_GRUPOS[i] : ''; }
+function hoGrupoPinta() {
+    var id = document.getElementById('ho-grupo').value, bt = document.getElementById('ho-grupo-bt'); if (!bt) return;
+    var nome = id ? (bt.dataset.nome && bt.dataset.id === id ? bt.dataset.nome : hoGrupoNome(id)) : '';
+    var sig = document.getElementById('ho-grupo-sig');
+    if (id && nome) {
+        var h = 0; nome.split('').forEach(function (c) { h = (h * 31 + c.charCodeAt(0)) >>> 0; });
+        sig.textContent = nome.slice(0, 2).toUpperCase(); sig.style.background = HO_PK_CORES[h % 8]; bt.classList.add('tem');
+        document.getElementById('ho-grupo-nome').textContent = nome; document.getElementById('ho-grupo-sub').textContent = 'toque para trocar · é o grupo do cadastro';
+    } else {
+        sig.textContent = '—'; sig.style.background = ''; bt.classList.remove('tem');
+        document.getElementById('ho-grupo-nome').textContent = '— sem grupo —'; document.getElementById('ho-grupo-sub').textContent = 'toque para escolher ou criar um grupo';
+    }
+}
+function hoGrupoUsar(id, nome) {
+    var g = document.getElementById('ho-grupo'), bt = document.getElementById('ho-grupo-bt');
+    g.value = id || ''; bt.dataset.id = String(id || ''); bt.dataset.nome = nome || '';
+    if (id && HO_GRUPOS_ID.indexOf(parseInt(id, 10)) < 0) { HO_GRUPOS_ID.push(parseInt(id, 10)); HO_GRUPOS.push(nome); }
+    document.getElementById('ho-grupo-aviso').style.display = 'none';
+    hoGrupoPinta(); if (typeof hoSync === 'function') hoSync();
+}
+function hoGrupoAbrir() {
+    if (!window.CaixaGrupo) return;
+    CaixaGrupo.abrir({
+        atual: document.getElementById('ho-grupo').value, empresa: document.getElementById('ho-cli-nome').textContent || 'empresa ainda não escolhida',
+        pode_criar: {{ pode_rota('clientes.grupo_rapido') | tojson }}, z: 1300,
+        url_opcoes: {{ url_for('clientes.caixa_opcoes') | tojson }} + '?qual=grupo', url_novo: {{ url_for('clientes.grupo_rapido') | tojson }},
+        reserva: HO_GRUPOS_ID.map(function (id, i) { return { id: id, nome: HO_GRUPOS[i] }; }),
+        onUsar: function (id, nome) { hoGrupoUsar(id, nome || hoGrupoNome(id)); }
+    });
+}
+// ---- sugestões da rede (06/11/2026): o que as outras empresas do grupo pagam; um clique preenche, ou ignora e digita ----
+var HO_SUG = [];
+function hoSugestoes(cid) {
+    fetch('/financeiro/honorarios/sugestoes/' + cid).then(function (r) { return r.ok ? r.json() : null; }).then(function (d) {
+        if (!d || document.getElementById('ho-cliente-id').value !== String(cid)) return;
+        HO_SUG = d.sugestoes || [];
+        var g = document.getElementById('ho-grupo'), av = document.getElementById('ho-grupo-aviso');
+        if (d.grupo) { g.value = d.grupo.id; av.style.display = 'none'; }
+        else {
+            g.value = '';
+            av.innerHTML = 'Sem grupo no cadastro' + (d.grupo_sugerido ? ': parece ser <b>' + d.grupo_sugerido.nome + '</b> <button type="button" class="ho-grupo-usar" data-id="' + d.grupo_sugerido.id + '" data-nome="' + String(d.grupo_sugerido.nome).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;') + '" onclick="hoGrupoUsar(this.dataset.id, this.dataset.nome)"><i class="fas fa-check"></i> Usar ' + String(d.grupo_sugerido.nome).replace(/</g, '&lt;') + '</button>' : '') + '. Com o grupo, os valores da rede aparecem como sugestão; trocar aqui troca também no cadastro.';
+            av.style.display = 'block';
+        }
+        hoGrupoPinta();
+        var rede = document.getElementById('ho-rede'), chips = document.getElementById('ho-chips'); chips.innerHTML = '';
+        if (!HO_SUG.length) { rede.style.display = 'none'; hoResumo(); return; }
+        rede.innerHTML = 'O que as outras empresas do grupo <b>' + d.rede + '</b> pagam:';
+        rede.style.display = 'block';
+        HO_SUG.forEach(function (s, i) {
+            var c = document.createElement('button'); c.type = 'button'; c.className = 'ho-chip'; c.title = 'Usar estes valores';
+            c.innerHTML = '<b>' + brl(Number(s.valor)) + '</b><span>' + s.n + (s.n === 1 ? ' empresa' : ' empresas') + (s.decimo_tipo !== 'NENHUM' ? ' · com 13º' : '') + '</span>';
+            c.onclick = function () { hoAplicar(i); }; chips.appendChild(c);
+        });
+        hoResumo();
+    });
+}
+function hoAplicar(i) {
+    var s = HO_SUG[i]; if (!s) return;
+    document.querySelector('#ho-itens tbody').innerHTML = '';
+    (s.itens || []).forEach(function (it) { hoAddItem(it.descricao, it.valor, it.servico_id); });
+    if (!s.itens || !s.itens.length) hoAddItem('Honorários contábeis', s.valor, HO_SERV_HON);
+    if (s.dia_vencimento) document.getElementById('ho-dia').value = s.dia_vencimento;
+    document.getElementById('ho-decimo').value = s.decimo_tipo || 'NENHUM';
+    document.getElementById('ho-nfse').checked = !!s.gerar_nfse; document.getElementById('ho-boleto').checked = !!s.gerar_boleto;
+    hoDecimo(); hoResumo();
+}
+// ---- nota do rodapé (como a janela de Responsáveis): o que vai ser cobrado, ou o que falta ----
+var HO_ANO = {{ hoje.year }};
+function hoData(s) { if (!s) return null; var p = s.split('-'); return p.length === 3 ? { y: +p[0], m: +p[1] } : null; }
+function hoResumo() {
+    var t = 0; document.querySelectorAll('#ho-itens input[name=item_valor]').forEach(function (i) { t += hoNum(i.value); });
+    var nota = document.getElementById('ho-nota'), partes = [];
+    hoSync(); hoResumoLado(t);
+    if (!document.getElementById('ho-cliente-id').value) { nota.className = 'ns-aviso red'; nota.innerHTML = '<i class="fas fa-circle-exclamation"></i> Falta escolher a empresa'; return; }
+    if (!(t > 0)) { nota.className = 'ns-aviso red'; nota.innerHTML = '<i class="fas fa-circle-exclamation"></i> Falta o valor dos honorários'; return; }
+    var semServ = [].some.call(document.querySelectorAll('#ho-itens tbody tr'), function (tr) { return !tr.querySelector('[name=item_desc]').value && hoNum(tr.querySelector('[name=item_valor]').value) > 0; });
+    if (semServ) { nota.className = 'ns-aviso red'; nota.innerHTML = '<i class="fas fa-circle-exclamation"></i> Falta escolher o serviço numa linha com valor'; return; }
+    var dsx = hoDesconto(t);
+    if (document.getElementById('ho-desc-tipo').value && !(dsx.valor > 0)) { nota.className = 'ns-aviso red'; nota.innerHTML = '<i class="fas fa-circle-exclamation"></i> Falta o valor do desconto mensal'; return; }
+    partes.push(dsx.valor ? 'A cobrar ' + brl(t - dsx.valor) + ' (' + brl(t) + ' − desconto ' + brl(dsx.valor) + ')' : 'Mensal ' + brl(t));
+    var tipo = document.getElementById('ho-decimo').value, modo = document.getElementById('ho-dec-inicio').value;
+    var ini = hoData(document.getElementById('ho-inicio').value), desde = hoData(document.getElementById('ho-dec-desde').value);
+    if (tipo !== 'NENHUM') {
+        var base = ini || { y: HO_ANO, m: 1 };
+        if (modo === 'INTEIRO') base = { y: base.y, m: 1 }; else if (modo === 'PROXIMO') base = { y: base.y + 1, m: 1 }; else if (modo === 'DATA' && desde) base = desde;
+        var meses = base.y > HO_ANO ? 0 : (base.y < HO_ANO ? 12 : 13 - base.m);
+        if (tipo === 'PROPRIO') { var nd = hoDpDatas().filter(Boolean).length, ad = hoDpAno(), bd = hoDpBase(t, ad); partes.push('13º de ' + ad + ' em ' + nd + (nd === 1 ? ' boleto próprio' : ' boletos próprios') + (bd.meses ? ' · ' + brl(bd.valor) + ' (' + bd.meses + '/12)' : ' · só a partir de ' + base.y)); }
+        else partes.push('13º de ' + HO_ANO + ' ' + (meses ? brl(t * meses / 12) + ' (' + meses + '/12)' : 'só a partir de ' + base.y));
+    } else partes.push('sem 13º');
+    var rt = document.getElementById('ho-reajuste').value, prox = hoData(document.getElementById('ho-prox').value);
+    if (prox) partes.push('reajuste ' + ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'][prox.m - 1] + '/' + prox.y);
+    else if (rt === 'SALARIO_MINIMO' && ini) partes.push('reajuste jan/' + (ini.m === 1 ? ini.y + 1 : ini.y + 2));
+    nota.className = 'ns-aviso ok'; nota.innerHTML = '<i class="fas fa-circle-check"></i> ' + partes.join(' · ');
+}
+document.getElementById('ho-form').addEventListener('input', hoResumo);
+document.getElementById('ho-desc-campos').addEventListener('input', hoSoma);
+document.getElementById('ho-form').addEventListener('input', function (e) { if (document.getElementById('ho-decimo').value === 'PROPRIO' && !(e.target && e.target.closest && e.target.closest('#ho-dp-acao'))) hoDpPinta(); });
+document.getElementById('ho-form').addEventListener('change', hoResumo);
+function hoTrocarCliente() { hoSetCliente(null); document.getElementById('ho-cli-q').focus(); }
+function hoNovo(id, nome, numero) {
+    hoLimpar(); document.getElementById('ho-titulo').textContent = 'Novo contrato de honorários';
+    hoSetCliente(id, nome, numero); hoAddItem('Honorários contábeis', '', HO_SERV_HON);
+    document.getElementById('ho-cli-trocar').style.display = 'inline-flex';
+    document.getElementById('hoModal').style.display = 'block';
+    setTimeout(function () { (id ? document.querySelector('#ho-itens [name=item_valor]') : document.getElementById('ho-cli-q')).focus(); }, 60);
+}
+function hoEditar(cid) {
+    fetch('/financeiro/honorarios/' + cid + '/json').then(function (r) { return r.json(); }).then(function (c) {
+        hoLimpar(); document.getElementById('ho-titulo').textContent = 'Contrato de honorários';
+        document.getElementById('ho-id').value = c.id; hoSetCliente(c.cliente_id, c.nome_razao_social, c.numero_cliente);
+        document.getElementById('ho-cli-trocar').style.display = 'none';
+        (c.itens || []).forEach(function (i) { hoAddItem(i.descricao, i.valor, i.servico_id); });
+        document.getElementById('ho-dia').value = c.dia_vencimento; document.getElementById('ho-inicio').value = c.inicio || '';
+        document.getElementById('ho-fim').value = c.fim || ''; document.getElementById('ho-grupo').value = c.grupo_id || ''; hoGrupoPinta(); if (window.QCData) QCData.pintarTodos();
+        document.getElementById('ho-decimo').value = c.decimo_tipo || 'NENHUM';
+        document.getElementById('ho-dec-inicio').value = c.decimo_inicio || 'PROPORCIONAL';
+        document.getElementById('ho-dec-desde').value = c.decimo_desde || '';
+        var parc = c.decimo_parcelas; if (typeof parc === 'string') { try { parc = JSON.parse(parc); } catch (e) { parc = []; } }
+        HO_DP = c.decimo_proprio || null;
+        var dts = (HO_DP && HO_DP.ciclo && HO_DP.ciclo.length) ? HO_DP.ciclo.slice() : (parc || []).map(function (p) { return p && p.data; }).filter(Boolean).sort();
+        if (dts.length) hoDpN(dts.length, dts);
+        document.getElementById('ho-reajuste').value = c.reajuste_tipo || 'SALARIO_MINIMO';
+        document.getElementById('ho-prox').value = c.proximo_reajuste || ''; document.getElementById('ho-reaj-obs').value = c.reajuste_obs || '';
+        document.getElementById('ho-nfse').checked = !!Number(c.gerar_nfse); document.getElementById('ho-boleto').checked = !!Number(c.gerar_boleto);
+        if (document.getElementById('ho-banco')) document.getElementById('ho-banco').value = /^\d+$/.test(String(c.banco_boleto || '')) ? String(c.banco_boleto) : '';
+        document.getElementById('ho-desc-tipo').value = c.desconto_tipo || '';
+        document.getElementById('ho-desc-valor').value = c.desconto_tipo === 'FIXO' && c.desconto_valor ? Number(c.desconto_valor).toLocaleString('pt-BR', { minimumFractionDigits: 2 }) : '';
+        document.getElementById('ho-desc-pct').value = c.desconto_tipo === 'PCT' && c.desconto_valor ? Number(c.desconto_valor).toLocaleString('pt-BR', { maximumFractionDigits: 2 }) : '';
+        document.getElementById('ho-desc-motivo').value = c.desconto_motivo || ''; document.getElementById('ho-desc-ate').value = c.desconto_ate || '';
+        hoDescPinta(); if (window.QCData) QCData.pintarTodos(); hoSoma();
+        hoExtra(c.extra);
+        hoDecimo(); hoResumo(); document.getElementById('hoModal').style.display = 'block';
+        if (window.HO_ENC_AO_ABRIR) { window.HO_ENC_AO_ABRIR = false; if (document.getElementById('ho-enc-bt')) hoEncAbrir(); }
+    });
+}
+// 19/11/2026: aberto pelo botão Contrato dos cartões (?volta=painel) — fechar, salvar e encerrar voltam para os cartões, no mesmo mês
+var HO_VOLTA = window.HO_VOLTA_FIXO || (function () { var q = new URLSearchParams(location.search); return q.get('volta') === 'painel' ? { comp: q.get('competencia') || '' } : null; })();   // 26/11/2026: no painel, HO_VOLTA_FIXO
+if (HO_VOLTA) {
+    document.querySelectorAll('.ho-volta').forEach(function (i) { i.value = 'painel'; });
+    document.querySelectorAll('.ho-volta-comp').forEach(function (i) { i.value = HO_VOLTA.comp; });
+}
+function hoFechar() {
+    document.getElementById('hoModal').style.display = 'none';
+    if (HO_VOLTA && !window.HO_EM_PAINEL) location.href = '{{ url_for('financeiro.honorarios') }}' + (HO_VOLTA.comp ? '?competencia=' + encodeURIComponent(HO_VOLTA.comp) : '');
+}
+function hoEncerrar(cid, nome) {   // 18/11/2026: abre o contrato com a caixa de encerrar à mostra (sem prompt do navegador)
+    window.HO_ENC_AO_ABRIR = true; hoEditar(cid);
+}
+function hoReprovar(cid, nome) {
+    var m = prompt('Reprovar os honorários de ' + nome + '. Motivo (vai para quem cadastrou):'); if (m === null) return;
+    var f = document.getElementById('ho-form-reprovar'); f.action = '/financeiro/honorarios/' + cid + '/reprovar'; document.getElementById('ho-rep-motivo').value = m; f.submit();
+}
+document.getElementById('ho-form').addEventListener('submit', function (e) {
+    // como na janela de Responsáveis: a linha que falta fica vermelha e a nota do rodapé diz o quê
+    var falta = null;
+    if (!document.getElementById('ho-cliente-id').value) falta = 'ho-row-cli';
+    else {
+        var ok = false, semServ = false;
+        document.querySelectorAll('#ho-itens tbody tr').forEach(function (tr) { var v = hoNum(tr.querySelector('[name=item_valor]').value); if (v > 0) ok = true; if (v > 0 && !tr.querySelector('[name=item_desc]').value) semServ = true; });
+        if (!ok || semServ) falta = 'ho-row-itens';
+    }
+    if (!document.getElementById('ho-dia').value || !document.getElementById('ho-inicio').value) falta = falta || 'ho-row-cli';
+    if (!falta && document.getElementById('ho-decimo').value === 'PROPRIO' && (!hoDpDatas().length || hoDpDatas().some(function (d) { return !d; }))) falta = 'ho-dec-box';
+    if (!falta && document.getElementById('ho-desc-tipo').value && !(hoNum(hoDescCampo().value) > 0)) falta = 'ho-desc-box';
+    if (falta) {
+        e.preventDefault(); hoResumo();
+        var r = document.getElementById(falta); r.classList.add('ho-row-falta'); r.scrollIntoView({ block: 'center' });
+        var inp = r.querySelector('input:not([type=hidden])'); if (inp) inp.focus();
+    }
+});
+// busca da empresa (mesma rota das notas)
+(function () {
+    var q = document.getElementById('ho-cli-q'), sug = document.getElementById('ho-sug'), t;
+    q.addEventListener('input', function () {
+        clearTimeout(t); var v = q.value.trim(); if (v.length < 2) { sug.style.display = 'none'; return; }
+        t = setTimeout(function () {
+            fetch('/financeiro/notas/buscar?q=' + encodeURIComponent(v)).then(function (r) { return r.json(); }).then(function (lista) {
+                sug.innerHTML = ''; (lista || []).forEach(function (c) {
+                    var d = document.createElement('div'); d.innerHTML = '<strong>' + (c.numero_cliente ? c.numero_cliente + ' · ' : '') + c.nome + '</strong> <span class="ho-num">' + (c.cpf_cnpj || '') + (c.situacao !== 'ATIVO' ? ' · ' + c.situacao : '') + '</span>';
+                    d.onclick = function () { hoSetCliente(c.id, c.nome, c.numero_cliente); sug.style.display = 'none'; };
+                    sug.appendChild(d);
+                });
+                sug.style.display = sug.children.length ? 'block' : 'none';
+            });
+        }, 250);
+    });
+    document.addEventListener('click', function (e) { if (!sug.contains(e.target) && e.target !== q) sug.style.display = 'none'; });
+    document.addEventListener('keydown', function (e) { if (e.key === 'Escape') hoFechar(); });
+})();
+// 18/11/2026: a tela Honorários (cobrança do mês) abre o contrato aqui: ?novo=1 ou ?editar=<id>
+(function () { var q = new URLSearchParams(location.search);
+  if (q.get('novo') && typeof hoNovo === 'function') hoNovo();
+  else if (q.get('editar') && typeof hoEditar === 'function') hoEditar(parseInt(q.get('editar'), 10)); })();
+if (window.QCData) QCData.ligarTodos();
+</script>

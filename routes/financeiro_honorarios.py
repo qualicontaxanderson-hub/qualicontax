@@ -175,7 +175,10 @@ def _painel():
     bj = {b['id']: {'nome': b['nome'], 'img': logo_url(b['cod']) if b['cod'] else ''} for b in P['bancos']}
     st = lote_mensal.status(P['lote']['id']) if P['lote'] else None
     return render_template('financeiro/honorarios_painel.html', painel=P, competencia=comp, resumo=FinContrato.resumo(), bancos_js=bj,
-                           comp_ant=ant, comp_prox=mes_seguinte(comp), status_lote=st, hoje=date.today())
+                           comp_ant=ant, comp_prox=mes_seguinte(comp), status_lote=st, hoje=date.today(),
+                           # 26/11/2026: a janela do contrato abre dentro do painel (mesmas variáveis da página antiga)
+                           modo='admin', servicos=_servicos(), grupos=_grupos(), DECIMO_TIPOS=DECIMO_TIPOS, DECIMO_INICIOS=DECIMO_INICIOS,
+                           REAJUSTE_TIPOS=REAJUSTE_TIPOS, SERVICO_HONORARIOS=SERVICO_HONORARIOS, bancos=_bancos_cobranca())
 
 
 @financeiro.route('/financeiro/honorarios')

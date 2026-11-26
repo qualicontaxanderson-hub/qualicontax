@@ -1,0 +1,212 @@
+{# Janela do contrato de honorários (18/11/2026 "repaginar"), separada em 26/11/2026 para abrir também dentro do painel Honorários.
+   Usada por honorarios.html (lista antiga, convite, cadastrar) e honorarios_painel.html. Variáveis: bancos, servicos, grupos, DECIMO_TIPOS,
+   DECIMO_INICIOS, REAJUSTE_TIPOS, SERVICO_HONORARIOS, hoje, modo ('admin' no escritório). #}
+<!-- Novo / editar contrato -->
+{# 18/11/2026 — Anderson: "Bora repaginar 100000000%". Janela do contrato no molde das caixas do Financeiro (ns-*, a
+   mesma de Lançamentos › Nova solicitação): cabeçalho verde com o valor ao vivo, blocos à esquerda com opções em
+   cartões (sem selects escondidos), resumo e próxima cobrança à direita, Encerrar contrato dentro da janela.
+   Os nomes dos campos e as funções (hoNovo/hoEditar/hoAddItem…) são os mesmos: a rota de salvar não mudou. #}
+<div id="hoModal" class="ns-fundo" style="display:none;">
+  <div class="ns ho" role="dialog" aria-modal="true" aria-labelledby="ho-titulo">
+    <header class="ns-cab">
+      <span class="ns-ico"><i class="fas fa-file-signature"></i></span>
+      <div class="ns-tit"><b id="ho-titulo">Contrato de honorários</b><span id="ho-sub">escolha a empresa</span>
+        <div class="ho-chips-cab" id="ho-chips-cab"></div></div>
+      <div class="ns-prev"><small>Mensal</small><b id="ho-prev">R$ 0,00</b><span id="ho-prev-sub">—</span></div>
+      <button type="button" class="ns-x" onclick="hoFechar()" aria-label="Fechar"><i class="fas fa-xmark"></i></button>
+    </header>
+    <div class="ho-kpis" id="ho-kpis">
+      <div class="ho-kpi k1"><i class="fas fa-coins"></i><div><small>Mensal</small><b id="ho-k-mensal">—</b><span id="ho-k-mensal-s">valor do contrato</span></div></div>
+      <div class="ho-kpi k2"><i class="fas fa-gift"></i><div><small>13º deste ano</small><b id="ho-k-dec">—</b><span id="ho-k-dec-s">sem 13º</span></div></div>
+      <div class="ho-kpi k3"><i class="fas fa-arrow-trend-up"></i><div><small>Próximo reajuste</small><b id="ho-k-reaj">—</b><span id="ho-k-reaj-s">salário mínimo</span></div></div>
+      <div class="ho-kpi k4"><i class="fas fa-clock"></i><div><small>Em atraso</small><b id="ho-k-atr">—</b><span id="ho-k-atr-s">mensalidades vencidas</span></div></div>
+    </div>
+    <form id="ho-form" method="POST" action="{{ acao_form or url_for('financeiro.honorarios_salvar') }}" novalidate style="display:contents">
+      <input type="hidden" name="contrato_id" id="ho-id">
+      <input type="hidden" name="cliente_id" id="ho-cliente-id">
+      <input type="hidden" name="aba" value="{{ aba }}">
+      <input type="hidden" name="volta" class="ho-volta"><input type="hidden" name="competencia" class="ho-volta-comp">
+      <div class="ns-g">
+        <div class="ns-f">
+
+          <section class="ns-b" id="ho-row-cli">
+            <div class="ns-h"><i class="fas fa-building"></i> Empresa <em>quem paga</em></div>
+            <div id="ho-cli-busca" style="position:relative;">
+              <input type="text" id="ho-cli-q" class="ns-in" placeholder="digite o nome, o número ou o CNPJ" autocomplete="off">
+              <div id="ho-sug" class="ho-sug" style="display:none;"></div>
+            </div>
+            <div id="ho-cli" class="ho-cli" style="display:none;">
+              <span class="ho-cli-av" id="ho-cli-av"></span>
+              <div class="ho-cli-tx"><b id="ho-cli-nome"></b><small id="ho-cli-num"></small></div>
+              <button type="button" class="ns-bt mini" id="ho-cli-trocar" onclick="hoTrocarCliente()"><i class="fas fa-rotate"></i> Trocar</button>
+            </div>
+            <div class="ho-grupo-l">
+              <label class="ns-campo" style="flex:1; min-width:200px;"><span class="ho-lbl">Grupo <small>é o do cadastro: trocar aqui troca lá</small></span>
+                <input type="hidden" name="grupo_id" id="ho-grupo" value="">
+                <button type="button" class="ns-in ho-grupo-bt" id="ho-grupo-bt" onclick="hoGrupoAbrir()"><span class="ho-grupo-sig" id="ho-grupo-sig">—</span><span class="ho-grupo-tx"><b id="ho-grupo-nome">— sem grupo —</b><small id="ho-grupo-sub">toque para escolher ou criar um grupo</small></span><i class="fas fa-chevron-right"></i></button></label>
+            </div>
+            <div class="ns-aviso" id="ho-grupo-aviso" style="display:none; margin-top:8px;"></div>
+          </section>
+
+          <section class="ns-b" id="ho-row-itens">
+            <div class="ns-h"><i class="fas fa-list-ul"></i> O que está contratado <em>a soma é o valor mensal</em></div>
+            <div id="ho-rede" class="ho-rede" style="display:none;"></div>
+            <div id="ho-chips" class="ho-chips"></div>
+            <table class="ho-itens" id="ho-itens"><tbody></tbody></table>
+            <div class="ho-itens-pe">
+              <button type="button" class="ns-bt mini" onclick="hoAddItem('', '', '', 'servico')"><i class="fas fa-plus"></i> Outra linha</button>
+              <span class="ho-atalhos" id="ho-atalhos"></span>
+              <div class="ho-soma">Total mensal <b id="ho-total">R$ 0,00</b></div>
+            </div>
+            <div class="ho-desc" id="ho-desc-box">
+              <div class="ho-desc-cab"><span class="ho-lbl">Desconto mensal <small>fixo ou por cento sobre os honorários · sai no boleto e na nota; o 13º segue o valor cheio</small></span>
+                <span class="ns-seg" id="ho-desc-seg"><button type="button" data-v="" onclick="hoDescTipo('')">Sem desconto</button><button type="button" data-v="FIXO" onclick="hoDescTipo('FIXO')">Valor fixo</button><button type="button" data-v="PCT" onclick="hoDescTipo('PCT')">Porcentagem</button></span></div>
+              <input type="hidden" name="desconto_tipo" id="ho-desc-tipo" value="">
+              <div class="ho-desc-campos" id="ho-desc-campos" style="display:none;">
+                <label><span>Desconto <b id="ho-desc-un">R$</b></span><input type="text" name="desconto_valor" id="ho-desc-valor" class="ns-in dinheiro" inputmode="decimal" placeholder="0,00"><input type="text" name="desconto_valor" id="ho-desc-pct" class="ns-in" inputmode="decimal" placeholder="10" maxlength="6" disabled style="display:none;"></label>
+                <label><span>Motivo <small>aparece no painel</small></span><input type="text" name="desconto_motivo" id="ho-desc-motivo" class="ns-in" maxlength="200" placeholder="ex.: acordo comercial, guias de INSS"></label>
+                <label><span>Até <small>em branco = sem prazo</small></span><input type="date" name="desconto_ate" id="ho-desc-ate" class="ns-in"></label>
+              </div>
+            </div>
+          </section>
+
+          <section class="ns-b">
+            <div class="ns-h"><i class="fas fa-file-invoice-dollar"></i> Cobrança de cada mês</div>
+            <div class="ho-cob">
+              <div class="ns-campo"><span class="ho-lbl">Vencimento <small>no mês seguinte à competência</small></span>
+                <div class="ho-venc"><span class="ns-seg" id="ho-dias">{% for d in (5, 10, 15, 20, 25) %}<button type="button" data-d="{{ d }}" onclick="hoDia({{ d }})">dia {{ d }}</button>{% endfor %}</span>
+                  <span class="ho-venc-outro">outro <input type="number" name="dia_vencimento" id="ho-dia" class="ns-in" min="1" max="31" required></span></div></div>
+              {% if bancos %}
+              <div class="ns-campo" style="grid-column:1 / -1;"><span class="ho-lbl">Banco do boleto <small>em qual banco a cobrança dela sai</small></span>
+                <div class="ns-ops ho-bancos" id="ho-banco-ops">
+                  <button type="button" class="ns-op" data-v="" onclick="hoBanco('')"><i class="fas fa-star"></i><b>Padrão do escritório</b><small>hoje: {% for b in bancos if b.padrao %}{{ b.nome }}{% endfor %}</small></button>
+                  {% for b in bancos %}<button type="button" class="ns-op" data-v="{{ b.id }}" onclick="hoBanco('{{ b.id }}')"><span class="ho-bco-logo">{{ logo_banco(b.cod, tam=22, titulo=b.nome) if b.cod }}</span><b>{{ b.nome }}</b><small>{{ 'é o padrão hoje' if b.padrao else 'sempre por aqui' }}</small></button>{% endfor %}
+                </div>
+                <input type="hidden" name="banco_boleto" id="ho-banco" value=""></div>
+              {% endif %}
+              <div class="ns-campo"><span class="ho-lbl">Emite</span>
+                <div class="ns-ops ns-ops-2" id="ho-emite">
+                  <button type="button" class="ns-op" data-nf="1" onclick="hoEmite(1)"><i class="fas fa-file-invoice"></i><b>Nota + boleto</b><small>NFS-e todo mês, com o boleto</small></button>
+                  <button type="button" class="ns-op" data-nf="0" onclick="hoEmite(0)"><i class="fas fa-barcode"></i><b>Só boleto</b><small>sem nota fiscal</small></button>
+                </div>
+                <span style="display:none"><input type="checkbox" name="gerar_nfse" id="ho-nfse" checked><input type="checkbox" name="gerar_boleto" id="ho-boleto" checked></span></div>
+            </div>
+          </section>
+
+          <section class="ns-b">
+            <div class="ns-h"><i class="fas fa-gift"></i> 13º honorário <em>"Sem 13º" também cancela o de quem negociou</em></div>
+            <div class="ns-ops ns-ops-4" id="ho-dec-ops">
+              <button type="button" class="ns-op" data-v="NENHUM" onclick="hoDecTipo('NENHUM')"><i class="fas fa-ban"></i><b>Sem 13º</b><small>não cobra ou foi cancelado</small></button>
+              <button type="button" class="ns-op" data-v="UNICA" onclick="hoDecTipo('UNICA')"><i class="fas fa-1"></i><b>Parcela única</b><small>vence em dezembro</small></button>
+              <button type="button" class="ns-op" data-v="DUAS" onclick="hoDecTipo('DUAS')"><i class="fas fa-2"></i><b>Duas parcelas</b><small>vencem em novembro e dezembro</small></button>
+              <button type="button" class="ns-op" data-v="PROPRIO" onclick="hoDecTipo('PROPRIO')"><i class="fas fa-receipt"></i><b>Boletos próprios</b><small>fora da mensalidade, nas datas combinadas</small></button>
+            </div>
+            <span style="display:none"><select name="decimo_tipo" id="ho-decimo" onchange="hoDecimo()">{% for k, v in DECIMO_TIPOS.items() %}<option value="{{ k }}">{{ v }}</option>{% endfor %}</select>
+              <select name="decimo_inicio" id="ho-dec-inicio" onchange="hoDecimo()">{% for k, v in DECIMO_INICIOS.items() %}<option value="{{ k }}">{{ v }}</option>{% endfor %}</select></span>
+            <div class="ho-dec-on" style="margin-top:12px;">
+              <span class="ho-lbl">Começa a cobrar</span>
+              <span class="ns-seg" id="ho-dec-ini-seg">{% for k, v in DECIMO_INICIOS.items() %}<button type="button" data-v="{{ k }}" onclick="hoDecIni('{{ k }}')">{{ v }}</button>{% endfor %}</span>
+            </div>
+            <div class="ho-dec-on" id="ho-dec-desde-box" style="margin-top:10px;">
+              <span class="ho-lbl">Na casa desde <small>base do proporcional: entrou em maio = 8/12</small></span>
+              <input type="date" name="decimo_desde" id="ho-dec-desde" class="ns-in" style="width:190px;">
+            </div>
+            <div class="ho-dec" id="ho-dec-box" style="margin-top:10px;">
+              <div class="ho-dp-cab"><span class="ho-lbl">Parcelas do 13º <small>cada uma sai no painel do mês, em boleto separado da mensalidade</small></span>
+                <span class="ns-seg" id="ho-dp-n">{% for k in range(1, 7) %}<button type="button" data-v="{{ k }}" onclick="hoDpN({{ k }})">{{ k }}</button>{% endfor %}</span></div>
+              <div id="ho-dec-rows" class="ho-dp-rows"></div>
+              <div id="ho-dp-st" class="ho-dp-st"></div>
+              <div id="ho-dp-acao" class="ho-dp-acao"></div>
+            </div>
+          </section>
+
+          <section class="ns-b">
+            <div class="ns-h"><i class="fas fa-arrow-trend-up"></i> Reajuste <em>salário mínimo: em branco = 1º janeiro após 12 meses</em></div>
+            <div class="ns-ops ns-ops-5" id="ho-reaj-ops">
+              <button type="button" class="ns-op" data-v="SALARIO_MINIMO" onclick="hoReaj('SALARIO_MINIMO')"><i class="fas fa-calendar-day"></i><b>Salário mínimo</b><small>todo janeiro</small></button>
+              <button type="button" class="ns-op" data-v="INDICE" onclick="hoReaj('INDICE')"><i class="fas fa-percent"></i><b>Índice próprio</b><small>INPC, IGPM…</small></button>
+              <button type="button" class="ns-op" data-v="DATA_PROPRIA" onclick="hoReaj('DATA_PROPRIA')"><i class="fas fa-calendar-check"></i><b>Data própria</b><small>fora de janeiro</small></button>
+              <button type="button" class="ns-op" data-v="ESCALONADO" onclick="hoReaj('ESCALONADO')"><i class="fas fa-stairs"></i><b>Escalonado</b><small>degraus combinados</small></button>
+              <button type="button" class="ns-op" data-v="SEM" onclick="hoReaj('SEM')"><i class="fas fa-pause"></i><b>Sem / adiado</b><small>reajusta quando der</small></button>
+            </div>
+            <span style="display:none"><select name="reajuste_tipo" id="ho-reajuste">{% for k, v in REAJUSTE_TIPOS.items() %}<option value="{{ k }}">{{ v }}</option>{% endfor %}</select></span>
+            <div class="ns-campos" style="margin-top:12px;">
+              <label class="ns-campo"><span class="ho-lbl">Próximo em</span><input type="date" name="proximo_reajuste" id="ho-prox" class="ns-in"></label>
+              <label class="ns-campo"><span class="ho-lbl">Índice, degraus, motivo</span><input type="text" name="reajuste_obs" id="ho-reaj-obs" class="ns-in" placeholder="ex.: INPC · 3.000 → 5.000 em mar/27"></label>
+            </div>
+          </section>
+
+          <section class="ns-b" id="ho-row-vig">
+            <div class="ns-h"><i class="fas fa-hourglass-half"></i> Vigência</div>
+            <div class="ns-campos">
+              <label class="ns-campo"><span class="ho-lbl">Início</span><input type="date" name="inicio" id="ho-inicio" class="ns-in" required></label>
+              <label class="ns-campo"><span class="ho-lbl">Fim <small>em branco = sem fim</small></span><input type="date" name="fim" id="ho-fim" class="ns-in"></label>
+            </div>
+            <div class="ho-vig-txt" id="ho-vig-txt"></div>
+            {% if modo != 'admin' %}
+            <label class="ns-campo" style="margin-top:12px; display:block;"><span class="ho-lbl">Recado <small>para quem aprova</small></span><input type="text" name="observacao" class="ns-in" placeholder="ex.: combinado com o cliente em reunião de 05/11"></label>
+            {% endif %}
+            {% if modo == 'admin' %}
+            <div class="ho-enc" id="ho-enc" style="display:none;">
+              <button type="button" class="ns-bt canc" id="ho-enc-bt" onclick="hoEncAbrir()"><i class="fas fa-ban"></i> Encerrar contrato</button>
+              <div class="ho-enc-box" id="ho-enc-box" style="display:none;">
+                <div class="ns-aviso red"><i class="fas fa-triangle-exclamation"></i><span>A empresa sai do lote a partir da competência seguinte à data do fim, e o 13º sai proporcional aos meses de casa. Empresa que fechou em outubro: fim 31/10.</span></div>
+                <div class="ho-enc-l"><span class="ho-lbl">Último dia como cliente</span><input type="date" id="ho-enc-data" class="ns-in" style="width:190px;">
+                  <button type="button" class="ns-bt" onclick="hoEncFechar()">Voltar</button>
+                  <button type="button" class="ns-bt red" onclick="hoEncConfirmar()"><i class="fas fa-ban"></i> Confirmar encerramento</button></div>
+              </div>
+            </div>
+            {% endif %}
+          </section>
+        </div>
+
+        <aside class="ns-r">
+          <div class="ns-b">
+            <div class="ns-h"><i class="fas fa-receipt"></i> Resumo</div>
+            <dl class="ho-res">
+              <div><dt>Mensal</dt><dd id="ho-r-mensal">—</dd></div>
+              <div><dt>Vence</dt><dd id="ho-r-venc">—</dd></div>
+              <div><dt>Emite</dt><dd id="ho-r-emite">—</dd></div>
+              <div><dt>Banco</dt><dd id="ho-r-banco">—</dd></div>
+              <div><dt>13º</dt><dd id="ho-r-dec">—</dd></div>
+              <div><dt>Reajuste</dt><dd id="ho-r-reaj">—</dd></div>
+              <div><dt>Vigência</dt><dd id="ho-r-vig">—</dd></div>
+            </dl>
+          </div>
+          <div class="ns-b" id="ho-b-paga" style="display:none;">
+            <div class="ns-h"><i class="fas fa-wave-square"></i> Como paga <em id="ho-paga-em"></em></div>
+            <div class="hp-meses ho-meses" id="ho-meses"></div>
+            <div class="ho-paga-txt" id="ho-paga-txt"></div>
+          </div>
+          <div class="ns-b ho-prox">
+            <div class="ns-h"><i class="fas fa-paper-plane"></i> Próxima cobrança <em id="ho-px-comp"></em></div>
+            <div class="ho-px-val" id="ho-px-val">—</div>
+            <div class="ho-px-l" id="ho-px-lin"></div>
+            <small class="ho-px-obs">previsão pelo contrato; o lote do mês é quem emite</small>
+          </div>
+          <div class="ns-b" id="ho-b-cont" style="display:none;">
+            <div class="ns-h"><i class="fas fa-envelope"></i> Quem recebe a cobrança <em id="ho-cont-em"></em></div>
+            <div class="ho-cont" id="ho-cont"></div>
+          </div>
+          <div class="ns-b" id="ho-b-reaj" style="display:none;">
+            <div class="ns-h"><i class="fas fa-percent"></i> Reajustes aplicados <em id="ho-reaj-em"></em></div>
+            <div class="ho-lista" id="ho-reaj-lista"></div>
+          </div>
+          <div class="ns-b" id="ho-b-hist" style="display:none;">
+            <div class="ns-h"><i class="fas fa-clock-rotate-left"></i> Histórico</div>
+            <div class="ho-lista" id="ho-hist"></div>
+          </div>
+          <div class="ns-aviso" id="ho-nota"></div>
+        </aside>
+      </div>
+      <footer class="ns-pe">
+        <div class="ns-pe-info" id="ho-pe-info"></div>
+        <button type="button" class="ns-bt" onclick="hoFechar()">Cancelar</button>
+        <button type="submit" class="ns-bt prim"><i class="fas fa-check"></i> Salvar</button>
+      </footer>
+    </form>
+  </div>
+</div>
+
+<form id="ho-form-encerrar" method="POST" style="display:none;"><input type="hidden" name="fim" id="ho-enc-fim"><input type="hidden" name="volta" class="ho-volta"><input type="hidden" name="competencia" class="ho-volta-comp"></form>
+<form id="ho-form-reprovar" method="POST" style="display:none;"><input type="hidden" name="motivo" id="ho-rep-motivo"></form>

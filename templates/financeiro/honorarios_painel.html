@@ -8,6 +8,7 @@
    outro caso necessário!!". Molde: LANÇAMENTOS/COBRANÇAS (quadros coloridos em cima, cartões embaixo). #}
 {% include 'financeiro/_lanc_tx_css.html' %}
 <style>
+{% include 'financeiro/_honorario_janela_css.html' %}
 .tx-a-ctr { --cor:#7c3aed; --cor-e:#5b21b6; }
 .tx-painel[data-p="emitir"] { --sec:#f97316; --sec-e:#c2410c; --sec-f:#fff4ec; --sec-b:#fed7b5; }
 .tx-painel[data-p="cobradas"] { --sec:#2563eb; --sec-e:#1e40af; --sec-f:#eff4ff; --sec-b:#bfdbfe; }
@@ -347,7 +348,7 @@ span.hp-bco, span.hp-nf { cursor:default; }
   <div class="hp-ac">
     {% set tid = l.atual.id if (l.atual and f != 'atrasadas') else (l.atrasos[-1].id if (f == 'atrasadas' and l.atrasos) else None) %}
     {% if tid and pode_rota('financeiro.titulo_cobranca') %}<button type="button" class="cob" onclick="event.stopPropagation(); hpCob({{ tid }})"><i class="fas fa-barcode"></i> Cobrança</button>{% endif %}
-    <a href="{{ url_for('financeiro.honorarios', aba='com', editar=l.contrato.id, volta='painel', competencia=competencia.strftime('%Y-%m')) }}" onclick="event.stopPropagation()"><i class="fas fa-file-contract"></i> Contrato</a>
+    <a href="{{ url_for('financeiro.honorarios', editar=l.contrato.id, competencia=competencia.strftime('%Y-%m')) }}" onclick="event.stopPropagation(); event.preventDefault(); hoEditar({{ l.contrato.id }})"><i class="fas fa-file-contract"></i> Contrato</a>
   </div>
 </div>
 {% endmacro %}
@@ -364,7 +365,7 @@ span.hp-bco, span.hp-nf { cursor:default; }
         <span><small>Competência</small><b>{{ competencia.strftime('%m/%Y') }}</b></span>
         <a href="{{ url_for('financeiro.honorarios', competencia=comp_prox.strftime('%Y-%m')) }}" onclick="return hpIrComp(this)" title="Próximo mês"><i class="fas fa-chevron-right"></i></a></div>
       {% if pode_rota('financeiro.honorarios_reajuste') %}<a class="hp-btn hp-btn2" href="{{ url_for('financeiro.honorarios_reajuste') }}"><i class="fas fa-arrow-trend-up"></i> Reajuste de janeiro</a>{% endif %}
-      {% if pode_rota('financeiro.honorarios_salvar') %}<a class="hp-btn" href="{{ url_for('financeiro.honorarios', aba='com', novo=1, volta='painel', competencia=competencia.strftime('%Y-%m')) }}"><i class="fas fa-plus"></i> Novo contrato</a>{% endif %}
+      {% if pode_rota('financeiro.honorarios_salvar') %}<a class="hp-btn" href="{{ url_for('financeiro.honorarios', novo=1, competencia=competencia.strftime('%Y-%m')) }}" onclick="event.preventDefault(); hoNovo()"><i class="fas fa-plus"></i> Novo contrato</a>{% endif %}
     </div>
   </div>
 </div>
@@ -529,10 +530,14 @@ span.hp-bco, span.hp-nf { cursor:default; }
     <div class="tx-gav-corpo" id="txGavCorpo"></div>
   </div>
 </div>
+{% include 'financeiro/_honorario_janela.html' %}
 {% endblock %}
 
 {% block extra_js %}
 <script src="{{ url_for('static', filename='js/qc_data.js') }}"></script>
+<script src="{{ url_for('static', filename='js/dinheiro.js') }}"></script>
+<script src="{{ url_for('static', filename='js/caixa_grupo.js') }}"></script>
+<script src="{{ url_for('static', filename='js/caixa_servico.js') }}"></script>
 <script>
 var BANCOS = {{ bancos_js | tojson }};
 var URL_ESC = "{{ url_for('financeiro.honorarios_escolha') if pode_rota('financeiro.honorarios_escolha') else '' }}";  {# o {% set %} do content não chega aqui #}
@@ -1091,4 +1096,7 @@ function hpPadrao(id, nome) {
   }, 4000);
 })();
 </script>
+{# 26/11/2026: a janela do contrato abre aqui mesmo (Anderson: "veja a página feia por trás") #}
+<script>window.HO_VOLTA_FIXO = { comp: "{{ competencia.strftime('%Y-%m') }}" }; window.HO_EM_PAINEL = true;</script>
+{% include 'financeiro/_honorario_janela_js.html' %}
 {% endblock %}
