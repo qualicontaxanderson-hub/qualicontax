@@ -230,6 +230,7 @@
 (function () {
   var CLI = JSON.parse(document.getElementById('ocCliJ').textContent), SRV = JSON.parse(document.getElementById('ocSrvJ').textContent);
   var SRVI = {}; SRV.forEach(function (s) { SRVI[String(s.id)] = s; });
+  var ABERT = {{ abertura_prefixos | tojson }};   // serviços que abrem CNPJ novo (Orcamento.ABERTURA_PREFIXOS)
   var $ = function (id) { return document.getElementById(id); };
   function esc(s) { var d = document.createElement('div'); d.textContent = s == null ? '' : String(s); return d.innerHTML; }
   function semAc(s) { return String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase(); }
@@ -393,7 +394,7 @@
     } });
   };
   function ocTemAbertura() {
-    return Array.prototype.some.call(document.querySelectorAll('#ocItens .oc-it'), function (r) { var s = SRVI[r.querySelector('[name=item_servico_id]').value]; return s && String(s.nome || '').toUpperCase().indexOf('ABERTURA DE EMPRESA') === 0; });
+    return Array.prototype.some.call(document.querySelectorAll('#ocItens .oc-it'), function (r) { var s = SRVI[r.querySelector('[name=item_servico_id]').value]; var n = s ? String(s.nome || '').toUpperCase() : ''; return ABERT.some(function (p) { return n.indexOf(p) === 0; }); });
   }
   $('ocNovoFundo').addEventListener('mousedown', function (e) { if (e.target === this) ocNovoFechar(); });
   document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && !$('ocNovoFundo').hidden && !document.querySelector('.pk-fundo.pk-sobre')) ocNovoFechar(); });

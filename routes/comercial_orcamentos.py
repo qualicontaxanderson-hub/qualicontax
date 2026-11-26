@@ -217,6 +217,7 @@ def orcamentos():
         pessoas.setdefault(o['criado_por'], o['criado_por_nome'] or ('#%s' % o['criado_por']))
     abrir = request.args.get('abrir', type=int)
     return render_template('comercial/orcamentos.html', lista=lista, cont=cont, STATUS=STATUS, COMO=COMO, COMISSAO=COMISSAO, hoje=hoje,
+                           abertura_prefixos=list(Orcamento.ABERTURA_PREFIXOS),
                            aprovador=apr, pode_incluir=current_user.is_admin() or current_user.has_permission(INCLUIR),
                            pessoas=pessoas, abrir=abrir, aba=request.args.get('aba') or '',
                            clientes_json=json.dumps(_clientes(), ensure_ascii=False),

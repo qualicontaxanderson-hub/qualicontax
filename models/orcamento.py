@@ -183,9 +183,19 @@ class Orcamento:
                 'observacao': (f.get('observacao') or '').strip()[:4000].upper() or None,
                 'nota_interna': (f.get('nota_interna') or '').strip()[:2000] or None}
 
+    # Serviços que abrem um CNPJ novo (Anderson, 26/11/2026: "constituição de Posto e Abertura de empresas essas são as que
+    # tem que aparecer para abertura de CNPJ"). Prefixo do nome do serviço, em maiúsculas; o template recebe a mesma lista
+    # (abertura_prefixos) para a caixa reagir igual. "Abertura de Filial" fica de fora: a filial não é empresa nova.
+    ABERTURA_PREFIXOS = ('ABERTURA DE EMPRESA', 'CONSTITUI')
+
+    @staticmethod
+    def servico_e_abertura(nome):
+        n = (nome or '').strip().upper()
+        return any(n.startswith(p) for p in Orcamento.ABERTURA_PREFIXOS)
+
     @staticmethod
     def _abertura_pf(cliente_id, itens):
-        """Cliente pessoa física pedindo "Abertura de empresa": o orçamento precisa do nome da empresa nova (25/11/2026)."""
+        """Cliente pessoa física pedindo abertura de CNPJ (ABERTURA_PREFIXOS): o orçamento precisa do nome da empresa nova (25/11/2026)."""
         c = execute_query('SELECT tipo_pessoa, cpf_cnpj FROM clientes WHERE id = %s', (cliente_id,), fetch=True, fetch_one=True) or {}
         pf = c.get('tipo_pessoa') == 'PF' or len(''.join(ch for ch in (c.get('cpf_cnpj') or '') if ch.isdigit())) == 11
         if not pf or not itens:
@@ -194,7 +204,7 @@ class Orcamento:
         if not ids:
             return False
         rows = execute_query('SELECT nome FROM nfse_servicos WHERE id IN (%s)' % ','.join('%s' for _ in ids), tuple(ids), fetch=True) or []
-        return any((r['nome'] or '').strip().upper().startswith('ABERTURA DE EMPRESA') for r in rows)
+        return any(Orcamento.servico_e_abertura(r['nome']) for r in rows)
 
     @staticmethod
     def _avulso_abertura(d, usuario):
