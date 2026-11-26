@@ -237,7 +237,7 @@ def orcamento_janela(oid):
     lanc = FinLancamento.get(o['lancamento_id']) if o.get('lancamento_id') else None
     from utils.cobranca_email import destinatarios_cobranca
     try:
-        dest = destinatarios_cobranca(o['cliente_id'], o.get('cliente_email'))
+        dest = destinatarios_cobranca(o['cliente_id'])
     except Exception:
         dest = []
     from datetime import timedelta

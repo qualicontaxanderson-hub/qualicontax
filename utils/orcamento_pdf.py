@@ -152,9 +152,8 @@ def gerar_pdf(o, itens, link=None, data_doc=None):
 
     # ── três quadros: PARA · SOLICITADO POR · RESPONSÁVEL ──
     para = [Paragraph('PARA', st['k']), Paragraph(_esc(o['cliente_nome']), st['nome'])]
-    mi = [x for x in (_doc(o.get('cliente_doc')), o.get('cliente_email')) if x]
-    if mi:
-        para.append(Paragraph(_esc(' · '.join(mi)), st['mi']))
+    if _doc(o.get('cliente_doc')):                        # só o CPF/CNPJ: o e-mail do cadastro é informativo; quem recebe é "quem pediu" (26/11/2026)
+        para.append(Paragraph(_esc(_doc(o.get('cliente_doc'))), st['mi']))
     for nome in (o.get('empresas_mais') or []):           # mais de uma empresa (25/11/2026)
         para.append(Paragraph(_esc('+ ' + nome), st['mi']))
     if o.get('empresa_nova_nome'):

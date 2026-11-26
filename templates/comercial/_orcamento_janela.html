@@ -12,10 +12,8 @@
           {% if o.cliente_avulso %}<span class="tj-chip">avulso</span>{% elif o.cliente_num %}<span class="tj-chip">cliente nº {{ o.cliente_num }}</span>{% endif %}
           {% if o.empresas_mais %}<span class="tj-chip" title="{{ o.empresas_mais | join(', ') }}"><i class="fas fa-building"></i> + {{ o.empresas_mais | length }} empresa{{ 's' if o.empresas_mais | length > 1 }}: {{ o.empresas_mais | join(', ') | truncate(60) }}</span>{% endif %}
           {% if o.empresa_nova_nome %}<span class="tj-chip" title="abertura de empresa para pessoa física"><i class="fas fa-seedling"></i> empresa a abrir: {{ o.empresa_nova_nome }}{% if o.empresa_nova_cliente %} · avulso criado{% endif %}</span>{% endif %}
-          {% if o.cliente_email %}<span><i class="fas fa-envelope"></i> {{ o.cliente_email }}</span>{% endif %}
-          {% if o.cliente_fone %}<span><i class="fas fa-mobile-screen"></i> {{ o.cliente_fone }}</span>{% endif %}
           <a href="{{ url_for('clientes.detalhes', id=o.cliente_id) }}" target="_blank"><i class="fas fa-arrow-up-right-from-square"></i> cadastro</a>
-          {% if o.solicitante_nome %}<span class="tj-chip" title="quem pediu o serviço, do lado do cliente"><i class="fas fa-user-tag"></i> pedido por {{ o.solicitante_nome }}{% if o.solicitante_fone %} · {{ o.solicitante_fone }}{% endif %}</span>{% endif %}
+          {% if o.solicitante_nome %}<span class="tj-chip" title="quem pediu o serviço, do lado do cliente"><i class="fas fa-user-tag"></i> pedido por {{ o.solicitante_nome }}{% if o.solicitante_email %} · {{ o.solicitante_email }}{% endif %}{% if o.solicitante_fone %} · {{ o.solicitante_fone }}{% endif %}</span>{% endif %}
           {% if o.interno %}<span class="tj-chip"><i class="fas fa-lock"></i> controle interno</span>{% endif %}
         </div>
       </div>
