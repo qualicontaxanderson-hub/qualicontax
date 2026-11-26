@@ -119,6 +119,15 @@ def baixas_soltas_perto(lanc):
               (lanc['empresa_id'], lanc['data'], lanc['data'], lanc['valor'], lanc['data']))
 
 
+def _doc_fmt(doc):
+    d = re.sub(r'\D', '', doc or '')
+    if len(d) == 14:
+        return f'{d[:2]}.{d[2:5]}.{d[5:8]}/{d[8:12]}-{d[12:]}'
+    if len(d) == 11:
+        return f'{d[:3]}.{d[3:6]}.{d[6:9]}-{d[9:]}'
+    return doc or ''
+
+
 def _quem_pagou(lanc):
     """Nome para filtrar os títulos: o que o banco escreveu, sem o "PIX RECEBIDO REM:" e sem a data do fim."""
     from models.extrato_lancamento import ExtratoLancamento
@@ -440,7 +449,9 @@ def vincular_pagamento(lanc_id):
         hist = {'t': ht, 'bol': hb, 'primeira': hp, 'desc': TR._desc(ht) if ht else '', 'janela': _volta_dup(dup)}
     quem = TR._nome(nome or '') or 'Quem pagou'
     return render_template('financeiro/vincular.html', modo='linha', lanc=lanc, feitas=feitas, titulos=titulos, soltas=soltas,
-                           hist=hist, quem=quem, iniciais=''.join(w[0] for w in quem.split()[:2]).upper() or '?',
+                           hist=hist, quem=quem, quem_doc=_doc_fmt(doc),
+                           extrato_link=url_for('financeiro.extrato', classif='todos', busca=(lanc.get('descricao') or '')[:30]),
+                           iniciais=''.join(w[0] for w in quem.split()[:2]).upper() or '?',
                            sugestao=nome, pre=pre, meses=_proximos_meses(), hoje=t0, brl=_brl,
                            credito=credito, usado=usado, dup=dup,
                            **dict(zip(('volta_link', 'volta_rot'), _volta_de(

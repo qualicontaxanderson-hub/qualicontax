@@ -120,7 +120,10 @@
 .vj-meio small { display:block; font-size:12px; color:#64748b; margin-top:2px; }
 .vj-selo { display:inline-flex; gap:5px; align-items:center; margin-top:6px; font-size:11px; font-weight:700; color:#1d4ed8; background:#eff6ff; border-radius:99px; padding:2px 9px; }
 .vj-v { font-size:15.5px; font-weight:800; white-space:nowrap; font-variant-numeric:tabular-nums; }
-.vj-nada { margin:8px 0 0; font-size:13px; color:#64748b; }
+.vj-nada { margin:4px 0 0; padding:26px 16px; border:1.5px dashed #dbe3df; border-radius:12px; text-align:center; color:#64748b; font-size:12.5px; }
+.vj-nada > i { display:block; width:40px; height:40px; line-height:40px; margin:0 auto 10px; border-radius:12px; background:var(--cor-f); color:var(--cor); font-size:15px; }
+.vj-nada b { display:block; font-size:13.5px; color:#334155; margin-bottom:3px; }
+.vj-tl li small.vj-quebra { white-space:normal; overflow-wrap:anywhere; }
 .vj-aviso { display:flex; gap:10px; background:#fffbeb; border:1px solid #fcd34d; border-radius:12px; padding:11px 12px; font-size:12.5px; color:#78350f; margin-bottom:12px; }
 .vj-aviso > i { color:#b45309; margin-top:2px; } .vj-aviso small { display:block; margin-top:4px; }
 .vj-conta { position:sticky; top:12px; }
@@ -221,13 +224,15 @@
     <div><i class="fas fa-circle-check"></i><div><dt>1º pagamento</dt><dd>{{ (hist.primeira.data_linha or hist.primeira.data_baixa).strftime('%d/%m/%Y') if hist.primeira else '—' }}</dd><small>baixou a cobrança do boleto</small></div></div>
     <div><i class="fas fa-clone"></i><div><dt>2º pagamento</dt><dd>{{ lanc.data.strftime('%d/%m/%Y') }}</dd><small>virou este crédito</small></div></div>
     {% else %}
-    <div class="vj-kpi-largo"><i class="fas fa-file-lines"></i><div><dt>O banco escreveu</dt><dd class="vj-quebra">{{ lanc.descricao }}</dd></div></div>
+    <div><i class="fas fa-user"></i><div><dt>Quem pagou</dt><dd>{{ quem }}</dd><small>{{ quem_doc or 'documento não veio no extrato' }}</small></div></div>
+    <div><i class="fas fa-file-lines"></i><div><dt>O banco escreveu</dt><dd title="{{ lanc.descricao }}">{{ lanc.descricao }}</dd><small>linha do extrato</small></div></div>
+    <div><i class="fas fa-scale-balanced"></i><div><dt>Situação</dt><dd>{{ 'Já vinculado' if feitas else 'Sem dono' }}</dd><small>{{ 'deu baixa na cobrança' if feitas else 'ninguém vinculou ainda' }}</small></div></div>
     {% endif %}
   </div>
 
   <form method="POST" id="vpForm" onsubmit="return vpConfirma();">
   <input type="hidden" name="volta_ok" value="{{ volta_link }}">
-  <div class="vj-corpo{{ ' vj-2' if not hist }}">
+  <div class="vj-corpo">
     {% if hist %}
     <section class="vj-sec">
       <h4><i class="fas fa-timeline"></i> O que aconteceu</h4>
@@ -239,6 +244,17 @@
         <li class="fut"><i class="fas fa-question"></i><div><b>Agora: usar numa cobrança ou devolver</b><small>enquanto ninguém decide, o crédito fica guardado</small></div></li>
       </ol>
       <a class="vj-outro" href="{{ hist.janela }}"><i class="fas fa-hand-holding-dollar"></i><span><b>Prefere devolver ao cliente?</b><small>abre a janela do crédito em Cobranças</small></span><i class="fas fa-chevron-right"></i></a>
+    </section>
+    {% else %}
+    <section class="vj-sec">
+      <h4><i class="fas fa-timeline"></i> O que aconteceu</h4>
+      <ol class="vj-tl">
+        <li class="vd"><i class="fas fa-building-columns"></i><div><b>Entrou no banco · {{ brl(lanc.valor) }}</b><small>{{ lanc.banco or 'banco' }}{% if lanc.conta %} · {{ lanc.conta }}{% endif %}</small></div><time>{{ lanc.data.strftime('%d/%m') }}</time></li>
+        <li class="az"><i class="fas fa-file-lines"></i><div><b>O banco escreveu</b><small class="vj-quebra">{{ lanc.descricao }}</small></div></li>
+        {% for b in feitas %}<li class="vd"><i class="fas fa-link"></i><div><b>Vinculado · {{ brl(b.valor) }}</b><small>pagou {{ b.descricao }}</small></div></li>{% endfor %}
+        {% if not feitas %}<li class="fut"><i class="fas fa-question"></i><div><b>Agora: marcar a cobrança que ele paga</b><small>enquanto ninguém vincula, fica sem dono no extrato</small></div></li>{% endif %}
+      </ol>
+      <a class="vj-outro" href="{{ extrato_link }}"><i class="fas fa-right-left"></i><span><b>Não é pagamento de cliente?</b><small>transferência entre contas ou outra receita: classifique no Extrato</small></span><i class="fas fa-chevron-right"></i></a>
     </section>
     {% endif %}
 
@@ -281,7 +297,8 @@
         </label>
       {% endfor %}
       </div>
-      <p class="vj-nada" id="vpNada" style="display:none">Nenhuma cobrança em aberto com esse nome. Apague a busca para ver todas.</p>
+      <div class="vj-nada" id="vpNada" style="display:none"><i class="fas fa-magnifying-glass"></i><b>Nenhuma cobrança em aberto com esse nome</b>
+        <small>Apague ou troque a busca para ver todas as cobranças em aberto.</small></div>
     </section>
 
     <section class="vj-sec vj-conta" id="vpContaCard">
@@ -355,7 +372,7 @@
     var dif = Math.round((soma - PAGO) * 100) / 100;
     document.getElementById('vpSoma').textContent = brl(soma);
     var d = document.getElementById('vpDif'), rot = document.getElementById('vpDifRot');
-    d.className = dif > 0 ? 'vp-dif-menos' : (dif < 0 ? 'vp-dif-mais' : 'vp-dif-zero');
+    d.className = !marcados.length ? '' : (dif > 0 ? 'vp-dif-menos' : (dif < 0 ? 'vp-dif-mais' : 'vp-dif-zero'));
     rot.textContent = !marcados.length ? 'Diferença' : (dif > 0 ? 'Falta' : (dif < 0 ? 'Sobra' : 'Bate certinho'));
     d.textContent = marcados.length ? brl(Math.abs(dif)) : '—';
     document.getElementById('vpMenos').style.display = marcados.length && dif > 0 ? '' : 'none';
