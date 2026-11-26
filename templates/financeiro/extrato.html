@@ -955,7 +955,7 @@ body.ex-selecionando .ex-barra-lote { display:flex; }
                 </span>
                 {% elif rc and rc.tipo == 'dobro' %}
                 <span class="ex-rec dobro" title="O banco recebeu o mesmo boleto mais de uma vez. Este crédito NÃO deu baixa em outra parcela: decida se vira adiantamento ou se devolve.">
-                    <i class="fas fa-clone"></i> PAGO EM DOBRO · {{ rc.nome or '' }}{% if rc.texto %} · {{ rc.texto }}{% endif %}{% if rc.venc %} · venc. {{ rc.venc.strftime('%d/%m') }}{% endif %}{% if rc.usado %} · usado para pagar a cobrança{% if rc.usado.texto %} {{ rc.usado.texto }}{% endif %}{% if rc.usado.venc %} venc. {{ rc.usado.venc.strftime('%d/%m') }}{% endif %}{% elif rc.situacao == 'A_DECIDIR' %} · a decidir{% endif %}
+                    <i class="fas fa-clone"></i> PAGO EM DUPLICIDADE · {{ rc.nome or '' }}{% if rc.texto %} · {{ rc.texto }}{% endif %}{% if rc.venc %} · venc. {{ rc.venc.strftime('%d/%m') }}{% endif %}{% if rc.usado %} · usado para pagar a cobrança{% if rc.usado.texto %} {{ rc.usado.texto }}{% endif %}{% if rc.usado.venc %} venc. {{ rc.usado.venc.strftime('%d/%m') }}{% endif %}{% if rc.situacao == 'A_DECIDIR' %} · resto a decidir{% endif %}{% elif rc.situacao == 'A_DECIDIR' %} · a decidir{% elif rc.situacao == 'DEVOLVIDO' %} · devolver ao cliente{% endif %}
                 </span>
                 {% endif %}
                 {% if l.categoria_id and l.conferir %}

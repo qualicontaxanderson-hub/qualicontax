@@ -178,6 +178,18 @@ def coletar(f, fresco=False, so_base=False):
         else:
             bk, bn = SEM_EXTRATO, BANCO_ESPECIAL[SEM_EXTRATO]
         fato(t, 'pago', b['v'], data_mov=b['data_baixa'], banco_k=bk, banco=bn)
+    # 26/11/2026 — o crédito PAGO EM DUPLICIDADE (o que resta dele) entra no Pago como linha própria, para o
+    # relatório contar o dinheiro que entrou e dizer o que ele é (Anderson: "nos relatórios nunca vão entender")
+    from utils.titulos_receber import duplicidades
+    for x in duplicidades(faixa=(date(2000, 1, 1), date(2100, 1, 1))):
+        t = T.get(x['titulo_id'])
+        if not t:
+            continue
+        bk, bn = _banco(x['banco']) if (x.get('banco') or '').strip() else ('403', 'Cora')
+        rot = 'Pago em duplicidade — ' + ('a devolver' if x['situacao'] == 'DEVOLVIDO' else 'a decidir')
+        fato(t, 'pago', x['v'], data_mov=x['data'], banco_k=bk, banco=bn, dobro=True)
+        fatos[-1].update(linhas=[(rot, round(float(x['v']), 2))], descricao=rot + ' · ' + (t['descricao'] or ''),
+                         aberto_contrato=False)
     for t in T.values():
         saldo = float(t['valor']) - float(t['valor_baixado'] or 0)
         prov = bol.get(t['id'])

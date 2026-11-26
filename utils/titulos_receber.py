@@ -242,6 +242,46 @@ def periodo(per, de=None, ate=None, hoje=None):
     return None
 
 
+def duplicidades(ec='', ep=(), faixa=None):
+    """Créditos PAGO EM DUPLICIDADE que entraram na faixa [de, ate) e ainda têm valor (a decidir ou a devolver):
+    o que resta = valor - o que já foi usado em cobranças. Cada um vem no formato de uma baixa do Recebido."""
+    try:
+        rows = q(f"""SELECT d.id AS dup_id, d.situacao, d.lancamento_id, d.valor AS dup_valor, l.data, l.banco,
+                            t.id AS titulo_id, t.contraparte_nome, t.descricao, t.competencia, t.cliente_id, t.vencimento,
+                            c.numero_cliente, cat.nome AS categoria_nome,
+                            (SELECT COALESCE(SUM(x.valor + x.juros + x.multa), 0) FROM fin_titulo_baixas x
+                              WHERE x.lancamento_id = d.lancamento_id) AS usado
+                       FROM fin_pagamentos_duplicados d
+                       JOIN extrato_lancamentos l ON l.id = d.lancamento_id
+                       LEFT JOIN fin_titulos t ON t.id = d.titulo_id
+                       LEFT JOIN clientes c ON c.id = t.cliente_id
+                       LEFT JOIN fin_categorias cat ON cat.id = t.categoria_id
+                      WHERE d.situacao IN ('A_DECIDIR', 'DEVOLVIDO') AND l.data >= %s AND l.data < %s{ec}
+                      ORDER BY l.data DESC, d.id DESC""", tuple(faixa) + tuple(ep), fetch=True) or []
+    except Exception:                       # tabela ainda não criada
+        return []
+    out = []
+    for r in rows:
+        from decimal import Decimal
+        v = Decimal(str(r['dup_valor'] or 0)) - Decimal(str(r['usado'] or 0))
+        if v > Decimal('0.004'):
+            out.append(dict(r, v=v, origem='extrato', referencia='', data_baixa=r['data']))
+    return out
+
+
+def _linhas_em_duplicidade(lanc_ids):
+    """Das linhas do extrato das baixas, quais são crédito em duplicidade (a baixa foi paga com esse crédito)."""
+    ids = [i for i in set(lanc_ids) if i]
+    if not ids:
+        return []
+    try:
+        return [r['lancamento_id'] for r in q(f"""SELECT lancamento_id FROM fin_pagamentos_duplicados
+                                                   WHERE lancamento_id IN ({','.join(['%s'] * len(ids))})""",
+                                              tuple(ids), fetch=True) or []]
+    except Exception:
+        return []
+
+
 def montar(empresa_ids=None, mes=None, per=None):
     hoje = hoje_br()
     if mes is None:
@@ -269,9 +309,17 @@ def montar(empresa_ids=None, mes=None, per=None):
     cat = _Catalogo()
     rec_grupos = _grupos_dos_clientes([b['cliente_id'] for b in rec])
     rec_bols = _boletos_dos_titulos([b['titulo_id'] for b in rec])
+    # 26/11/2026 — Anderson: "qual a informação para o meu financeiro que foi pago em duplicidade? Se não estiver ali,
+    # e nos relatórios nunca vão entender". O crédito a mais é um cartão PRÓPRIO no dia em que entrou (o que resta dele,
+    # a decidir ou a devolver); usado inteiro numa cobrança, quem aparece é a baixa daquela cobrança.
+    dups = duplicidades(ec.replace('t.', 'd.'), ep, (p_de, p_ate + timedelta(days=1)) if per else (mes, prox))
+    dup_lancs = {x['lancamento_id'] for x in dups} | set(_linhas_em_duplicidade([b['lancamento_id'] for b in rec]))
+    rec_grupos.update(_grupos_dos_clientes([x['cliente_id'] for x in dups]))
     por_dia = defaultdict(list)
     for b in rec:
         por_dia[b['data_baixa']].append(b)
+    for x in dups:
+        por_dia[x['data']].append(x)
     rec_g = []
     for d in sorted(por_dia, reverse=True):
         dt, sub = _cab(d, hoje)
@@ -280,13 +328,21 @@ def montar(empresa_ids=None, mes=None, per=None):
             mk = _marcas({'cliente_id': b['cliente_id'], 'descricao': b['descricao'], 'categoria_nome': b['categoria_nome'],
                           'competencia': b['competencia'], 'id': b['titulo_id']}, rec_grupos, rec_bols)
             cat.add(mk)
+            if b.get('dup_id'):
+                itens_d.append({'id': b['titulo_id'], 'dup': b['dup_id'], 'dup_sit': b['situacao'], 'num': b['numero_cliente'] or '—',
+                                'nome': _nome(b['contraparte_nome']), 'nome_full': b['contraparte_nome'] or '',
+                                'valor': brl(b['v']), 'v': '%.2f' % float(b['v']), 'desc': _desc(b),
+                                'dup_txt': ('boleto venc. ' + b['vencimento'].strftime('%d/%m') if b.get('vencimento') else 'boleto') + ' pago 2 vezes',
+                                'cliente_id': b['cliente_id'], 'auto': True, 'app': False, 'banco': b.get('banco') or '', **mk})
+                continue
             itens_d.append({'id': b['titulo_id'], 'num': b['numero_cliente'] or '—', 'nome': _nome(b['contraparte_nome']),
                             'nome_full': b['contraparte_nome'] or '',
                             'valor': brl(b['v']), 'v': '%.2f' % float(b['v']), 'desc': _desc(b), 'cliente_id': b['cliente_id'],
-                            'auto': _auto(b), 'app': _no_app(b),
+                            'auto': _auto(b), 'app': _no_app(b), 'com_credito': b.get('lancamento_id') in dup_lancs,
                             'banco': _banco_baixa(b), **mk})
         rec_g.append({'data': dt, 'sub': sub, 'tot': brl(sum(b['v'] for b in por_dia[d])),
                       'n': len(por_dia[d]), 'itens': itens_d})
+    rec = rec + dups                       # o total e a contagem do Recebido levam o crédito em duplicidade
 
     # ── Em aberto ──────────────────────────────────────────────────
     abe = q(f"""SELECT t.id, t.cliente_id, t.contraparte_doc, t.contraparte_nome, t.descricao, t.competencia,

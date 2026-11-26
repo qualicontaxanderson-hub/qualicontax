@@ -73,6 +73,22 @@ def baixas_da_linha(lanc_id):
                   WHERE b.lancamento_id = %s ORDER BY t.vencimento, t.id""", (lanc_id,))
 
 
+def duplicidade_da_linha(lanc_id):
+    """O crédito PAGO EM DUPLICIDADE desta linha do extrato, com quanto já foi usado em cobranças e quanto resta
+    (26/11/2026 — Anderson: o crédito pode baixar uma cobrança de outro valor; o que sobra continua crédito)."""
+    try:
+        d = _q('SELECT * FROM fin_pagamentos_duplicados WHERE lancamento_id = %s', (lanc_id,), one=True)
+    except Exception:                       # tabela ainda não criada
+        return None
+    if not d:
+        return None
+    u = _q('SELECT COALESCE(SUM(valor + juros + multa), 0) v FROM fin_titulo_baixas WHERE lancamento_id = %s',
+           (lanc_id,), one=True) or {}
+    d['usado'] = _d(u.get('v'))
+    d['resto'] = max(_d(d['valor']) - d['usado'], Decimal('0'))
+    return d
+
+
 def _abertos(empresa_id, ids=None):
     cond, params = '', [empresa_id]
     if ids is not None:
@@ -378,6 +394,11 @@ def vincular_pagamento(lanc_id):
         flash('Só crédito (dinheiro que entrou) é vinculado a título a receber.', 'warning')
         return redirect(url_for('financeiro.extrato'))
     feitas = baixas_da_linha(lanc_id)
+    dup = duplicidade_da_linha(lanc_id)
+    credito = dup['resto'] if dup and dup['situacao'] == 'A_DECIDIR' and dup['resto'] > 0 else None
+    usado = []
+    if credito:                             # crédito em duplicidade com sobra: ainda dá para usar
+        usado, feitas = feitas, []
     titulos = [] if feitas else _abertos(lanc['empresa_id'])
     for t in titulos:
         t['saldo'] = _d(t['valor']) - _d(t['valor_baixado'])
@@ -390,13 +411,14 @@ def vincular_pagamento(lanc_id):
     elif doc and any(t['contraparte_doc'] == doc for t in titulos):
         nome = next(t['contraparte_nome'] for t in titulos if t['contraparte_doc'] == doc)
     t0 = _hoje()
-    soltas = [] if feitas else baixas_soltas_perto(lanc)
+    soltas = [] if (feitas or credito) else baixas_soltas_perto(lanc)
     palavras = [w for w in re.findall(r'[A-Z0-9]{4,}', (nome or '').upper()) if w not in ('LTDA', 'PIX', 'RECEBIDO')]
     for b in soltas:
         b['mesmo_nome'] = bool(palavras) and all(w in (b['contraparte_nome'] or '').upper() for w in palavras[:2])
     soltas = [b for b in soltas if b['mesmo_nome']] or []
     return render_template('financeiro/vincular.html', modo='linha', lanc=lanc, feitas=feitas, titulos=titulos, soltas=soltas,
                            sugestao=nome, pre=pre, meses=_proximos_meses(), hoje=t0, brl=_brl,
+                           credito=credito, usado=usado, dup=dup,
                            empresa_nome=FinEmpresa.mapa().get(lanc['empresa_id'], ''))
 
 
@@ -410,7 +432,14 @@ def vincular_gravar(lanc_id):
     pago = _d(lanc['valor'])
     if pago <= 0:
         abort(400)
-    if baixas_da_linha(lanc_id):
+    dup = duplicidade_da_linha(lanc_id)
+    credito = dup['resto'] if dup and dup['situacao'] == 'A_DECIDIR' and dup['resto'] > 0 else None
+    if dup and not credito:
+        flash('Este crédito em duplicidade já foi usado ou devolvido.', 'warning')
+        return redirect(volta)
+    if credito:
+        pago = credito                      # só o que resta do crédito em duplicidade
+    elif baixas_da_linha(lanc_id):
         flash('Este pagamento já está vinculado.', 'warning')
         return redirect(volta)
 
@@ -454,7 +483,10 @@ def vincular_gravar(lanc_id):
                 return redirect(volta)
             dia = (ts[-1]['vencimento'] or date(2000, 1, 10)).day
             venc_residuo = _dia_no_mes(int(m.group(1)), int(m.group(2)), dia)
-    elif dif < 0 and acao != 'juros':
+    elif dif < 0 and credito and acao != 'credito':
+        flash(f'Sobram {_brl(-dif)} do crédito: confirme que continuam como crédito do cliente.', 'danger')
+        return redirect(volta)
+    elif dif < 0 and not credito and acao != 'juros':
         flash(f'Sobraram {_brl(-dif)}: confirme que entram como juros, ou marque mais um título do cliente.', 'danger')
         return redirect(volta)
 
@@ -466,8 +498,8 @@ def vincular_gravar(lanc_id):
         for i, t in enumerate(ts):
             ultimo = i == len(ts) - 1
             valor, juros, desconto = t['saldo'], Decimal('0'), Decimal('0')
-            if ultimo and dif < 0:
-                juros = -dif
+            if ultimo and dif < 0 and not credito:
+                juros = -dif                    # crédito em duplicidade: a sobra fica como crédito, não é juros
             elif ultimo and dif > 0:
                 valor = t['saldo'] - dif
                 if acao == 'desconto':
@@ -507,19 +539,29 @@ def vincular_gravar(lanc_id):
                       'motivo': motivo or None, 'residuo_titulo_id': residuo_id,
                       'residuo_vencimento': str(venc_residuo) if venc_residuo else None})
 
-    # o crédito era PAGO EM DOBRO de outro boleto: usá-lo numa cobrança é a decisão "adiantamento"
-    try:
-        execute_query("""UPDATE fin_pagamentos_duplicados SET situacao = 'ADIANTAMENTO', decidido_por = %s, decidido_em = NOW(),
-                                obs = %s WHERE lancamento_id = %s AND situacao = 'A_DECIDIR'""",
-                      (current_user.id, ('usado para pagar o título ' + ', '.join(str(t['id']) for t in ts))[:255], lanc_id))
-    except Exception:
-        logger.exception('[vincular] marcar pago em dobro como adiantamento (linha %s)', lanc_id)
-    msg = f'Pagamento de {_brl(pago)} vinculado a {len(ts)} título(s).'
+    # o crédito era PAGO EM DUPLICIDADE: usado inteiro vira "adiantamento"; com sobra, continua a decidir
+    sobra = None
+    if credito:
+        try:
+            agora = duplicidade_da_linha(lanc_id)
+            sobra = agora['resto'] if agora else None
+            texto = ('usado para pagar o título ' + ', '.join(str(t['id']) for t in ts))[:255]
+            if sobra is not None and sobra > 0:
+                execute_query('UPDATE fin_pagamentos_duplicados SET obs = %s WHERE lancamento_id = %s', (texto, lanc_id))
+            else:
+                execute_query("""UPDATE fin_pagamentos_duplicados SET situacao = 'ADIANTAMENTO', decidido_por = %s,
+                                        decidido_em = NOW(), obs = %s WHERE lancamento_id = %s AND situacao = 'A_DECIDIR'""",
+                              (current_user.id, texto, lanc_id))
+        except Exception:
+            logger.exception('[vincular] marcar o pago em duplicidade (linha %s)', lanc_id)
+    msg = f'{"Crédito em duplicidade" if credito else "Pagamento"} de {_brl(pago)} vinculado a {len(ts)} título(s).'
+    if sobra:
+        msg += f' Continuam {_brl(sobra)} de crédito do cliente (pago em duplicidade).'
     if dif > 0 and acao == 'desconto':
         msg += f' Desconto de {_brl(dif)}.'
     elif dif > 0:
         msg += f' A diferença de {_brl(dif)} virou o título {residuo_id}, vence {venc_residuo.strftime("%d/%m/%Y")}.'
-    elif dif < 0:
+    elif dif < 0 and not credito:
         msg += f' {_brl(-dif)} entraram como juros.'
     flash(msg, 'success')
 
@@ -549,3 +591,140 @@ def _boleto_do_residuo(titulo_id, vencimento):
                                                    _d(t['valor']), competencia, vencimento, mensagem, t['id'],
                                                    current_user.id)
     return ok, msg + (f' {aviso}' if aviso else '')
+
+
+# ---------------------------------------------------------------------------
+# PAGO EM DUPLICIDADE: a janela do crédito e as decisões (26/11/2026)
+# Anderson: "informar a duplicidade no Recebidos, e deixa em aberto; ai o que eu posso fazer é BAIXAR o A RECEBER
+# com o RECEBIDO DUPLICIDADE"; "E se tiver que devolver?". Usar = vincular a uma cobrança (a de outro valor também:
+# o que sobra continua crédito). Devolver = vira uma conta a PAGAR "Devolução a cliente", que sai pelo extrato.
+# ---------------------------------------------------------------------------
+def _dup(dup_id):
+    try:
+        d = _q('SELECT * FROM fin_pagamentos_duplicados WHERE id = %s', (dup_id,), one=True)
+    except Exception:
+        d = None
+    if not d or d['empresa_id'] not in FinEmpresa.ids_validos():
+        abort(404)
+    return d
+
+
+def _devolucao_do_dup(dup_id):
+    return _q("SELECT * FROM fin_titulos WHERE chave_idem = %s AND status <> 'cancelado' ORDER BY id DESC LIMIT 1",
+              (f'devolucao-dup:{dup_id}',), one=True)
+
+
+def _volta_dup(d):
+    l = _q('SELECT data FROM extrato_lancamentos WHERE id = %s', (d['lancamento_id'],), one=True) or {}
+    mes = l['data'].strftime('%Y-%m') if l.get('data') else None
+    return url_for('financeiro.titulos', tipo='R', aba='rec', **({'mes': mes} if mes else {})) + f'#dup={d["id"]}'
+
+
+@financeiro.route('/financeiro/duplicidade/<int:dup_id>')
+@permission_required('financeiro.titulos')
+def duplicidade(dup_id):
+    """A janela do crédito PAGO EM DUPLICIDADE (abre ao clicar no cartão laranja do Recebido)."""
+    from utils import titulos_receber as TR
+    d = _dup(dup_id)
+    info = duplicidade_da_linha(d['lancamento_id']) or d
+    lanc = _q('SELECT * FROM extrato_lancamentos WHERE id = %s', (d['lancamento_id'],), one=True) or {}
+    t = _q("""SELECT t.*, c.numero_cliente FROM fin_titulos t LEFT JOIN clientes c ON c.id = t.cliente_id
+               WHERE t.id = %s""", (d['titulo_id'],), one=True) if d.get('titulo_id') else None
+    bol = _q('SELECT * FROM fin_boletos WHERE id = %s', (d['boleto_id'],), one=True) if d.get('boleto_id') else None
+    # a 1ª vez que o banco recebeu este boleto: a baixa feita PELO boleto e a linha do extrato dela
+    primeira = None
+    if bol and t:
+        primeira = _q("""SELECT x.data_baixa, l.data AS data_linha FROM fin_titulo_baixas x
+                           LEFT JOIN extrato_lancamentos l ON l.id = x.lancamento_id
+                          WHERE x.titulo_id = %s AND x.referencia = %s ORDER BY x.id LIMIT 1""",
+                      (t['id'], 'cora:' + str(bol.get('charge_id') or '')), one=True)
+    usado = baixas_da_linha(d['lancamento_id'])
+    abertos = []
+    if t and t.get('cliente_id') and info.get('situacao') == 'A_DECIDIR' and info.get('resto', 0) > 0:
+        for o in _abertos(d['empresa_id']):
+            if o['cliente_id'] == t['cliente_id']:
+                o['saldo'] = _d(o['valor']) - _d(o['valor_baixado'])
+                o['desc'] = TR._desc(o)
+                abertos.append(o)
+    devol = _devolucao_do_dup(dup_id) if d['situacao'] == 'DEVOLVIDO' else None
+    quem = None
+    if d.get('decidido_por'):
+        quem = (_q('SELECT nome FROM usuarios WHERE id = %s', (d['decidido_por'],), one=True) or {}).get('nome')
+    nome = TR._nome((t or {}).get('contraparte_nome') or '')
+    pode = current_user.has_permission(PERM)
+    return render_template('financeiro/_duplicidade.html', d=d, info=info, lanc=lanc, t=t, bol=bol, primeira=primeira,
+                           usado=usado, abertos=abertos, devol=devol, quem=quem, nome=nome, pode=pode,
+                           iniciais=''.join(p[0] for p in nome.split()[:2]).upper() or '?', brl=_brl,
+                           desc=TR._desc(t) if t else '', hoje=_hoje())
+
+
+@financeiro.route('/financeiro/duplicidade/<int:dup_id>/devolver', methods=['POST'])
+@permission_required(PERM)
+def duplicidade_devolver(dup_id):
+    """Devolver ao cliente: o que resta do crédito vira uma conta a PAGAR (categoria "Devolução a cliente")."""
+    from models.fin_titulo import FinTitulo
+    d = _dup(dup_id)
+    volta = _volta_dup(d)
+    info = duplicidade_da_linha(d['lancamento_id'])
+    if not info or info['situacao'] != 'A_DECIDIR' or info['resto'] <= 0:
+        flash('Este crédito já foi usado ou devolvido.', 'warning')
+        return redirect(volta)
+    motivo = (request.form.get('motivo') or '').strip()[:200]
+    try:
+        venc = date.fromisoformat(request.form.get('vencimento') or '')
+    except ValueError:
+        venc = None
+    if not venc or len(motivo) < 3:
+        flash('Para devolver, informe a data da devolução e o motivo.', 'danger')
+        return redirect(volta)
+    t = _q('SELECT * FROM fin_titulos WHERE id = %s', (d['titulo_id'],), one=True) or {}
+    cat = _q("SELECT id FROM fin_categorias WHERE tipo = 'P' AND nome = 'Devolução a cliente' ORDER BY id LIMIT 1", one=True)
+    if not cat:
+        flash('Falta a categoria "Devolução a cliente" (a pagar) em Categorias.', 'danger')
+        return redirect(volta)
+    quem = getattr(current_user, 'nome', None) or f'usuário {current_user.id}'
+    l = _q('SELECT data FROM extrato_lancamentos WHERE id = %s', (d['lancamento_id'],), one=True) or {}
+    quando = l['data'].strftime('%d/%m/%Y') if l.get('data') else ''
+    ja = _devolucao_do_dup(dup_id)
+    tid = ja['id'] if ja else FinTitulo.criar(
+        tipo='P', contraparte_nome=t.get('contraparte_nome') or 'Cliente', categoria_id=cat['id'],
+        descricao=('Devolução de pagamento em duplicidade — ' + (t.get('descricao') or ''))[:255],
+        competencia=_hoje().replace(day=1), emissao=_hoje(), vencimento=venc, valor=info['resto'],
+        empresa_id=d['empresa_id'], contraparte_doc=t.get('contraparte_doc'), cliente_id=t.get('cliente_id'),
+        observacao=(f'O cliente pagou duas vezes o mesmo boleto; o crédito de {_brl(info["resto"])} de {quando} '
+                    f'vai ser devolvido. Decidido por {quem}: {motivo}')[:1000],
+        origem='manual', chave_idem=f'devolucao-dup:{dup_id}', centro_custo_id=t.get('centro_custo_id'))
+    if not tid or tid is True:
+        flash('Não consegui criar a conta a pagar da devolução. Nada mudou.', 'danger')
+        return redirect(volta)
+    execute_query("""UPDATE fin_pagamentos_duplicados SET situacao = 'DEVOLVIDO', decidido_por = %s, decidido_em = NOW(),
+                            obs = %s WHERE id = %s AND situacao = 'A_DECIDIR'""",
+                  (current_user.id, (f'devolver em {venc.strftime("%d/%m/%Y")} (a pagar {tid}): {motivo}')[:255], dup_id))
+    registrar('escrita.devolver_pagamento_duplicado', 'financeiro', tabela='fin_titulos', registro_id=d['titulo_id'],
+              depois={'valor': str(info['resto']), 'vencimento': str(venc), 'motivo': motivo, 'a_pagar': tid,
+                      'lancamento_id': d['lancamento_id']})
+    flash(f'Devolução de {_brl(info["resto"])} lançada no A pagar para {venc.strftime("%d/%m/%Y")}. '
+          'Quando o Pix ou a transferência sair, ela baixa pelo extrato. O boleto em aberto do cliente continua valendo.',
+          'success')
+    return redirect(volta)
+
+
+@financeiro.route('/financeiro/duplicidade/<int:dup_id>/devolver/desfazer', methods=['POST'])
+@permission_required(PERM)
+def duplicidade_devolver_desfazer(dup_id):
+    """Desistiu de devolver (a conta a pagar ainda não foi paga): o crédito volta para "a decidir"."""
+    from models.fin_titulo import FinTitulo
+    d = _dup(dup_id)
+    volta = _volta_dup(d)
+    if d['situacao'] != 'DEVOLVIDO':
+        return redirect(volta)
+    p = _devolucao_do_dup(dup_id)
+    if p and not FinTitulo.cancelar(p['id']):
+        flash('A devolução já foi paga (tem baixa): não dá para desfazer por aqui.', 'danger')
+        return redirect(volta)
+    execute_query("""UPDATE fin_pagamentos_duplicados SET situacao = 'A_DECIDIR', decidido_por = NULL, decidido_em = NULL,
+                            obs = NULL WHERE id = %s AND situacao = 'DEVOLVIDO'""", (dup_id,))
+    registrar('escrita.desfez_devolucao_duplicado', 'financeiro', tabela='fin_titulos', registro_id=d['titulo_id'],
+              depois={'a_pagar_cancelado': p['id'] if p else None, 'lancamento_id': d['lancamento_id']})
+    flash('A devolução foi desfeita: o crédito voltou para "a decidir".', 'success')
+    return redirect(volta)

@@ -1,0 +1,102 @@
+{# Janela "Pago em duplicidade" (26/11/2026) — abre ao clicar no cartão laranja do Recebido.
+   Anderson: "informar a duplicidade no Recebidos, e deixa em aberto; ai o que eu posso fazer é BAIXAR o A RECEBER
+   com o RECEBIDO DUPLICIDADE"; "Vamos supor que foi um cliente que não tem um boleto no mesmo valor? E se tiver que
+   devolver?". Mesmo molde da janela da cobrança (tj-*, CSS em titulos_receber.html). Rota: financeiro.duplicidade. #}
+{% set sit = info.situacao %}
+{% set resto = info.resto if info.resto is defined else info.valor %}
+<style>.tj-dup a.tj-o { text-decoration:none; color:inherit; } .tj-dup a.tj-o:hover { background:#fff7ed; }</style>
+<div class="tj tx-venc tj-dup">
+  <header class="tj-cab">
+    <div class="tj-cab-cli">
+      <span class="tj-avatar">{{ iniciais }}</span>
+      <div class="tj-quem">
+        <div class="tj-quem-l1"><span class="tj-num">{{ (t.numero_cliente if t else None) or '—' }}</span><b>{{ nome or 'Cliente' }}</b></div>
+        <div class="tj-quem-l2">
+          <span><i class="fas fa-clone"></i> PAGO EM DUPLICIDADE</span>
+          {% if t and t.cliente_id %}<a href="{{ url_for('clientes.detalhes', id=t.cliente_id) }}"><i class="fas fa-arrow-up-right-from-square"></i> cadastro</a>{% endif %}
+        </div>
+      </div>
+    </div>
+    <div class="tj-cab-val">
+      <span class="tj-tag">{{ {'A_DECIDIR': 'a decidir', 'ADIANTAMENTO': 'usado em cobrança', 'DEVOLVIDO': 'devolver ao cliente'}.get(sit, sit | lower) }}</span>
+      <b>{{ brl(resto if sit == 'A_DECIDIR' else info.valor) }}</b>
+      <small>{% if sit == 'A_DECIDIR' and info.usado %}crédito que resta · entrou {{ brl(info.valor) }}{% elif sit == 'A_DECIDIR' %}crédito do cliente{% elif sit == 'DEVOLVIDO' %}vai voltar para o cliente{% else %}já usado{% endif %}</small>
+    </div>
+  </header>
+
+  <div class="tj-kpis">
+    <div><i class="fas fa-building-columns"></i><div><dt>Entrou no banco</dt><dd>{{ lanc.data.strftime('%d/%m/%Y') if lanc.data else '—' }}</dd><small>{{ lanc.banco or '' }} · {{ brl(info.valor) }}</small></div></div>
+    <div><i class="fas fa-barcode"></i><div><dt>Boleto pago 2 vezes</dt><dd>{{ desc or '—' }}</dd><small>{% if bol %}vencimento {{ bol.vencimento.strftime('%d/%m/%Y') }}{% endif %}</small></div></div>
+    <div><i class="fas fa-circle-check"></i><div><dt>1º pagamento</dt><dd>{{ (primeira.data_linha or primeira.data_baixa).strftime('%d/%m/%Y') if primeira else '—' }}</dd><small>baixou a cobrança do boleto</small></div></div>
+    <div><i class="fas fa-clone"></i><div><dt>2º pagamento</dt><dd>{{ lanc.data.strftime('%d/%m/%Y') if lanc.data else '—' }}</dd><small>este crédito</small></div></div>
+    <div><i class="fas fa-scale-balanced"></i><div><dt>Situação</dt><dd>{{ {'A_DECIDIR': 'A decidir', 'ADIANTAMENTO': 'Usado', 'DEVOLVIDO': 'Devolver'}.get(sit, sit) }}</dd><small>{% if quem %}{{ quem }}{% if d.decidido_em %} · {{ d.decidido_em.strftime('%d/%m/%Y') }}{% endif %}{% else %}ninguém decidiu ainda{% endif %}</small></div></div>
+  </div>
+
+  <div class="tj-corpo">
+    <div class="tj-col1">
+      <section class="tj-sec tj-sec-tl">
+        <h4><i class="fas fa-timeline"></i> O que aconteceu</h4>
+        <ol class="tj-tl">
+          {% if bol %}<li class="tj-azul"><i class="fas fa-barcode"></i><div><b>Boleto emitido · {{ brl(bol.valor) }}</b><small>{{ desc }} · vence {{ bol.vencimento.strftime('%d/%m/%Y') }}</small></div><time>{{ bol.criado_em.strftime('%d/%m') if bol.criado_em else '' }}</time></li>{% endif %}
+          {% if primeira %}<li class="tj-verde"><i class="fas fa-check"></i><div><b>1º pagamento · baixou a cobrança</b><small>o banco recebeu o boleto</small></div><time>{{ (primeira.data_linha or primeira.data_baixa).strftime('%d/%m') }}</time></li>{% endif %}
+          <li class="tj-laranja"><i class="fas fa-clone"></i><div><b>2º pagamento do MESMO boleto · {{ brl(info.valor) }}</b><small>o cliente pagou de novo (ex.: Pix e código de barras). Nenhuma outra cobrança foi baixada.</small></div><time>{{ lanc.data.strftime('%d/%m') if lanc.data else '' }}</time></li>
+          {% for u in usado %}<li class="tj-verde"><i class="fas fa-link"></i><div><b>Usado · {{ brl(u.valor) }}</b><small>pagou {{ u.descricao }}{% if u.titulo_vencimento %} · venc. {{ u.titulo_vencimento.strftime('%d/%m/%Y') }}{% endif %}</small></div><time>{{ u.data_baixa.strftime('%d/%m') }}</time></li>{% endfor %}
+          {% if sit == 'DEVOLVIDO' %}<li class="tj-verm"><i class="fas fa-hand-holding-dollar"></i><div><b>Devolver ao cliente{% if devol %} · {{ brl(devol.valor) }}{% endif %}</b><small>{{ d.obs or '' }}</small></div><time>{{ d.decidido_em.strftime('%d/%m') if d.decidido_em else '' }}</time></li>{% endif %}
+        </ol>
+      </section>
+    </div>
+
+    <section class="tj-sec">
+      <h4><i class="fas fa-link"></i> Usar para baixar uma cobrança <small>· do mesmo cliente</small></h4>
+      {% if sit == 'A_DECIDIR' and resto > 0 %}
+        {% if abertos %}
+        <div class="tj-outros">
+          {% for o in abertos %}
+          {% if pode %}<a class="tj-o" href="{{ url_for('financeiro.vincular_pagamento', lanc_id=d.lancamento_id, titulo=o.id) }}" title="Dar baixa nesta cobrança com o crédito em duplicidade">
+          {% else %}<div class="tj-o">{% endif %}
+            <span><b>{{ o.desc }}</b><small>vence {{ o.vencimento.strftime('%d/%m/%Y') if o.vencimento else '—' }}{% if o.boletos_valendo %} · boleto em aberto{% endif %}{% if o.saldo > resto %} · o crédito paga parte{% elif o.saldo < resto %} · sobra crédito{% endif %}</small></span><em>{{ brl(o.saldo) }}</em>{% if pode %}<i class="fas fa-chevron-right"></i>{% endif %}
+          {% if pode %}</a>{% else %}</div>{% endif %}
+          {% endfor %}
+        </div>
+        <p class="tj-regra"><i class="fas fa-circle-info"></i> Ao dar baixa, o boleto em aberto daquela cobrança é cancelado no banco, para o cliente não pagar de novo. Se a cobrança for maior, a diferença continua a cobrar. Se for menor, o resto continua como crédito.</p>
+        {% else %}
+        <div class="tj-ok" style="color:#9a3412; background:#fff7ed;"><i class="fas fa-circle-info"></i> Este cliente não tem cobrança em aberto. O crédito fica guardado até ter uma, ou você devolve.</div>
+        {% endif %}
+      {% elif sit == 'ADIANTAMENTO' %}
+        <div class="tj-ok"><i class="fas fa-circle-check"></i> Crédito usado inteiro{% if usado %} na cobrança {{ usado[-1].descricao }}{% endif %}.</div>
+      {% else %}
+        <div class="tj-aviso"><i class="fas fa-circle-info"></i> {% if sit == 'DEVOLVIDO' %}Decidido devolver: este crédito não baixa cobrança.{% else %}Nada a usar.{% endif %}</div>
+      {% endif %}
+    </section>
+
+    <div class="tj-col3">
+      <section class="tj-sec tj-sec-acoes">
+        <h4><i class="fas fa-hand-holding-dollar"></i> Devolver ao cliente</h4>
+        {% if sit == 'A_DECIDIR' and resto > 0 %}
+          {% if pode %}
+          <form method="POST" action="{{ url_for('financeiro.duplicidade_devolver', dup_id=d.id) }}" class="tj-form tj-form-solta"
+                onsubmit="return confirm('Devolver {{ brl(resto) }} ao cliente? Vira uma conta a PAGAR (Devolução a cliente).');">
+            <label for="dupV{{ d.id }}">Devolver {{ brl(resto) }} em</label>
+            <div style="grid-template-columns:1fr;"><input type="date" id="dupV{{ d.id }}" name="vencimento" required min="{{ hoje.isoformat() }}" value="{{ hoje.isoformat() }}"></div>
+            <label for="dupM{{ d.id }}" style="margin-top:8px;">Motivo</label>
+            <div><input type="text" id="dupM{{ d.id }}" name="motivo" required minlength="3" maxlength="200" placeholder="ex.: cliente pediu de volta por Pix"><button type="submit" class="tj-prim"><i class="fas fa-rotate-left"></i> Devolver</button></div>
+          </form>
+          <p class="tj-regra"><i class="fas fa-circle-info"></i> Vira uma conta a pagar "Devolução a cliente". Quando o Pix sair, ela baixa pelo extrato. As cobranças do cliente continuam abertas e o boleto delas continua valendo.</p>
+          {% else %}
+          <div class="tj-aviso"><i class="fas fa-lock"></i> Quem pode vincular pagamento decide aqui.</div>
+          {% endif %}
+        {% elif sit == 'DEVOLVIDO' %}
+          <div class="tj-ok" style="color:#9a3412; background:#fff7ed;"><i class="fas fa-hand-holding-dollar"></i> Devolver {{ brl(devol.valor if devol else info.valor) }}{% if devol %} em {{ devol.vencimento.strftime('%d/%m/%Y') }} · {{ 'paga' if devol.status == 'liquidado' else 'a pagar' }}{% endif %}.</div>
+          {% if pode and devol and devol.status == 'aberto' %}
+          <form method="POST" action="{{ url_for('financeiro.duplicidade_devolver_desfazer', dup_id=d.id) }}" class="tj-form tj-form-solta"
+                onsubmit="return confirm('Desfazer a devolução? A conta a pagar é cancelada e o crédito volta para a decidir.');">
+            <div style="grid-template-columns:1fr;"><button type="submit"><i class="fas fa-rotate-left"></i> Desfazer a devolução</button></div>
+          </form>
+          {% endif %}
+        {% else %}
+          <div class="tj-aviso"><i class="fas fa-circle-info"></i> Crédito já usado: nada a devolver.</div>
+        {% endif %}
+      </section>
+    </div>
+  </div>
+</div>

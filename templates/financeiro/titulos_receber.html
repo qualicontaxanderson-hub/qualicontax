@@ -602,6 +602,11 @@ a.tx-c { text-decoration:none; color:inherit; }
 @media (max-width:760px) { .tx-rel { width:100%; justify-content:flex-start; } .tx-rel-ico { margin-left:auto; } }
 .tj-desf { margin-left:auto; } .tj-desf button { border:1px solid #fecaca; background:#fff; color:#b91c1c; border-radius:7px; padding:2px 8px; font-size:11px; font-weight:700; cursor:pointer; white-space:nowrap; } .tj-desf button:hover { background:#fef2f2; }
 .tx-dobro { display:inline-flex; align-items:center; gap:5px; margin-top:4px; font-size:10.5px; font-weight:800; color:#9a3412; background:#fff7ed; border:1px solid #fdba74; border-radius:99px; padding:2px 8px; }
+.tx-dobro-ok { color:#166534; background:#ecfdf3; border-color:#86efac; }
+/* 26/11/2026: crédito PAGO EM DUPLICIDADE — cartão laranja próprio no Recebido */
+.tx-c.tx-dup { --cor:#ea580c; --cor-e:#c2410c; --cor-f:#fff7ed; --cor-b:#fdba74; border:2px dashed #fb923c; cursor:pointer; }
+.tx-c.tx-dup .tx-c-top { background:linear-gradient(120deg, #f97316 0%, #c2410c 100%); }
+.tx-c.tx-dup .tx-c-val { color:#c2410c; }
 </style>
 
 {% set _q = {'emp': filtros.emp} if filtros.emp else {} %}
@@ -731,14 +736,26 @@ a.tx-c { text-decoration:none; color:inherit; }
     {{ cab(g, 'pagamento') }}
     <div class="tx-grade">
       {% for t in g.itens %}
+      {% if t.dup %}
+      {# 26/11/2026: o crédito a mais é um cartão próprio, laranja, até alguém decidir (usar numa cobrança ou devolver) #}
+      <div class="tx-c tx-dup" title="Pago em duplicidade: clique para decidir (usar numa cobrança ou devolver)" data-dup="{{ t.dup }}"
+           data-auto="1" data-busca="{{ t.num }} {{ t.nome_full }} duplicidade"
+           data-g="{{ t.grupos | join('|') }}" data-s="{{ t.serv }}" data-k="{{ t.comp }}" data-b="{{ t.bol }}" data-v="{{ t.v }}">
+        <div class="tx-c-top"><span class="tx-c-num">{{ t.num }}</span><span class="tx-c-nome">{{ t.nome }}</span></div>
+        <div class="tx-c-meio"><div><div class="tx-c-val">{{ t.valor }}</div><div class="tx-c-desc">{{ t.desc }} · {{ t.dup_txt }}</div>
+          <div class="tx-dobro"><i class="fas fa-clone"></i> PAGO EM DUPLICIDADE · {{ 'DEVOLVER AO CLIENTE' if t.dup_sit == 'DEVOLVIDO' else 'A DECIDIR' }}</div></div>
+          {% if t.banco %}<span class="tx-c-st tx-c-bco" title="Entrou no extrato do {{ t.banco }}">{{ logo_banco(t.banco, '#94a3b8', 22, t.banco) }}</span>{% endif %}</div>
+      </div>
+      {% else %}
       <div class="tx-c tx-ok" title="Clique para ver a cobrança" data-tid="{{ t.id }}"
            data-auto="{{ 1 if t.auto else 0 }}" data-busca="{{ t.num }} {{ t.nome_full }}"
            data-g="{{ t.grupos | join('|') }}" data-s="{{ t.serv }}" data-k="{{ t.comp }}" data-b="{{ t.bol }}" data-v="{{ t.v }}">
         <div class="tx-c-top"><span class="tx-c-num">{{ t.num }}</span><span class="tx-c-nome">{{ t.nome }}</span></div>
-        <div class="tx-c-meio"><div><div class="tx-c-val">{{ t.valor }}</div><div class="tx-c-desc">{{ t.desc }}</div>{% if t.id in dobro %}<div class="tx-dobro" title="O banco recebeu este boleto mais de uma vez: o valor a mais está no Extrato como PAGO EM DOBRO, esperando decisão (adiantamento ou devolver)"><i class="fas fa-clone"></i> PAGO EM DOBRO · +{{ dobro[t.id] }}</div>{% endif %}</div>
+        <div class="tx-c-meio"><div><div class="tx-c-val">{{ t.valor }}</div><div class="tx-c-desc">{{ t.desc }}</div>{% if t.id in dobro %}<div class="tx-dobro" title="O banco recebeu este boleto mais de uma vez: o valor a mais está no Extrato como PAGO EM DOBRO, esperando decisão (adiantamento ou devolver)"><i class="fas fa-clone"></i> PAGO 2 VEZES · +{{ dobro[t.id] }} em duplicidade</div>{% endif %}{% if t.com_credito %}<div class="tx-dobro tx-dobro-ok" title="Esta cobrança foi paga com o crédito de um pagamento em duplicidade"><i class="fas fa-link"></i> PAGO COM CRÉDITO EM DUPLICIDADE</div>{% endif %}</div>
           {# 16/11/2026 — Anderson: "não marcar EFI ou Bradesco e sim o icons": só o logo do banco onde caiu #}
           {% if t.app %}<span class="tx-c-st tx-c-bco" title="Boleto marcado como pago no app da Efí (o dinheiro não passou pela conta da Efí)">{{ logo_banco('364', '#94a3b8', 22, 'Efí') }}<i class="fas fa-mobile-screen-button"></i></span>{% elif t.auto %}<span class="tx-c-st tx-c-bco" title="Pagamento localizado no extrato do {{ t.banco }}">{{ logo_banco(t.banco, '#94a3b8', 22, t.banco) }}</span>{% else %}<span class="tx-c-st" title="Baixa sem linha do extrato amarrada"><i class="fas fa-hand"></i>manual</span>{% endif %}</div>
       </div>
+      {% endif %}
       {% endfor %}
     </div>
     {% else %}
@@ -1220,7 +1237,7 @@ a.tx-c { text-decoration:none; color:inherit; }
   }, true);
   window.txGavFechar = function () {
     gav.hidden = true; document.body.style.overflow = '';
-    try { if (location.hash.indexOf('#cob=') === 0 || location.hash.indexOf('#grupo=') === 0) history.replaceState(null, '', location.pathname + location.search); } catch (e) {}
+    try { if (location.hash.indexOf('#cob=') === 0 || location.hash.indexOf('#grupo=') === 0 || location.hash.indexOf('#dup=') === 0) history.replaceState(null, '', location.pathname + location.search); } catch (e) {}
   };
   document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && !gav.hidden) txGavFechar(); });
   document.querySelectorAll('.tx-c[data-tid]').forEach(function (c) {
@@ -1229,6 +1246,22 @@ a.tx-c { text-decoration:none; color:inherit; }
       txAbrirCob(c.dataset.tid);
     });
   });
+  // 26/11/2026: o crédito PAGO EM DUPLICIDADE abre a sua janela (usar numa cobrança ou devolver), na mesma gaveta
+  var URL_DUP = "{{ url_for('financeiro.duplicidade', dup_id=999999999) }}";
+  window.txAbrirDup = function (id) {
+    if (!id) return;
+    gav.hidden = false; document.body.style.overflow = 'hidden';
+    gavCorpo.innerHTML = '<div class="tx-gav-carregando"><i class="fas fa-circle-notch fa-spin"></i>Abrindo o pagamento em duplicidade…</div>';
+    try { history.replaceState(null, '', location.pathname + location.search + '#dup=' + id); } catch (e) {}
+    fetch(URL_DUP.replace('999999999', id), {credentials: 'same-origin'})
+      .then(function (r) { if (!r.ok) throw new Error(r.status); return r.text(); })
+      .then(function (html) { gavCorpo.innerHTML = html; gav.querySelector('.tx-gav-pane').scrollTop = 0; })
+      .catch(function () { gavCorpo.innerHTML = '<div class="tx-gav-carregando"><i class="fas fa-triangle-exclamation"></i>Não consegui abrir agora. Tente de novo.</div>'; });
+  };
+  document.querySelectorAll('.tx-c[data-dup]').forEach(function (c) {
+    c.addEventListener('click', function (e) { if (e.target.closest('button, a')) return; txAbrirDup(c.dataset.dup); });
+  });
+  if (location.hash.indexOf('#dup=') === 0) txAbrirDup(location.hash.slice(5));
   if (location.hash.indexOf('#cob=') === 0) txAbrirCob(location.hash.slice(5));
   if (location.hash.indexOf('#grupo=') === 0) txAbrirGrupo(location.hash.slice(7));
 

@@ -93,6 +93,13 @@
             <div><dt>Banco</dt><dd>{% if logo_banco_url(lanc.banco) %}{{ logo_banco(lanc.banco, None, 18) }} {% endif %}{{ lanc.banco or '—' }} {% if lanc.conta %}<small class="nd-ajuda">· {{ lanc.conta }}</small>{% endif %}</dd></div>
             <div class="nd-span"><dt>O banco escreveu</dt><dd>{{ lanc.descricao }}</dd></div>
         </dl>
+        {% if credito %}
+        {# 26/11/2026: crédito PAGO EM DUPLICIDADE — usa só o que resta; a sobra continua crédito #}
+        <div style="margin-top:10px; padding:10px 12px; border-radius:10px; background:#fff7ed; border:1px solid #fdba74; color:#9a3412; font-size:13px;">
+            <b><i class="fas fa-clone"></i> PAGO EM DUPLICIDADE</b> · crédito disponível <b>{{ brl(credito) }}</b>
+            {% for u in usado %}<div style="font-size:12px; margin-top:4px;">já usado {{ brl(u.valor) }} em {{ u.descricao }}{% if u.titulo_vencimento %} (venc. {{ u.titulo_vencimento.strftime('%d/%m/%Y') }}){% endif %}</div>{% endfor %}
+        </div>
+        {% endif %}
     </div>
 </section>
 
@@ -131,7 +138,7 @@
     <header><b><i class="fas fa-calculator"></i></b><span>A conta</span><small>pago × devido</small></header>
     <div class="nf-card-body">
         <div class="vp-resumo">
-            <div><span>Pagou</span><b>{{ brl(lanc.valor) }}</b></div>
+            <div><span>{{ 'Crédito' if credito else 'Pagou' }}</span><b>{{ brl(credito or lanc.valor) }}</b></div>
             <div><span>Títulos marcados</span><b id="vpSoma">R$ 0,00</b></div>
             <div><span id="vpDifRot">Diferença</span><b id="vpDif">—</b></div>
         </div>
@@ -156,14 +163,19 @@
 
         <div id="vpMais" style="display:none; margin-top:10px;">
             <div class="nd-rotulo">Pagou mais.</div>
+            {% if credito %}
+            <div class="vp-opcao ativa"><label><input type="radio" name="diferenca" value="credito"> A sobra continua como crédito do cliente (pago em duplicidade)</label></div>
+            <small class="nd-ajuda">Depois dá para usar o resto em outra cobrança ou devolver ao cliente, na aba Recebidos.</small>
+            {% else %}
             <div class="vp-opcao ativa"><label><input type="radio" name="diferenca" value="juros"> Registrar a sobra como juros (pagou atrasado)</label></div>
             <small class="nd-ajuda">Se a sobra é de outro mês ou serviço, marque também esse título na lista acima.</small>
+            {% endif %}
         </div>
 
         <div class="nd-acoes">
             <button class="btn btn-primary" type="submit" id="vpOk" disabled><i class="fas fa-link"></i> Vincular e dar baixa</button>
         </div>
-        <small class="nd-ajuda">O boleto que ainda podia ser pago é marcado como pago na Efí, para o cliente não pagar de novo. A tela do boleto passa a mostrar onde foi pago.</small>
+        <small class="nd-ajuda">O boleto que ainda podia ser pago sai do banco (na Efí fica como pago; no Cora é cancelado), para o cliente não pagar de novo. A tela do boleto passa a mostrar onde foi pago.</small>
     </div>
 </section>
 </div>
@@ -206,7 +218,7 @@
 {% if modo == 'linha' and not feitas %}
 <script>
 (function () {
-  var PAGO = {{ lanc.valor | float }};
+  var PAGO = {{ (credito or lanc.valor) | float }};
   var busca = document.getElementById('vpBusca'), lista = document.getElementById('vpLista');
   function norm(s) { return (s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase(); }
   function brl(v) { return 'R$ ' + v.toFixed(2).replace('.', ',').replace(/\B(?=(\d{3})+(?!\d))/g, '.'); }
@@ -235,7 +247,7 @@
     document.getElementById('vpMenos').style.display = marcados.length && dif > 0 ? '' : 'none';
     document.getElementById('vpMais').style.display = marcados.length && dif < 0 ? '' : 'none';
     // no "Sobra", juros vem marcado: é a única saída
-    document.querySelector('input[value=juros]').checked = marcados.length && dif < 0;
+    document.querySelector('#vpMais input[type=radio]').checked = marcados.length && dif < 0;
     if (!(dif > 0)) document.querySelectorAll('#vpMenos input[type=radio]').forEach(function (r) { r.checked = false; });
     opcoes();
     var ordem = marcados.map(function (i) { return [i.getAttribute('data-venc'), parseFloat(i.getAttribute('data-saldo'))]; }).sort();
