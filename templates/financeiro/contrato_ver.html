@@ -9,6 +9,13 @@
 {% block extra_css %}
 {% include 'financeiro/_tj_css.html' %}
 <style>
+.pk-bancos { padding:4px 18px 2px; } .pk-bancos-t { display:block; font-size:12px; font-weight:800; letter-spacing:.06em; text-transform:uppercase; color:#475569; margin:6px 0 8px; }
+.pk-bancos-g { display:grid; grid-template-columns:repeat(auto-fill, minmax(170px, 1fr)); gap:8px; }
+.pk-bco { display:flex; align-items:center; gap:10px; text-align:left; background:#fff; border:1.5px solid #e2e8f0; border-radius:14px; padding:9px 11px; font:inherit; cursor:pointer; color:#0f172a; }
+.pk-bco img { border-radius:9px; flex-shrink:0; } .pk-bco > i { width:34px; height:34px; border-radius:9px; background:#f1f5f9; color:#64748b; display:inline-flex; align-items:center; justify-content:center; }
+.pk-bco span { display:flex; flex-direction:column; line-height:1.2; min-width:0; } .pk-bco b { font-size:13.5px; } .pk-bco small { font-size:11.5px; color:#64748b; }
+.pk-bco:hover { border-color:#9fc9b3; } .pk-bco.on { border-color:#15803d; box-shadow:0 0 0 3px #dcfce7; background:linear-gradient(135deg,#f0fdf4,#fff 70%); }
+.pk-pe-info.erro { color:#b91c1c; font-weight:700; }
 {% include 'clientes/_pk_css.html' %}
 /* pergunta (caixa nossa), igual à do Comercial */
 .pk.pk-peq { width:min(560px, 96vw); top:18vh; } .pk.pk-peq .pk-quem span { white-space:normal; line-height:1.4; }
@@ -212,7 +219,7 @@
         {% if c.status == 'RASCUNHO' and pode %}
           <div class="cv-prox"><i class="fas fa-arrow-right"></i> <b>Próximo passo:</b> conferir o PDF e {{ 'aprovar ou enviar para assinatura' if aprov else 'mandar para aprovação' }}.</div>
           {% if aprov %}
-          <button type="button" class="tj-acao prim" onclick="ctAcao(this)" data-url="{{ url_for('financeiro.contrato_aprovar', cid=c.id) }}" data-titulo="Aprovar o contrato nº {{ c.numero or c.id }}?" data-texto="O honorário de {{ brl(d.valor) }} por mês passa a valer a partir de {{ dia(d.inicio) }}.{% if d.carteira %} A comissão de carteira de {{ d.carteira.nome.split(' ')[0] | nome_proprio }} nasce junto.{% endif %}{% if d.grupo and d.grupo.autorizacao_necessaria %} Você também AUTORIZA o contrato em grupo com sócios diferentes.{% endif %}" data-ok="{{ 'Aprovar e autorizar o grupo' if d.grupo and d.grupo.autorizacao_necessaria else 'Aprovar' }}" data-icone="fa-check" data-cor="pk-verde"><i class="fas fa-check"></i><span><b>{{ 'Aprovar e autorizar o grupo' if d.grupo and d.grupo.autorizacao_necessaria else 'Aprovar' }}</b><small>o honorário passa a valer · depois é só enviar para assinar</small></span></button>
+          <button type="button" class="tj-acao prim" onclick="ctAprovar(this)" data-url="{{ url_for('financeiro.contrato_aprovar', cid=c.id) }}" data-titulo="Aprovar o contrato nº {{ c.numero or c.id }}?" data-texto="O honorário de {{ brl(d.valor) }} por mês passa a valer a partir de {{ dia(d.inicio) }}.{% if d.carteira %} A comissão de carteira de {{ d.carteira.nome.split(' ')[0] | nome_proprio }} nasce junto.{% endif %}{% if d.grupo and d.grupo.autorizacao_necessaria %} Você também AUTORIZA o contrato em grupo com sócios diferentes.{% endif %}" data-ok="{{ 'Aprovar e autorizar o grupo' if d.grupo and d.grupo.autorizacao_necessaria else 'Aprovar' }}" data-icone="fa-check" data-cor="pk-verde"><i class="fas fa-check"></i><span><b>{{ 'Aprovar e autorizar o grupo' if d.grupo and d.grupo.autorizacao_necessaria else 'Aprovar' }}</b><small>o honorário passa a valer · depois é só enviar para assinar</small></span></button>
           <button type="button" class="tj-acao" onclick="ctAcao(this)" data-url="{{ url_for('financeiro.contrato_enviar', cid=c.id) }}" data-titulo="Enviar para assinatura sem aprovar?" data-texto="O honorário NÃO é criado. Cada pessoa recebe o link por e-mail e o PDF fica congelado como está.{% if sem_email %} Falta e-mail de {{ sem_email | map(attribute='nome') | join(', ') }}: não vai dar.{% endif %}" data-ok="Só enviar" data-icone="fa-paper-plane" data-cor="pk-ambar"><i class="fas fa-paper-plane"></i><span><b>Só enviar para assinatura</b><small>sem criar o honorário</small></span></button>
           {% else %}
           <button type="button" class="tj-acao prim" onclick="ctAcao(this)" data-url="{{ url_for('financeiro.contrato_pedir_aprovacao', cid=c.id) }}" data-titulo="Mandar para aprovação?" data-texto="O contrato fica aguardando aprovação. Aprovado, você recebe aviso e envia para o cliente assinar." data-ok="Mandar para aprovação" data-icone="fa-paper-plane" data-cor="pk-verde"><i class="fas fa-paper-plane"></i><span><b>Mandar para aprovação</b><small>o escritório confere e você recebe aviso</small></span></button>
@@ -221,7 +228,7 @@
         {% elif c.status == 'APROVACAO' %}
           {% if aprov %}
           <div class="cv-prox"><i class="fas fa-arrow-right"></i> <b>Próximo passo:</b> conferir e aprovar, ou devolver para {{ (c.criado_por_nome or 'quem montou').split(' ')[0] }} acertar.</div>
-          <button type="button" class="tj-acao prim" onclick="ctAcao(this)" data-url="{{ url_for('financeiro.contrato_aprovar', cid=c.id) }}" data-titulo="Aprovar o contrato nº {{ c.numero or c.id }}?" data-texto="O honorário de {{ brl(d.valor) }} por mês passa a valer a partir de {{ dia(d.inicio) }}.{% if d.carteira %} A comissão de carteira de {{ d.carteira.nome.split(' ')[0] | nome_proprio }} nasce junto.{% endif %}{% if d.grupo and d.grupo.autorizacao_necessaria %} Você também AUTORIZA o contrato em grupo com sócios diferentes.{% endif %}" data-ok="{{ 'Aprovar e autorizar o grupo' if d.grupo and d.grupo.autorizacao_necessaria else 'Aprovar' }}" data-icone="fa-check" data-cor="pk-verde"><i class="fas fa-check"></i><span><b>{{ 'Aprovar e autorizar o grupo' if d.grupo and d.grupo.autorizacao_necessaria else 'Aprovar' }}</b><small>o honorário passa a valer · {{ (c.criado_por_nome or 'quem montou').split(' ')[0] }} envia para assinar</small></span></button>
+          <button type="button" class="tj-acao prim" onclick="ctAprovar(this)" data-url="{{ url_for('financeiro.contrato_aprovar', cid=c.id) }}" data-titulo="Aprovar o contrato nº {{ c.numero or c.id }}?" data-texto="O honorário de {{ brl(d.valor) }} por mês passa a valer a partir de {{ dia(d.inicio) }}.{% if d.carteira %} A comissão de carteira de {{ d.carteira.nome.split(' ')[0] | nome_proprio }} nasce junto.{% endif %}{% if d.grupo and d.grupo.autorizacao_necessaria %} Você também AUTORIZA o contrato em grupo com sócios diferentes.{% endif %}" data-ok="{{ 'Aprovar e autorizar o grupo' if d.grupo and d.grupo.autorizacao_necessaria else 'Aprovar' }}" data-icone="fa-check" data-cor="pk-verde"><i class="fas fa-check"></i><span><b>{{ 'Aprovar e autorizar o grupo' if d.grupo and d.grupo.autorizacao_necessaria else 'Aprovar' }}</b><small>o honorário passa a valer · {{ (c.criado_por_nome or 'quem montou').split(' ')[0] }} envia para assinar</small></span></button>
           <button type="button" class="tj-acao rubro" onclick="ctAcao(this)" data-url="{{ url_for('financeiro.contrato_reprovar', cid=c.id) }}" data-titulo="Devolver o contrato para acertar?" data-texto="Volta para {{ c.criado_por_nome or 'quem montou' }} corrigir. Diga o que está errado." data-motivo="o que precisa acertar (obrigatório)" data-opcoes="Valor dos honorários errado|Quem assina está errado|Faltou serviço|Dados do cadastro incompletos|Data de início errada" data-ok="Devolver" data-icone="fa-rotate-left" data-cor="pk-rubro"><i class="fas fa-rotate-left"></i><span><b>Devolver para acertar</b><small>volta para correção, com o motivo</small></span></button>
           {% else %}
           <div class="cv-prox"><i class="fas fa-hourglass-half"></i> <b>Aguardando aprovação.</b> Você recebe um e-mail quando sair; aprovado, o botão de enviar aparece aqui.</div>
@@ -315,17 +322,33 @@
     var f = document.createElement('div'); f.className = 'pk-fundo'; f.style.zIndex = 1400;
     f.innerHTML = '<div class="pk pk-peq ' + (o.cor || 'pk-roxo') + '" role="alertdialog" aria-modal="true"><header class="pk-cab"><span class="pk-av"><i class="fas ' + (o.icone || 'fa-question') + '"></i></span>'
       + '<div class="pk-quem"><b>' + esc(o.titulo) + '</b><span>' + esc(o.texto || '') + '</span></div><button type="button" class="pk-x" title="Fechar (Esc)"><i class="fas fa-xmark"></i></button></header>'
+      + (o.html || '')
       + (o.opcoes ? '<div class="pk-opcoes">' + o.opcoes.map(function (x) { return '<button type="button" class="pk-opc">' + esc(x) + '</button>'; }).join('') + '</div>' : '')
       + (o.motivo ? '<textarea class="pk-motivo" placeholder="' + esc(o.motivo) + '" maxlength="400"></textarea>' : '')
       + '<footer class="pk-pe"><div class="pk-pe-info">' + esc(o.info || '') + '</div><button type="button" class="pk-canc">' + esc(o.voltar || 'Voltar') + '</button><button type="button" class="pk-ok' + (o.cor === 'pk-rubro' ? ' rubro' : '') + '"><i class="fas ' + (o.okIcone || 'fa-check') + '"></i> ' + esc(o.ok || 'Confirmar') + '</button></footer></div>';
     document.body.appendChild(f);
-    function fechar(sim) { document.removeEventListener('keydown', tecla, true); var m = (f.querySelector('.pk-motivo') || {}).value || ''; f.remove(); if (sim) { if (o.exigeMotivo && !m.trim()) { ctPergunta(Object.assign({}, o, { info: 'Escreva o motivo para continuar.' })); return; } if (o.onOk) o.onOk(m.trim()); } }
+    function fechar(sim) { if (sim && o.valida) { var erro = o.valida(f); if (erro) { var inf = f.querySelector('.pk-pe-info'); inf.textContent = erro; inf.classList.add('erro'); return; } } document.removeEventListener('keydown', tecla, true); var m = (f.querySelector('.pk-motivo') || {}).value || ''; f.remove(); if (sim) { if (o.exigeMotivo && !m.trim()) { ctPergunta(Object.assign({}, o, { info: 'Escreva o motivo para continuar.' })); return; } if (o.onOk) o.onOk(m.trim()); } }
     function tecla(e) { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); fechar(false); } }
     document.addEventListener('keydown', tecla, true);
     f.querySelector('.pk-x').addEventListener('click', function () { fechar(false); }); f.querySelector('.pk-canc').addEventListener('click', function () { fechar(false); });
     f.querySelector('.pk-ok').addEventListener('click', function () { fechar(true); }); f.addEventListener('mousedown', function (e) { if (e.target === f) fechar(false); });
     var ta = f.querySelector('.pk-motivo'); if (ta) ta.focus(); else f.querySelector('.pk-ok').focus();
     f.querySelectorAll('.pk-opc').forEach(function (b) { b.addEventListener('click', function () { f.querySelectorAll('.pk-opc').forEach(function (x) { x.classList.toggle('on', x === b); }); if (ta) { ta.value = b.textContent; ta.focus(); } }); });
+  };
+  // Aprovar (26/11/2026 — Anderson): o aprovador escolhe o banco da cobrança, com a logo; sem escolher não prossegue
+  var BANCOS = {{ (bancos or []) | tojson }};
+  window.ctAprovar = function (bt) {
+    var d = bt.dataset;
+    var html = '<div class="pk-bancos"><b class="pk-bancos-t"><i class="fas fa-building-columns"></i> Qual banco cobra este contrato?</b><div class="pk-bancos-g">'
+      + BANCOS.map(function (b) {
+          return '<button type="button" class="pk-bco" data-id="' + b.id + '">' + (b.cod ? '<img src="/static/images/bancos/' + String(b.cod).padStart(3, '0') + '.svg" alt="" width="34" height="34">' : '<i class="fas fa-building-columns"></i>')
+            + '<span><b>' + esc(b.nome) + '</b><small>' + (b.padrao ? 'padrão da casa' : 'boleto por este banco') + '</small></span></button>';
+        }).join('') + '</div></div>';
+    window.__bancoEscolhido = '';
+    ctPergunta({ titulo: d.titulo, texto: d.texto, html: html, cor: d.cor || 'pk-verde', icone: d.icone || 'fa-check', ok: d.ok || 'Aprovar', okIcone: 'fa-check', voltar: 'Voltar',
+                 valida: function (f) { return f.querySelector('.pk-bco.on') ? '' : 'Escolha o banco que vai cobrar: sem isso a aprovação não segue.'; },
+                 onOk: function () { ctPost(d.url, { banco: window.__bancoEscolhido || '' }); } });
+    document.querySelectorAll('.pk-bco').forEach(function (b) { b.addEventListener('click', function () { document.querySelectorAll('.pk-bco').forEach(function (x) { x.classList.toggle('on', x === b); }); window.__bancoEscolhido = b.dataset.id; var inf = document.querySelector('.pk-fundo .pk-pe-info'); if (inf) { inf.textContent = ''; inf.classList.remove('erro'); } }); });
   };
   // botão de ação: lê a pergunta dos data-* e, confirmada, manda o POST (com o motivo, quando tem)
   window.ctAcao = function (bt) {

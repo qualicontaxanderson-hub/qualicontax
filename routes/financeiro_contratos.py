@@ -454,9 +454,27 @@ def _carteira_do_contrato(c, aprovado_por, avisos):
     return feitos
 
 
-def _honorario_do_contrato(c, aprovado_por):
+def _bancos_cobranca():
+    """Bancos que emitem boleto (mesma lista da tela de Honorários), com o padrão marcado."""
+    try:
+        from utils.honorarios_painel import contas
+        return contas()
+    except Exception:
+        logger.exception('[contratos] bancos da cobrança')
+        return []
+
+
+def _banco_escolhido(valor):
+    """A conta de cobrança que o aprovador escolheu (id de fin_cobranca_contas), ou None."""
+    if not str(valor or '').isdigit():
+        return None
+    return next((b for b in _bancos_cobranca() if int(b['id']) == int(valor)), None)
+
+
+def _honorario_do_contrato(c, aprovado_por, banco=None):
     """Na APROVAÇÃO o honorário passa a valer: cria o contrato de honorários (fin_contratos) ATIVO de cada empresa
-    que ainda não tem um vigente. Quem já tem fica como está (devolve o aviso). Devolve (criados, avisos)."""
+    que ainda não tem um vigente. Quem já tem fica como está (devolve o aviso). Devolve (criados, avisos).
+    ``banco``: a conta de cobrança escolhida na aprovação (26/11/2026); fora do padrão, grava em banco_boleto como a tela de Honorários."""
     from models.fin_contrato import REAJUSTE_TIPOS
     d = c['dados']
     try:
@@ -484,6 +502,8 @@ def _honorario_do_contrato(c, aprovado_por):
                                 reajuste_obs=d.get('reajuste_escala') or d.get('reajuste_indice'), criado_por=c['criado_por'], aprovado_por=aprovado_por,
                                 proximo_reajuste=date(int(d['reajuste_proximo'][:4]), int(d['reajuste_proximo'][5:7]), 1) if d.get('reajuste_proximo') else None,
                                 observacao='Do contrato de prestação nº %s, aprovado no sistema' % (c.get('numero') or c['id']))
+        if banco and not banco.get('padrao'):        # vazio = o padrão (mesma convenção de Honorários)
+            FinContrato.atualizar(fid, {'banco_boleto': str(banco['id'])})
         criados.append(fid)
     return criados, avisos
 
@@ -725,7 +745,7 @@ def contrato_ver(cid):
     return render_template('financeiro/contrato_ver.html', c=c, assinantes=ass, ROTULO=ROTULO, aprov=_aprovador(), cls=cls, ico=ico,
                            eventos=_eventos(c, ass), n_assinados=sum(1 for a in ass if a['assinado_em']),
                            meu=c.get('criado_por') == current_user.id, montado=PrestContrato.montar(c['dados']), hoje=date.today(), AREAS=AREAS, brl=brl,
-                           SIGN_Q=SIGNATARIOS_QUALICONTAX)
+                           SIGN_Q=SIGNATARIOS_QUALICONTAX, bancos=_bancos_cobranca() if c['status'] in ('APROVACAO', 'RASCUNHO') else [])
 
 
 def _pdf_bytes(c):
@@ -925,15 +945,22 @@ def contrato_aprovar(cid):
     if not c or c['status'] not in ('APROVACAO', 'RASCUNHO'):
         flash('Só contrato em rascunho ou aguardando aprovação pode ser aprovado.', 'warning')
         return redirect(url_for('financeiro.contrato_ver', cid=cid))
+    # 26/11/2026 — Anderson: "na aprovação do contrato tenho que ter aqui só o Aprovador escolher qual banco será cobrado,
+    # com as logos... se não escolher não prossegue... senão tenho que ir no Honorário e fazer isso"
+    banco = _banco_escolhido(request.form.get('banco'))
+    if not banco:
+        flash('Não aprovei: escolha o banco que vai cobrar este contrato.', 'danger')
+        return redirect(url_for('financeiro.contrato_ver', cid=cid))
     try:
-        criados, avisos = _honorario_do_contrato(c, current_user.id)
+        criados, avisos = _honorario_do_contrato(c, current_user.id, banco=banco)
     except ValueError as e:
         flash('Não aprovei: %s' % e, 'danger')
         return redirect(url_for('financeiro.contrato_ver', cid=cid))
     acordos = _carteira_do_contrato(c, current_user.id, avisos)
     cobrancas = _cobranca_do_contrato(c, avisos)
     c['dados']['aprovacao'] = {'por': current_user.id, 'nome': getattr(current_user, 'nome', ''), 'em': datetime.now().isoformat(timespec='minutes'),
-                               'honorarios_criados': criados, 'avisos': avisos, 'acordos_carteira': acordos, 'cobrancas': cobrancas}
+                               'honorarios_criados': criados, 'avisos': avisos, 'acordos_carteira': acordos, 'cobrancas': cobrancas,
+                               'banco': {'id': banco['id'], 'nome': banco['nome'], 'cod': banco.get('cod')}}
     if (c['dados'].get('grupo') or {}).get('autorizacao_necessaria'):
         c['dados']['autorizacao'] = {'por': current_user.id, 'nome': getattr(current_user, 'nome', ''), 'em': datetime.now().isoformat(timespec='minutes'),
                                      'texto': 'Contrato em grupo com quadro de sócios diferente autorizado pelo escritório na aprovação'}
@@ -943,7 +970,7 @@ def contrato_aprovar(cid):
     registrar('escrita.aprovou_contrato_prestacao', 'financeiro', tabela='prest_contratos', registro_id=cid,
               depois={'empresa': c['dados']['empresas'][0]['razao'], 'valor': c['dados'].get('valor'), 'honorarios_criados': criados, 'avisos': avisos})
     flash('Contrato aprovado.%s%s Agora é enviar para o cliente assinar.' % (
-        (' Honorário passou a valer (%d).' % len(criados)) if criados else '', (' ' + '; '.join(avisos) + '.') if avisos else ''), 'success')
+        (' Honorário passou a valer (%d), cobrado pelo %s.' % (len(criados), banco['nome'])) if criados else '', (' ' + '; '.join(avisos) + '.') if avisos else ''), 'success')
     return redirect(url_for('financeiro.contrato_ver', cid=cid))
 
 
