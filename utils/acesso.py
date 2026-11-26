@@ -540,6 +540,7 @@ MAPA = {
     'financeiro.acdiv_ativar': 'financeiro.cobranca.vincular',
     'financeiro.acdiv_cancelar': 'financeiro.cobranca.vincular',
     'financeiro.acdiv_anotar': 'financeiro.cobranca.vincular',
+    'financeiro.acdiv_boleto': 'financeiro.cobranca.vincular',
     'financeiro.titulo_novo': 'financeiro.titulos.incluir',
     # grupos
     'grupos.desativar': 'grupos.excluir',

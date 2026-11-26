@@ -2007,6 +2007,13 @@ def _apply_migrations():
         "AND TABLE_NAME = 'fin_titulos' AND COLUMN_NAME = 'acordo_id'", fetch=True, fetch_one=True) or {}
     if _c.get('cnt', 0) == 0:
         _migrate("ALTER TABLE fin_titulos ADD COLUMN acordo_id INT NULL, ADD KEY idx_titulo_acordo (acordo_id)")
+    # 26/11/2026 — Acordo, etapa 3: a parcela "junto com o honorário" vai no boleto do mês; titulo_id passa a ser o título
+    # desse boleto e titulo_proprio_id guarda o título da parcela (que sai da cobrança, absorvido).
+    _c = execute_query(
+        "SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() "
+        "AND TABLE_NAME = 'fin_acordo_parcelas' AND COLUMN_NAME = 'titulo_proprio_id'", fetch=True, fetch_one=True) or {}
+    if _c.get('cnt', 0) == 0:
+        _migrate("ALTER TABLE fin_acordo_parcelas ADD COLUMN titulo_proprio_id INT NULL, ADD KEY idx_acordo_parc_proprio (titulo_proprio_id)")
 
     print("✓ Migrations concluídas")
 

@@ -312,7 +312,7 @@ span.hp-bco, span.hp-nf { cursor:default; }
   </div>
   <div class="hp-itens">
     {% for i in l.itens if not i.lancamento_id %}<div class="hp-it{{ ' dec' if i.origem == 'decimo' else (' lan' if i.origem == 'lancamento' else (' desc' if i.origem == 'desconto' else '')) }}">
-      <span>{% if i.origem == 'decimo' %}<i class="fas fa-gift"></i>{% elif i.origem == 'lancamento' %}<i class="fas fa-plus"></i>{% elif i.origem == 'desconto' %}<i class="fas fa-tag"></i>{% endif %}{{ i.nome }}{% if i.origem == 'honorarios' and l.hon_mes %} <small class="hp-so" title="valor só desta cobrança; no contrato é {{ l.hon_contrato | float | format_currency }}">só {{ competencia.strftime('%m/%Y') }}</small>{% endif %}</span><b>{% if i.origem == 'desconto' %}− {{ (i.valor | float | abs) | format_currency }}{% else %}{{ i.valor | float | format_currency }}{% endif %}</b></div>{% endfor %}
+      <span>{% if i.origem == 'decimo' %}<i class="fas fa-gift"></i>{% elif i.origem == 'lancamento' %}<i class="fas fa-plus"></i>{% elif i.origem == 'desconto' %}<i class="fas fa-tag"></i>{% elif i.origem == 'acordo' %}<i class="fas fa-handshake" title="parcela de acordo: só no boleto, fora da nota"></i>{% endif %}{{ i.nome }}{% if i.origem == 'honorarios' and l.hon_mes %} <small class="hp-so" title="valor só desta cobrança; no contrato é {{ l.hon_contrato | float | format_currency }}">só {{ competencia.strftime('%m/%Y') }}</small>{% endif %}</span><b>{% if i.origem == 'desconto' %}− {{ (i.valor | float | abs) | format_currency }}{% else %}{{ i.valor | float | format_currency }}{% endif %}</b></div>{% endfor %}
   </div>
   {% if l.lancs or l.pendentes %}
   {# 25/11/2026 — Anderson: "aparecer no Honorários uma janelinha ROXA" com o que a equipe lançou para esta mensalidade #}

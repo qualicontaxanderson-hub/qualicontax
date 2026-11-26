@@ -228,6 +228,10 @@ a.tx-c { text-decoration:none; color:inherit; }
 .pa-l small { color:#64748b; } .pa-l .s { font-size:10.5px; font-weight:800; text-transform:uppercase; border-radius:99px; padding:2px 8px; background:#f1f5f9; color:#64748b; margin-left:6px; }
 .pa-l.ok { border-color:#bbf7d0; background:#f0fdf4; } .pa-l .s.ok { background:#dcfce7; color:#15803d; }
 .pa-l.atr { border-color:#fed7aa; background:#fff7ed; } .pa-l .s.atr { background:#ffedd5; color:#c2410c; }
+.pa-l small a { color:#1d4ed8; font-weight:700; text-decoration:none; } .pa-l small a i, .pa-bt i { margin-right:3px; }
+.pa-bt { white-space:nowrap; border:1px solid #bfdbfe; background:#eff6ff; color:#1d4ed8; border-radius:8px; padding:2px 8px; font:inherit; font-size:11.5px; font-weight:700; cursor:pointer; }
+.pa-bt:hover { background:#dbeafe; } .pa-q { display:block; font-size:11px; color:#94a3b8; }
+@media (max-width: 600px) { .pa-l { grid-template-columns:34px minmax(0,1fr) auto; } .pa-l > small { grid-column:1 / -1; order:5; } .pa-l small .pa-q { display:inline; margin-left:6px; } }
 .lt { display:flex; flex-direction:column; }
 .lt > div { display:flex; gap:10px; font-size:12.5px; padding-bottom:12px; position:relative; }
 .lt > div::before { content:''; position:absolute; left:13px; top:26px; bottom:0; width:2px; background:#e2e8f0; }
@@ -1550,6 +1554,7 @@ a.tx-c { text-decoration:none; color:inherit; }
       .then(function (r) { return r.json(); })
       .then(function (j) {
         if (!j.ok) { bt.disabled = false; acMsg(j.erro, true); return; }
+        if ((j.avisos || []).length) alert(j.avisos.join('\n'));
         location.href = location.pathname + '?aba=ac' + (EMP ? '&emp=' + encodeURIComponent(EMP) : '') + '#acordo=' + j.id;
       })
       .catch(function () { bt.disabled = false; acMsg('Não consegui gravar agora. Tente de novo.', true); });
@@ -1579,6 +1584,15 @@ a.tx-c { text-decoration:none; color:inherit; }
         if ((j.avisos || []).length) alert(j.avisos.join('\n'));
         if (qual === 'anotar') acAbrirJan(id); else location.reload();
       })
+      .catch(function () { alert('Não consegui agora. Tente de novo.'); });
+  };
+  // 26/11/2026 — etapa 3: "emitir boleto agora" de uma parcela (sai pelo banco do acordo e vai por e-mail)
+  window.acBoleto = function (id, pid, rot) {
+    if (!confirm('Emitir agora o boleto da ' + rot + '? Ele sai pelo banco do acordo e vai por e-mail ao cliente.')) return;
+    var fd = new FormData(); fd.append('csrf_token', CSRF_AC);
+    fetch(URL_AC_JAN.replace('999999999', id) + '/parcela/' + pid + '/boleto', {method: 'POST', credentials: 'same-origin', body: fd, headers: {'X-CSRFToken': CSRF_AC}})
+      .then(function (r) { return r.json(); })
+      .then(function (j) { alert(j.ok ? j.msg : j.erro); acAbrirJan(id); })
       .catch(function () { alert('Não consegui agora. Tente de novo.'); });
   };
   document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && acCx.innerHTML) { if (acCx.querySelector('#acJan')) acFecharJan(); else acFechar(); } });

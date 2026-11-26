@@ -457,11 +457,15 @@ BANCO_DE = {'efi': 'a Efí', 'bradesco': 'o Bradesco', 'cora': 'o Cora'}
 BANCO_EM = {'efi': 'na Efí', 'bradesco': 'no Bradesco', 'cora': 'no Cora'}
 
 
-def gerar_boleto_da_nota(n, conta, vencimento, mensagem, usuario_id):
-    """Boleto de uma nota autorizada. Devolve (ok, msg, aviso_email)."""
+def gerar_boleto_da_nota(n, conta, vencimento, mensagem, usuario_id, extras=None):
+    """Boleto de uma nota autorizada. Devolve (ok, msg, aviso_email).
+    ``extras`` (26/11/2026): linhas só no boleto, fora da nota — a parcela do acordo "junto com o honorário"."""
     itens, total, dj = _itens_da_nota(n)
     if total <= 0:
         return False, 'A nota não tem valor para cobrar.', None
+    if extras:
+        itens = itens + list(extras)
+        total = total + sum((Decimal(str(i['valor'])) for i in extras), Decimal('0'))
     pagador = _pagador_da_nota(n, dj)
     mensagem = _mensagem_do_boleto(mensagem, _competencia(n), conta, n)
     descricao = 'Honorários e serviços — ' + ', '.join(i['nome'] for i in itens)

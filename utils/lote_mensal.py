@@ -123,6 +123,14 @@ def previa(empresa_id, competencia, so_clientes=None, so_decimo=None):
         for l in FinLancamento.para_o_mensal(empresa_id, competencia):
             por_cliente.setdefault(l['cliente_id'], []).append(l)
     esc = escolhas(empresa_id, competencia)
+    # 26/11/2026 — Acordo, etapa 3: parcelas "junto com o honorário" que vencem até o fim do mês deste boleto
+    try:
+        from utils import acordos
+        fim = mes_seguinte(competencia)
+        acp = acordos.parcelas_junto(empresa_id, date(fim.year, fim.month, calendar.monthrange(fim.year, fim.month)[1]))
+    except Exception:
+        logger.exception('[lote] parcelas de acordo')
+        acp = {}
     linhas = []
     for c in contratos:
         e = esc.get(c['cliente_id']) or {}
@@ -133,6 +141,7 @@ def previa(empresa_id, competencia, so_clientes=None, so_decimo=None):
         if hon_mes:
             ic = [dict(i, valor=e['valor_honorarios']) if k == k_hon else i for k, i in enumerate(ic)]
         itens = itens_da_empresa(c, competencia, ic, por_cliente.get(c['cliente_id'], []))
+        itens += acp.get(c['cliente_id'], [])          # parcela do acordo: só no boleto, fora da nota
         total = sum(_d(i['valor']) for i in itens)
         venc = vencimento_para(c['dia_vencimento'], competencia)
         venc_mes = bool(e.get('vencimento')) and e['vencimento'] != venc
@@ -243,7 +252,10 @@ def _cobrar(linha, lote_id, usuario_id, conta, cfg, empresa_id):
     _v, mensagem = sugestao_boleto(conta, competencia)
     # 19/11/2026 — desconto mensal: a linha negativa vira abatimento na linha dos honorários (banco e nota só aceitam positivo)
     itens_lin = itens                                              # o que fica gravado no lote (com as linhas de desconto)
-    itens, desconto = _aplicar_descontos(itens)
+    # 26/11/2026 — parcela de acordo: fora da nota e fora do desconto mensal (vai inteira, só no boleto)
+    acordo_its = [i for i in itens if i.get('origem') == 'acordo']
+    itens, desconto = _aplicar_descontos([i for i in itens if i.get('origem') != 'acordo'])
+    itens = itens + acordo_its
     emite_nota = bool(cfg) and linha['nota'] and any(i['servico_id'] for i in itens)
     nfse_id = boleto_id = titulo_id = None
     avisos = []
@@ -260,8 +272,8 @@ def _cobrar(linha, lote_id, usuario_id, conta, cfg, empresa_id):
                               ('tomador_cliente_id', str(linha['cliente_id'])),
                               ('descricao', NfseConfig.descricao_para(cfg, competencia)),
                               ('linhas_nota', json.dumps(linhas_nota, ensure_ascii=False))]
-                             + [('item_servico_id', str(i['servico_id'])) for i in itens]
-                             + [('item_valor', i['valor']) for i in itens])
+                             + [('item_servico_id', str(i['servico_id'])) for i in itens if i.get('origem') != 'acordo']
+                             + [('item_valor', i['valor']) for i in itens if i.get('origem') != 'acordo'])
             pedido = nfse_emissor.pedido_do_form(form, empresa_id, cfg)
             pedido.origem = 'lote'
             nota = nfse_emissor.emitir(pedido, cfg, usuario_id=usuario_id)
@@ -271,7 +283,8 @@ def _cobrar(linha, lote_id, usuario_id, conta, cfg, empresa_id):
             nfse_id = nota['id']
             if linha['boleto']:
                 n = NfseEmitida.get(nfse_id)
-                ok, msg, aviso = gerar_boleto_da_nota(n, conta, venc, mensagem, usuario_id)
+                ok, msg, aviso = gerar_boleto_da_nota(n, conta, venc, mensagem, usuario_id, extras=[
+                    {'nome': i['nome'], 'valor': Decimal(i['valor']), 'emite_nota': False} for i in acordo_its])
                 if not ok:
                     return fechar('erro', 'nota ok, boleto não: ' + msg, nfse_id=nfse_id)
                 b = FinBoleto.da_nota(nfse_id)
@@ -289,6 +302,11 @@ def _cobrar(linha, lote_id, usuario_id, conta, cfg, empresa_id):
     except Exception as exc:
         logger.exception('[lote] empresa %s', linha['cliente_id'])
         return fechar('erro', str(exc)[:1000], nfse_id=nfse_id, boleto_id=boleto_id)
+    # a parcela passa a ser cobrada pelo boleto do mês — só se o boleto saiu com ela (valor = total da linha)
+    if titulo_id and boleto_id and acordo_its and _d((FinBoleto.get(boleto_id) or {}).get('valor')) == _d(total):
+        from utils import acordos
+        acordos.absorver([i['acordo_parcela_id'] for i in acordo_its], titulo_id,
+                         'boleto do honorário de %02d/%d' % (competencia.month, competencia.year))
     for i in itens_lin:
         if i.get('lancamento_id'):
             FinLancamento.marcar_faturado(i['lancamento_id'], titulo_id=titulo_id, nfse_id=nfse_id, boleto_id=boleto_id, lote_id=lote_id)

@@ -75,7 +75,7 @@ def acdiv_criar(cliente_id):
     msg = {'ATIVO': 'Acordo %s criado e já valendo: os títulos foram renegociados e as parcelas estão no A receber.',
            'FALTA_ASSINAR': 'Acordo %s criado. O envio para assinar chega na próxima etapa: por enquanto ele fica em "Falta assinar".',
            'FALTA_ENVIAR': 'Acordo %s guardado em "Falta enviar".'}.get(a['situacao'], 'Acordo %s criado.') % a['numero']
-    return jsonify(ok=True, id=aid, msg=msg)
+    return jsonify(ok=True, id=aid, msg=msg, avisos=v.get('avisos') or [])
 
 
 @financeiro.route('/financeiro/acordos/previa.pdf', methods=['POST'])
@@ -142,6 +142,15 @@ def acdiv_cancelar(aid):
     except AC.AcordoInvalido as exc:
         return jsonify(ok=False, erro=str(exc))
     return jsonify(ok=True, msg='Acordo cancelado: os títulos voltaram como estavam.')
+
+
+@financeiro.route('/financeiro/acordos/<int:aid>/parcela/<int:pid>/boleto', methods=['POST'])
+@permission_required(PERM)
+def acdiv_boleto(aid, pid):
+    """Etapa 3: emitir agora o boleto de uma parcela (sem esperar a data automática)."""
+    _acordo_ou_404(aid)
+    ok, msg = AC.emitir_uma(aid, pid, current_user.id)
+    return jsonify(ok=ok, msg=msg, erro=None if ok else msg)
 
 
 @financeiro.route('/financeiro/acordos/<int:aid>/anotar', methods=['POST'])

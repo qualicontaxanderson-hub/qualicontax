@@ -1078,6 +1078,18 @@ def main() -> int:
     except Exception:
         logger.exception('[roteador] consulta dos boletos do Cora falhou; tenta na próxima hora.')
 
+    # Acordos, etapa 3 (26/11/2026): boleto das parcelas que chegaram na data ("separado" 20 dias antes; "junto" que o
+    # lote do mês não levou, 5 dias antes). No máximo uma tentativa por parcela por dia. Desliga com ACORDO_BOLETOS=0.
+    try:
+        from zoneinfo import ZoneInfo
+        if os.getenv('ACORDO_BOLETOS', '1') != '0' and 7 <= datetime.now(ZoneInfo('America/Sao_Paulo')).hour <= 21:
+            from utils.acordos import emitir_pendentes as _acordo_boletos
+            _r = _acordo_boletos()
+            if _r:
+                logger.info('[roteador] acordos: %s', '; '.join(f"{x['acordo']} {x['msg']}" for x in _r))
+    except Exception:
+        logger.exception('[roteador] boletos dos acordos falharam; tenta na próxima hora.')
+
     # E o extrato diário da Efí pela API (12/11/2026): uma vez por dia, depois
     # das 7h, entra sozinho e dá baixa nos boletos recebidos — Anderson: "Ao
     # receber na conta é pra dar baixa". Desliga com EFI_EXTRATO_ATIVO=0.

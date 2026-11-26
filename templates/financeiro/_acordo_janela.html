@@ -37,10 +37,17 @@
       <div class="ns-b"><div class="ns-h"><i class="fas fa-list-ol"></i> Parcelas <em>{{ FORMA[a.forma] }} · dia {{ a.dia }}</em></div>
         <div class="pa">{% for p in a.parcelas %}
           <div class="pa-l {{ {'paga': 'ok', 'atrasada': 'atr'}.get(p.sit, '') }}"><span class="n">{{ 'ent.' if p.entrada else (p.n ~ 'ª') }}</span><span>{{ p.venc.strftime('%d/%m/%y') }}</span>
-            <small>{% if p.sit == 'paga' and p.pago_em %}paga em {{ p.pago_em.strftime('%d/%m') }}{% elif p.titulo_id %}cobrança nº {{ p.titulo_id }}{% endif %}</small>
+            <small>{% if p.sit == 'paga' and p.pago_em %}paga em {{ p.pago_em.strftime('%d/%m') }}{% if p.junto %} · no boleto do honorário{% endif %}
+              {% elif p.junto %}<a href="{{ url_for('financeiro.boleto_detalhe', boleto_id=p.boleto_id) if p.boleto_id else '#' }}" target="_blank"><i class="fas fa-barcode"></i> no boleto do honorário</a>
+              {% elif p.boleto_id %}<a href="{{ url_for('financeiro.boleto_detalhe', boleto_id=p.boleto_id) }}" target="_blank"><i class="fas fa-barcode"></i> boleto emitido</a>
+              {% elif p.titulo_id and p.sit in ('a vencer', 'atrasada') and a.forma == 'JUNTO' and not p.entrada %}<i class="fas fa-file-invoice-dollar"></i> vai no boleto do honorário
+              {% elif p.titulo_id and p.sit in ('a vencer', 'atrasada') %}{% if pode and a.situacao == 'ATIVO' %}<button type="button" class="pa-bt" title="sai pelo banco do acordo e vai por e-mail" onclick="acBoleto({{ a.id }}, {{ p.id }}, '{{ 'entrada' if p.entrada else 'parcela ' ~ p.n }}')"><i class="fas fa-barcode"></i> emitir agora</button>{% endif %}
+                <span class="pa-q">boleto sai 20 dias antes</span>
+              {% elif p.titulo_id %}cobrança nº {{ p.titulo_id }}{% endif %}</small>
             <span class="v">{{ brl(p.valor) }} <span class="s {{ {'paga': 'ok', 'atrasada': 'atr'}.get(p.sit, '') }}">{{ p.sit }}</span></span></div>
         {% endfor %}</div>
-        <small style="color:#64748b;margin-top:8px;display:block">Paga, a parcela fica verde com a data; atrasada, fica laranja{% if a.rompe != 'SEM' %} e conta para o rompimento{% endif %}.</small></div>
+        <small style="color:#64748b;margin-top:8px;display:block">Paga, a parcela fica verde com a data; atrasada, fica laranja{% if a.rompe != 'SEM' %} e conta para o rompimento{% endif %}.
+          {% if a.forma == 'JUNTO' %}A entrada sai em boleto próprio; as parcelas vão no boleto do honorário do mês (fora da nota fiscal).{% else %}A entrada sai na hora; cada parcela ganha o boleto 20 dias antes de vencer, por e-mail.{% endif %}</small></div>
     </div>
     <div>
       {% if pode and a.situacao not in ('CANCELADO', 'QUITADO', 'ROMPIDO') %}

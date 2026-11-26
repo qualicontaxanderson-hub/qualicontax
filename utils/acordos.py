@@ -7,6 +7,15 @@ pelo mesmo caminho do contrato; "sem assinatura" ativa na hora.
 
 Ativar = os títulos da dívida saem da cobrança como "renegociados no AC-000N" (cancelados com fin_titulos.acordo_id;
 o que já tinha pago fica pago) e nascem os títulos das parcelas (origem 'acordo').
+
+Etapa 3 (26/11/2026) — o boleto das parcelas:
+* a ENTRADA sai em boleto próprio na hora em que o acordo começa a valer;
+* "boleto separado": cada parcela ganha o boleto ``JANELA_SEPARADO`` dias antes de vencer (o cron_roteador passa
+  de hora em hora; no máximo uma tentativa por parcela por dia);
+* "junto com o honorário": a parcela vai como linha "só no boleto" (fora da nota) no boleto do mês, pelo lote de
+  honorários (utils/lote_mensal). Dado o boleto, o título da parcela sai da cobrança (absorvido) e a parcela passa a
+  apontar para o título do boleto do mês (``titulo_proprio_id`` guarda o dela). Se o lote não a levar até
+  ``JANELA_JUNTO`` dias antes do vencimento, ela sai em boleto próprio — nunca fica sem cobrar.
 """
 import logging
 from datetime import date, datetime, timedelta
@@ -22,6 +31,8 @@ ROMPE = {'2_ATRASADAS': ('Rompe com 2 parcelas atrasadas', 'rompe com 2', 'parce
          '1_30_DIAS': ('Rompe com 1 parcela 30 dias atrasada', 'rompe com 1', 'parcela 30 dias atrasada'),
          'SEM': ('Sem regra de rompimento', 'sem regra', 'atrasou, cai em Atrasados')}
 ASSINATURA = {'ENVIAR': 'enviar para assinar', 'DEPOIS': 'guardar para enviar depois', 'SEM': 'sem assinatura (combinado)'}
+JANELA_SEPARADO = 20     # dias antes do vencimento em que o boleto da parcela "separado" é emitido
+JANELA_JUNTO = 5         # "junto": se o lote do mês não levou, boleto próprio a esta distância do vencimento
 SITUACAO = {'FALTA_ENVIAR': 'Falta enviar', 'FALTA_ASSINAR': 'Falta assinar', 'ATIVO': 'Ativo', 'QUITADO': 'Quitado',
             'ROMPIDO': 'Rompido', 'CANCELADO': 'Cancelado'}
 
@@ -264,7 +275,7 @@ def criar(v, cli, usuario):
            f'{len(v["titulos"]) + len(v["outros"])} itens · {brl(v["total"])} · {v["parcelas"]}x {FORMA[v["forma"]]}',
            usuario.id, 'fa-handshake')
     if situacao == 'ATIVO':
-        ativar(aid, usuario, 'Sem assinatura: combinado com o cliente')
+        v['avisos'] = ativar(aid, usuario, 'Sem assinatura: combinado com o cliente')
     else:
         x('UPDATE fin_acordos SET situacao = %s WHERE id = %s', (situacao, aid))
     return aid
@@ -337,6 +348,11 @@ def ativar(aid, usuario, como=''):
         x('UPDATE fin_acordo_parcelas SET titulo_id = %s WHERE id = %s', (tid, p['id']))
     x("UPDATE fin_acordos SET situacao = 'ATIVO', ativado_em = NOW() WHERE id = %s", (aid,))
     evento(aid, 'O acordo começou a valer', como or '', getattr(usuario, 'id', None), 'fa-circle-check')
+    try:                                     # etapa 3: entrada e parcelas que já estão perto ganham o boleto agora
+        avisos += [r['msg'] for r in emitir_pendentes(aid, getattr(usuario, 'id', None))]
+    except Exception:
+        logger.exception('[acordo] boletos do acordo %s', aid)
+        avisos.append('Os boletos não saíram agora; o sistema tenta de novo em até uma hora.')
     from utils.atividade import registrar
     registrar('escrita.ativou_acordo', 'financeiro', tabela='fin_acordos', registro_id=aid,
               depois={'numero': a['numero'], 'titulos': [i['titulo_id'] for i in a['itens'] if i.get('titulo_id')],
@@ -353,6 +369,10 @@ def cancelar(aid, motivo, usuario):
         raise AcordoInvalido('Este acordo não pode mais ser cancelado.')
     if any(p['pago'] > 0 for p in a['parcelas']):
         raise AcordoInvalido('Já tem parcela paga: não dá para cancelar. Fale com o financeiro.')
+    junto = [p for p in a['parcelas'] if p.get('junto')]
+    if junto:
+        raise AcordoInvalido(f'A parcela {junto[0]["n"]} já foi no boleto do honorário (cobrança nº {junto[0]["titulo_id"]}): '
+                             'não dá para cancelar o acordo por aqui. Fale com o financeiro.')
     for p in a['parcelas']:
         if p.get('titulo_id'):
             _cancelar_boletos(p['titulo_id'])
@@ -380,6 +400,137 @@ def cancelar(aid, motivo, usuario):
               depois={'numero': a['numero'], 'motivo': motivo})
 
 
+# ─────────────────────────── boletos das parcelas (etapa 3) ───────────────────────────
+def rotulo(a, p):
+    return 'entrada' if p['entrada'] else f'parcela {p["n"]}/{a["n_parcelas"]}'
+
+
+def _tem_boleto(titulo_id, hoje_tambem=False):
+    """Boleto ainda valendo (ou, com ``hoje_tambem``, qualquer tentativa de hoje: não repete o erro de hora em hora)."""
+    if q("SELECT 1 x FROM fin_boletos WHERE titulo_id = %s AND situacao NOT IN ('canceled', 'erro', 'expired') LIMIT 1",
+         (titulo_id,), one=True):
+        return True
+    return bool(hoje_tambem and q('SELECT 1 x FROM fin_boletos WHERE titulo_id = %s AND DATE(criado_em) = CURDATE() LIMIT 1',
+                                  (titulo_id,), one=True))
+
+
+def _conta(a):
+    from models.fin_cobranca import FinCobrancaConta
+    c = FinCobrancaConta.get(a['conta_cobranca_id']) if a.get('conta_cobranca_id') else None
+    if not c or not c.get('ativo') or c.get('empresa_id') != a['empresa_id']:
+        c = FinCobrancaConta.padrao_da_empresa(a['empresa_id'])
+    return c
+
+
+def emitir_boleto_parcela(a, p, usuario_id=None):
+    """Boleto de UMA parcela (título dela, sem nota: dívida renegociada não é serviço novo). Devolve (ok, msg)."""
+    from models.nfse_emissao import tomador_do_cliente
+    from routes.financeiro_cobranca import _pagador_do_tomador, emitir_boleto_avulso
+    rot = rotulo(a, p)
+    t = q('SELECT id, status, valor, valor_baixado, vencimento FROM fin_titulos WHERE id = %s', (p['titulo_id'],), one=True)
+    if not t or t['status'] not in ('aberto', 'parcial'):
+        return False, f'{rot.capitalize()}: a cobrança não está em aberto.'
+    if _tem_boleto(t['id']):
+        return False, f'{rot.capitalize()}: já tem boleto.'
+    conta = _conta(a)
+    if not conta:
+        return False, f'{rot.capitalize()}: a empresa não tem conta de cobrança ativa.'
+    tom = tomador_do_cliente(a['cliente_id'], consultar_cep=False)
+    if not tom or not tom.get('documento'):
+        return False, f'{rot.capitalize()}: o cadastro do cliente está sem CPF/CNPJ.'
+    valor = d(t['valor']) - d(t['valor_baixado'])
+    venc = max(t['vencimento'], hoje())
+    nome = f'Acordo {a["numero"]} — {rot}'
+    bid, ok, msg, aviso = emitir_boleto_avulso(
+        a['empresa_id'], conta, _pagador_do_tomador(tom),
+        [{'servico_id': None, 'nome': nome, 'valor': valor, 'emite_nota': False}], valor, p['vencimento'].replace(day=1),
+        venc, f'{nome} (termo de acordo / confissão de dívida).', t['id'], usuario_id)
+    if not ok:
+        logger.warning('[acordo] boleto da %s do %s: %s', rot, a['numero'], msg)
+        return False, f'{rot.capitalize()}: o banco não emitiu o boleto ({msg}).'
+    evento(a['id'], f'Boleto da {rot} emitido', f'{brl(valor)} · vence {venc.strftime("%d/%m/%Y")}'
+           + (f' · {aviso}' if aviso else ''), usuario_id, 'fa-barcode')
+    return True, f'Boleto da {rot} emitido: {brl(valor)}, vence {venc.strftime("%d/%m/%Y")}.' + (f' {aviso}' if aviso else '')
+
+
+def emitir_pendentes(aid=None, usuario_id=None):
+    """Emite o que já está na hora: a entrada sempre; "separado" a JANELA_SEPARADO dias do vencimento; "junto" que o
+    lote não levou, a JANELA_JUNTO dias. Devolve [{acordo, ok, msg}]. Seguro rodar de hora em hora."""
+    h = hoje()
+    cond, par = ('AND a.id = %s', (aid,)) if aid else ('', ())
+    rows = q(f"""SELECT p.*, a.forma FROM fin_acordo_parcelas p JOIN fin_acordos a ON a.id = p.acordo_id
+                   JOIN fin_titulos t ON t.id = p.titulo_id
+                  WHERE a.situacao = 'ATIVO' AND p.titulo_proprio_id IS NULL AND t.status IN ('aberto', 'parcial') {cond}
+                  ORDER BY a.id, p.n""", par)
+    out, cache = [], {}
+    for p in rows:
+        dias = (p['vencimento'] - h).days
+        if not (p['entrada'] or dias <= (JANELA_SEPARADO if p['forma'] == 'SEPARADO' else JANELA_JUNTO)):
+            continue
+        if _tem_boleto(p['titulo_id'], hoje_tambem=not aid):
+            continue
+        a = cache.get(p['acordo_id']) or cache.setdefault(p['acordo_id'], get(p['acordo_id']))
+        try:
+            ok, msg = emitir_boleto_parcela(a, p, usuario_id)
+        except Exception as exc:
+            logger.exception('[acordo] boleto da parcela %s', p['id'])
+            ok, msg = False, f'{rotulo(a, p).capitalize()}: erro ao emitir o boleto ({exc}).'
+        out.append({'acordo': a['numero'], 'ok': ok, 'msg': msg})
+    return out
+
+
+def emitir_uma(aid, pid, usuario_id=None):
+    """Botão "Emitir boleto agora" da janela (qualquer parcela em aberto sem boleto). Devolve (ok, msg)."""
+    a = get(aid)
+    p = next((x for x in (a or {}).get('parcelas', []) if x['id'] == pid), None)
+    if not a or not p or a['situacao'] != 'ATIVO':
+        return False, 'O acordo não está valendo.'
+    if p.get('junto'):
+        return False, 'Esta parcela já foi no boleto do honorário.'
+    return emitir_boleto_parcela(a, p, usuario_id)
+
+
+def parcelas_junto(empresa_id, ate):
+    """Parcelas "junto com o honorário" que vão no boleto do mês (vencem até ``ate``), por cliente: {cliente_id: [itens]}.
+    Item no formato do lote (utils/lote_mensal.itens_da_empresa), origem 'acordo', sem serviço (fora da nota)."""
+    rows = q("""SELECT p.id, p.n, p.vencimento, p.titulo_id, a.cliente_id, a.numero, a.parcelas AS n_parcelas,
+                       t.valor - t.valor_baixado AS saldo
+                  FROM fin_acordo_parcelas p JOIN fin_acordos a ON a.id = p.acordo_id
+                  JOIN fin_titulos t ON t.id = p.titulo_id
+                 WHERE a.empresa_id = %s AND a.situacao = 'ATIVO' AND a.forma = 'JUNTO' AND p.entrada = 0
+                   AND p.titulo_proprio_id IS NULL AND t.status IN ('aberto', 'parcial') AND p.vencimento <= %s
+                   AND NOT EXISTS (SELECT 1 FROM fin_boletos b WHERE b.titulo_id = p.titulo_id
+                                      AND b.situacao NOT IN ('canceled', 'erro', 'expired'))
+                 ORDER BY p.vencimento, p.n""", (empresa_id, ate))
+    out = {}
+    for r in rows:
+        if d(r['saldo']) <= 0:
+            continue
+        out.setdefault(r['cliente_id'], []).append({
+            'origem': 'acordo', 'servico_id': None, 'acordo_parcela_id': r['id'],
+            'nome': f'Acordo {r["numero"]} — parcela {r["n"]}/{r["n_parcelas"]} (venc. {r["vencimento"].strftime("%d/%m/%Y")})',
+            'valor': str(d(r['saldo']))})
+    return out
+
+
+def absorver(parcela_ids, titulo_id, onde):
+    """Dado o boleto do mês, as parcelas "junto" passam a ser cobradas por ele: o título próprio sai da cobrança
+    (cancelado, com acordo_id — não vai para Cancelados) e a parcela aponta para o título do boleto do mês."""
+    from models.fin_titulo import FinTitulo
+    for pid in parcela_ids or []:
+        p = q("""SELECT p.*, a.numero, a.parcelas AS n_parcelas FROM fin_acordo_parcelas p JOIN fin_acordos a ON a.id = p.acordo_id
+                  WHERE p.id = %s AND p.titulo_proprio_id IS NULL""", (pid,), one=True)
+        if not p or not p.get('titulo_id'):
+            continue
+        proprio = p['titulo_id']
+        x('UPDATE fin_acordo_parcelas SET titulo_proprio_id = %s, titulo_id = %s WHERE id = %s', (proprio, titulo_id, pid))
+        FinTitulo.cancelar(proprio)
+        x("""UPDATE fin_titulos SET acordo_id = %s, observacao = CONCAT_WS('\n', NULLIF(observacao, ''), %s) WHERE id = %s""",
+          (p['acordo_id'], f'{hoje().strftime("%d/%m/%Y")} — cobrada no boleto do honorário (cobrança nº {titulo_id})', proprio))
+        evento(p['acordo_id'], f'A parcela {p["n"]}/{p["n_parcelas"]} foi no boleto do honorário', f'{onde} · cobrança nº {titulo_id}',
+               None, 'fa-barcode')
+
+
 # ─────────────────────────── ler ───────────────────────────
 def get(aid):
     a = q("""SELECT a.*, c.numero_cliente, c.nome_razao_social, c.cpf_cnpj, u.nome AS criado_por_nome,
@@ -393,12 +544,18 @@ def get(aid):
     a['n_parcelas'] = a['parcelas']          # a coluna é a quantidade; a['parcelas'] vira a lista abaixo
     a['itens'] = q('SELECT * FROM fin_acordo_titulos WHERE acordo_id = %s ORDER BY vencimento IS NULL, vencimento, id', (aid,))
     a['parcelas'] = q("""SELECT p.*, t.status AS t_status, t.valor_baixado AS pago, t.vencimento AS t_venc,
-                                (SELECT MAX(x.data_baixa) FROM fin_titulo_baixas x WHERE x.titulo_id = p.titulo_id) AS pago_em
+                                (SELECT MAX(x.data_baixa) FROM fin_titulo_baixas x WHERE x.titulo_id = p.titulo_id) AS pago_em,
+                                (SELECT b.id FROM fin_boletos b WHERE b.titulo_id = p.titulo_id
+                                    AND b.situacao NOT IN ('canceled', 'erro', 'expired') ORDER BY b.id DESC LIMIT 1) AS boleto_id,
+                                (SELECT b.vencimento FROM fin_boletos b WHERE b.titulo_id = p.titulo_id
+                                    AND b.situacao NOT IN ('canceled', 'erro', 'expired') ORDER BY b.id DESC LIMIT 1) AS boleto_venc
                            FROM fin_acordo_parcelas p LEFT JOIN fin_titulos t ON t.id = p.titulo_id
                           WHERE p.acordo_id = %s ORDER BY p.n""", (aid,))
     h = hoje()
     for p in a['parcelas']:
-        p['pago'] = d(p.get('pago'))
+        # etapa 3: a parcela que foi no boleto do honorário aponta para o título do mês; paga = o título do mês pago
+        p['junto'] = bool(p.get('titulo_proprio_id')) and p.get('titulo_id') != p.get('titulo_proprio_id')
+        p['pago'] = min(d(p.get('pago')), d(p['valor'])) if p['junto'] else d(p.get('pago'))
         p['venc'] = p.get('t_venc') or p['vencimento']
         p['sit'] = ('paga' if p.get('t_status') == 'liquidado' else
                     'cancelada' if p.get('t_status') == 'cancelado' else
