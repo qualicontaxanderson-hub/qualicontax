@@ -782,7 +782,7 @@ function ctGrupo() {
     q.addEventListener('input', function () {
         clearTimeout(t); var v = q.value.trim(); if (v.length < 2) { sug.style.display = 'none'; return; }
         t = setTimeout(function () {
-            fetch('/financeiro/notas/buscar?q=' + encodeURIComponent(v)).then(function (r) { return r.json(); }).then(function (lista) {
+            fetch('/comercial/contratos/empresas?q=' + encodeURIComponent(v)).then(function (r) { return r.json(); }).then(function (lista) {
                 sug.innerHTML = ''; (lista || []).forEach(function (c) {
                     var d = document.createElement('div'); d.innerHTML = '<strong>' + (c.numero_cliente ? esc(c.numero_cliente) + ' · ' : '') + esc(c.nome) + '</strong> <span class="ho-num">' + esc(c.cpf_cnpj || '') + '</span>';
                     d.onclick = function () {

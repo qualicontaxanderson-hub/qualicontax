@@ -239,6 +239,8 @@ class PrestContrato:
                                   ORDER BY c.situacao = 'ATIVO' DESC, c.nome_razao_social LIMIT %%s""" % ' OR '.join(cond),
                              tuple(params) + (int(limite),), fetch=True) or []
         from models.pessoa_dados import Documentos
+        from utils.acesso import filtrar_lista
+        rows = filtrar_lista(rows)      # 26/11/2026: pessoa reservada não aparece para quem não pode vê-la
         out = []
         for r in rows:
             email, _ = _email_da_pessoa(r['id'], r.get('cpf'))
@@ -376,6 +378,8 @@ class PrestContrato:
                                      AND (p.cliente_id = c.id OR p.id IN (SELECT contrato_id FROM prest_contrato_empresas e WHERE e.cliente_id = c.id)))
                 ORDER BY c.avulso, CAST(c.numero_cliente AS UNSIGNED), c.nome_razao_social""",
             (tipo, 'ENVIADO', 'ACEITO' if tipo == 'PROPOSTA' else 'ASSINADO', tipo), fetch=True) or []
+        from utils.acesso import filtrar_lista
+        rows = filtrar_lista(rows)      # 26/11/2026: empresa reservada não aparece para quem não pode vê-la
         return {'lista': rows, 'pendentes_empresas': 0, 'pendentes_avulsos': 0}
 
     @staticmethod

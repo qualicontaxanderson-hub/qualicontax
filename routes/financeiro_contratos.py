@@ -578,6 +578,16 @@ def contrato_socios_iguais():
     return jsonify({'iguais': iguais, 'detalhe': detalhe, 'n': len(ids)})
 
 
+@financeiro.route('/comercial/contratos/empresas')
+@permission_required(MONTAR)
+def contrato_empresas():
+    """Outra empresa para o contrato em grupo (nome, CNPJ/CPF ou número). 26/11/2026: o formulário usava a busca do tomador
+    da NFS-e (/financeiro/notas/buscar), que quem só monta contrato não pode abrir; esta é a mesma busca, pela porta do Comercial,
+    e sem as empresas reservadas."""
+    from models.nfse_emissao import buscar_clientes
+    return jsonify(buscar_clientes(request.args.get('q') or ''))
+
+
 @financeiro.route('/comercial/contratos/pessoas')
 @permission_required(MONTAR)
 def contrato_pessoas():

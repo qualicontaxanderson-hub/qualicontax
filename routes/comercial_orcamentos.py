@@ -56,6 +56,8 @@ def _clientes():
     linhas = execute_query("""SELECT c.id, c.numero_cliente AS num, c.nome_razao_social AS nome, c.cpf_cnpj AS doc, COALESCE(c.avulso, 0) AS av,
                                      (SELECT SUM(k.valor) FROM fin_contratos k WHERE k.cliente_id = c.id AND k.ativo = 1) AS mensal
                                 FROM clientes c WHERE COALESCE(c.situacao, 'ATIVO') <> 'INATIVO' ORDER BY c.nome_razao_social""", fetch=True) or []
+    from utils.acesso import filtrar_lista
+    linhas = filtrar_lista(linhas)      # 26/11/2026: empresa reservada não aparece para quem não pode vê-la (o portão barraria ao salvar)
     return [{'id': c['id'], 'num': str(c['num'] or ''), 'nome': c['nome'], 'doc': c['doc'] or '', 'av': bool(c['av']), 'mensal': float(c['mensal'] or 0),
              'pf': len(''.join(ch for ch in (c['doc'] or '') if ch.isdigit())) == 11} for c in linhas]
 

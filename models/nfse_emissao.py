@@ -375,13 +375,14 @@ def buscar_clientes(q, limite=12):
         cond += " OR REPLACE(REPLACE(REPLACE(c.cpf_cnpj, '.', ''), '/', ''), '-', '') LIKE %s"
         params.append(f'%{dig}%')
     cond += ')'
-    return execute_query(
+    from utils.acesso import filtrar_lista
+    return filtrar_lista(execute_query(          # 26/11/2026: empresa reservada não aparece para quem não pode vê-la
         f"""SELECT c.id, c.numero_cliente, c.nome_razao_social AS nome, c.cpf_cnpj, c.tipo_pessoa, c.situacao,
                   COALESCE(c.avulso, 0) AS avulso
               FROM clientes c
              WHERE {cond}
              ORDER BY (c.situacao = 'ATIVO') DESC, c.nome_razao_social
-             LIMIT %s""", tuple(params) + (int(limite),), fetch=True) or []
+             LIMIT %s""", tuple(params) + (int(limite),), fetch=True) or [])
 
 
 def ibge_do_documento(doc):

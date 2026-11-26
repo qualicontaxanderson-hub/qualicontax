@@ -320,6 +320,7 @@ MAPA = {
     'financeiro.contrato_pedir_aprovacao':          'financeiro.contratos.montar',     # 18/11/2026: equipe monta, vai para aprovação
     'financeiro.contrato_socios_iguais':            'financeiro.contratos.montar',     # aviso do contrato em grupo (22/11/2026)
     'financeiro.contrato_pessoas':                  'financeiro.contratos.montar',     # puxar quem assina do cadastro PF (22/11/2026)
+    'financeiro.contrato_empresas':                 'financeiro.contratos.montar',     # outra empresa do contrato em grupo (26/11/2026)
     'financeiro.contrato_nota':                     'financeiro.contratos.montar',     # anotação na linha do tempo do contrato (23/11/2026)
     'financeiro.contrato_aprovar':                  'financeiro.lancamentos.aprovar',  # Anderson ou Alessandra
     'financeiro.contrato_reprovar':                 'financeiro.lancamentos.aprovar',
