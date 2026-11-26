@@ -8,6 +8,7 @@ Capa única e limpa: cabeçalho do escritório (logo + endereço), faixa verde-e
 o registro (quem, quando, e-mail, IP, impressão digital). Aceito = ganha a página "Registro de aceite" no fim. ReportLab."""
 import io
 from datetime import date
+from utils.texto import nome_proprio
 from decimal import Decimal
 
 from reportlab.graphics.barcode import qr
@@ -125,6 +126,13 @@ def _caixa(cor_fundo, cor_borda=None, pad=10, radius=None):
     return TableStyle(est)
 
 
+def _pessoa(nome):
+    """Nome de pessoa em maiúsculas e minúsculas, como no contrato e na proposta (26/11/2026 — Anderson: "veja como está na
+    proposta e no contratos"): o cadastro guarda ANDERSON ANTUNES VIEIRA e o usuário Anderson Antunes Vieira; no PDF saem
+    iguais. Empresa continua como está no cadastro (maiúsculas)."""
+    return nome_proprio(nome or '')
+
+
 def gerar_pdf(o, itens, link=None, data_doc=None):
     """``o`` = Orcamento.get(id); ``itens`` = Orcamento.itens(id); ``link`` = página de aceite (None = controle interno);
     ``data_doc`` = data impressa no rodapé (a do envio, para a impressão digital não mudar de um dia para o outro)."""
@@ -151,7 +159,8 @@ def gerar_pdf(o, itens, link=None, data_doc=None):
     el += [faixa, Spacer(1, 8)]
 
     # ── três quadros: PARA · SOLICITADO POR · RESPONSÁVEL ──
-    para = [Paragraph('PARA', st['k']), Paragraph(_esc(o['cliente_nome']), st['nome'])]
+    pf = len(''.join(ch for ch in str(o.get('cliente_doc') or '') if ch.isdigit())) == 11
+    para = [Paragraph('PARA', st['k']), Paragraph(_esc(_pessoa(o['cliente_nome']) if pf else o['cliente_nome']), st['nome'])]
     if _doc(o.get('cliente_doc')):                        # só o CPF/CNPJ: o e-mail do cadastro é informativo; quem recebe é "quem pediu" (26/11/2026)
         para.append(Paragraph(_esc(_doc(o.get('cliente_doc'))), st['mi']))
     for nome in (o.get('empresas_mais') or []):           # mais de uma empresa (25/11/2026)
@@ -160,13 +169,13 @@ def gerar_pdf(o, itens, link=None, data_doc=None):
         para.append(Paragraph(_esc('Empresa a abrir: ' + o['empresa_nova_nome']), st['mi']))
     sol = [Paragraph('SOLICITADO POR', st['k'])]
     if o.get('solicitante_nome'):
-        sol.append(Paragraph(_esc(o['solicitante_nome']), st['nome']))
+        sol.append(Paragraph(_esc(_pessoa(o['solicitante_nome'])), st['nome']))
         mi = [x for x in (o.get('solicitante_email'), _fone(o.get('solicitante_fone')) if o.get('solicitante_fone') else '') if x]
         if mi:
             sol.append(Paragraph(_esc(' · '.join(mi)), st['mi']))
     else:
         sol.append(Paragraph('—', st['nome']))
-    resp = [Paragraph('RESPONSÁVEL NA QUALICONTAX', st['k']), Paragraph(_esc(o.get('criado_por_nome') or 'Qualicontax'), st['nome'])]
+    resp = [Paragraph('RESPONSÁVEL NA QUALICONTAX', st['k']), Paragraph(_esc(_pessoa(o.get('criado_por_nome')) or 'Qualicontax'), st['nome'])]
     mi = [x for x in (o.get('criado_por_email'), _fone(o.get('criado_por_fone')) if o.get('criado_por_fone') else '') if x]
     if mi:
         resp.append(Paragraph(_esc(' · '.join(mi)), st['mi']))
@@ -243,7 +252,7 @@ def gerar_pdf(o, itens, link=None, data_doc=None):
     # ── aceite ──
     if aceito:
         bloco = Table([[[Paragraph('✔ Proposta aceita eletronicamente', st['ace_t']),
-                         Paragraph('<b>%s</b>%s · em <b>%s</b>' % (_esc(o.get('aceito_nome')), (' · CPF %s' % _esc(o['aceito_cpf'])) if o.get('aceito_cpf') else '', o['aceito_em'].strftime('%d/%m/%Y às %H:%M')), st['ace']),
+                         Paragraph('<b>%s</b>%s · em <b>%s</b>' % (_esc(_pessoa(o.get('aceito_nome'))), (' · CPF %s' % _esc(o['aceito_cpf'])) if o.get('aceito_cpf') else '', o['aceito_em'].strftime('%d/%m/%Y às %H:%M')), st['ace']),
                          Paragraph('e-mail %s · IP %s · registro completo na última página' % (_esc(o.get('aceito_email') or ''), _esc(o.get('aceito_ip') or '')), st['mi'])]]], colWidths=[LW])
         bloco.setStyle(_caixa(FUNDO2, VERDE3, pad=12))
         el += [Spacer(1, 10), bloco]
@@ -260,7 +269,7 @@ def gerar_pdf(o, itens, link=None, data_doc=None):
         el += [Spacer(1, 10), KeepTogether(bloco)]
 
     el += [Spacer(1, 14), Paragraph('Atenciosamente,', st['b']), Spacer(1, 10),
-           Paragraph('<b>%s</b>' % _esc(o.get('criado_por_nome') or qc['razao']), st['b']),
+           Paragraph('<b>%s</b>' % _esc(_pessoa(o.get('criado_por_nome')) or qc['razao']), st['b']),
            Paragraph(_esc(qc['razao']) + ' · CNPJ %s · CRC %s' % (qc['cnpj'], qc.get('crc') or QUALICONTAX['crc']), st['mi'])]
 
     # ── registro de aceite ──
@@ -268,8 +277,8 @@ def gerar_pdf(o, itens, link=None, data_doc=None):
         el.append(PageBreak())
         el.append(Paragraph('Registro de aceite eletrônico', st['reg_t']))
         el.append(Paragraph('Este registro integra o orçamento %s e comprova o aceite da proposta pelo cliente, nos termos da MP 2.200-2/2001 e da Lei 14.063/2020.' % _esc(o['numero']), st['reg']))
-        linhas = [('Orçamento', o['numero']), ('Cliente', o['cliente_nome']), ('Valor', _brl(o['total'])),
-                  ('Aceito por', (o.get('aceito_nome') or '') + ((' · CPF %s' % o['aceito_cpf']) if o.get('aceito_cpf') else '')),
+        linhas = [('Orçamento', o['numero']), ('Cliente', _pessoa(o['cliente_nome']) if pf else o['cliente_nome']), ('Valor', _brl(o['total'])),
+                  ('Aceito por', _pessoa(o.get('aceito_nome')) + ((' · CPF %s' % o['aceito_cpf']) if o.get('aceito_cpf') else '')),
                   ('Data e hora', o['aceito_em'].strftime('%d/%m/%Y %H:%M:%S')), ('E-mail (código de confirmação)', o.get('aceito_email') or ''),
                   ('Endereço IP', o.get('aceito_ip') or ''), ('Navegador', (o.get('aceito_agente') or '')[:160]),
                   ('Enviado ao cliente em', o['enviado_em'].strftime('%d/%m/%Y %H:%M') if o.get('enviado_em') else ''),
