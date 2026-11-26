@@ -58,6 +58,68 @@
 .vp-pg #vpOk:disabled { background:#cbd5e1; box-shadow:none; }
 .vp-pg .vp-cand { border-radius:11px; border-width:1.5px; padding:10px 12px; }
 .vp-pg #vpBusca { height:42px; border-radius:11px; }
+/* 26/11/2026 (2ª volta) — Anderson: "feio e horrível": faixa do pagamento + 1) lista das cobranças + 2) conferir e dar baixa */
+.vx-corpo { position:relative; z-index:2; margin-top:-44px; display:flex; flex-direction:column; gap:16px; }
+.vx-pag { display:flex; gap:24px; align-items:center; flex-wrap:wrap; background:#fff; border:1px solid #e6eeea; border-radius:16px;
+          box-shadow:0 10px 26px rgba(15,23,42,.08); padding:18px 22px; }
+.vx-pag-val { padding-right:24px; border-right:1px solid #eef2f0; min-width:190px; }
+.vx-pag-val small { display:block; font-size:11px; font-weight:800; letter-spacing:.06em; text-transform:uppercase; color:#64748b; }
+.vx-pag-val b { display:block; font-size:28px; font-weight:800; color:#0f3d2e; font-variant-numeric:tabular-nums; line-height:1.2; }
+.vx-pag.dup .vx-pag-val b { color:#c2410c; }
+.vx-selo-dup { display:inline-flex; gap:6px; align-items:center; margin-top:6px; font-size:11px; font-weight:800; letter-spacing:.03em;
+               color:#9a3412; background:#ffedd5; border:1px solid #fdba74; border-radius:99px; padding:3px 10px; }
+.vx-pag-kv { flex:1 1 400px; display:flex; flex-wrap:wrap; gap:12px 28px; margin:0; min-width:0; }
+.vx-pag-kv dt { font-size:11px; font-weight:800; letter-spacing:.05em; text-transform:uppercase; color:#94a3b8; margin:0 0 2px; }
+.vx-pag-kv dd { margin:0; font-size:14px; color:#1e293b; } .vx-pag-kv dd small { color:#64748b; }
+.vx-pag-kv .vx-largo { flex:1 1 320px; min-width:0; } .vx-pag-kv .vx-largo dd { font-size:13px; color:#475569; overflow-wrap:anywhere; }
+.vx-grade { display:grid; grid-template-columns:minmax(0, 1fr) 400px; gap:16px; align-items:start; }
+.vx-card { background:#fff; border:1px solid #e6eeea; border-radius:16px; box-shadow:0 10px 26px rgba(15,23,42,.08); padding:18px 20px; min-width:0; }
+.vx-card > header { display:flex; gap:12px; align-items:center; margin-bottom:14px; }
+.vx-card h2 { margin:0; font-size:16px; font-weight:800; color:#0f3d2e; } .vx-card header p { margin:2px 0 0; font-size:12.5px; color:#64748b; }
+.vx-n { flex:0 0 auto; width:34px; height:34px; border-radius:50%; background:#16a34a; color:#fff; font-style:normal; font-weight:800; font-size:15px;
+        display:inline-flex; align-items:center; justify-content:center; } .vx-n.ok { background:#15803d; }
+.vx-busca { position:relative; margin-bottom:12px; } .vx-busca > i { position:absolute; left:14px; top:50%; transform:translateY(-50%); color:#94a3b8; }
+.vx-busca input { width:100%; height:44px; border:1.5px solid #e2e8f0; border-radius:12px; padding:0 14px 0 40px; font-size:14px; background:#f8fafc; box-sizing:border-box; }
+.vx-busca input:focus { outline:0; border-color:#16a34a; background:#fff; box-shadow:0 0 0 3px #dcfce7; }
+.vx-lista { display:flex; flex-direction:column; gap:8px; max-height:560px; overflow-y:auto; }
+.vx-cli { font-size:12px; font-weight:800; letter-spacing:.04em; text-transform:uppercase; color:#475569; margin:6px 0 0; }
+.vx-cli i { color:#94a3b8; margin-right:4px; }
+.vx-tit { position:relative; display:flex; gap:14px; align-items:center; padding:14px 16px; border:1.5px solid #e2e8f0; border-radius:12px; cursor:pointer;
+          background:#fff; transition:border-color .12s, background .12s; }
+.vx-tit:hover { border-color:#86efac; }
+.vx-tit input { position:absolute; opacity:0; pointer-events:none; width:1px; height:1px; }
+.vx-check { flex:0 0 auto; width:24px; height:24px; border-radius:7px; border:2px solid #cbd5e1; display:inline-flex; align-items:center; justify-content:center;
+            font-size:12px; color:transparent; background:#fff; box-sizing:border-box; }
+.vx-tit.marcado { border-color:#16a34a; background:#f0fdf4; } .vx-tit.marcado .vx-check { background:#16a34a; border-color:#16a34a; color:#fff; }
+.vx-tit:focus-within { box-shadow:0 0 0 3px #dcfce7; }
+.vx-meio { flex:1 1 auto; min-width:0; } .vx-meio b { display:block; font-size:14px; color:#1e293b; font-weight:700; }
+.vx-meio small { display:block; font-size:12.5px; color:#64748b; margin-top:2px; }
+.vx-selo { display:inline-flex; gap:5px; align-items:center; margin-top:6px; font-size:11.5px; font-weight:700; color:#1d4ed8; background:#eff6ff; border-radius:99px; padding:2px 9px; }
+.vx-val { font-size:16px; font-weight:800; color:#0f3d2e; white-space:nowrap; font-variant-numeric:tabular-nums; }
+.vx-nada { margin:8px 0 0; font-size:13px; color:#64748b; }
+.vx-conta { position:sticky; top:12px; }
+.vx-recibo { background:#f8fafc; border-radius:12px; padding:6px 16px; }
+.vx-recibo > div { display:flex; justify-content:space-between; align-items:baseline; gap:10px; padding:9px 0; font-size:14px; color:#475569; }
+.vx-recibo > div + div { border-top:1px dashed #e2e8f0; } .vx-recibo b { font-size:16px; color:#1e293b; font-variant-numeric:tabular-nums; }
+.vx-recibo > div.vx-tot { border-top:2px solid #cbd5e1; font-weight:700; color:#1e293b; } .vx-recibo .vx-tot b { font-size:20px; }
+.vx-recibo b.vp-dif-zero { color:#15803d; } .vx-recibo b.vp-dif-menos { color:#b45309; } .vx-recibo b.vp-dif-mais { color:#1d4ed8; }
+.vx-dif { margin-top:14px; } .vx-rot { font-size:13px; font-weight:800; color:#0f3d2e; }
+.vx-conta .vp-opcao { border-radius:11px; border-width:1.5px; } .vx-conta .vp-opcao .vp-extra { margin-left:24px; }
+.vx-conta .vp-extra input[type=text] { flex:1 1 200px; } .vx-conta .vp-extra small { flex-basis:100%; color:#64748b; font-size:12px; }
+.vx-chk { font-weight:normal; display:flex; gap:6px; align-items:center; font-size:12.5px; }
+.vx-ok { width:100%; margin-top:16px; height:50px; border:0; border-radius:12px; font-size:15px; font-weight:800; color:#fff; cursor:pointer;
+         background:linear-gradient(135deg, #16a34a, #166534); box-shadow:0 8px 18px rgba(22,163,74,.25); }
+.vx-ok i { margin-right:6px; } .vx-ok:disabled { background:#e2e8f0; color:#94a3b8; box-shadow:none; cursor:not-allowed; }
+.vx-nota { display:block; margin-top:8px; font-size:12px; color:#64748b; line-height:1.45; }
+.vx-dica { text-align:center; color:#b45309; font-weight:600; }
+.vx-aviso { display:flex; gap:12px; background:#fffbeb; border:1.5px solid #f59e0b; border-radius:14px; padding:14px 16px; font-size:13px; color:#78350f; }
+.vx-aviso > i { color:#b45309; font-size:18px; margin-top:2px; } .vx-aviso small { display:block; margin-top:6px; }
+@media (max-width: 1000px) {
+  .vx-grade { grid-template-columns:minmax(0, 1fr); } .vx-conta { position:static; }
+  .vx-pag-val { border-right:0; padding-right:0; } .vx-pag { gap:14px; padding:16px; }
+  .vx-card { padding:16px; }
+  .vp-pg .ef-hero-actions { margin-bottom:14px; }
+}
 </style>
 <div class="vp-pg">
 
@@ -92,144 +154,125 @@
 </div>
 
 {% else %}
+{# 26/11/2026 — Anderson: "feio e horrível, bora melhorar": faixa do pagamento, 1) qual cobrança, 2) conferir e dar baixa #}
 <div class="ef-hero"><div class="ef-hero-inner ef-hero-head">
-    <div><h1 class="ef-hero-title"><i class="fas fa-link"></i> Vincular pagamento</h1>
-        <p class="ef-hero-sub">{{ empresa_nome }} · o crédito do extrato dá a baixa nos títulos e tira o boleto do banco</p>
-        <div class="ef-hero-actions" style="margin-top:10px"><a class="ef-btn ef-btn-primary" href="{{ volta_link }}"><i class="fas fa-arrow-left"></i> {{ volta_rot }}</a></div></div>
-    <div class="vp-hero-val"><small>{{ 'Crédito em duplicidade' if credito else 'Entrou no banco' }}</small><b>{{ brl(credito or lanc.valor) }}</b><span>{{ lanc.data.strftime('%d/%m/%Y') }} · {{ lanc.banco or '' }}</span></div>
+    <div><h1 class="ef-hero-title"><i class="fas fa-link"></i> {{ 'Usar o crédito pago em duplicidade' if credito else 'Vincular pagamento' }}</h1>
+        <p class="ef-hero-sub">{{ empresa_nome }} · {{ 'escolha a cobrança que este crédito paga' if credito else 'escolha o que este dinheiro paga: a cobrança é baixada e o boleto sai do banco' }}</p></div>
+    <div class="ef-hero-actions"><a class="ef-btn ef-btn-primary" href="{{ volta_link }}"><i class="fas fa-arrow-left"></i> {{ volta_rot }}</a></div>
 </div></div>
+
+<div class="vx-corpo">
+<section class="vx-pag{{ ' dup' if credito }}">
+    <div class="vx-pag-val">
+        <small>{{ 'Crédito disponível' if credito else 'Entrou no banco' }}</small>
+        <b>{{ brl(credito or lanc.valor) }}</b>
+        {% if credito %}<span class="vx-selo-dup"><i class="fas fa-clone"></i> PAGO EM DUPLICIDADE</span>{% endif %}
+    </div>
+    <dl class="vx-pag-kv">
+        <div><dt>Data</dt><dd>{{ lanc.data.strftime('%d/%m/%Y') }}</dd></div>
+        <div><dt>Banco</dt><dd>{% if logo_banco_url(lanc.banco) %}{{ logo_banco(lanc.banco, None, 16) }} {% endif %}{{ lanc.banco or '—' }}{% if lanc.conta %} <small>· {{ lanc.conta }}</small>{% endif %}</dd></div>
+        {% if credito %}<div><dt>Valor da linha</dt><dd>{{ brl(lanc.valor) }}</dd></div>{% endif %}
+        <div class="vx-largo"><dt>O banco escreveu</dt><dd>{{ lanc.descricao }}</dd></div>
+        {% for u in usado %}<div class="vx-largo"><dt>Já usado</dt><dd>{{ brl(u.valor) }} em {{ u.descricao }}{% if u.titulo_vencimento %} (venc. {{ u.titulo_vencimento.strftime('%d/%m/%Y') }}){% endif %}</dd></div>{% endfor %}
+    </dl>
+</section>
 
 <form method="POST" id="vpForm" onsubmit="return vpConfirma();">
 <input type="hidden" name="volta_ok" value="{{ volta_link }}">
-<div class="vp-grade">
-<div class="vp-esq">
-<section class="nf-card">
-    <header><b><i class="fas fa-university"></i></b><span>O pagamento</span><small>linha do extrato</small></header>
-    <div class="nf-card-body">
-        <dl class="nd-kv">
-            <div><dt>Valor</dt><dd><strong class="nd-valor">{{ brl(lanc.valor) }}</strong></dd></div>
-            <div><dt>Data</dt><dd>{{ lanc.data.strftime('%d/%m/%Y') }}</dd></div>
-            <div><dt>Banco</dt><dd>{% if logo_banco_url(lanc.banco) %}{{ logo_banco(lanc.banco, None, 18) }} {% endif %}{{ lanc.banco or '—' }} {% if lanc.conta %}<small class="nd-ajuda">· {{ lanc.conta }}</small>{% endif %}</dd></div>
-            <div class="nd-span"><dt>O banco escreveu</dt><dd>{{ lanc.descricao }}</dd></div>
-        </dl>
-        {% if credito %}
-        {# 26/11/2026: crédito PAGO EM DUPLICIDADE — usa só o que resta; a sobra continua crédito #}
-        <div style="margin-top:10px; padding:10px 12px; border-radius:10px; background:#fff7ed; border:1px solid #fdba74; color:#9a3412; font-size:13px;">
-            <b><i class="fas fa-clone"></i> PAGO EM DUPLICIDADE</b> · crédito disponível <b>{{ brl(credito) }}</b>
-            {% for u in usado %}<div style="font-size:12px; margin-top:4px;">já usado {{ brl(u.valor) }} em {{ u.descricao }}{% if u.titulo_vencimento %} (venc. {{ u.titulo_vencimento.strftime('%d/%m/%Y') }}){% endif %}</div>{% endfor %}
-        </div>
-        {% endif %}
-    </div>
-</section>
-
 {% if feitas %}
-</div><div>
-<section class="nf-card">
-    <header><b><i class="fas fa-check"></i></b><span>Já vinculado</span><small>este crédito já deu baixa</small></header>
-    <div class="nf-card-body">
-        <div class="vp-lista">
-        {% for b in feitas %}
-            <div class="vp-tit marcado" style="cursor:default">
-                <div class="vp-meio">{{ b.contraparte_nome }}<small>{{ b.descricao }} · venc. {{ b.titulo_vencimento.strftime('%d/%m/%Y') if b.titulo_vencimento else '—' }}
-                    {% if b.desconto and b.desconto > 0 %} · desconto {{ brl(b.desconto) }}{% endif %}
-                    {% if b.juros and b.juros > 0 %} · juros {{ brl(b.juros) }}{% endif %}</small></div>
-                <div class="vp-val">{{ brl(b.valor) }}</div>
-            </div>
-        {% endfor %}
+<section class="vx-card">
+    <header><i class="vx-n ok"><i class="fas fa-check"></i></i><div><h2>Já vinculado</h2><p>este crédito já deu baixa nestas cobranças</p></div></header>
+    <div class="vx-lista">
+    {% for b in feitas %}
+        <div class="vx-tit marcado" style="cursor:default">
+            <i class="vx-check"><i class="fas fa-check"></i></i>
+            <div class="vx-meio"><b>{{ b.descricao }}</b><small>{{ b.contraparte_nome }} · venc. {{ b.titulo_vencimento.strftime('%d/%m/%Y') if b.titulo_vencimento else '—' }}
+                {% if b.desconto and b.desconto > 0 %} · desconto {{ brl(b.desconto) }}{% endif %}
+                {% if b.juros and b.juros > 0 %} · juros {{ brl(b.juros) }}{% endif %}</small></div>
+            <div class="vx-val">{{ brl(b.valor) }}</div>
         </div>
-        <div class="nd-acoes"><a class="btn btn-outline" href="{{ volta_link }}"><i class="fas fa-arrow-left"></i> {{ volta_rot }}</a></div>
+    {% endfor %}
     </div>
 </section>
-</div>
 {% else %}
 {% if soltas %}
-<section class="nf-card" style="border:2px solid #f59e0b;">
-    <header><b><i class="fas fa-exclamation-triangle" style="color:#b45309"></i></b><span>Cuidado: pode já ter sido usado</span><small>baixa dada à mão, sem a linha do extrato, para este cliente perto desta data</small></header>
-    <div class="nf-card-body">
-        {% for b in soltas %}
-        <div style="font-size:13px; padding:4px 0;"><b>{{ brl(b.valor) }}</b> em {{ b.data_baixa.strftime('%d/%m/%Y') }} · {{ b.contraparte_nome }} · {{ b.descricao }}{% if b.referencia %} <small class="nd-ajuda">({{ b.referencia }})</small>{% endif %}</div>
-        {% endfor %}
-        <small class="nd-ajuda">Se essa baixa foi feita com ESTE dinheiro, vincular de novo conta o pagamento duas vezes. Vincule só o que sobrou para outro título.</small>
-    </div>
+<section class="vx-aviso">
+    <i class="fas fa-triangle-exclamation"></i>
+    <div><b>Cuidado: este dinheiro pode já ter sido usado.</b> Há baixa dada à mão, sem a linha do extrato, para este cliente perto desta data:
+        {% for b in soltas %}<div><b>{{ brl(b.valor) }}</b> em {{ b.data_baixa.strftime('%d/%m/%Y') }} · {{ b.contraparte_nome }} · {{ b.descricao }}{% if b.referencia %} ({{ b.referencia }}){% endif %}</div>{% endfor %}
+        <small>Se essa baixa foi feita com ESTE dinheiro, vincular de novo conta o pagamento duas vezes. Vincule só o que sobrou para outra cobrança.</small></div>
 </section>
 {% endif %}
-<section class="nf-card" id="vpContaCard">
-    <header><b><i class="fas fa-calculator"></i></b><span>A conta</span><small>pago × devido</small></header>
-    <div class="nf-card-body">
-        <div class="vp-resumo">
-            <div><span>{{ 'Crédito' if credito else 'Pagou' }}</span><b>{{ brl(credito or lanc.valor) }}</b></div>
-            <div><span>Títulos marcados</span><b id="vpSoma">R$ 0,00</b></div>
-            <div><span id="vpDifRot">Diferença</span><b id="vpDif">—</b></div>
-        </div>
-
-        <div id="vpMenos" style="display:none; margin-top:10px;">
-            <div class="nd-rotulo">Pagou menos. O que fazer com a diferença?</div>
-            <div class="vp-opcao"><label><input type="radio" name="diferenca" value="desconto"> a) Quitar com desconto</label>
-                <div class="vp-extra"><input type="text" name="motivo" class="form-control" maxlength="200" style="flex:1 1 260px"
-                     placeholder="motivo do desconto (obrigatório)"></div></div>
-            <div class="vp-opcao"><label><input type="radio" name="diferenca" value="cobrar"> b) Cobrar a diferença agora</label>
-                <div class="vp-extra"><span>vence em</span>
-                    <input type="date" name="vencimento" class="form-control" style="width:auto; min-width:150px" min="{{ hoje.isoformat() }}">
-                    <label style="font-weight:normal; display:flex; gap:6px; align-items:center;"><input type="checkbox" name="boleto" value="1" checked> emitir o boleto e mandar por e-mail</label></div></div>
-            <div class="vp-opcao"><label><input type="radio" name="diferenca" value="mes"> c) Cobrar junto com outro mês</label>
-                <div class="vp-extra"><span>no mês de</span>
-                    <select name="mes" class="form-control" style="width:auto">
-                        {% for v, n in meses[1:] %}<option value="{{ v }}">{{ n }}</option>{% endfor %}
-                    </select>
-                    <small class="nd-ajuda" style="flex-basis:100%">Vence no mesmo dia do vencimento deste título, no mês escolhido, e vai junto com o honorário daquele mês.</small></div></div>
-            <small class="nd-ajuda">Em b) e c) a diferença vira um título "Diferença de honorários — resíduo de …" e este fica quitado com o que foi pago.</small>
-        </div>
-
-        <div id="vpMais" style="display:none; margin-top:10px;">
-            <div class="nd-rotulo">Pagou mais.</div>
-            {% if credito %}
-            <div class="vp-opcao ativa"><label><input type="radio" name="diferenca" value="credito"> A sobra continua como crédito do cliente (pago em duplicidade)</label></div>
-            <small class="nd-ajuda">Depois dá para usar o resto em outra cobrança ou devolver ao cliente, na aba Recebidos.</small>
-            {% else %}
-            <div class="vp-opcao ativa"><label><input type="radio" name="diferenca" value="juros"> Registrar a sobra como juros (pagou atrasado)</label></div>
-            <small class="nd-ajuda">Se a sobra é de outro mês ou serviço, marque também esse título na lista acima.</small>
-            {% endif %}
-        </div>
-
-        <div class="nd-acoes">
-            <button class="btn btn-primary" type="submit" id="vpOk" disabled><i class="fas fa-link"></i> Vincular e dar baixa</button>
-        </div>
-        <small class="nd-ajuda">O boleto que ainda podia ser pago sai do banco (na Efí fica como pago; no Cora é cancelado), para o cliente não pagar de novo. A tela do boleto passa a mostrar onde foi pago.</small>
+<div class="vx-grade">
+<section class="vx-card">
+    <header><i class="vx-n">1</i><div><h2>Qual cobrança este {{ 'crédito' if credito else 'dinheiro' }} paga?</h2><p>marque uma ou mais — a mais antiga é quitada primeiro</p></div></header>
+    <div class="vx-busca"><i class="fas fa-magnifying-glass"></i>
+        <input type="search" id="vpBusca" value="{{ sugestao }}" placeholder="Buscar por nome, CNPJ ou descrição" autocomplete="off"></div>
+    <div class="vx-lista" id="vpLista">
+    {% set ns = namespace(cli=None) %}
+    {% for t in titulos %}
+        {% if t.contraparte_nome != ns.cli %}{% set ns.cli = t.contraparte_nome %}
+        <div class="vx-cli" data-cli="{{ t.contraparte_nome }} {{ t.contraparte_doc or '' }}"><i class="fas fa-building"></i> {{ t.contraparte_nome }}</div>
+        {% endif %}
+        <label class="vx-tit vp-tit" data-cli="{{ t.contraparte_nome }} {{ t.contraparte_doc or '' }} {{ t.descricao }}">
+            <input type="checkbox" name="titulo" value="{{ t.id }}" data-saldo="{{ t.saldo }}"
+                   data-venc="{{ t.vencimento.isoformat() if t.vencimento else '9999-12-31' }}-{{ '%09d' % t.id }}"
+                   {{ 'checked' if pre == t.id }}>
+            <i class="vx-check"><i class="fas fa-check"></i></i>
+            <div class="vx-meio"><b>{{ t.descricao }}</b>
+                <small>vence {{ t.vencimento.strftime('%d/%m/%Y') if t.vencimento else '—' }}{% if t.competencia and 'compet' not in (t.descricao or '').lower() %} · competência {{ t.competencia.strftime('%m/%Y') }}{% endif %}{% if t.status == 'parcial' %} · já recebeu parte{% endif %}</small>
+                {% if t.boletos_valendo %}<span class="vx-selo"><i class="fas fa-barcode"></i> tem boleto valendo · sai do banco na baixa</span>{% endif %}</div>
+            <div class="vx-val">{{ brl(t.saldo) }}</div>
+        </label>
+    {% endfor %}
     </div>
+    <p class="vx-nada" id="vpNada" style="display:none">Nenhuma cobrança em aberto com esse nome. Apague a busca para ver todas.</p>
 </section>
-</div>
-<div>
-<section class="nf-card">
-    <header><b><i class="fas fa-user"></i></b><span>De quem é</span><small>marque o(s) título(s) que este dinheiro paga — o mais antigo é quitado primeiro</small></header>
-    <div class="nf-card-body">
-        <input type="search" id="vpBusca" class="form-control" value="{{ sugestao }}" placeholder="nome, CNPJ ou descrição"
-               autocomplete="off" style="margin-bottom:8px;">
-        <div class="vp-lista" id="vpLista">
-        {% set ns = namespace(cli=None) %}
-        {% for t in titulos %}
-            {% if t.contraparte_nome != ns.cli %}{% set ns.cli = t.contraparte_nome %}
-            <div class="vp-cli" data-cli="{{ t.contraparte_nome }} {{ t.contraparte_doc or '' }}">{{ t.contraparte_nome }}</div>
-            {% endif %}
-            <label class="vp-tit" data-cli="{{ t.contraparte_nome }} {{ t.contraparte_doc or '' }} {{ t.descricao }}">
-                <input type="checkbox" name="titulo" value="{{ t.id }}" data-saldo="{{ t.saldo }}"
-                       data-venc="{{ t.vencimento.isoformat() if t.vencimento else '9999-12-31' }}-{{ '%09d' % t.id }}"
-                       {{ 'checked' if pre == t.id }}>
-                <div class="vp-meio">{{ t.descricao }}
-                    <small>venc. {{ t.vencimento.strftime('%d/%m/%Y') if t.vencimento else '—' }}
-                    {% if t.competencia and 'compet' not in (t.descricao or '').lower() %} · competência {{ t.competencia.strftime('%m/%Y') }}{% endif %}
-                    {% if t.status == 'parcial' %} · já recebeu parte{% endif %}
-                    {% if t.boletos_valendo %}<span class="vp-selo">boleto valendo</span>{% endif %}</small></div>
-                <div class="vp-val">{{ brl(t.saldo) }}</div>
-            </label>
-        {% endfor %}
-        </div>
-        <small class="nd-ajuda" id="vpNada" style="display:none">Nenhum título em aberto com esse nome. Apague a busca para ver todos.</small>
+
+<section class="vx-card vx-conta" id="vpContaCard">
+    <header><i class="vx-n">2</i><div><h2>Conferir e dar baixa</h2><p>{{ 'crédito' if credito else 'pago' }} × cobranças marcadas</p></div></header>
+    <div class="vx-recibo">
+        <div><span>{{ 'Crédito' if credito else 'Pagou' }}</span><b>{{ brl(credito or lanc.valor) }}</b></div>
+        <div><span>Cobranças marcadas</span><b id="vpSoma">R$ 0,00</b></div>
+        <div class="vx-tot"><span id="vpDifRot">Diferença</span><b id="vpDif">—</b></div>
     </div>
+
+    <div id="vpMenos" class="vx-dif" style="display:none">
+        <div class="vx-rot">Pagou menos. O que fazer com a diferença?</div>
+        <div class="vp-opcao"><label><input type="radio" name="diferenca" value="desconto"> Quitar com desconto</label>
+            <div class="vp-extra"><input type="text" name="motivo" class="form-control" maxlength="200" placeholder="motivo do desconto (obrigatório)"></div></div>
+        <div class="vp-opcao"><label><input type="radio" name="diferenca" value="cobrar"> Cobrar a diferença agora</label>
+            <div class="vp-extra"><span>vence em</span>
+                <input type="date" name="vencimento" class="form-control" style="width:auto" min="{{ hoje.isoformat() }}">
+                <label class="vx-chk"><input type="checkbox" name="boleto" value="1" checked> emitir o boleto e mandar por e-mail</label></div></div>
+        <div class="vp-opcao"><label><input type="radio" name="diferenca" value="mes"> Cobrar junto com outro mês</label>
+            <div class="vp-extra"><span>no mês de</span>
+                <select name="mes" class="form-control" style="width:auto">
+                    {% for v, n in meses[1:] %}<option value="{{ v }}">{{ n }}</option>{% endfor %}
+                </select>
+                <small>Vence no mesmo dia, no mês escolhido, junto com o honorário daquele mês.</small></div></div>
+        <small class="vx-nota">Cobrando agora ou junto com outro mês, a diferença vira uma cobrança "Diferença de honorários — resíduo de …" e esta fica quitada com o que foi pago.</small>
+    </div>
+
+    <div id="vpMais" class="vx-dif" style="display:none">
+        <div class="vx-rot">Pagou mais.</div>
+        {% if credito %}
+        <div class="vp-opcao ativa"><label><input type="radio" name="diferenca" value="credito"> A sobra continua como crédito do cliente</label></div>
+        <small class="vx-nota">Depois dá para usar o resto em outra cobrança ou devolver ao cliente, na aba Recebidos.</small>
+        {% else %}
+        <div class="vp-opcao ativa"><label><input type="radio" name="diferenca" value="juros"> Registrar a sobra como juros (pagou atrasado)</label></div>
+        <small class="vx-nota">Se a sobra é de outro mês ou serviço, marque também essa cobrança na lista.</small>
+        {% endif %}
+    </div>
+
+    <button type="submit" id="vpOk" class="vx-ok" disabled><i class="fas fa-check"></i> {{ 'Dar baixa com o crédito' if credito else 'Vincular e dar baixa' }}</button>
+    <small class="vx-nota vx-dica" id="vpOkDica">Marque a cobrança que este {{ 'crédito' if credito else 'dinheiro' }} paga.</small>
+    <small class="vx-nota">O boleto que ainda podia ser pago sai do banco (na Efí fica como pago; no Cora é cancelado), para o cliente não pagar de novo.</small>
 </section>
 </div>
 {% endif %}
-</div>
 </form>
+</div>
 {% endif %}
 </div>
 {% endblock %}
@@ -275,6 +318,10 @@
     var cabe = marcados.length < 2 || PAGO > antes + 0.004;
     document.getElementById('vpOk').disabled = !marcados.length || !cabe;
     document.getElementById('vpOk').title = cabe ? '' : 'O valor pago não chega ao último título marcado: desmarque-o.';
+    var dica = document.getElementById('vpOkDica');
+    if (dica) { dica.style.display = marcados.length && cabe ? 'none' : '';
+                dica.textContent = marcados.length ? 'O valor não chega à última cobrança marcada: desmarque-a.' : dica.getAttribute('data-txt') || dica.textContent;
+                if (!dica.getAttribute('data-txt') && !marcados.length) dica.setAttribute('data-txt', dica.textContent); }
   }
   function opcoes() {
     document.querySelectorAll('.vp-opcao').forEach(function (o) {
