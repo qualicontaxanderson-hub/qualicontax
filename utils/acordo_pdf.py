@@ -22,12 +22,22 @@ DIA_EXT = {i: s for i, s in enumerate(['', 'um', 'dois', 'três', 'quatro', 'cin
                                          'vinte', 'vinte e um', 'vinte e dois', 'vinte e três', 'vinte e quatro', 'vinte e cinco',
                                          'vinte e seis', 'vinte e sete', 'vinte e oito', 'vinte e nove', 'trinta', 'trinta e um'])}
 ROMPE_CLAUSULA = {
-    '2_ATRASADAS': ('O atraso de 2 (duas) parcelas, consecutivas ou não, rompe este acordo: o saldo que faltar pagar vence de uma vez '
-                    'e volta a ser cobrado pela CREDORA, descontadas as parcelas já pagas.'),
-    '1_30_DIAS': ('O atraso de qualquer parcela por mais de 30 (trinta) dias rompe este acordo: o saldo que faltar pagar vence de uma '
-                  'vez e volta a ser cobrado pela CREDORA, descontadas as parcelas já pagas.'),
+    '2_ATRASADAS': 'O atraso de 2 (duas) parcelas, consecutivas ou não, rompe este acordo',
+    '1_30_DIAS': 'O atraso de qualquer parcela por mais de 30 (trinta) dias rompe este acordo',
     'SEM': ('A parcela em atraso continua devida e é cobrada como qualquer cobrança vencida, sem que o atraso rompa este acordo.'),
 }
+
+
+def _clausula_rompe(a):
+    """Etapa 4 (26/11/2026, Anderson): rompido o acordo, o desconto cai — volta a dívida original menos o que foi pago."""
+    if a['rompe'] == 'SEM':
+        return ROMPE_CLAUSULA['SEM']
+    if a['desconto']:
+        return (ROMPE_CLAUSULA[a['rompe']] + ': o desconto da cláusula primeira é cancelado e a DEVEDORA volta a dever o valor '
+                'original da dívida, de %s, descontado tudo o que já tiver pago neste acordo; esse saldo vence de uma vez e volta '
+                'a ser cobrado pela CREDORA.' % _brl(a['divida']))
+    return (ROMPE_CLAUSULA[a['rompe']] + ': o saldo que faltar pagar vence de uma vez e volta a ser cobrado pela CREDORA, '
+            'descontadas as parcelas já pagas.')
 
 
 def _brl(v):
@@ -155,11 +165,14 @@ def gerar_pdf(a, rodape=None):
             'A DEVEDORA reconhece e confessa dever à CREDORA a quantia líquida, certa e exigível de %s, referente aos valores de '
             'prestação de serviços contábeis vencidos e não pagos listados no quadro "O que entra no acordo", que integra este termo.'
             % _brl(a['divida'])] + ([
-            'PARÁGRAFO ÚNICO. A CREDORA concede desconto de %s, e o valor do acordo passa a ser %s. Se o acordo for rompido, o desconto '
-            'não volta a ser cobrado.' % (_brl(a['desconto']), _brl(a['total']))] if a['desconto'] else [])),
+            'PARÁGRAFO ÚNICO. A CREDORA concede desconto de %s, e o valor do acordo passa a ser %s. O desconto vale só se o acordo '
+            'for cumprido: se for rompido, o desconto é cancelado (cláusula quarta).' % (_brl(a['desconto']), _brl(a['total']))]
+            if a['desconto'] and a['rompe'] != 'SEM' else [
+            'PARÁGRAFO ÚNICO. A CREDORA concede desconto de %s, e o valor do acordo passa a ser %s.'
+            % (_brl(a['desconto']), _brl(a['total']))] if a['desconto'] else [])),
         ('CLÁUSULA SEGUNDA — DO PAGAMENTO.', [pag, p_forma] + ([p2] if p2 else [])),
         ('CLÁUSULA TERCEIRA — SEM JUROS E SEM CORREÇÃO.', ['Sobre a dívida e sobre as parcelas deste acordo não incidem juros nem correção monetária.']),
-        ('CLÁUSULA QUARTA — DO ROMPIMENTO.', [ROMPE_CLAUSULA[a['rompe']]] + (
+        ('CLÁUSULA QUARTA — DO ROMPIMENTO.', [_clausula_rompe(a)] + (
             ['PARÁGRAFO ÚNICO. O rompimento não acrescenta juros, multa ou correção ao saldo.'] if a['rompe'] != 'SEM' else [])),
         ('CLÁUSULA QUINTA — DA QUITAÇÃO.', [
             'Com a assinatura, os títulos listados passam a constar como renegociados neste acordo. Paga a última parcela, a CREDORA '

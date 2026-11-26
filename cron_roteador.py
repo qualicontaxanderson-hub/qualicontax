@@ -1087,6 +1087,11 @@ def main() -> int:
             _r = _acordo_boletos()
             if _r:
                 logger.info('[roteador] acordos: %s', '; '.join(f"{x['acordo']} {x['msg']}" for x in _r))
+            # etapa 4: a regra do acordo bateu (2 atrasadas / 1 com 30 dias) -> rompe; o desconto cai
+            from utils.acordos import romper_vencidos as _acordo_romper
+            _r = _acordo_romper()
+            if _r:
+                logger.info('[roteador] acordos rompidos: %s', '; '.join(f"{x['acordo']} {x['msg']}" for x in _r))
     except Exception:
         logger.exception('[roteador] boletos dos acordos falharam; tenta na próxima hora.')
 

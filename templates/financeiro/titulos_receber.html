@@ -1507,6 +1507,7 @@ a.tx-c { text-decoration:none; color:inherit; }
          ['fa-box-archive', '<b>Assinou:</b> os ' + nIt + ' itens saem da cobrança como "renegociados no acordo" e as parcelas começam.']];
     passos.push([junto ? 'fa-object-group' : 'fa-receipt', junto ? '<b>Todo dia ' + (AC.contrato || {}).dia + '</b> o boleto do honorário sai com duas linhas: honorário do mês + parcela do acordo.' : '<b>Cada parcela</b> tem o seu boleto, no dia ' + d.dia + '.']);
     passos.push(['fa-handshake', '<b>Na aba Acordos</b> se vê quantas pagou, a próxima e se está perto de romper.']);
+    if (d.rompe !== 'SEM') passos.push(['fa-link-slash', '<b>Se romper</b>, o sistema rompe sozinho' + (desc > 0 ? ' e <b>o desconto de ' + acBrl(desc) + ' cai</b>' : '') + ': o cliente volta a dever ' + acBrl(div) + ' menos o que já pagou, numa cobrança só.']);
     f.querySelector('#acPassos').innerHTML = passos.map(function (p) { return '<div><i class="fas ' + p[0] + '"></i><span>' + p[1] + '</span></div>'; }).join('');
     var ok = f.querySelector('#acOk span'); ok.textContent = d.assinatura === 'SEM' ? 'Criar acordo (vale já)' : (d.assinatura === 'ENVIAR' ? 'Criar acordo' : 'Guardar acordo');
   }

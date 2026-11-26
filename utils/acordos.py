@@ -16,6 +16,17 @@ Etapa 3 (26/11/2026) — o boleto das parcelas:
   honorários (utils/lote_mensal). Dado o boleto, o título da parcela sai da cobrança (absorvido) e a parcela passa a
   apontar para o título do boleto do mês (``titulo_proprio_id`` guarda o dela). Se o lote não a levar até
   ``JANELA_JUNTO`` dias antes do vencimento, ela sai em boleto próprio — nunca fica sem cobrar.
+
+Etapa 4 (26/11/2026) — o rompimento. Anderson: "quando o acordo rompe, o desconto cai" (opção A, e isso tem de estar
+no termo). Bateu a regra do acordo (2 parcelas atrasadas, ou 1 com mais de 30 dias), o cron rompe sozinho:
+* as parcelas que faltam saem da cobrança (boleto cancelado no banco; título cancelado com acordo_id);
+* o desconto é cancelado: o cliente volta a dever a DÍVIDA ORIGINAL menos tudo o que já pagou no acordo, numa
+  cobrança só (origem 'acordo_rompido', chave ``acordo:<id>:rompido``), vencida desde a 1ª parcela atrasada — vai
+  para Atrasados e pode entrar num acordo novo;
+* parcela "junto" que já foi no boleto do honorário e não foi paga continua dentro daquele boleto (não se cobra duas
+  vezes): ela sai da conta da cobrança nova.
+A parcela só conta como atrasada para romper ``TOLERANCIA_ROMPE`` dias depois do vencimento (o banco leva um ou dois
+dias para mandar a baixa de quem pagou no dia).
 """
 import logging
 from datetime import date, datetime, timedelta
@@ -33,6 +44,7 @@ ROMPE = {'2_ATRASADAS': ('Rompe com 2 parcelas atrasadas', 'rompe com 2', 'parce
 ASSINATURA = {'ENVIAR': 'enviar para assinar', 'DEPOIS': 'guardar para enviar depois', 'SEM': 'sem assinatura (combinado)'}
 JANELA_SEPARADO = 20     # dias antes do vencimento em que o boleto da parcela "separado" é emitido
 JANELA_JUNTO = 5         # "junto": se o lote do mês não levou, boleto próprio a esta distância do vencimento
+TOLERANCIA_ROMPE = 3     # etapa 4: dias depois do vencimento até a parcela contar para o rompimento "2 atrasadas"
 SITUACAO = {'FALTA_ENVIAR': 'Falta enviar', 'FALTA_ASSINAR': 'Falta assinar', 'ATIVO': 'Ativo', 'QUITADO': 'Quitado',
             'ROMPIDO': 'Rompido', 'CANCELADO': 'Cancelado'}
 
@@ -531,6 +543,116 @@ def absorver(parcela_ids, titulo_id, onde):
                None, 'fa-barcode')
 
 
+# ─────────────────────────── rompimento (etapa 4) ───────────────────────────
+def motivo_rompimento(a, h=None):
+    """O texto do motivo se a regra do acordo já bateu; None se não. Só acordo ATIVO e não quitado."""
+    h = h or hoje()
+    if a['situacao'] != 'ATIVO' or a['rompe'] not in ('2_ATRASADAS', '1_30_DIAS'):
+        return None
+    ps = a['parcelas']
+    if not ps or all(p['sit'] == 'paga' for p in ps):
+        return None
+    atr = [p for p in ps if p['sit'] == 'atrasada']
+    if a['rompe'] == '2_ATRASADAS':
+        conta = [p for p in atr if (h - p['venc']).days > TOLERANCIA_ROMPE]
+        if len(conta) >= 2:
+            return '2 parcelas atrasadas (%s)' % ' e '.join(
+                f'{rotulo(a, p)} de {p["venc"].strftime("%d/%m/%Y")}' for p in conta[:2])
+    else:
+        conta = [p for p in atr if (h - p['venc']).days > 30]
+        if conta:
+            p = conta[0]
+            return f'{rotulo(a, p)} de {p["venc"].strftime("%d/%m/%Y")} com {(h - p["venc"]).days} dias de atraso'
+    return None
+
+
+def saldo_do_rompimento(a):
+    """Quanto o cliente volta a dever se o acordo romper (o desconto cai) e quanto disso vira a cobrança nova.
+    Devolve {cheio, pago, no_honorario, nova}."""
+    pago = sum((p['pago'] for p in a['parcelas']), Decimal('0'))
+    no_hon = sum((d(p['valor']) - p['pago'] for p in a['parcelas'] if p.get('junto') and p['sit'] != 'paga'), Decimal('0'))
+    cheio = max(d(a['divida']) - pago, Decimal('0'))
+    return {'cheio': cheio, 'pago': pago, 'no_honorario': no_hon, 'nova': max(cheio - no_hon, Decimal('0'))}
+
+
+def romper(aid, motivo, usuario=None):
+    """Rompe o acordo (opção A: o desconto cai). Devolve {'titulo_id', 'valor', 'avisos'}."""
+    from models.fin_titulo import FinTitulo
+    from utils.financeiro_core import recalcular_status
+    a = get(aid)
+    if not a or a['situacao'] != 'ATIVO':
+        raise AcordoInvalido('Só um acordo valendo pode ser rompido.')
+    uid = getattr(usuario, 'id', None)
+    h = hoje()
+    sal = saldo_do_rompimento(a)
+    avisos = []
+    nota = f'{h.strftime("%d/%m/%Y")} — o acordo {a["numero"]} foi rompido ({motivo})'
+    # 1) as parcelas que faltam saem da cobrança (a "junto" já absorvida fica no boleto do honorário)
+    for p in a['parcelas']:
+        if p.get('junto') or not p.get('titulo_id'):
+            continue
+        t = q('SELECT id, status, valor_baixado FROM fin_titulos WHERE id = %s', (p['titulo_id'],), one=True)
+        if not t or t['status'] not in ('aberto', 'parcial'):
+            continue
+        avisos += _cancelar_boletos(t['id'])
+        if d(t['valor_baixado']) > 0:
+            x("""UPDATE fin_titulos SET valor = valor_baixado, acordo_id = %s,
+                        observacao = CONCAT_WS('\n', NULLIF(observacao, ''), %s) WHERE id = %s""", (aid, nota, t['id']))
+            recalcular_status(t['id'])
+        else:
+            FinTitulo.cancelar(t['id'])
+            x("""UPDATE fin_titulos SET acordo_id = %s, observacao = CONCAT_WS('\n', NULLIF(observacao, ''), %s)
+                  WHERE id = %s""", (aid, nota, t['id']))
+    # 2) a dívida volta sem o desconto, menos o que já pagou, numa cobrança só
+    tid = None
+    if sal['nova'] > 0:
+        cli = q('SELECT nome_razao_social, cpf_cnpj FROM clientes WHERE id = %s', (a['cliente_id'],), one=True) or {}
+        cat = q("SELECT id FROM fin_categorias WHERE tipo = 'R' AND nome LIKE 'Honor%%' ORDER BY id LIMIT 1", one=True) or {}
+        atr = [p['venc'] for p in a['parcelas'] if p['sit'] == 'atrasada']
+        venc = min(atr) if atr else h
+        obs = (f'Acordo {a["numero"]} rompido em {h.strftime("%d/%m/%Y")}: {motivo}. Dívida original {brl(a["divida"])}'
+               + (f', desconto de {brl(a["desconto"])} cancelado' if d(a['desconto']) > 0 else '')
+               + f', já pago no acordo {brl(sal["pago"])}'
+               + (f', {brl(sal["no_honorario"])} continuam no boleto do honorário' if sal['no_honorario'] > 0 else '') + '.')
+        tid = FinTitulo.criar(tipo='R', contraparte_nome=cli.get('nome_razao_social') or '', categoria_id=cat.get('id'),
+                              descricao=f'Acordo {a["numero"]} rompido — saldo da dívida', competencia=h.replace(day=1),
+                              emissao=h, vencimento=venc, valor=sal['nova'], empresa_id=a['empresa_id'],
+                              contraparte_doc=''.join(ch for ch in (cli.get('cpf_cnpj') or '') if ch.isdigit()) or None,
+                              cliente_id=a['cliente_id'], observacao=obs, origem='acordo_rompido',
+                              chave_idem=f'acordo:{aid}:rompido')
+        if not tid or tid is True:
+            raise AcordoInvalido(f'Não consegui criar a cobrança do saldo do acordo {a["numero"]}.')
+    x("""UPDATE fin_acordos SET situacao = 'ROMPIDO', encerrado_em = NOW(), encerrado_motivo = %s WHERE id = %s""",
+      (('Rompido: ' + motivo)[:255], aid))
+    sub = (f'desconto de {brl(a["desconto"])} cancelado · ' if d(a['desconto']) > 0 else '') + \
+          (f'volta a dever {brl(sal["cheio"])} (cobrança nº {tid})' if tid else 'nada a cobrar além do boleto do honorário')
+    evento(aid, ('O acordo foi rompido: ' + motivo) if not uid else f'{usuario.nome} rompeu o acordo: {motivo}', sub, uid,
+           'fa-link-slash')
+    from utils.atividade import registrar
+    registrar('escrita.rompeu_acordo', 'financeiro', tabela='fin_acordos', registro_id=aid,
+              depois={'numero': a['numero'], 'motivo': motivo, 'titulo_saldo': tid, 'valor': str(sal['nova']),
+                      'desconto_cancelado': str(a['desconto']), 'pago': str(sal['pago'])})
+    return {'titulo_id': tid, 'valor': sal['nova'], 'avisos': avisos}
+
+
+def romper_vencidos():
+    """Cron: rompe os acordos em que a regra bateu. Devolve [{acordo, msg}]. Seguro rodar de hora em hora."""
+    out = []
+    for r in q("SELECT id FROM fin_acordos WHERE situacao = 'ATIVO' AND rompe IN ('2_ATRASADAS', '1_30_DIAS')"):
+        a = get(r['id'])
+        m = motivo_rompimento(a) if a else None
+        if not m:
+            continue
+        try:
+            res = romper(a['id'], m)
+            out.append({'acordo': a['numero'], 'msg': f'rompido ({m}); saldo {brl(res["valor"])}'
+                        + (f' na cobrança nº {res["titulo_id"]}' if res['titulo_id'] else '')})
+        except Exception as exc:
+            logger.exception('[acordo] romper %s', a['numero'])
+            out.append({'acordo': a['numero'], 'msg': f'não rompeu ({exc})'})
+    return out
+
+
 # ─────────────────────────── ler ───────────────────────────
 def get(aid):
     a = q("""SELECT a.*, c.numero_cliente, c.nome_razao_social, c.cpf_cnpj, u.nome AS criado_por_nome,
@@ -563,6 +685,10 @@ def get(aid):
                     'a vencer' if p.get('titulo_id') else 'espera assinar')
     a['eventos'] = q("""SELECT e.*, u.nome AS quem FROM fin_acordo_eventos e LEFT JOIN usuarios u ON u.id = e.usuario_id
                          WHERE e.acordo_id = %s ORDER BY e.id""", (aid,))
+    a['saldo_romper'] = None
+    if a['situacao'] == 'ROMPIDO':        # etapa 4: a cobrança do saldo (a dívida sem o desconto, menos o que pagou)
+        a['saldo_romper'] = q("""SELECT id, valor, valor_baixado, status, vencimento FROM fin_titulos
+                                  WHERE chave_idem = %s LIMIT 1""", (f'acordo:{aid}:rompido',), one=True)
     return resumo(a)
 
 

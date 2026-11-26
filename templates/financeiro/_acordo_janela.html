@@ -14,7 +14,7 @@
     <div><i class="fas fa-coins"></i><div><dt>Pago</dt><dd>{{ brl(a.pago_total) }}</dd><small>{{ a.n_pagas }} de {{ a.parcelas|length }} parcela{{ 's' if a.parcelas|length != 1 }}</small></div></div>
     <div><i class="fas fa-calendar-day"></i><div><dt>Próxima</dt><dd>{{ a.proxima.venc.strftime('%d/%m/%Y') if a.proxima else '—' }}</dd><small>{% if a.proxima %}{{ brl(a.proxima.valor) }}{% if a.forma == 'JUNTO' %} + honorário{% endif %}{% else %}nada a vencer{% endif %}</small></div></div>
     <div><i class="fas fa-building-columns"></i><div><dt>Cobrança</dt><dd>{{ {'bradesco': 'Bradesco', 'cora': 'Cora', 'efi': 'Efí'}.get(a.banco_provedor, a.banco_apelido or '—') }}</dd><small>{{ FORMA[a.forma] }}</small></div></div>
-    <div><i class="fas fa-triangle-exclamation"></i><div><dt>Se não pagar</dt><dd>{{ ROMPE[a.rompe][1] }}</dd><small>{{ ROMPE[a.rompe][2] }}</small></div></div>
+    <div><i class="fas fa-triangle-exclamation"></i><div><dt>Se não pagar</dt><dd>{{ ROMPE[a.rompe][1] }}</dd><small>{{ ROMPE[a.rompe][2] }}{% if a.desconto and a.rompe != 'SEM' %} · o desconto cai{% endif %}</small></div></div>
   </div>
   <div class="jg">
     <div>
@@ -27,6 +27,9 @@
             <div><b>{{ a.qc_nome.title() }} · pela Qualicontax</b><small>{{ a.qc_cargo or '' }}</small></div></div></div>{% endif %}
           <div class="as-bt"><a class="mini v" href="{{ url_for('financeiro.acdiv_termo_pdf', aid=a.id) }}" target="_blank" rel="noopener"><i class="fas fa-file-pdf"></i> Ver o termo</a>
             <a class="mini" href="{{ url_for('financeiro.acdiv_termo_pdf', aid=a.id, baixar=1) }}"><i class="fas fa-download"></i> Baixar PDF</a></div>
+          {% if a.situacao == 'ROMPIDO' %}<div class="ns-aviso" style="margin:0;border-color:#fecaca;background:#fef2f2;color:#991b1b"><i class="fas fa-link-slash"></i><span><b>Acordo rompido{% if a.encerrado_em %} em {{ a.encerrado_em.strftime('%d/%m/%Y') }}{% endif %}.</b>
+            {% if a.desconto %}O desconto de {{ brl(a.desconto) }} foi cancelado: {% endif %}a dívida voltou pelo valor original ({{ brl(a.divida) }}) menos o que já pagou ({{ brl(a.pago_total) }}).
+            {% if a.saldo_romper %}Está na cobrança nº {{ a.saldo_romper.id }}, {{ brl(a.saldo_romper.valor) }}, na aba Atrasados.{% endif %}</span></div>{% endif %}
           {% if a.situacao in ('FALTA_ENVIAR', 'FALTA_ASSINAR') %}<div class="ns-aviso" style="margin:0"><i class="fas fa-circle-info"></i><span>O envio do termo por link e código chega na próxima etapa. Se o cliente já combinou, use "Ativar sem assinatura".</span></div>{% endif %}
         </div></div>
       <div class="ns-b"><div class="ns-h"><i class="fas fa-box-archive"></i> Dívida renegociada <em>{{ a.n_itens }} ite{{ 'm' if a.n_itens == 1 else 'ns' }} · {{ brl(a.divida) }}{% if a.desconto %} − desconto {{ brl(a.desconto) }}{% endif %}</em></div>
@@ -46,7 +49,7 @@
               {% elif p.titulo_id %}cobrança nº {{ p.titulo_id }}{% endif %}</small>
             <span class="v">{{ brl(p.valor) }} <span class="s {{ {'paga': 'ok', 'atrasada': 'atr'}.get(p.sit, '') }}">{{ p.sit }}</span></span></div>
         {% endfor %}</div>
-        <small style="color:#64748b;margin-top:8px;display:block">Paga, a parcela fica verde com a data; atrasada, fica laranja{% if a.rompe != 'SEM' %} e conta para o rompimento{% endif %}.
+        <small style="color:#64748b;margin-top:8px;display:block">Paga, a parcela fica verde com a data; atrasada, fica laranja{% if a.rompe != 'SEM' %} e conta para o rompimento ({{ ROMPE[a.rompe][0] | lower }}{% if a.rompe == '2_ATRASADAS' %}, depois de 3 dias do vencimento{% endif %}; rompido, {% if a.desconto %}o desconto cai e {% endif %}volta a dívida original menos o que já pagou){% endif %}.
           {% if a.forma == 'JUNTO' %}A entrada sai em boleto próprio; as parcelas vão no boleto do honorário do mês (fora da nota fiscal).{% else %}A entrada sai na hora; cada parcela ganha o boleto 20 dias antes de vencer, por e-mail.{% endif %}</small></div>
     </div>
     <div>
