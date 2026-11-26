@@ -43,6 +43,7 @@ AREAS_VISUAL = {
     'Todos':            ('#ffedd5', '#c2410c', 'fa-bullhorn'),
     'Cadastros':        ('#dbeafe', '#1d4ed8', 'fa-folder-open'),
     'Financeiro':       ('#dcfce7', '#15803d', 'fa-dollar-sign'),
+    'Comercial':        ('#ffedd5', '#c2410c', 'fa-handshake'),
     'Escrita Fiscal':   ('#e0f2fe', '#0369a1', 'fa-file-invoice'),
     'Contábil':         ('#ede9fe', '#6d28d9', 'fa-calculator'),
     'DP / Legalização': ('#fee2e2', '#b91c1c', 'fa-id-card'),
@@ -366,7 +367,7 @@ def index():
 
 
 ZAP_EMOJI = {'novo': '✨', 'melhoria': '📈', 'correcao': '🔧', 'aviso': '⚠️'}
-ZAP_AREA = {'Financeiro': '💰', 'Cadastros': '📁', 'Escrita Fiscal': '🧾', 'Contábil': '📊', 'DP / Legalização': '🪪',
+ZAP_AREA = {'Financeiro': '💰', 'Comercial': '🤝', 'Cadastros': '📁', 'Escrita Fiscal': '🧾', 'Contábil': '📊', 'DP / Legalização': '🪪',
             'Q-Robô': '🤖', 'Processos': '✅', 'Relatórios': '📈', 'Configurações': '⚙️'}
 
 

@@ -944,6 +944,7 @@ DEPARTAMENTOS = [
     ('Escrita Fiscal', 'Fiscal', 'fa-file-invoice'),
     ('Contábil', 'Contábil', 'fa-book'),
     ('Financeiro', 'Financeiro', 'fa-coins'),
+    ('Comercial', 'Comercial', 'fa-handshake'),
     ('DP / Legalização', 'DP e Legalização', 'fa-briefcase'),
     ('Processos', 'Processos', 'fa-list-check'),
     ('Relatórios', 'Relatórios', 'fa-chart-column'),

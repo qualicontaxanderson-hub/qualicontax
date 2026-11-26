@@ -182,10 +182,6 @@ DEPARTAMENTOS_PERMISSOES = [
                     ('financeiro.honorarios.desfazer', 'desfazer reajuste', True)]},
         {'id': 'honc', 'nome': 'Honorários da empresa que cadastrei',
          'inc': ('financeiro.honorarios_cadastrar', 'cadastrar (vai para aprovação)')},
-        # 18/11/2026 — Anderson: honorário da equipe só "mediante o Contrato de Prestação de Serviços... com o Contrato
-        # apareceria para a Aprovação"; aprovado, o honorário passa a valer e o contrato vai para o cliente assinar.
-        {'id': 'ctr', 'nome': 'Contrato de prestação de serviços',
-         'inc': ('financeiro.contratos.montar', 'montar contrato (vai para aprovação)')},
         {'id': 'lan', 'nome': 'Serviço avulso e comissões',
          'ver': ('financeiro.lancamentos', 'meus lançamentos'),
          'inc': ('financeiro.lancamentos.incluir', 'lançar serviço'),
@@ -196,6 +192,22 @@ DEPARTAMENTOS_PERMISSOES = [
          'ver': ('financeiro.lote', 'lotes'),
          'inc': ('financeiro.lote.incluir', 'emitir o lote'),
          'outros': [('financeiro.lote.reabrir', 'reabrir lote', True)]},
+    ]},
+    # 26/11/2026 — Anderson: "Nas configurações, o Comercial não está aparecendo". As telas estavam espalhadas
+    # (Comercial e Orçamentos dentro de DP / Legalização; o contrato dentro do Financeiro). Os códigos são os mesmos:
+    # nenhum perfil perde nada, só muda o departamento em que a caixa aparece.
+    {'grupo': 'Comercial', 'sigla': 'CO', 'cor': 'com', 'telas': [
+        {'id': 'com', 'nome': 'Acessar o Comercial', 'ver': ('modulos.comercial', 'abrir o painel')},
+        # 21/11/2026 — Anderson: o orçamento nasce no Comercial, o escritório aprova, vira lançamento no Financeiro
+        {'id': 'orc', 'nome': 'Orçamentos',
+         'ver': ('comercial.orcamentos', 'ver os orçamentos (os seus; quem aprova vê todos)'),
+         'inc': ('comercial.orcamentos.incluir', 'montar, alterar, mandar ao cliente e para a cobrança'),
+         'outros': [('comercial.orcamentos.aprovar', 'aprovar e reprovar orçamentos', True)]},
+        # 18/11/2026 — Anderson: honorário da equipe só "mediante o Contrato de Prestação de Serviços... com o Contrato
+        # apareceria para a Aprovação"; aprovado, o honorário passa a valer e o contrato vai para o cliente assinar.
+        # 25/11/2026: a proposta de serviços usa a mesma caixa (quem monta contrato monta proposta).
+        {'id': 'ctr', 'nome': 'Contratos e propostas de serviços',
+         'inc': ('financeiro.contratos.montar', 'montar contrato e proposta (vão para aprovação)')},
     ]},
     {'grupo': 'Processos', 'sigla': 'PR', 'cor': 'pro', 'telas': [
         {'id': 'pro', 'nome': 'Processos',
@@ -212,12 +224,6 @@ DEPARTAMENTOS_PERMISSOES = [
         {'id': 'dp', 'nome': 'DP', 'ver': ('modulos.dp', 'abrir')},
         {'id': 'leg', 'nome': 'Legalização', 'ver': ('modulos.legalizacao', 'abrir')},
         {'id': 'ana', 'nome': 'Análise', 'ver': ('modulos.analise', 'abrir')},
-        {'id': 'com', 'nome': 'Comercial', 'ver': ('modulos.comercial', 'abrir')},
-        # 21/11/2026 — Anderson: o orçamento nasce no Comercial, o escritório aprova, vira lançamento no Financeiro
-        {'id': 'orc', 'nome': 'Orçamentos (Comercial)',
-         'ver': ('comercial.orcamentos', 'ver os orçamentos (os seus; quem aprova vê todos)'),
-         'inc': ('comercial.orcamentos.incluir', 'montar, alterar, mandar ao cliente e para a cobrança'),
-         'outros': [('comercial.orcamentos.aprovar', 'aprovar e reprovar orçamentos', True)]},
     ]},
     {'grupo': 'Configurações', 'sigla': 'CF', 'cor': 'cfg', 'telas': [
         # Usuários e Perfis são só do administrador (MAPA/decorador): a caixa
