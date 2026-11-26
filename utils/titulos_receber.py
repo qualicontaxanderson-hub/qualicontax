@@ -483,6 +483,15 @@ def montar(empresa_ids=None, mes=None, per=None):
                   AND NOT EXISTS (SELECT 1 FROM fin_titulo_baixas b WHERE b.lancamento_id = l.id)""",
             (CORTE_EFI,), fetch=True, fetch_one=True) or {'n': 0, 'v': 0}
 
+    # Acordos (26/11/2026): os ativos e os que esperam assinatura contam no total da aba; os encerrados ficam no registro
+    from utils import acordos as AC
+    ac = AC.listar(empresa_ids)
+    vivos = [a for a in ac if a['situacao'] in ('ATIVO', 'FALTA_ENVIAR', 'FALTA_ASSINAR') and a['tela'][1] != 'qui']
+    ac_dia = sum(1 for a in vivos if a['filtro'] == 'dia'); ac_atr = sum(1 for a in vivos if a['filtro'] == 'atr')
+    ac_ass = sum(1 for a in vivos if a['filtro'] == 'ass')
+    ac_sub = ' · '.join(x for x in (('%d em dia' % ac_dia) if ac_dia else '', ('%d atrasado%s' % (ac_atr, 's' if ac_atr != 1 else '')) if ac_atr else '',
+                                    ('%d a assinar' % ac_ass) if ac_ass else '') if x) or ('nenhum ativo' if ac else 'renegociar a dívida')
+    ac_tot = brl(sum(float(a['total']) - float(a['pago_total']) for a in vivos))
     ant = date(mes.year - (mes.month == 1), (mes.month - 2) % 12 + 1, 1)
     mes_rot = f'{MES_LONGO[mes.month]}/{mes.year}'
     return dict(
@@ -498,6 +507,7 @@ def montar(empresa_ids=None, mes=None, per=None):
         ina=ina, ina_tot=brl(sum(x['v'] for x in ina)), ina_cli=len(ina),
         perd=perd, perd_tot=brl(sum(x['v'] for x in perd)), perd_n=len(perd),
         canc=canc, canc_tot=brl(sum(x['v'] for x in canc)), canc_n=len(canc),
+        ac=ac, ac_tot=ac_tot, ac_n=len(ac), ac_sub=ac_sub,
         ina_tit=sum(x['qtd'] for x in ina),
         regua_ini=_comp(date(*comps[0], 1)), regua_fim=_comp(date(*comps[-1], 1)),
         filtros=cat.saida(),
@@ -514,7 +524,7 @@ def cancelados(ec='', ep=(), hoje=None, per=None):
                         (SELECT l.orcamento_id FROM fin_lancamentos l WHERE l.titulo_id = t.id OR (l.boleto_id IS NOT NULL AND l.boleto_id = (SELECT b2.id FROM fin_boletos b2 WHERE b2.titulo_id = t.id ORDER BY b2.id DESC LIMIT 1)) LIMIT 1) AS orcamento_id
                    FROM fin_titulos t LEFT JOIN clientes c ON c.id = t.cliente_id
                    LEFT JOIN fin_categorias cat ON cat.id = t.categoria_id
-                  WHERE t.tipo = 'R' AND t.status = 'cancelado' AND t.perdido_em IS NULL{ec}
+                  WHERE t.tipo = 'R' AND t.status = 'cancelado' AND t.perdido_em IS NULL AND t.acordo_id IS NULL{ec}
                   ORDER BY t.id DESC""", tuple(ep), fetch=True) or []
     if not rows:
         return []

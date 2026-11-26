@@ -227,7 +227,7 @@ def _titulos_receber(emps, sel):
             mes = date(int(raw[:4]), int(raw[5:]), 1)
         except ValueError:
             mes = None
-    aba = request.args.get('aba') if request.args.get('aba') in ('rec', 'abe', 'atr', 'ina', 'perd', 'canc') else 'abe'
+    aba = request.args.get('aba') if request.args.get('aba') in ('rec', 'abe', 'atr', 'ina', 'ac', 'perd', 'canc') else 'abe'
     # Período (17/11/2026): per=mes|ant|ano|datas (+ de/ate). Vale a baixa no Recebido e o vencimento nas outras.
     per_raw = request.args.get('per') if request.args.get('per') in ('mes', 'ant', 'ano', 'datas') else ''
     def _d(k):
@@ -243,6 +243,8 @@ def _titulos_receber(emps, sel):
     return render_template(
         'financeiro/titulos_receber.html', m=m, aba=aba, per=per_raw if per else '', grupos_ids=grupos_ids,
         pode_perd=current_user.has_permission('financeiro.titulos.excluir'),
+        pode_acordo=current_user.has_permission('financeiro.cobranca.vincular'),   # 26/11/2026: Acordos
+        brl=TR.brl, ROMPE_AC=__import__('utils.acordos', fromlist=['ROMPE']).ROMPE,
         categorias=FinCategoria.listar(), centros=FinCentroCusto.listar(),
         hoje=m['hoje'], fin_empresas=emps, sel_empresas=sel,
         filtros=dict(tipo='R', emp=emp, aba=aba, mes=raw if mes else '',

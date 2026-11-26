@@ -145,6 +145,8 @@ from routes.programa import programa as programa_bp
 from routes.manuais import manuais as manuais_bp
 # Vincular pagamento de outra conta aos títulos (14/11/2026) — rotas no blueprint financeiro; antes do register.
 from routes import financeiro_vincular  # noqa: E402,F401
+# Acordos de dívida (26/11/2026) — Cobranças › Acordos; rotas no blueprint financeiro.
+from routes import financeiro_acordos  # noqa: E402,F401
 # Ligar a cobrança (Bradesco) dentro do cartão da conta bancária (15/11/2026).
 from routes import financeiro_ligar_banco  # noqa: E402,F401
 

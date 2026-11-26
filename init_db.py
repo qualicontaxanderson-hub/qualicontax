@@ -1930,6 +1930,84 @@ def _apply_migrations():
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     """)
 
+    # 26/11/2026 — ACORDOS de dívida (Cobranças › Acordos; desenho e termo aprovados pelo Anderson). O acordo junta
+    # títulos em aberto (e valores fora do sistema), dá desconto (sem juros nunca) e divide em parcelas; ativo, os
+    # títulos velhos ficam cancelados com fin_titulos.acordo_id ("renegociados") e nascem os títulos das parcelas.
+    _migrate("""
+        CREATE TABLE IF NOT EXISTS fin_acordos (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            numero VARCHAR(12) NOT NULL,
+            empresa_id INT NOT NULL,
+            cliente_id INT NOT NULL,
+            situacao VARCHAR(16) NOT NULL DEFAULT 'FALTA_ENVIAR',
+            divida DECIMAL(12,2) NOT NULL,
+            desconto DECIMAL(12,2) NOT NULL DEFAULT 0,
+            motivo_desconto VARCHAR(200) NULL,
+            total DECIMAL(12,2) NOT NULL,
+            entrada DECIMAL(12,2) NULL,
+            entrada_venc DATE NULL,
+            parcelas INT NOT NULL,
+            valor_parcela DECIMAL(12,2) NOT NULL,
+            dia INT NOT NULL,
+            inicio DATE NOT NULL,
+            forma VARCHAR(10) NOT NULL,
+            rompe VARCHAR(12) NOT NULL,
+            conta_cobranca_id INT NULL,
+            assinatura VARCHAR(10) NOT NULL,
+            assina_nome VARCHAR(150) NULL, assina_cpf VARCHAR(20) NULL, assina_cargo VARCHAR(80) NULL,
+            assina_email VARCHAR(150) NULL, assina_celular VARCHAR(30) NULL,
+            qc_nome VARCHAR(150) NULL, qc_cpf VARCHAR(20) NULL, qc_cargo VARCHAR(80) NULL,
+            prest_contrato_id INT NULL,
+            criado_por INT NULL,
+            criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            ativado_em DATETIME NULL,
+            encerrado_em DATETIME NULL,
+            encerrado_motivo VARCHAR(255) NULL,
+            UNIQUE KEY uk_acordo_numero (numero),
+            KEY idx_acordo_cliente (cliente_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    """)
+    _migrate("""
+        CREATE TABLE IF NOT EXISTS fin_acordo_titulos (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            acordo_id INT NOT NULL,
+            titulo_id INT NULL,
+            descricao VARCHAR(200) NOT NULL,
+            vencimento DATE NULL,
+            valor DECIMAL(12,2) NOT NULL,
+            KEY idx_acordo_tit (acordo_id), KEY idx_acordo_tit_titulo (titulo_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    """)
+    _migrate("""
+        CREATE TABLE IF NOT EXISTS fin_acordo_parcelas (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            acordo_id INT NOT NULL,
+            n INT NOT NULL,
+            vencimento DATE NOT NULL,
+            valor DECIMAL(12,2) NOT NULL,
+            entrada TINYINT(1) NOT NULL DEFAULT 0,
+            titulo_id INT NULL,
+            UNIQUE KEY uk_acordo_parcela (acordo_id, n), KEY idx_acordo_parc_titulo (titulo_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    """)
+    _migrate("""
+        CREATE TABLE IF NOT EXISTS fin_acordo_eventos (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            acordo_id INT NOT NULL,
+            usuario_id INT NULL,
+            texto VARCHAR(255) NOT NULL,
+            sub VARCHAR(255) NULL,
+            ico VARCHAR(40) NULL,
+            criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            KEY idx_acordo_ev (acordo_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    """)
+    _c = execute_query(
+        "SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() "
+        "AND TABLE_NAME = 'fin_titulos' AND COLUMN_NAME = 'acordo_id'", fetch=True, fetch_one=True) or {}
+    if _c.get('cnt', 0) == 0:
+        _migrate("ALTER TABLE fin_titulos ADD COLUMN acordo_id INT NULL, ADD KEY idx_titulo_acordo (acordo_id)")
+
     print("✓ Migrations concluídas")
 
 

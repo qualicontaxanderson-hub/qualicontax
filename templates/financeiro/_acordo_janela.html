@@ -1,0 +1,61 @@
+{# Janela de um acordo (26/11/2026, desenho aprovado). Vem por fetch; ações pelo JS de titulos_receber.html (acAcao). #}
+{% include 'financeiro/_ns_css.html' %}
+{% set cor = {'ass': ('#a78bfa', '#7c3aed', '#3b0764'), 'atr': ('#fdba74', '#f97316', '#7c2d12'), 'qui': ('#cbd5e1', '#64748b', '#1e293b'),
+              'rom': ('#fca5a5', '#dc2626', '#7f1d1d'), '': ('#2dd4bf', '#0d9488', '#134e4a')}[a.tela[1]] %}
+<div class="ns-fundo on" id="acJan" data-id="{{ a.id }}">
+<div class="ns" style="width:min(1320px, calc(100vw - 32px))">
+  <header class="ns-cab ac" style="background:radial-gradient(120% 140% at 0% 0%, {{ cor[0] }} 0%, {{ cor[1] }} 45%, {{ cor[2] }} 100%)"><span class="ns-logo"><img src="{{ url_for('static', filename='images/logo.png') }}" alt="Qualicontax"></span>
+    <div class="ns-tit"><b>Acordo {{ a.numero }} <span class="ac-st-pill" style="color:{{ cor[1] }}">{{ a.tela[0] | upper }}</span></b>
+      <span>{{ a.numero_cliente or '—' }} · {{ a.nome_razao_social }} · montado por {{ (a.criado_por_nome or '').split()[0] }} em {{ a.criado_em.strftime('%d/%m/%Y') }}</span></div>
+    <div class="ns-prev"><small>Total do acordo</small><b>{{ brl(a.total) }}</b><span>{{ a.texto_parcelas }} · {{ FORMA[a.forma] }}</span></div>
+    <button type="button" class="ns-x" onclick="acFecharJan()" title="Fechar"><i class="fas fa-xmark"></i></button></header>
+  <div class="jk">
+    <div><i class="fas fa-file-signature"></i><div><dt>Assinatura</dt><dd>{{ {'ENVIAR': 'enviar', 'DEPOIS': 'depois', 'SEM': 'sem termo'}[a.assinatura] }}</dd><small>{{ 'falta enviar' if a.situacao == 'FALTA_ENVIAR' else ('falta o cliente assinar' if a.situacao == 'FALTA_ASSINAR' else ('combinado' if a.assinatura == 'SEM' else 'assinado')) }}</small></div></div>
+    <div><i class="fas fa-coins"></i><div><dt>Pago</dt><dd>{{ brl(a.pago_total) }}</dd><small>{{ a.n_pagas }} de {{ a.parcelas|length }} parcela{{ 's' if a.parcelas|length != 1 }}</small></div></div>
+    <div><i class="fas fa-calendar-day"></i><div><dt>Próxima</dt><dd>{{ a.proxima.venc.strftime('%d/%m/%Y') if a.proxima else '—' }}</dd><small>{% if a.proxima %}{{ brl(a.proxima.valor) }}{% if a.forma == 'JUNTO' %} + honorário{% endif %}{% else %}nada a vencer{% endif %}</small></div></div>
+    <div><i class="fas fa-building-columns"></i><div><dt>Cobrança</dt><dd>{{ {'bradesco': 'Bradesco', 'cora': 'Cora', 'efi': 'Efí'}.get(a.banco_provedor, a.banco_apelido or '—') }}</dd><small>{{ FORMA[a.forma] }}</small></div></div>
+    <div><i class="fas fa-triangle-exclamation"></i><div><dt>Se não pagar</dt><dd>{{ ROMPE[a.rompe][1] }}</dd><small>{{ ROMPE[a.rompe][2] }}</small></div></div>
+  </div>
+  <div class="jg">
+    <div>
+      <div class="ns-b"><div class="ns-h"><i class="fas fa-file-signature"></i> Termo do acordo <em>{{ 'o acordo começa a valer quando todos assinarem' if a.situacao in ('FALTA_ENVIAR', 'FALTA_ASSINAR') else ASSINATURA[a.assinatura] }}</em></div>
+        <div class="as">
+          <div class="as-p"><div class="q"><span class="av">{{ ((a.assina_nome or '?').split()[0][:1] ~ ((a.assina_nome or '').split()[-1][:1] if (a.assina_nome or '').split()|length > 1 else '')) | upper }}</span>
+            <div><b>{{ a.assina_nome.title() if a.assina_nome else ('Combinado com o cliente' if a.assinatura == 'SEM' else 'Quem assina pela empresa') }}</b><small>{{ a.assina_cargo or '' }}{% if a.assina_email %} · {{ a.assina_email }}{% endif %}</small></div>
+            <span class="st{{ ' ok' if a.situacao not in ('FALTA_ENVIAR', 'FALTA_ASSINAR') and a.assinatura != 'SEM' }}">{{ 'falta enviar' if a.situacao == 'FALTA_ENVIAR' else ('falta assinar' if a.situacao == 'FALTA_ASSINAR' else ('sem termo' if a.assinatura == 'SEM' else 'assinou')) }}</span></div></div>
+          {% if a.qc_nome %}<div class="as-p"><div class="q"><span class="av" style="background:#dcfce7;color:#15803d">{{ (a.qc_nome.split()[0][:1] ~ (a.qc_nome.split()[-1][:1] if a.qc_nome.split()|length > 1 else '')) | upper }}</span>
+            <div><b>{{ a.qc_nome.title() }} · pela Qualicontax</b><small>{{ a.qc_cargo or '' }}</small></div></div></div>{% endif %}
+          <div class="as-bt"><a class="mini v" href="{{ url_for('financeiro.acdiv_termo_pdf', aid=a.id) }}" target="_blank" rel="noopener"><i class="fas fa-file-pdf"></i> Ver o termo</a>
+            <a class="mini" href="{{ url_for('financeiro.acdiv_termo_pdf', aid=a.id, baixar=1) }}"><i class="fas fa-download"></i> Baixar PDF</a></div>
+          {% if a.situacao in ('FALTA_ENVIAR', 'FALTA_ASSINAR') %}<div class="ns-aviso" style="margin:0"><i class="fas fa-circle-info"></i><span>O envio do termo por link e código chega na próxima etapa. Se o cliente já combinou, use "Ativar sem assinatura".</span></div>{% endif %}
+        </div></div>
+      <div class="ns-b"><div class="ns-h"><i class="fas fa-box-archive"></i> Dívida renegociada <em>{{ a.n_itens }} ite{{ 'm' if a.n_itens == 1 else 'ns' }} · {{ brl(a.divida) }}{% if a.desconto %} − desconto {{ brl(a.desconto) }}{% endif %}</em></div>
+        <div class="chips">{% for i in a.itens %}<span title="{{ i.descricao }}">{{ i.descricao }}{% if i.vencimento %} · {{ i.vencimento.strftime('%d/%m/%y') }}{% endif %} · {{ brl(i.valor) }}</span>{% endfor %}</div>
+        {% if a.motivo_desconto %}<small style="color:#64748b;margin-top:6px;display:block">Desconto: {{ a.motivo_desconto }}</small>{% endif %}</div>
+    </div>
+    <div>
+      <div class="ns-b"><div class="ns-h"><i class="fas fa-list-ol"></i> Parcelas <em>{{ FORMA[a.forma] }} · dia {{ a.dia }}</em></div>
+        <div class="pa">{% for p in a.parcelas %}
+          <div class="pa-l {{ {'paga': 'ok', 'atrasada': 'atr'}.get(p.sit, '') }}"><span class="n">{{ 'ent.' if p.entrada else (p.n ~ 'ª') }}</span><span>{{ p.venc.strftime('%d/%m/%y') }}</span>
+            <small>{% if p.sit == 'paga' and p.pago_em %}paga em {{ p.pago_em.strftime('%d/%m') }}{% elif p.titulo_id %}cobrança nº {{ p.titulo_id }}{% endif %}</small>
+            <span class="v">{{ brl(p.valor) }} <span class="s {{ {'paga': 'ok', 'atrasada': 'atr'}.get(p.sit, '') }}">{{ p.sit }}</span></span></div>
+        {% endfor %}</div>
+        <small style="color:#64748b;margin-top:8px;display:block">Paga, a parcela fica verde com a data; atrasada, fica laranja{% if a.rompe != 'SEM' %} e conta para o rompimento{% endif %}.</small></div>
+    </div>
+    <div>
+      {% if pode and a.situacao not in ('CANCELADO', 'QUITADO', 'ROMPIDO') %}
+      <div class="ns-b"><div class="ns-h"><i class="fas fa-bolt"></i> O que fazer</div>
+        <div class="acoes">
+          {% if a.situacao in ('FALTA_ENVIAR', 'FALTA_ASSINAR') %}
+          <button type="button" class="acao" onclick="acAcao({{ a.id }}, 'ativar', 'Ativar o acordo sem assinatura? Os títulos são renegociados e as parcelas vão para o A receber.\n\nComo foi combinado com o cliente?')"><i class="fas fa-circle-check"></i><span><b>Ativar sem assinatura</b><small>combinado por WhatsApp ou telefone</small></span></button>
+          {% endif %}
+          <button type="button" class="acao" onclick="acAcao({{ a.id }}, 'anotar', 'Anotação (conversa, promessa de pagamento):')"><i class="fas fa-note-sticky"></i><span><b>Anotar</b><small>conversa, promessa de pagamento</small></span></button>
+          {% if a.n_pagas == 0 %}<button type="button" class="acao red" onclick="acAcao({{ a.id }}, 'cancelar', 'Cancelar o acordo {{ a.numero }}? Os títulos voltam como estavam.\n\nMotivo:')"><i class="fas fa-ban"></i><span><b>Cancelar o acordo</b><small>com motivo; os títulos voltam como estavam</small></span></button>{% endif %}
+        </div></div>
+      {% endif %}
+      <div class="ns-b"><div class="ns-h"><i class="fas fa-clock-rotate-left"></i> Linha do tempo</div>
+        <div class="lt">{% for e in a.eventos %}<div><i class="fas {{ e.ico or 'fa-circle' }}"></i><span><b>{{ e.texto }}</b><small>{{ e.criado_em.strftime('%d/%m %H:%M') }}{% if e.sub %} · {{ e.sub }}{% endif %}</small></span></div>{% endfor %}</div></div>
+    </div>
+  </div>
+</div>
+</div>

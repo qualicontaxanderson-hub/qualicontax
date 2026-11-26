@@ -138,7 +138,112 @@ a.tx-c { text-decoration:none; color:inherit; }
 .tx-a-atr  { --cor:#f97316; --cor-e:#c2410c; }
 .tx-a-ina  { --cor:#dc2626; --cor-e:#991b1b; }
 .tx-a-perd { --cor:#475569; --cor-e:#1e293b; } .tx-a-canc { --cor:#7c3aed; --cor-e:#5b21b6; }
-.tx-abas { grid-template-columns:repeat(6, minmax(0,1fr)); }
+.tx-abas { grid-template-columns:repeat(7, minmax(0,1fr)); }
+/* 26/11/2026: ACORDOS (desenho aprovado) — aba, cartões, caixa Novo acordo e janela do acordo */
+.tx-a-ac { --cor:#0d9488; --cor-e:#115e59; }
+.tx-painel[data-p="ac"] { --sec:#0d9488; --sec-e:#115e59; --sec-f:#f0fdfa; --sec-b:#99f6e4; }
+.ac-faixa { display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin:4px 0 16px; }
+.ac-f { border:1px solid #dbe5e1; background:#fff; border-radius:99px; padding:7px 14px; font:inherit; font-size:13px; font-weight:700; color:#334155; display:inline-flex; gap:7px; align-items:center; cursor:pointer; }
+.ac-f b { color:#64748b; } .ac-f.on { background:#0d9488; border-color:#0d9488; color:#fff; } .ac-f.on b { color:#ccfbf1; } .ac-f i { font-size:9px; }
+.ac-grade { display:grid; grid-template-columns:repeat(auto-fill, minmax(360px, 1fr)); gap:14px; }
+.ac-c { background:#fff; border-radius:16px; overflow:hidden; box-shadow:0 8px 22px rgba(15,23,42,.08); border:1px solid #e6eeea; display:flex; flex-direction:column; cursor:pointer; }
+.ac-c:hover { box-shadow:0 12px 28px rgba(15,23,42,.14); }
+.ac-top { --k:#0d9488; --ke:#115e59; background:linear-gradient(135deg, var(--k), var(--ke)); color:#fff; padding:11px 14px; display:flex; align-items:center; gap:10px; }
+.ac-top .n { background:rgba(255,255,255,.22); border-radius:8px; padding:2px 8px; font-size:11.5px; font-weight:800; letter-spacing:.03em; }
+.ac-top .nm { flex:1; min-width:0; font-weight:800; font-size:14px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.ac-top .st { font-size:10.5px; font-weight:800; text-transform:uppercase; letter-spacing:.05em; background:#fff; color:var(--ke); border-radius:99px; padding:3px 10px; white-space:nowrap; }
+.ac-c.atr .ac-top { --k:#f97316; --ke:#c2410c; } .ac-c.ass .ac-top { --k:#7c3aed; --ke:#5b21b6; }
+.ac-c.qui .ac-top { --k:#64748b; --ke:#334155; } .ac-c.rom .ac-top { --k:#dc2626; --ke:#991b1b; }
+.ac-corpo { padding:13px 15px 14px; display:flex; flex-direction:column; gap:11px; }
+.ac-val { display:flex; align-items:flex-end; justify-content:space-between; gap:10px; }
+.ac-val b { font-size:22px; font-weight:800; color:#0f172a; font-variant-numeric:tabular-nums; }
+.ac-val small { display:block; font-size:12px; color:#64748b; margin-top:2px; }
+.ac-val .de { text-align:right; font-size:12px; color:#64748b; } .ac-val .de s { color:#94a3b8; }
+.ac-val .de em { display:block; font-style:normal; color:#0d9488; font-weight:800; }
+.ac-parc { display:flex; gap:3px; } .ac-parc i { flex:1; height:9px; border-radius:3px; background:#e2e8f0; }
+.ac-parc i.p { background:#14b8a6; } .ac-parc i.a { background:#f97316; } .ac-parc i.e { background:#c4b5fd; }
+.ac-pl { display:flex; justify-content:space-between; font-size:12px; color:#475569; font-weight:600; margin-top:5px; }
+.ac-prox { display:flex; align-items:center; gap:10px; background:#f0fdfa; border:1px solid #ccfbf1; border-radius:11px; padding:8px 11px; font-size:12.5px; color:#134e4a; }
+.ac-prox .d { background:#0d9488; color:#fff; border-radius:8px; padding:3px 8px; font-weight:800; font-size:12px; } .ac-prox b { margin-left:auto; }
+.ac-c.atr .ac-prox { background:#fff7ed; border-color:#fed7aa; color:#9a3412; } .ac-c.atr .ac-prox .d { background:#f97316; }
+.ac-c.ass .ac-prox { background:#f5f3ff; border-color:#ddd6fe; color:#5b21b6; } .ac-c.ass .ac-prox .d { background:#7c3aed; }
+.ac-c.rom .ac-prox { background:#fef2f2; border-color:#fecaca; color:#991b1b; } .ac-c.rom .ac-prox .d { background:#dc2626; }
+.ac-c.qui .ac-prox { background:#f8fafc; border-color:#e2e8f0; color:#334155; } .ac-c.qui .ac-prox .d { background:#64748b; }
+.ac-tags { display:flex; gap:6px; flex-wrap:wrap; }
+.ac-tag { font-size:11.5px; font-weight:700; border-radius:8px; padding:3px 8px; background:#f1f5f9; color:#475569; display:inline-flex; gap:5px; align-items:center; }
+.ac-tag.ok { background:#dcfce7; color:#15803d; } .ac-tag.wa { background:#f5f3ff; color:#6d28d9; } .ac-tag.tl { background:#ccfbf1; color:#0f766e; }
+.ac-tag svg, .ac-tag img { width:14px; height:14px; border-radius:3px; }
+.ns-cab.ac { background:radial-gradient(120% 140% at 0% 0%, #2dd4bf 0%, #0d9488 45%, #134e4a 100%); }
+#acCaixa .ns-fundo { z-index:3000; } #acNovo [hidden] { display:none !important; }
+.ac-st-pill { font-size:11px; font-weight:800; background:#fff; border-radius:99px; padding:3px 10px; vertical-align:middle; margin-left:6px; }
+.ac-t { display:flex; align-items:center; gap:10px; border:1.5px solid #e2e8f0; border-radius:11px; padding:7px 11px; background:#fff; font:inherit; font-size:13px; text-align:left; cursor:pointer; }
+.ac-t.on { border-color:#14b8a6; background:#f0fdfa; }
+.ac-t .ck { width:20px; height:20px; border-radius:6px; border:2px solid #cbd5e1; display:inline-flex; align-items:center; justify-content:center; font-size:11px; color:#fff; flex:0 0 auto; }
+.ac-t.on .ck { background:#0d9488; border-color:#0d9488; }
+.ac-t b { flex:1; min-width:0; } .ac-t .dd { font-size:11.5px; font-weight:700; color:#b91c1c; background:#fef2f2; border-radius:6px; padding:2px 7px; white-space:nowrap; }
+.ac-t .dd.fut { color:#475569; background:#f1f5f9; }
+.ac-t .vv { font-weight:800; min-width:92px; text-align:right; font-variant-numeric:tabular-nums; }
+.ac-2col { display:grid; grid-template-columns:1fr 1fr; gap:6px; }
+.ac-mais { border:1.5px dashed #5eead4; border-radius:11px; padding:8px 11px; color:#0f766e; font-weight:700; font-size:12.5px; background:#fff; display:flex; gap:8px; align-items:center; margin-top:8px; width:100%; font-family:inherit; cursor:pointer; }
+.ac-outro { display:grid; grid-template-columns:minmax(0,1fr) 130px 34px; gap:6px; margin-top:6px; }
+.ac-outro button { border:1px solid #fecaca; background:#fff; color:#b91c1c; border-radius:9px; cursor:pointer; }
+.ac-sel { display:flex; justify-content:space-between; align-items:center; gap:12px; margin-top:10px; font-size:12.5px; color:#475569; }
+.ac-sel b { font-size:15px; color:#0f172a; white-space:nowrap; }
+.ac-lin { display:flex; gap:16px; align-items:flex-start; flex-wrap:wrap; }
+.ac-lin > div { display:flex; flex-direction:column; gap:6px; }
+.ac-lin label { font-size:11.5px; font-weight:700; color:#0f3d2e; text-transform:uppercase; letter-spacing:.3px; }
+.ns-seg button.on.t { color:#0f766e; }
+.ac-pls { display:grid; grid-template-columns:repeat(4, minmax(0,1fr)); gap:6px; margin-top:12px; }
+.ac-pl1 { border:1px solid #e2ece6; background:#f8fbf9; border-radius:10px; padding:7px 9px; font-size:12px; }
+.ac-pl1 small { display:block; color:#64748b; font-weight:700; } .ac-pl1 b { font-size:13.5px; } .ac-pl1.en { background:#f0fdfa; border-color:#99f6e4; }
+.ac-mais-pl { font-size:12px; color:#64748b; margin-top:6px; }
+.ns-op.on.t { border-color:#0d9488; background:#f0fdfa; box-shadow:0 0 0 3px #ccfbf1; } .ns-op.t i { color:#0d9488; } .ns-op:disabled { opacity:.5; cursor:not-allowed; }
+.ns-res .big b { color:#0f766e; }
+.ac-quem { display:grid; grid-template-columns:repeat(2, minmax(0,1fr)); gap:6px; margin-top:6px; }
+.ac-quem input { height:36px; border:1px solid #d7e3dc; border-radius:9px; padding:0 10px; font:inherit; font-size:13px; min-width:0; }
+.ac-passos { display:flex; flex-direction:column; gap:10px; font-size:12.5px; color:#334155; }
+.ac-passos div { display:flex; gap:10px; align-items:flex-start; }
+.ac-passos i { width:26px; height:26px; border-radius:8px; background:#f0fdfa; color:#0d9488; display:inline-flex; align-items:center; justify-content:center; flex:0 0 auto; font-size:12px; }
+.jk { display:grid; grid-template-columns:repeat(5, minmax(0,1fr)); gap:1px; background:#e6eeea; border-bottom:1px solid #e6eeea; flex-shrink:0; }
+.jk > div { background:#fff; padding:12px 16px; display:flex; gap:11px; align-items:center; min-width:0; }
+.jk > div > i { width:38px; height:38px; border-radius:11px; background:#f0fdfa; color:#0d9488; display:inline-flex; align-items:center; justify-content:center; flex-shrink:0; }
+.jk dt { font-size:10.5px; text-transform:uppercase; letter-spacing:.5px; color:#94a3b8; font-weight:800; }
+.jk dd { margin:1px 0 0; font-size:16px; font-weight:800; color:#0f172a; white-space:nowrap; }
+.jk small { display:block; font-size:12px; color:#64748b; }
+.jg { flex:1; min-height:0; display:grid; grid-template-columns:minmax(0,1.2fr) minmax(0,1fr) 300px; gap:14px; padding:16px 20px; overflow:auto; background:#f6faf8; }
+.jg > div { display:flex; flex-direction:column; gap:12px; min-width:0; }
+.as { display:flex; flex-direction:column; gap:10px; }
+.as-p { border:1px solid #e6eeea; border-radius:13px; padding:11px 13px; background:#fff; }
+.as-p .q { display:flex; align-items:center; gap:10px; }
+.as-p .q .av { width:34px; height:34px; border-radius:99px; background:#ede9fe; color:#6d28d9; font-weight:800; font-size:12px; display:inline-flex; align-items:center; justify-content:center; flex-shrink:0; }
+.as-p .q b { display:block; font-size:13.5px; } .as-p .q small { color:#64748b; font-size:11.5px; }
+.as-p .q .st { margin-left:auto; font-size:10.5px; font-weight:800; text-transform:uppercase; border-radius:99px; padding:3px 9px; background:#f5f3ff; color:#6d28d9; white-space:nowrap; }
+.as-p .q .st.ok { background:#dcfce7; color:#15803d; }
+.as-bt { display:flex; gap:6px; flex-wrap:wrap; }
+.mini { font:inherit; font-size:12px; font-weight:800; border-radius:9px; padding:6px 10px; border:1.5px solid #e2e8f0; background:#fff; color:#334155; display:inline-flex; gap:6px; align-items:center; text-decoration:none; cursor:pointer; }
+.mini.v { border-color:#99f6e4; color:#0f766e; background:#f0fdfa; }
+.pa { display:flex; flex-direction:column; gap:5px; }
+.pa-l { display:grid; grid-template-columns:40px 70px minmax(0,1fr) auto; gap:8px; align-items:center; font-size:12.5px; border:1px solid #eef2f0; border-radius:10px; padding:7px 10px; background:#fff; }
+.pa-l .n { font-weight:800; color:#0f766e; } .pa-l .v { font-weight:800; text-align:right; white-space:nowrap; }
+.pa-l small { color:#64748b; } .pa-l .s { font-size:10.5px; font-weight:800; text-transform:uppercase; border-radius:99px; padding:2px 8px; background:#f1f5f9; color:#64748b; margin-left:6px; }
+.pa-l.ok { border-color:#bbf7d0; background:#f0fdf4; } .pa-l .s.ok { background:#dcfce7; color:#15803d; }
+.pa-l.atr { border-color:#fed7aa; background:#fff7ed; } .pa-l .s.atr { background:#ffedd5; color:#c2410c; }
+.lt { display:flex; flex-direction:column; }
+.lt > div { display:flex; gap:10px; font-size:12.5px; padding-bottom:12px; position:relative; }
+.lt > div::before { content:''; position:absolute; left:13px; top:26px; bottom:0; width:2px; background:#e2e8f0; }
+.lt > div:last-child::before { display:none; }
+.lt i { width:28px; height:28px; border-radius:99px; background:#f0fdfa; color:#0d9488; display:inline-flex; align-items:center; justify-content:center; flex-shrink:0; font-size:11px; z-index:1; }
+.lt b { display:block; } .lt small { color:#64748b; }
+.acoes { display:flex; flex-direction:column; gap:7px; }
+.acao { display:flex; gap:10px; align-items:center; text-align:left; font:inherit; border:1.5px solid #e2e8f0; background:#fff; border-radius:12px; padding:9px 11px; cursor:pointer; }
+.acao:hover { border-color:#99f6e4; background:#f0fdfa; }
+.acao i { width:30px; height:30px; border-radius:9px; background:#f0fdfa; color:#0d9488; display:inline-flex; align-items:center; justify-content:center; flex-shrink:0; }
+.acao b { display:block; font-size:13px; } .acao small { color:#64748b; font-size:11.5px; }
+.acao.red i { background:#fef2f2; color:#dc2626; } .acao.red:hover { border-color:#fecaca; background:#fef2f2; }
+.chips { display:flex; flex-wrap:wrap; gap:5px; } .chips span { font-size:11.5px; font-weight:700; background:#f1f5f9; border-radius:7px; padding:3px 8px; color:#475569; }
+.tx-b-ac { background:#0d9488 !important; color:#fff !important; border:0 !important; }
+@media (max-width:980px) { .ac-2col, .ac-pls { grid-template-columns:1fr 1fr; } .jk { grid-template-columns:1fr 1fr; } .jg { grid-template-columns:minmax(0,1fr); } }
+@media (max-width:600px) { .ac-2col, .ac-pls, .ac-quem { grid-template-columns:minmax(0,1fr); } .ac-grade { grid-template-columns:minmax(0,1fr); } }
 .tx-aba { background:linear-gradient(135deg, var(--cor) 0%, var(--cor-e) 100%); border:0; box-shadow:0 10px 24px rgba(15,23,42,.14); }
 .tx-aba::after { display:none; }
 .tx-aba .tx-aba-lbl, .tx-aba .tx-aba-val { color:#fff; }
@@ -654,6 +759,8 @@ a.tx-c { text-decoration:none; color:inherit; }
       <span class="tx-aba-txt"><span class="tx-aba-lbl">Atrasados</span><span class="tx-aba-val">{{ m.atr_tot }}</span><span class="tx-aba-sub">1 vencido · cobrar já</span></span><span class="tx-aba-n">{{ m.atr_n }}</span></button>
     <button type="button" class="tx-aba tx-a-ina{{ ' on' if aba == 'ina' }}" data-p="ina"><span class="tx-aba-ico"><i class="fas fa-user-clock"></i></span>
       <span class="tx-aba-txt"><span class="tx-aba-lbl">Inadimplentes</span><span class="tx-aba-val">{{ m.ina_tot }}</span><span class="tx-aba-sub">2 ou mais vencidos</span></span><span class="tx-aba-n">{{ m.ina_cli }}</span></button>
+    <button type="button" class="tx-aba tx-a-ac{{ ' on' if aba == 'ac' }}" data-p="ac"><span class="tx-aba-ico"><i class="fas fa-handshake"></i></span>
+      <span class="tx-aba-txt"><span class="tx-aba-lbl">Acordos</span><span class="tx-aba-val">{{ m.ac_tot }}</span><span class="tx-aba-sub">{{ m.ac_sub }}</span></span><span class="tx-aba-n">{{ m.ac_n }}</span></button>
     <button type="button" class="tx-aba tx-a-perd{{ ' on' if aba == 'perd' }}" data-p="perd"><span class="tx-aba-ico"><i class="fas fa-box-archive"></i></span>
       <span class="tx-aba-txt"><span class="tx-aba-lbl">Perdidos</span><span class="tx-aba-val">{{ m.perd_tot }}</span><span class="tx-aba-sub">não vão pagar · registro</span></span><span class="tx-aba-n">{{ m.perd_n }}</span></button>
     <button type="button" class="tx-aba tx-a-canc{{ ' on' if aba == 'canc' }}" data-p="canc"><span class="tx-aba-ico"><i class="fas fa-ban"></i></span>
@@ -787,6 +894,7 @@ a.tx-c { text-decoration:none; color:inherit; }
           {% elif t.cliente_id %}<a class="tx-b1 off" href="{{ url_for('clientes.detalhes', id=t.cliente_id) }}" title="O cadastro está sem celular: abrir a ficha"><i class="fas fa-phone-slash"></i> Sem celular</a>
           {% else %}<span class="tx-b1 off" style="flex:1; height:30px; border-radius:9px; display:inline-flex; align-items:center; justify-content:center; gap:6px; font-size:11.5px; font-weight:700;"><i class="fas fa-phone-slash"></i> Sem celular</span>{% endif %}
           <button type="button" class="tx-b2" onclick="txAbrirCob({{ t.titulos[0].id }})"><i class="fas fa-receipt"></i> Ver cobrança</button>
+          {% if pode_acordo and t.cliente_id %}<button type="button" class="tx-b2 tx-b-ac" onclick="acAbrirNovo({{ t.cliente_id }})" title="Renegociar a dívida em parcelas"><i class="fas fa-handshake"></i> Acordo</button>{% endif %}
         </div>
       </div>
       {% endfor %}
@@ -796,6 +904,45 @@ a.tx-c { text-decoration:none; color:inherit; }
     <div class="tx-vazio"><i class="fas fa-face-smile"></i>Nenhum cliente com 2 ou mais títulos vencidos.</div>
     {% endif %}
   </div>
+
+  {# ── ACORDOS (26/11/2026, desenho aprovado): dívida renegociada em parcelas ── #}
+  <div class="tx-painel{{ ' on' if aba == 'ac' }}" data-p="ac">
+    <div class="ac-faixa" id="acFiltros">
+      <button type="button" class="ac-f on" data-v="todos">Todos <b>{{ m.ac_n }}</b></button>
+      {% for k, rot, cor in (('dia', 'Em dia', '#14b8a6'), ('atr', 'Parcela atrasada', '#f97316'), ('ass', 'Falta assinar', '#7c3aed'), ('qui', 'Quitados', '#64748b'), ('rom', 'Rompidos', '#dc2626'), ('canc', 'Cancelados', '#94a3b8')) %}
+      {% set nn = m.ac | selectattr('filtro', 'equalto', k) | list | length %}{% if nn %}<button type="button" class="ac-f" data-v="{{ k }}"><i class="fas fa-circle" style="color:{{ cor }}"></i> {{ rot }} <b>{{ nn }}</b></button>{% endif %}
+      {% endfor %}
+      <div class="tx-busca" style="margin-left:auto"><i class="fas fa-magnifying-glass"></i><input type="search" id="acBusca" placeholder="Cliente, número ou CNPJ"></div>
+    </div>
+    {% if m.ac %}
+    <div class="ac-grade" id="acGrade">
+      {% for a in m.ac %}
+      <div class="ac-c {{ a.tela[1] }}" data-f="{{ a.filtro }}" data-busca="{{ a.numero }} {{ a.numero_cliente or '' }} {{ a.nome_razao_social }} {{ a.cpf_cnpj or '' }}" onclick="acAbrirJan({{ a.id }})" title="Abrir o acordo">
+        <div class="ac-top"><span class="n">{{ a.numero }}</span><span class="nm">{{ a.nome_razao_social }}</span><span class="st">{{ a.tela[0] }}</span></div>
+        <div class="ac-corpo">
+          <div class="ac-val"><div><b>{{ brl(a.total) }}</b><small>{{ a.texto_parcelas }}{% if a.forma == 'JUNTO' %} · no boleto do honorário{% else %} · dia {{ a.dia }}{% endif %}</small></div>
+            <div class="de">dívida <s>{{ brl(a.divida) }}</s><em>{{ ('− ' ~ brl(a.desconto)) if a.desconto else 'sem desconto' }}</em></div></div>
+          <div><div class="ac-parc">{% for p in a.parcelas %}<i class="{{ {'paga': 'p', 'atrasada': 'a'}.get(p.sit, 'e' if a.tela[1] == 'ass' and loop.first else '') }}"></i>{% endfor %}</div>
+            <div class="ac-pl"><span>{{ a.n_itens }} ite{{ 'm' if a.n_itens == 1 else 'ns' }}: {{ a.periodo }}</span><span>{{ a.n_pagas }} de {{ a.parcelas|length }} paga{{ 's' if a.n_pagas != 1 }}{% if a.n_atrasadas %} · {{ a.n_atrasadas }} atrasada{{ 's' if a.n_atrasadas != 1 }}{% endif %}</span></div></div>
+          {% if a.situacao == 'CANCELADO' %}<div class="ac-prox"><span class="d">{{ a.encerrado_em.strftime('%d/%m') if a.encerrado_em else '' }}</span>Cancelado · {{ a.encerrado_motivo or '' }}</div>
+          {% elif a.tela[1] == 'ass' %}<div class="ac-prox"><span class="d">{{ a.criado_em.strftime('%d/%m') }}</span>{{ 'Termo ainda não enviado' if a.situacao == 'FALTA_ENVIAR' else 'Termo com o cliente · falta assinar' }}</div>
+          {% elif a.tela[1] == 'qui' %}<div class="ac-prox"><span class="d">ok</span>Quitado · {{ a.parcelas|length }} parcela{{ 's' if a.parcelas|length != 1 }} paga{{ 's' if a.parcelas|length != 1 }}</div>
+          {% elif a.proxima %}<div class="ac-prox"><span class="d">{{ a.proxima.venc.strftime('%d/%m') }}</span>{% if a.proxima.sit == 'atrasada' %}{{ 'entrada' if a.proxima.entrada else (a.proxima.n ~ 'ª parcela') }} venceu há {{ (hoje - a.proxima.venc).days }} dia{{ 's' if (hoje - a.proxima.venc).days != 1 }}{% if a.rompe != 'SEM' %} · {{ ROMPE_AC[a.rompe][1] }}{% endif %}{% else %}Próxima: {{ 'entrada' if a.proxima.entrada else (a.proxima.n ~ 'ª parcela') }}{% endif %}<b>{{ brl(a.proxima.valor) }}</b></div>{% endif %}
+          <div class="ac-tags">
+            {% if a.assinatura == 'SEM' %}<span class="ac-tag"><i class="fas fa-comment"></i> sem termo · combinado</span>{% elif a.situacao in ('FALTA_ENVIAR', 'FALTA_ASSINAR') %}<span class="ac-tag wa"><i class="fas fa-file-signature"></i> {{ 'falta enviar o termo' if a.situacao == 'FALTA_ENVIAR' else 'termo com o cliente' }}</span>{% else %}<span class="ac-tag ok"><i class="fas fa-check"></i> termo assinado</span>{% endif %}
+            {% if a.forma == 'JUNTO' %}<span class="ac-tag tl"><i class="fas fa-object-group"></i> junto com o honorário</span>{% else %}<span class="ac-tag"><i class="fas fa-receipt"></i> boleto separado</span>{% endif %}
+            {% if a.banco_provedor %}<span class="ac-tag">{{ logo_banco({'bradesco': '237', 'cora': '403', 'efi': '364'}.get(a.banco_provedor, a.banco_provedor), '#94a3b8', 14, a.banco_apelido) }} boleto</span>{% endif %}
+          </div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    <div class="tx-vazio" id="acNada" style="display:none;"><i class="fas fa-magnifying-glass"></i>Nada encontrado com esse filtro.</div>
+    {% else %}
+    <div class="tx-vazio"><i class="fas fa-handshake"></i>Nenhum acordo ainda. Para fazer um, abra o cliente em Inadimplentes ou Atrasados e use "Acordo".</div>
+    {% endif %}
+  </div>
+  <div id="acCaixa"></div>
 
   {# ── PERDIDOS: não vão pagar, guardados para o registro ── #}
   <div class="tx-painel{{ ' on' if aba == 'perd' }}" data-p="perd">
@@ -1246,6 +1393,206 @@ a.tx-c { text-decoration:none; color:inherit; }
       txAbrirCob(c.dataset.tid);
     });
   });
+  // ══ ACORDOS (26/11/2026, desenho aprovado) ══ caixa Novo acordo e janela do acordo, por fetch em #acCaixa
+  var URL_AC_NOVO = "{{ url_for('financeiro.acdiv_novo', cliente_id=999999999) }}";
+  var URL_AC_JAN = "{{ url_for('financeiro.acdiv_janela', aid=999999999) }}";
+  var URL_AC_PREV = "{{ url_for('financeiro.acdiv_previa_pdf', cliente_id=999999999) }}";
+  var CSRF_AC = (document.querySelector('meta[name="csrf-token"]') || {}).content || '';
+  var acCx = document.getElementById('acCaixa');
+  if (acCx && acCx.parentNode !== document.body) document.body.appendChild(acCx);   // por cima do menu (fora do empilhamento da página)
+  function acBrl(v) { return 'R$ ' + (Math.round(v * 100) / 100).toFixed(2).replace('.', ',').replace(/\B(?=(\d{3})+(?!\d))/g, '.'); }
+  function acNum(s) { s = String(s || '').trim(); if (!s) return 0; if (s.indexOf(',') >= 0) s = s.replace(/\./g, '').replace(',', '.'); var n = parseFloat(s); return isNaN(n) ? 0 : n; }
+  var MESES_AC = ['', 'jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
+  function acDia(a, m, d) { var ult = new Date(a, m, 0).getDate(); return new Date(a, m - 1, Math.min(d, ult)); }
+  function acDt(d) { return ('0' + d.getDate()).slice(-2) + '/' + ('0' + (d.getMonth() + 1)).slice(-2) + '/' + String(d.getFullYear()).slice(2); }
+  window.acAbrirNovo = function (cid, tits) {
+    acCx.innerHTML = '<div class="ns-fundo on"><div class="tx-gav-carregando" style="color:#fff;padding-top:30vh"><i class="fas fa-circle-notch fa-spin"></i> Abrindo o acordo…</div></div>';
+    document.body.style.overflow = 'hidden';
+    var q = (tits || []).map(function (t) { return 't=' + t; }).join('&');
+    fetch(URL_AC_NOVO.replace('999999999', cid) + (q ? '?' + q : ''), {credentials: 'same-origin'})
+      .then(function (r) { if (!r.ok) throw new Error(r.status); return r.text(); })
+      .then(function (h) { acCx.innerHTML = h; acIniciar(); })
+      .catch(function () { acCx.innerHTML = ''; document.body.style.overflow = ''; alert('Não consegui abrir a caixa do acordo agora.'); });
+  };
+  window.acFechar = function () { acCx.innerHTML = ''; document.body.style.overflow = ''; };
+  var AC = null;
+  function acSeg(nome) { var b = acCx.querySelector('[data-seg="' + nome + '"] button.on'); return b ? b.dataset.v : ''; }
+  function acOp(nome) { var b = acCx.querySelector('[data-op="' + nome + '"] .ns-op.on'); return b ? b.dataset.v : ''; }
+  function acQuem() {
+    var s = acSeg('socio'), box = acCx.querySelector('[data-ac="quem_dados"]');
+    var p = (s !== 'outro' && AC.socios[+s]) || null;
+    var g = function (n) { var i = box.querySelector('[name="q_' + n + '"]'); return i ? i.value.trim() : ''; };
+    return {nome: g('nome'), cpf: g('cpf'), email: g('email'), celular: g('celular'), cargo: p ? p.cargo : (g('cargo') || 'representante autorizado(a)')};
+  }
+  function acPintaQuem() {
+    var s = acSeg('socio'), p = (s !== 'outro' && AC.socios[+s]) || {nome: '', cpf: '', email: '', celular: ''};
+    var box = acCx.querySelector('[data-ac="quem_dados"]');
+    box.innerHTML = '<input name="q_nome" placeholder="nome"><input name="q_cpf" placeholder="CPF"><input name="q_email" placeholder="e-mail (o código chega aqui)"><input name="q_celular" placeholder="celular (WhatsApp)">';
+    box.querySelector('[name=q_nome]').value = p.nome ? p.nome.replace(/\w\S*/g, function (w) { return w.charAt(0).toUpperCase() + w.slice(1).toLowerCase(); }) : '';
+    box.querySelector('[name=q_cpf]').value = p.cpf || ''; box.querySelector('[name=q_email]').value = p.email || ''; box.querySelector('[name=q_celular]').value = p.celular || '';
+    box.querySelectorAll('input').forEach(function (i) { i.addEventListener('input', acConta); });
+  }
+  function acDados() {
+    var f = acCx.querySelector('#acNovo'), forma = acOp('forma');
+    var np = acSeg('parcelas'); if (np === 'outro') np = (f.querySelector('[name=parcelas_outro]').value || '0');
+    var outros = []; f.querySelectorAll('.ac-outro').forEach(function (o) { outros.push({descricao: o.querySelector('[name=o_desc]').value, valor: acNum(o.querySelector('[name=o_val]').value)}); });
+    var qcI = acSeg('qc'), qc = AC.qc[+qcI] || {};
+    return {cliente_id: AC.cliente, titulos: Array.prototype.map.call(f.querySelectorAll('.ac-t.on'), function (b) { return +b.dataset.id; }),
+            outros: outros, desconto_tipo: acSeg('desconto_tipo'), desconto: acNum(f.querySelector('[name=desconto]').value),
+            motivo_desconto: f.querySelector('[name=motivo_desconto]').value, forma: forma, com_entrada: acSeg('com_entrada') === '1',
+            entrada: acNum(f.querySelector('[name=entrada]').value), entrada_venc: f.querySelector('[name=entrada_venc]').value,
+            parcelas: +np, dia: forma === 'JUNTO' ? (AC.contrato || {}).dia : +acSeg('dia'), inicio: acSeg('inicio'), rompe: acOp('rompe'),
+            banco: +((f.querySelector('[name=banco]:checked') || {}).value || 0), assinatura: acOp('assinatura'),
+            assina: acQuem(), qc: {nome: qc.nome || '', cpf: qc.cpf || '', cargo: qc.cargo || ''}};
+  }
+  function acPlano(d, total) {
+    var out = [], resto = total;
+    if (d.com_entrada && d.entrada > 0) { out.push({n: 0, v: new Date(d.entrada_venc + 'T12:00:00'), valor: d.entrada, e: true}); resto = total - d.entrada; }
+    var n = Math.max(d.parcelas || 0, 1), p = Math.floor(resto / n * 100) / 100, a = +d.inicio.slice(0, 4), m = +d.inicio.slice(5, 7);
+    for (var i = 0; i < n; i++) {
+      var mm = m - 1 + i, aa = a + Math.floor(mm / 12); mm = mm % 12 + 1;
+      out.push({n: i + 1, v: acDia(aa, mm, d.dia || 1), valor: i < n - 1 ? p : Math.round((resto - p * (n - 1)) * 100) / 100, e: false});
+    }
+    return out;
+  }
+  function acConta() {
+    var f = acCx.querySelector('#acNovo'); if (!f) return;
+    var d = acDados(), sel = f.querySelectorAll('.ac-t.on');
+    var div = 0; sel.forEach(function (b) { div += parseFloat(b.dataset.v); }); d.outros.forEach(function (o) { if (o.descricao.trim() && o.valor > 0) div += o.valor; });
+    div = Math.round(div * 100) / 100;
+    var desc = d.desconto_tipo === 'PCT' ? Math.round(div * d.desconto) / 100 : (d.desconto_tipo === 'RS' ? d.desconto : 0);
+    var total = Math.max(Math.round((div - desc) * 100) / 100, 0);
+    f.querySelectorAll('[data-se="desconto"]').forEach(function (e) { e.hidden = !d.desconto_tipo; });
+    f.querySelector('[data-ac="desc_rot"]').textContent = d.desconto_tipo === 'PCT' ? 'Desconto (%)' : 'Desconto (R$)';
+    f.querySelectorAll('[data-se="entrada"]').forEach(function (e) { e.hidden = !d.com_entrada; });
+    f.querySelector('[name=parcelas_outro]').hidden = acSeg('parcelas') !== 'outro';
+    var junto = d.forma === 'JUNTO';
+    f.querySelector('[data-se="dia_junto"]').hidden = !junto; f.querySelector('[data-se="dia_sep"]').hidden = junto;
+    f.querySelector('[data-se="aviso_junto"]').hidden = !junto;
+    f.querySelector('[data-se="quem"]').hidden = d.assinatura === 'SEM';
+    var vencs = []; sel.forEach(function (b) { if (b.dataset.venc) vencs.push(b.dataset.venc); }); vencs.sort();
+    var nIt = sel.length + d.outros.filter(function (o) { return o.descricao.trim() && o.valor > 0; }).length;
+    f.querySelector('[data-ac="sel"]').textContent = nIt ? (nIt + ' ite' + (nIt === 1 ? 'm' : 'ns') + (vencs.length ? ' · de ' + acMes(vencs[0]) + ' a ' + acMes(vencs[vencs.length - 1]) : '')) : 'nada marcado';
+    f.querySelector('[data-ac="divida"]').textContent = acBrl(div);
+    var pl = (total > 0 && d.parcelas > 0 && d.inicio) ? acPlano(d, total) : [];
+    var hon = junto && AC.contrato ? AC.contrato.valor : 0;
+    var pls = f.querySelector('#acPls');
+    pls.innerHTML = pl.slice(0, 4).map(function (x) {
+      return '<div class="ac-pl1' + (x.e ? ' en' : '') + '"><small>' + (x.e ? 'entrada' : x.n + 'ª') + ' · ' + acDt(x.v) + (hon && !x.e ? ' · boleto ' + acBrl(x.valor + hon) : '') + '</small><b>' + acBrl(x.valor) + '</b>' + (hon && !x.e ? '<small style="font-weight:600">+ honorário ' + acBrl(hon) + '</small>' : '') + '</div>';
+    }).join('');
+    var ult = pl[pl.length - 1];
+    f.querySelector('[data-ac="mais_pl"]').textContent = pl.length > 4 ? ('… e mais ' + (pl.length - 4) + ' até ' + acDt(ult.v) + (ult.valor !== pl[pl.length - 2].valor ? ' · a última parcela é ' + acBrl(ult.valor) + ' (acerta os centavos)' : '')) : '';
+    var normais = pl.filter(function (x) { return !x.e; }), ent = pl.filter(function (x) { return x.e; })[0];
+    var txtP = normais.length ? ((ent ? 'entrada + ' : '') + normais.length + 'x de ' + acBrl(normais[0].valor)) : '';
+    f.querySelector('[data-ac="total"]').textContent = acBrl(total);
+    f.querySelector('[data-ac="sub"]').textContent = txtP ? txtP + (junto ? ' junto com o honorário' : '') + ' · sem juros' : 'marque o que entra';
+    var bancoEl = f.querySelector('[name=banco]:checked'), banco = bancoEl ? bancoEl.closest('label').querySelector('.nb b').textContent : '—';
+    var ROMPE = {'2_ATRASADAS': 'rompe com 2 atrasadas', '1_30_DIAS': 'rompe com 1 de 30 dias', 'SEM': 'sem regra'};
+    var ASS = {'ENVIAR': 'enviar para assinar', 'DEPOIS': 'guardar para enviar depois', 'SEM': 'sem assinatura'};
+    var linhas = [['Dívida', nIt + ' ite' + (nIt === 1 ? 'm' : 'ns') + ' · ' + acBrl(div)], ['Desconto', desc > 0 ? acBrl(desc) : 'nenhum'], ['Juros e correção', 'zero'],
+                  ['Entrada', ent ? acBrl(ent.valor) + ' em ' + acDt(ent.v) : 'sem entrada'], ['Parcelas', normais.length ? normais.length + 'x ' + acBrl(normais[0].valor) : '—'],
+                  ['Cobrança', junto ? 'junto com o honorário · dia ' + (AC.contrato || {}).dia : 'boleto separado · dia ' + d.dia],
+                  ['De / até', normais.length ? acMes2(normais[0].v) + ' a ' + acMes2(normais[normais.length - 1].v) : '—']];
+    if (hon && normais.length) linhas.push(['Boleto do mês', acBrl(normais[0].valor + hon)]);
+    linhas.push(['Se não pagar', ROMPE[d.rompe]], ['Banco', banco], ['Assinatura', ASS[d.assinatura]]);
+    f.querySelector('#acRes').innerHTML = linhas.map(function (l) { return '<div><span>' + l[0] + '</span><b>' + l[1] + '</b></div>'; }).join('') +
+      '<div class="big"><span>Total do acordo</span><b>' + acBrl(total) + '</b></div>';
+    var passos = d.assinatura === 'SEM'
+      ? [['fa-circle-check', '<b>Vale na hora:</b> os ' + nIt + ' itens saem da cobrança como "renegociados no acordo".'], ['fa-list-ol', '<b>As parcelas</b> entram no A receber, cada uma com o seu vencimento.']]
+      : [['fa-paper-plane', d.assinatura === 'ENVIAR' ? '<b>O termo vai para quem assina</b> por e-mail e WhatsApp, com o link; assina com o código que chega no e-mail.' : '<b>Fica em "Falta enviar"</b> na aba Acordos até você mandar o termo.'],
+         ['fa-box-archive', '<b>Assinou:</b> os ' + nIt + ' itens saem da cobrança como "renegociados no acordo" e as parcelas começam.']];
+    passos.push([junto ? 'fa-object-group' : 'fa-receipt', junto ? '<b>Todo dia ' + (AC.contrato || {}).dia + '</b> o boleto do honorário sai com duas linhas: honorário do mês + parcela do acordo.' : '<b>Cada parcela</b> tem o seu boleto, no dia ' + d.dia + '.']);
+    passos.push(['fa-handshake', '<b>Na aba Acordos</b> se vê quantas pagou, a próxima e se está perto de romper.']);
+    f.querySelector('#acPassos').innerHTML = passos.map(function (p) { return '<div><i class="fas ' + p[0] + '"></i><span>' + p[1] + '</span></div>'; }).join('');
+    var ok = f.querySelector('#acOk span'); ok.textContent = d.assinatura === 'SEM' ? 'Criar acordo (vale já)' : (d.assinatura === 'ENVIAR' ? 'Criar acordo' : 'Guardar acordo');
+  }
+  function acMes(iso) { return MESES_AC[+iso.slice(5, 7)] + '/' + iso.slice(2, 4); }
+  function acMes2(dt) { return MESES_AC[dt.getMonth() + 1] + '/' + dt.getFullYear(); }
+  window.acOutro = function () {
+    var div = document.createElement('div'); div.className = 'ac-outro';
+    div.innerHTML = '<input class="ns-in" name="o_desc" placeholder="o que é (ex.: Honorários jan/2025)"><input class="ns-in" name="o_val" inputmode="decimal" placeholder="valor"><button type="button" title="Tirar"><i class="fas fa-xmark"></i></button>';
+    div.querySelector('button').addEventListener('click', function () { div.remove(); acConta(); });
+    div.querySelectorAll('input').forEach(function (i) { i.addEventListener('input', acConta); });
+    acCx.querySelector('#acOutros').appendChild(div); div.querySelector('input').focus();
+  };
+  function acIniciar() {
+    var f = acCx.querySelector('#acNovo'); if (!f) return;
+    AC = JSON.parse(f.querySelector('#acDados').textContent);
+    f.querySelectorAll('.ac-t').forEach(function (b) { b.addEventListener('click', function () { b.classList.toggle('on'); acConta(); }); });
+    f.querySelectorAll('[data-seg] button').forEach(function (b) {
+      b.addEventListener('click', function () {
+        var g = b.closest('[data-seg]'); if (!b.dataset.v && b.style.cursor === 'default') return;
+        g.querySelectorAll('button').forEach(function (x) { x.classList.remove('on', 't'); }); b.classList.add('on', 't');
+        if (g.dataset.seg === 'socio') acPintaQuem();
+        acConta();
+      });
+    });
+    f.querySelectorAll('[data-op] .ns-op').forEach(function (b) {
+      b.addEventListener('click', function () { if (b.disabled) return; b.closest('[data-op]').querySelectorAll('.ns-op').forEach(function (x) { x.classList.remove('on'); }); b.classList.add('on'); acConta(); });
+    });
+    f.querySelectorAll('input').forEach(function (i) { i.addEventListener('input', acConta); i.addEventListener('change', acConta); });
+    acPintaQuem(); acConta();
+  }
+  function acMsg(t, erro) { var m = acCx.querySelector('#acMsg'); if (m) { m.textContent = t; m.style.color = erro ? '#b91c1c' : ''; m.style.fontWeight = erro ? '700' : ''; } }
+  window.acVerTermo = function () {
+    var d = acDados(), w = window.open('', '_blank');
+    fetch(URL_AC_PREV.replace('999999999', AC.cliente), {method: 'POST', credentials: 'same-origin', headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF_AC}, body: JSON.stringify(d)})
+      .then(function (r) { if (r.headers.get('Content-Type').indexOf('pdf') < 0) return r.json().then(function (j) { throw new Error(j.erro || 'erro'); }); return r.blob(); })
+      .then(function (b) { if (w) w.location = URL.createObjectURL(b); })
+      .catch(function (e) { if (w) w.close(); acMsg(e.message, true); });
+  };
+  window.acCriar = function () {
+    var d = acDados(), bt = acCx.querySelector('#acOk');
+    var conf = d.assinatura === 'SEM' ? 'Criar o acordo SEM assinatura? Ele vale na hora: os títulos marcados são renegociados e as parcelas vão para o A receber.' : 'Criar o acordo?';
+    if (!confirm(conf)) return;
+    bt.disabled = true; acMsg('Gravando…');
+    fetch(URL_AC_NOVO.replace('999999999', AC.cliente), {method: 'POST', credentials: 'same-origin', headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF_AC}, body: JSON.stringify(d)})
+      .then(function (r) { return r.json(); })
+      .then(function (j) {
+        if (!j.ok) { bt.disabled = false; acMsg(j.erro, true); return; }
+        location.href = location.pathname + '?aba=ac' + (EMP ? '&emp=' + encodeURIComponent(EMP) : '') + '#acordo=' + j.id;
+      })
+      .catch(function () { bt.disabled = false; acMsg('Não consegui gravar agora. Tente de novo.', true); });
+  };
+  window.acAbrirJan = function (id) {
+    if (!id) return;
+    acCx.innerHTML = '<div class="ns-fundo on"><div class="tx-gav-carregando" style="color:#fff;padding-top:30vh"><i class="fas fa-circle-notch fa-spin"></i> Abrindo o acordo…</div></div>';
+    document.body.style.overflow = 'hidden';
+    try { history.replaceState(null, '', location.pathname + location.search + '#acordo=' + id); } catch (e) {}
+    fetch(URL_AC_JAN.replace('999999999', id), {credentials: 'same-origin'})
+      .then(function (r) { if (!r.ok) throw new Error(r.status); return r.text(); })
+      .then(function (h) { acCx.innerHTML = h; })
+      .catch(function () { acCx.innerHTML = ''; document.body.style.overflow = ''; alert('Não consegui abrir o acordo agora.'); });
+  };
+  window.acFecharJan = function () {
+    acFechar();
+    try { if (location.hash.indexOf('#acordo=') === 0) history.replaceState(null, '', location.pathname + location.search); } catch (e) {}
+  };
+  window.acAcao = function (id, qual, pergunta) {
+    var t = prompt(pergunta); if (t === null) return; t = t.trim();
+    if (t.length < 3) { alert('Escreva um pouco mais.'); return; }
+    var fd = new FormData(); fd.append(qual === 'anotar' ? 'texto' : 'motivo', t); fd.append('csrf_token', CSRF_AC);
+    fetch(URL_AC_JAN.replace('999999999', id) + '/' + qual, {method: 'POST', credentials: 'same-origin', body: fd, headers: {'X-CSRFToken': CSRF_AC}})
+      .then(function (r) { return r.json(); })
+      .then(function (j) {
+        if (!j.ok) { alert(j.erro); return; }
+        if ((j.avisos || []).length) alert(j.avisos.join('\n'));
+        if (qual === 'anotar') acAbrirJan(id); else location.reload();
+      })
+      .catch(function () { alert('Não consegui agora. Tente de novo.'); });
+  };
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && acCx.innerHTML) { if (acCx.querySelector('#acJan')) acFecharJan(); else acFechar(); } });
+  (function () {   // filtros e busca da aba Acordos
+    var fs = document.getElementById('acFiltros'), grade = document.getElementById('acGrade'); if (!fs || !grade) return;
+    var busca = document.getElementById('acBusca');
+    function aplica() {
+      var v = (fs.querySelector('.ac-f.on') || {dataset: {v: 'todos'}}).dataset.v, b = (busca.value || '').toLowerCase().trim(), n = 0;
+      grade.querySelectorAll('.ac-c').forEach(function (c) { var ok = (v === 'todos' || c.dataset.f === v) && (!b || c.dataset.busca.toLowerCase().indexOf(b) >= 0); c.style.display = ok ? '' : 'none'; if (ok) n++; });
+      document.getElementById('acNada').style.display = n ? 'none' : '';
+    }
+    fs.querySelectorAll('.ac-f').forEach(function (b) { b.addEventListener('click', function () { fs.querySelectorAll('.ac-f').forEach(function (x) { x.classList.remove('on'); }); b.classList.add('on'); aplica(); }); });
+    busca.addEventListener('input', aplica);
+  })();
   // 26/11/2026: o crédito PAGO EM DUPLICIDADE abre a sua janela (usar numa cobrança ou devolver), na mesma gaveta
   var URL_DUP = "{{ url_for('financeiro.duplicidade', dup_id=999999999) }}";
   window.txAbrirDup = function (id) {
@@ -1262,6 +1609,7 @@ a.tx-c { text-decoration:none; color:inherit; }
     c.addEventListener('click', function (e) { if (e.target.closest('button, a')) return; txAbrirDup(c.dataset.dup); });
   });
   if (location.hash.indexOf('#dup=') === 0) txAbrirDup(location.hash.slice(5));
+  if (location.hash.indexOf('#acordo=') === 0) acAbrirJan(location.hash.slice(8));
   if (location.hash.indexOf('#cob=') === 0) txAbrirCob(location.hash.slice(5));
   if (location.hash.indexOf('#grupo=') === 0) txAbrirGrupo(location.hash.slice(7));
 
