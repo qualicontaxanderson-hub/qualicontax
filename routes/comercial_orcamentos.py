@@ -249,11 +249,18 @@ def orcamento_janela(oid):
     link = url_for('proposta.ver', token=o['token'], _external=True) if not o.get('interno') else None
     texto_wa = _texto_whatsapp(o, itens, link) if link else None
     texto_fin = _texto_financeiro(o, itens, lanc) if (o['status'] == 'COBRANCA' and lanc and lanc['status'] == 'LANCADO') else None
+    aprov_wa = None
+    if o['status'] == 'APROVACAO':                   # WhatsApp para cobrar a aprovação (26/11/2026)
+        from routes.financeiro_contratos import _wa_link
+        t = _texto_aprovacao(o, itens)
+        pessoas = [{'nome': a['nome'], 'primeiro': (a['nome'] or '').split(' ')[0].title(), 'wa_link': _wa_link(a.get('telefone'), t)}
+                   for a in _aprovadores() if a['id'] != current_user.id and a['id'] != 1]
+        aprov_wa = {'texto': t, 'pessoas': pessoas}
     # boleto cancelado: o lançamento voltou para "aprovado sem cobrança" (22/11/2026 — Anderson: "mostra que cancelou o boleto, e agora?")
     sem_cobranca = bool(lanc and lanc['status'] == 'APROVADO' and not lanc.get('titulo_id') and o['status'] == 'COBRANCA')
     _, bloqueio = _lancamento_vivo(o)
     editavel = o['status'] in Orcamento.EDITAVEIS and not bloqueio and (o['criado_por'] == current_user.id or _aprovador())
-    return render_template('comercial/_orcamento_janela.html', texto_fin=texto_fin, sem_cobranca=sem_cobranca, bloqueio=bloqueio, editavel=editavel, o=o, itens=itens, eventos=eventos, lanc=lanc, dest=dest, hoje=hoje, datas_venc=datas_venc, link=link,
+    return render_template('comercial/_orcamento_janela.html', aprov_wa=aprov_wa, texto_fin=texto_fin, sem_cobranca=sem_cobranca, bloqueio=bloqueio, editavel=editavel, o=o, itens=itens, eventos=eventos, lanc=lanc, dest=dest, hoje=hoje, datas_venc=datas_venc, link=link,
                            texto_wa=texto_wa, wa_link=_wa_link(o.get('solicitante_fone'), texto_wa) if texto_wa else None,
                            aprovador=_aprovador(), dono=o['criado_por'] == current_user.id, STATUS=STATUS, COMO=COMO, COMISSAO=COMISSAO,
                            vencido=Orcamento.vencido(o), n_nota=sum(1 for i in itens if i['emite_nota']),
@@ -612,14 +619,38 @@ def _avisar_dono(o, assunto, texto):
     _avisar(_emails_de([o['criado_por']]), assunto, texto)
 
 
-def _avisar_aprovadores(o):
-    rows = execute_query("""SELECT DISTINCT u.email FROM usuarios u WHERE u.email LIKE '%%@%%' AND u.situacao = 'ATIVO'
+def _aprovadores():
+    """Quem aprova orçamento: administradores e quem tem a permissão pelo PERFIL (24/11/2026). Com e-mail e telefone."""
+    return execute_query("""SELECT DISTINCT u.id, u.nome, u.email, u.telefone FROM usuarios u WHERE u.situacao = 'ATIVO'
+                              AND COALESCE(u.classe_conta, 'FUNCIONARIO') <> 'CLIENTE'
                               AND (u.tipo_usuario = 'ADMIN' OR u.id IN (
                                      SELECT up.usuario_id FROM usuario_perfis up
                                        JOIN perfis_acesso pa ON pa.id = up.perfil_id AND pa.situacao = 'ATIVO'
                                        JOIN perfil_permissoes pp ON pp.perfil_id = up.perfil_id
-                                      WHERE pp.permissao_codigo = %s))""",   # pelo PERFIL (24/11/2026)
-                         (APROVAR,), fetch=True) or []
+                                      WHERE pp.permissao_codigo = %s))
+                            ORDER BY u.nome""", (APROVAR,), fetch=True) or []
+
+
+def _texto_aprovacao(o, itens):
+    """Mensagem pronta para quem montou cobrar a aprovação pelo WhatsApp (26/11/2026 — Anderson: "nessa tela tem que aparecer
+    um WhatsApp para copiar para enviar para o departamento de aprovação")."""
+    quem = (o.get('criado_por_nome') or '').split(' ')[0].title()
+    linhas = ['Oi! %s aqui. 🙂' % quem if quem else 'Oi!', '',
+              'Tem um *orçamento para aprovar*: 🙏', '',
+              '🧾 *%s* · %s%s' % (o['numero'], _nome_cli(o), (' (cliente nº %s)' % o['cliente_num']) if o.get('cliente_num') else '')]
+    for i in itens:
+        linhas.append('📌 %s – R$ %s' % (i['descricao'], _brl(i['valor_total'])))
+    linhas.append('💰 *Total: R$ %s*%s' % (_brl(o['total']), (' · em %dx' % o['parcelas']) if o.get('parcelas') and o['parcelas'] > 1 else ''))
+    if o.get('como'):
+        linhas.append('💳 %s' % COMO.get(o['como'], o['como']))
+    if o.get('solicitante_nome'):
+        linhas.append('👤 Pedido por %s' % o['solicitante_nome'])
+    linhas += ['', '👉 Abrir em Comercial › Orçamentos › Para aprovar:', url_for('comercial.orcamentos', abrir=o['id'], aba='APROVACAO', _external=True), '', 'Obrigado! 🙏']
+    return '\n'.join(linhas)
+
+
+def _avisar_aprovadores(o):
+    rows = [r for r in _aprovadores() if '@' in (r.get('email') or '')]
     _avisar([r['email'] for r in rows], 'Orçamento %s para aprovar' % o['numero'],
             '%s mandou o orçamento %s (%s, R$ %s) para aprovação.\n\nAbra Comercial › Orçamentos › Para aprovar.' % (current_user.nome, o['numero'], _nome_cli(o), _brl(o['total'])))
 

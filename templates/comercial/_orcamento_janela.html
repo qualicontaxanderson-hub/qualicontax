@@ -95,6 +95,12 @@
           <button type="button" class="tj-acao rubro" onclick="ocPergunta({ titulo: 'Reprovar o orçamento {{ o.numero }}?', texto: 'Volta para {{ (o.criado_por_nome or 'quem montou') | e }} corrigir. Diga o que está errado.', motivo: 'motivo (obrigatório)', exigeMotivo: true, cor: 'pk-rubro', icone: 'fa-rotate-left', ok: 'Reprovar', okIcone: 'fa-rotate-left', onOk: function (m) { ocPost('{{ url_for('comercial.orcamento_reprovar', oid=o.id) }}', { motivo: m }); } })"><i class="fas fa-rotate-left"></i><span><b>Reprovar</b><small>volta para correção, com o motivo</small></span></button>
           {% else %}
           <div class="tj-aviso"><i class="fas fa-hourglass-half"></i> Esperando o escritório aprovar. Você recebe um e-mail quando sair.</div>
+          {% if aprov_wa %}{# 26/11/2026 — Anderson: WhatsApp pronto para cobrar a aprovação #}
+          <p class="tj-regra" style="margin:10px 0 6px"><i class="fab fa-whatsapp"></i> Quer agilizar? Mande pelo WhatsApp para quem aprova:</p>
+          <button type="button" class="tj-acao wa" data-copiar="{{ aprov_wa.texto }}" data-copiar-rotulo="Mensagem para quem aprova"><i class="fab fa-whatsapp"></i><span><b>Copiar texto para o WhatsApp</b><small>a mensagem pronta, com o orçamento e o link para aprovar</small></span></button>
+          {% for a in aprov_wa.pessoas %}{% if a.wa_link %}<a class="tj-acao wa" href="{{ a.wa_link }}" target="_blank" rel="noopener"><i class="fab fa-whatsapp"></i><span><b>Abrir conversa com {{ a.primeiro }}</b><small>{{ a.nome }} · já vai com a mensagem</small></span></a>
+          {% else %}<span class="tj-acao wa off"><i class="fab fa-whatsapp"></i><span><b>{{ a.primeiro }}</b><small>{{ a.nome }} · sem telefone no cadastro de usuários: copie o texto e cole na conversa</small></span></span>{% endif %}{% endfor %}
+          {% endif %}
           {% endif %}
         {% elif o.status in ('APROVADO', 'ACEITO') %}
           {% if o.aceito_em %}<div class="tj-aviso" style="background:#f0fdf4; border:1px solid #bbf7d0; color:#166534; margin:0 0 10px"><i class="fas fa-file-signature"></i> <b>Aceito por {{ o.aceito_nome }}</b>{% if o.aceito_cpf %} (CPF {{ o.aceito_cpf }}){% endif %} em {{ o.aceito_em.strftime('%d/%m/%Y às %H:%M') }}, pelo link, com código enviado a {{ o.aceito_email }}. O registro está na última página do PDF.</div>
@@ -153,6 +159,7 @@
 .tj-it span { min-width:0; } .tj-it b { white-space:nowrap; font-variant-numeric:tabular-nums; } .tj-it-tot { border:0; padding-top:8px; } .tj-it-tot b { font-size:17px; color:var(--cor-e); }
 .tj-bts { display:flex; gap:6px; flex-wrap:wrap; } .tj-bts a, .tj-bts button { height:34px; border-radius:9px; font:inherit; font-size:12.5px; font-weight:800; border:1px solid #e2e8f0; background:#fff; color:#475569; display:inline-flex; align-items:center; gap:6px; padding:0 12px; cursor:pointer; text-decoration:none; }
 .tj-acao { display:flex; align-items:center; gap:12px; width:100%; text-align:left; border:1px solid #e2e8f0; background:#fff; border-radius:14px; padding:10px 12px; font:inherit; cursor:pointer; margin-bottom:8px; color:#0f172a; }
+.tj-acao.wa { text-decoration:none; } .tj-acao.wa > i { background:#dcfce7; color:#15803d; } .tj-acao.wa.off { cursor:default; opacity:.7; } .tj-acao.wa.off > i { background:#f1f5f9; color:#94a3b8; }
 .tj-acao > i { width:36px; height:36px; border-radius:11px; background:#f1f5f4; color:#475569; display:inline-flex; align-items:center; justify-content:center; font-size:14px; flex-shrink:0; }
 .tj-acao span { display:flex; flex-direction:column; line-height:1.2; min-width:0; } .tj-acao b { font-size:13.5px; } .tj-acao small { color:#64748b; font-size:11.5px; }
 .tj-acao.prim { background:linear-gradient(135deg, var(--cor), var(--cor-e)); border-color:var(--cor-e); color:#fff; } .tj-acao.prim > i { background:rgba(255,255,255,.2); color:#fff; } .tj-acao.prim small { color:rgba(255,255,255,.85); }
