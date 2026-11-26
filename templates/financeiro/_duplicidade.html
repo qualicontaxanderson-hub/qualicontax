@@ -4,7 +4,21 @@
    devolver?". Mesmo molde da janela da cobrança (tj-*, CSS em titulos_receber.html). Rota: financeiro.duplicidade. #}
 {% set sit = info.situacao %}
 {% set resto = info.resto if info.resto is defined else info.valor %}
-<style>.tj-dup a.tj-o { text-decoration:none; color:inherit; } .tj-dup a.tj-o:hover { background:#fff7ed; }</style>
+<style>
+.tj-dup a.tj-o { text-decoration:none; color:inherit; } .tj-dup a.tj-o:hover { background:#fff7ed; }
+.dup-u > summary { list-style:none; } .dup-u > summary::-webkit-details-marker { display:none; }
+.dup-u > summary i { transition:transform .15s; } .dup-u[open] > summary i { transform:rotate(180deg); }
+.dup-u[open] > summary { border-color:#fb923c; background:#fff7ed; border-bottom-left-radius:0; border-bottom-right-radius:0; }
+.dup-f { border:1px solid #fb923c; border-top:0; border-radius:0 0 10px 10px; padding:12px; background:#fff; display:flex; flex-direction:column; gap:9px; }
+.dup-conta { display:grid; grid-template-columns:repeat(3, minmax(0,1fr)); gap:6px; }
+.dup-conta div { background:#f8fafc; border-radius:9px; padding:7px 9px; } .dup-conta span { display:block; font-size:11px; color:#64748b; font-weight:700; }
+.dup-conta b { font-size:14px; }
+.dup-dica { margin:0; font-size:12.5px; color:#9a3412; } .dup-dica i { margin-right:4px; }
+.dup-op { display:flex; flex-wrap:wrap; align-items:center; gap:6px; font-size:12.5px; font-weight:600; color:#334155; }
+.dup-op input[type=date], .dup-op select, .dup-op input[type=text] { height:32px; border:1px solid #e2e8f0; border-radius:8px; padding:0 8px; font:inherit; font-size:12.5px; }
+.dup-op input[type=text] { flex:1; min-width:140px; }
+.dup-ok { align-self:flex-start; height:38px; border:0; border-radius:10px; padding:0 16px; background:linear-gradient(135deg, #f97316, #c2410c); color:#fff; font:inherit; font-size:13px; font-weight:800; cursor:pointer; display:inline-flex; align-items:center; gap:8px; }
+</style>
 <div class="tj tx-venc tj-dup">
   <header class="tj-cab">
     <div class="tj-cab-cli">
@@ -50,12 +64,38 @@
       <h4><i class="fas fa-link"></i> Usar para baixar uma cobrança <small>· do mesmo cliente</small></h4>
       {% if sit == 'A_DECIDIR' and resto > 0 %}
         {% if abertos %}
+        {# 26/11/2026 — Anderson: a página Vincular "ficou bem feia e ainda nos remete para o extrato": a baixa é feita
+           aqui mesmo; toque na cobrança, confira a conta e confirme. Grava pelo vincular_gravar e volta para esta janela. #}
         <div class="tj-outros">
           {% for o in abertos %}
-          {% if pode %}<a class="tj-o" href="{{ url_for('financeiro.vincular_pagamento', lanc_id=d.lancamento_id, titulo=o.id) }}" title="Dar baixa nesta cobrança com o crédito em duplicidade">
-          {% else %}<div class="tj-o">{% endif %}
-            <span><b>{{ o.desc }}</b><small>vence {{ o.vencimento.strftime('%d/%m/%Y') if o.vencimento else '—' }}{% if o.boletos_valendo %} · boleto em aberto{% endif %}{% if o.saldo > resto %} · o crédito paga parte{% elif o.saldo < resto %} · sobra crédito{% endif %}</small></span><em>{{ brl(o.saldo) }}</em>{% if pode %}<i class="fas fa-chevron-right"></i>{% endif %}
-          {% if pode %}</a>{% else %}</div>{% endif %}
+          {% if pode %}
+          <details class="dup-u"{% if abertos|length == 1 %} open{% endif %}>
+            <summary class="tj-o" title="Dar baixa nesta cobrança com o crédito em duplicidade">
+              <span><b>{{ o.desc }}</b><small>vence {{ o.vencimento.strftime('%d/%m/%Y') if o.vencimento else '—' }}{% if o.boletos_valendo %} · boleto em aberto{% endif %}</small></span><em>{{ brl(o.saldo) }}</em><i class="fas fa-chevron-down"></i></summary>
+            <form method="POST" action="{{ url_for('financeiro.vincular_gravar', lanc_id=d.lancamento_id) }}" class="dup-f"
+                  onsubmit="return confirm('Dar baixa em {{ o.desc }} ({{ brl(o.saldo) }}) com o crédito em duplicidade?');">
+              <input type="hidden" name="titulo" value="{{ o.id }}"><input type="hidden" name="volta" value="{{ volta }}">
+              <div class="dup-conta"><div><span>Crédito</span><b>{{ brl(resto) }}</b></div><div><span>Cobrança</span><b>{{ brl(o.saldo) }}</b></div>
+                <div><span>{{ 'Bate certinho' if o.saldo == resto else ('Sobra de crédito' if o.saldo < resto else 'Falta') }}</span><b>{{ brl((resto - o.saldo) | abs) if o.saldo != resto else 'R$ 0,00' }}</b></div></div>
+              {% if o.saldo < resto %}
+              <input type="hidden" name="diferenca" value="credito">
+              <p class="dup-dica"><i class="fas fa-circle-info"></i> A cobrança fica paga e {{ brl(resto - o.saldo) }} continuam como crédito do cliente, para usar em outra cobrança ou devolver.</p>
+              {% elif o.saldo > resto %}
+              <p class="dup-dica"><i class="fas fa-circle-info"></i> O crédito paga parte. O que fazer com os {{ brl(o.saldo - resto) }} que faltam?</p>
+              <label class="dup-op"><input type="radio" name="diferenca" value="cobrar" required> Cobrar a diferença em
+                <input type="date" name="vencimento" min="{{ hoje.isoformat() }}" value="{{ (o.vencimento if o.vencimento and o.vencimento >= hoje else hoje).isoformat() }}">
+                <span><input type="checkbox" name="boleto" value="1" checked> com boleto</span></label>
+              <label class="dup-op"><input type="radio" name="diferenca" value="mes"> Junto com o honorário de
+                <select name="mes">{% for v, n in meses[1:] %}<option value="{{ v }}">{{ n }}</option>{% endfor %}</select></label>
+              <label class="dup-op"><input type="radio" name="diferenca" value="desconto"> Dar desconto da diferença · motivo
+                <input type="text" name="motivo" maxlength="200" placeholder="obrigatório no desconto"></label>
+              {% endif %}
+              <button type="submit" class="dup-ok"><i class="fas fa-link"></i> Dar baixa com o crédito</button>
+            </form>
+          </details>
+          {% else %}
+          <div class="tj-o"><span><b>{{ o.desc }}</b><small>vence {{ o.vencimento.strftime('%d/%m/%Y') if o.vencimento else '—' }}</small></span><em>{{ brl(o.saldo) }}</em></div>
+          {% endif %}
           {% endfor %}
         </div>
         <p class="tj-regra"><i class="fas fa-circle-info"></i> Ao dar baixa, o boleto em aberto daquela cobrança é cancelado no banco, para o cliente não pagar de novo. Se a cobrança for maior, a diferença continua a cobrar. Se for menor, o resto continua como crédito.</p>

@@ -39,16 +39,35 @@
 }
 .vp-cand { display:flex; gap:10px; align-items:center; justify-content:space-between; flex-wrap:wrap; padding:8px 10px;
            border:1px solid #e2e8f0; border-radius:8px; font-size:13px; }
+/* 26/11/2026 — Anderson: "ficou bem feia e ainda nos remete para o extrato": cabeçalho e cartões no molde do Financeiro */
+.vp-pg { min-width:0; }
+.vp-pg .ef-hero { margin-bottom:-30px; padding-bottom:46px; }
+.vp-hero-val { text-align:right; color:#fff; } .vp-hero-val small { display:block; font-size:10.5px; font-weight:800; letter-spacing:.06em; text-transform:uppercase; color:#a7d9c0; }
+.vp-hero-val b { font-size:26px; font-weight:800; font-variant-numeric:tabular-nums; } .vp-hero-val span { display:block; font-size:12px; color:#d1fae5; }
+.vp-pg .vp-grade, .vp-pg .nf-cards { position:relative; z-index:2; }
+.vp-pg .nf-card { border:1px solid #e6eeea; border-radius:16px; box-shadow:0 10px 26px rgba(15,23,42,.08); overflow:hidden; background:#fff; }
+.vp-pg .nf-card > header { background:#fff; border-bottom:1px solid #eef2f0; padding:13px 16px; display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+.vp-pg .nf-card > header > b { width:32px; height:32px; border-radius:10px; background:#ecfdf3; color:#15803d; display:inline-flex; align-items:center; justify-content:center; font-size:14px; }
+.vp-pg .nf-card > header > span { font-size:12.5px; font-weight:800; text-transform:uppercase; letter-spacing:.05em; color:#0f3d2e; }
+.vp-pg .nf-card > header > small { margin:0 0 0 auto; padding:0; color:#64748b; font-size:12px; text-align:right; max-width:60%; }
+.vp-pg .nd-valor { font-size:22px; }
+.vp-pg .vp-tit { border-radius:11px; padding:10px 12px; border-width:1.5px; } .vp-pg .vp-tit.marcado { border-color:#16a34a; background:#f0fdf4; box-shadow:0 0 0 3px #dcfce7; }
+.vp-pg .vp-resumo div { border-radius:11px; padding:11px 12px; } .vp-pg .vp-resumo b { font-size:19px; }
+.vp-pg .vp-opcao { border-radius:11px; border-width:1.5px; }
+.vp-pg #vpOk { height:46px; border-radius:12px; padding:0 20px; font-size:14px; font-weight:800; border:0; background:linear-gradient(135deg, #16a34a, #166534); box-shadow:0 8px 18px rgba(22,163,74,.25); }
+.vp-pg #vpOk:disabled { background:#cbd5e1; box-shadow:none; }
+.vp-pg .vp-cand { border-radius:11px; border-width:1.5px; padding:10px 12px; }
+.vp-pg #vpBusca { height:42px; border-radius:11px; }
 </style>
+<div class="vp-pg">
 
 {% if modo == 'achar' %}
-<div class="page-header">
-    <div>
-        <h1 class="page-title"><i class="fas fa-link" style="color: var(--primary-green);"></i> Achar o pagamento no extrato</h1>
-        <p class="page-subtitle">{{ titulo.contraparte_nome }} · {{ titulo.descricao }} · falta {{ brl(saldo) }}</p>
-    </div>
-    <div class="page-actions"><a class="btn btn-outline" href="javascript:history.back()"><i class="fas fa-arrow-left"></i> Voltar</a></div>
-</div>
+<div class="ef-hero"><div class="ef-hero-inner ef-hero-head">
+    <div><h1 class="ef-hero-title"><i class="fas fa-magnifying-glass-dollar"></i> Achar o pagamento no extrato</h1>
+        <p class="ef-hero-sub">{{ titulo.contraparte_nome }} · {{ titulo.descricao }}</p>
+        <div class="ef-hero-actions" style="margin-top:10px"><a class="ef-btn ef-btn-primary" href="{{ volta_link }}"><i class="fas fa-arrow-left"></i> {{ volta_rot }}</a></div></div>
+    <div class="vp-hero-val"><small>Falta receber</small><b>{{ brl(saldo) }}</b></div>
+</div></div>
 <div class="nf-cards">
 <section class="nf-card">
     <header><b><i class="fas fa-university"></i></b><span>Créditos ainda sem dono</span><small>com o nome ou o valor parecidos com este título</small></header>
@@ -60,7 +79,7 @@
                 <div><b>{{ l.data.strftime('%d/%m/%Y') }}</b> · {% if logo_banco_url(l.banco) %}{{ logo_banco(l.banco, None, 14) }} {% endif %}{{ l.banco or 'banco' }} · {{ l.descricao }}</div>
                 <div style="display:flex; gap:10px; align-items:center;">
                     <b>{{ brl(l.valor) }}</b>
-                    <a class="btn btn-primary" href="{{ url_for('financeiro.vincular_pagamento', lanc_id=l.id, titulo=titulo.id) }}"><i class="fas fa-link"></i> É este</a>
+                    <a class="btn btn-primary" href="{{ url_for('financeiro.vincular_pagamento', lanc_id=l.id, titulo=titulo.id, volta=volta_link) }}"><i class="fas fa-link"></i> É este</a>
                 </div>
             </div>
         {% endfor %}
@@ -73,15 +92,15 @@
 </div>
 
 {% else %}
-<div class="page-header">
-    <div>
-        <h1 class="page-title"><i class="fas fa-link" style="color: var(--primary-green);"></i> Vincular pagamento</h1>
-        <p class="page-subtitle">{{ empresa_nome }} · o crédito do extrato dá a baixa nos títulos e tira o boleto do banco</p>
-    </div>
-    <div class="page-actions"><a class="btn btn-outline" href="{{ url_for('financeiro.extrato', classif='todos', busca=lanc.descricao[:30]) }}"><i class="fas fa-arrow-left"></i> Extrato</a></div>
-</div>
+<div class="ef-hero"><div class="ef-hero-inner ef-hero-head">
+    <div><h1 class="ef-hero-title"><i class="fas fa-link"></i> Vincular pagamento</h1>
+        <p class="ef-hero-sub">{{ empresa_nome }} · o crédito do extrato dá a baixa nos títulos e tira o boleto do banco</p>
+        <div class="ef-hero-actions" style="margin-top:10px"><a class="ef-btn ef-btn-primary" href="{{ volta_link }}"><i class="fas fa-arrow-left"></i> {{ volta_rot }}</a></div></div>
+    <div class="vp-hero-val"><small>{{ 'Crédito em duplicidade' if credito else 'Entrou no banco' }}</small><b>{{ brl(credito or lanc.valor) }}</b><span>{{ lanc.data.strftime('%d/%m/%Y') }} · {{ lanc.banco or '' }}</span></div>
+</div></div>
 
 <form method="POST" id="vpForm" onsubmit="return vpConfirma();">
+<input type="hidden" name="volta_ok" value="{{ volta_link }}">
 <div class="vp-grade">
 <div class="vp-esq">
 <section class="nf-card">
@@ -118,7 +137,7 @@
             </div>
         {% endfor %}
         </div>
-        <div class="nd-acoes"><a class="btn btn-outline" href="{{ url_for('financeiro.titulos', tipo='R') }}"><i class="fas fa-receipt"></i> Cobranças</a></div>
+        <div class="nd-acoes"><a class="btn btn-outline" href="{{ volta_link }}"><i class="fas fa-arrow-left"></i> {{ volta_rot }}</a></div>
     </div>
 </section>
 </div>
@@ -212,6 +231,7 @@
 </div>
 </form>
 {% endif %}
+</div>
 {% endblock %}
 
 {% block extra_js %}

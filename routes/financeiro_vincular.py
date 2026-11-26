@@ -133,6 +133,22 @@ def _quem_pagou(lanc):
     return (m.group(1) if m else d)[:60], lido.get('doc') or ''
 
 
+def _volta_de(padrao_url, padrao_rot):
+    """Para onde o "Voltar" leva (26/11/2026 — Anderson: "ainda nos remete para o extrato se eu precisar voltar"):
+    ?volta= da própria tela, senão a página de onde a pessoa veio (Cobranças, Extrato...), senão o padrão."""
+    from urllib.parse import urlparse
+    v = (request.args.get('volta') or '').strip()
+    if not (v.startswith('/financeiro/') and '//' not in v):
+        ref = urlparse(request.referrer or '')
+        v = (ref.path + ('?' + ref.query if ref.query else '')) if ref.path.startswith('/financeiro/') and '/vincular' not in ref.path \
+            and (not ref.netloc or ref.netloc == request.host) else ''
+    if not v:
+        return padrao_url, padrao_rot
+    rot = ('Voltar para Cobranças' if v.startswith('/financeiro/titulos') else 'Voltar para o Extrato' if v.startswith('/financeiro/extrato')
+           else 'Voltar')
+    return v, rot
+
+
 def _proximos_meses(n=7):
     h = _hoje().replace(day=1)
     out = []
@@ -379,8 +395,9 @@ def vincular_achar(titulo_id):
 
     cands = [(nota(l), l) for l in linhas]
     cands = [l for n, l in sorted(cands, key=lambda x: (-x[0], -x[1]['data'].toordinal())) if n >= 2][:30]
+    volta_link, volta_rot = _volta_de(url_for('financeiro.titulos', tipo='R'), 'Voltar para Cobranças')
     return render_template('financeiro/vincular.html', modo='achar', titulo=t, saldo=saldo, candidatos=cands,
-                           brl=_brl)
+                           brl=_brl, volta_link=volta_link, volta_rot=volta_rot)
 
 
 # ---------------------------------------------------------------------------
@@ -419,6 +436,8 @@ def vincular_pagamento(lanc_id):
     return render_template('financeiro/vincular.html', modo='linha', lanc=lanc, feitas=feitas, titulos=titulos, soltas=soltas,
                            sugestao=nome, pre=pre, meses=_proximos_meses(), hoje=t0, brl=_brl,
                            credito=credito, usado=usado, dup=dup,
+                           **dict(zip(('volta_link', 'volta_rot'), _volta_de(
+                               url_for('financeiro.extrato', classif='todos', busca=(lanc.get('descricao') or '')[:30]), 'Voltar para o Extrato'))),
                            empresa_nome=FinEmpresa.mapa().get(lanc['empresa_id'], ''))
 
 
@@ -429,6 +448,12 @@ def vincular_gravar(lanc_id):
     from utils.financeiro_core import registrar_baixa, BaixaInvalida
     lanc = _linha(lanc_id)
     volta = url_for('financeiro.vincular_pagamento', lanc_id=lanc_id)
+    v = (request.form.get('volta') or '').strip()
+    if v.startswith('/financeiro/') and '//' not in v:     # 26/11/2026: veio da janela PAGO EM DUPLICIDADE: volta para lá
+        volta = v
+    vok = (request.form.get('volta_ok') or '').strip()
+    if vok.startswith('/financeiro/') and '//' not in vok and not v:
+        volta = url_for('financeiro.vincular_pagamento', lanc_id=lanc_id, volta=vok)
     pago = _d(lanc['valor'])
     if pago <= 0:
         abort(400)
@@ -655,7 +680,7 @@ def duplicidade(dup_id):
     return render_template('financeiro/_duplicidade.html', d=d, info=info, lanc=lanc, t=t, bol=bol, primeira=primeira,
                            usado=usado, abertos=abertos, devol=devol, quem=quem, nome=nome, pode=pode,
                            iniciais=''.join(p[0] for p in nome.split()[:2]).upper() or '?', brl=_brl,
-                           desc=TR._desc(t) if t else '', hoje=_hoje())
+                           desc=TR._desc(t) if t else '', hoje=_hoje(), volta=_volta_dup(d), meses=_proximos_meses())
 
 
 @financeiro.route('/financeiro/duplicidade/<int:dup_id>/devolver', methods=['POST'])
