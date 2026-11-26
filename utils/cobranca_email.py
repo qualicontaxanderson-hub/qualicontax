@@ -476,7 +476,11 @@ def destinatarios_cobranca(cliente_id, email_cadastro=None):
                 return out
         # Pessoa física: sem contato, vale o e-mail da própria pessoa, que fica no cadastro (não é "e-mail do CNPJ").
         # 103 PFs ativas em 25/11/2026 só têm esse e-mail. Para PJ o e-mail do cadastro nunca entra.
-        c = execute_query('SELECT tipo_pessoa, email FROM clientes WHERE id = %s', (cliente_id,), fetch=True, fetch_one=True) or {}
+        c = execute_query('SELECT tipo_pessoa, email, abertura_de_pf_id, abertura_concluida_em FROM clientes WHERE id = %s',
+                          (cliente_id,), fetch=True, fetch_one=True) or {}
+        if c.get('abertura_de_pf_id') and not c.get('abertura_concluida_em'):
+            # Empresa em abertura (25/11/2026): ainda sem CNPJ nem contatos próprios — a cobrança vai para quem pediu a abertura
+            return [dict(d, fonte=d['fonte'] + ' de quem pediu a abertura') for d in destinatarios_cobranca(c['abertura_de_pf_id'])]
         if c.get('tipo_pessoa') == 'PF':
             add(c.get('email'), '', 'e-mail da pessoa (cadastro)')
     return out

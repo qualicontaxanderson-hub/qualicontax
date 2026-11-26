@@ -141,6 +141,7 @@ class FinComissaoAcordo:
 class FinLancamento:
 
     SELECT = """SELECT l.*, c.numero_cliente, c.nome_razao_social, c.cpf_cnpj, s.nome AS servico_nome, s.emite_nota,
+                       (c.abertura_de_pf_id IS NOT NULL AND c.abertura_concluida_em IS NULL) AS em_abertura,
                        u.nome AS lancado_por_nome, ua.nome AS aprovado_por_nome,
                        t.status AS titulo_status, t.vencimento AS titulo_vencimento, t.valor_baixado,
                        f.status AS fechamento_status,

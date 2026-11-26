@@ -105,6 +105,7 @@ MAPA = {
     'clientes.anp_detalhe':            'clientes.index',
     'clientes.cnpj_vigia_status':      'clientes.index',
     'clientes.editar':                 'clientes.edit',
+    'clientes.abertura_cnpj':          'clientes.edit',   # 25/11/2026: "Saiu o CNPJ" da empresa em abertura (admin e Legalização)
     'clientes.salvar_campos':          'clientes.edit',   # tela única: o clique no valor grava (08/11/2026)
     'clientes.pessoa_por_cpf':         'clientes.edit',   # CPF do cônjuge: já tem cadastro? (17/11/2026)
     'clientes.inativar':               'clientes.inativar',
@@ -528,6 +529,9 @@ MAPA = {
     'financeiro.titulo_perdido': 'financeiro.titulos.excluir',
     'financeiro.titulo_perdido_voltar': 'financeiro.titulos.excluir',
     'financeiro.baixa_desfazer': 'financeiro.titulos.excluir',
+    'financeiro.duplicidade': 'financeiro.titulos',
+    'financeiro.duplicidade_devolver': 'financeiro.cobranca.vincular',
+    'financeiro.duplicidade_devolver_desfazer': 'financeiro.cobranca.vincular',
     'financeiro.titulo_novo': 'financeiro.titulos.incluir',
     # grupos
     'grupos.desativar': 'grupos.excluir',
@@ -629,7 +633,7 @@ class AcessoIndisponivel(Exception):
 # Rota nova de cadastro NÃO entra sozinha: fica fechada até ser posta aqui (nega por padrão).
 RESERVA_VISIVEL_NO_CADASTRO = frozenset({
     'clientes.index', 'clientes.relatorio', 'clientes.detalhes', 'clientes.salvar_campos',
-    'clientes.editar', 'clientes.avulsos', 'clientes.converter_avulso', 'clientes.inativar',
+    'clientes.editar', 'clientes.avulsos', 'clientes.converter_avulso', 'clientes.inativar', 'clientes.abertura_cnpj',
     'clientes.novo_endereco', 'clientes.excluir_endereco', 'clientes.salvar_responsaveis',
     'clientes.ie_salvar', 'clientes.ie_isenta', 'clientes.ie_excluir',
     'clientes.responsaveis_convite_novo', 'clientes.novo_contato', 'clientes.editar_contato',
@@ -742,6 +746,7 @@ _EMPRESA_POR_ARG = {
 _EMPRESA_POR_ENDPOINT = {
     'clientes.detalhes':             ('id', None),
     'clientes.editar':               ('id', None),
+    'clientes.abertura_cnpj':        ('id', None),
     'clientes.salvar_campos':        ('id', None),
     'clientes.salvar_responsaveis':  ('id', None),
     'clientes.responsaveis_convite_novo': ('id', None),

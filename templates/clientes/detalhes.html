@@ -109,6 +109,7 @@
         </nav>
 
         <div class="qb-bento">
+            {% include 'clientes/_abertura.html' %}{# 25/11/2026: empresa em abertura / empresas que a pessoa está abrindo #}
             <!-- IDENTIDADE -->
             <section class="qb-b qb-id s8" id="identificacao" data-copiar-bloco>
                 <div class="qb-id-acoes">
@@ -145,7 +146,7 @@
                 <span class="qb-num">{% if cliente.numero_cliente %}#{{ cliente.numero_cliente }}{% else %}avulso{% endif %}</span>
                 <h1 data-copiar data-copiar-rotulo="{{ 'Nome' if not pj else 'Razão social' }}">{{ cliente.nome_razao_social | nome_proprio }}</h1>
                 {% if pj and cliente.nome_fantasia %}<div class="qb-fantasia">{{ cliente.nome_fantasia }}</div>{% endif %}
-                <div class="qb-doc mono" data-copiar data-copiar-rotulo="{{ 'CPF' if not pj else 'CNPJ' }}">{{ cliente.cpf_cnpj or '—' }}</div>
+                <div class="qb-doc mono" data-copiar data-copiar-rotulo="{{ 'CPF' if not pj else 'CNPJ' }}">{{ 'sem CNPJ · em abertura' if em_abertura else (cliente.cpf_cnpj or '—') }}</div>
                 <div class="qb-linha">
                     {% if pj %}
                     <div><small>Natureza</small><b>{% if cliente.natureza_juridica %}{{ cliente.natureza_juridica }}{% else %}—{% endif %}</b></div>

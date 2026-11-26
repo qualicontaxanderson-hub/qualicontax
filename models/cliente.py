@@ -166,11 +166,56 @@ class Cliente:
                    porte_empresa, cnae_fiscal, cnae_fiscal_descricao, data_inicio_atividade, data_inicio_contrato,
                    situacao, observacoes, is_contador, aberta_pela_casa, contabilidade_anterior_id,
                    natureza_codigo, natureza_juridica, natureza_em,
-                   avulso, avulso_em, virou_cliente_em, nire, nire_data_registro, cobranca
+                   avulso, avulso_em, virou_cliente_em, nire, nire_data_registro, cobranca,
+                   abertura_de_pf_id, abertura_em, abertura_por, abertura_concluida_em
             FROM clientes
             WHERE id = %s
         """
         return execute_query(query, (cliente_id,), fetch=True, fetch_one=True)
+
+    # ── Abertura de empresa (25/11/2026 — Anderson: "quando selecionar pessoa física e no SERVIÇOS colocar ABERTURA DE
+    #    EMPRESA, já aparecerá um campo para colocar o NOME DA EMPRESA NOVA; esse nome já assume um AVULSO no sistema como
+    #    secundário do CPF; quando sair o CNPJ, aí altera") ───────────────────────────────────────────────────────────
+    @staticmethod
+    def em_abertura(c):
+        """A empresa nasceu de um pedido de abertura e o CNPJ ainda não saiu."""
+        return bool(c and c.get('abertura_de_pf_id') and not c.get('abertura_concluida_em'))
+
+    @staticmethod
+    def chave_abertura(pf_cliente_id, seq):
+        """Ocupa cpf_cnpj (NOT NULL e único) até sair o CNPJ. Não tem dígitos: para o resto do sistema é 'sem CNPJ'."""
+        return 'ABERT-%d-%d' % (int(pf_cliente_id), int(seq))
+
+    @staticmethod
+    def criar_avulso_abertura(pf_cliente_id, nome, criado_por):
+        """A empresa nova, ainda sem CNPJ, como AVULSO ligado ao CPF de quem pediu. Idempotente: o mesmo CPF com o mesmo
+        nome, ainda em abertura, devolve o cadastro que já existe. Chamada pelo orçamento (Comercial) ao salvar."""
+        nome = ' '.join(str(nome or '').split()).upper()[:255]
+        if not nome:
+            raise ValueError('Diga o nome da empresa nova.')
+        pf = Cliente.get_by_id(pf_cliente_id)
+        if not pf or pf.get('tipo_pessoa') != 'PF':
+            raise ValueError('A abertura de empresa parte de uma pessoa física do cadastro.')
+        ja = execute_query("SELECT id FROM clientes WHERE abertura_de_pf_id = %s AND nome_razao_social = %s "
+                           "AND abertura_concluida_em IS NULL ORDER BY id LIMIT 1", (pf_cliente_id, nome), fetch=True, fetch_one=True)
+        if ja:
+            return ja['id']
+        n = int((execute_query("SELECT COUNT(*) AS n FROM clientes WHERE abertura_de_pf_id = %s", (pf_cliente_id,),
+                               fetch=True, fetch_one=True) or {}).get('n') or 0) + 1
+        cid = Cliente.create({'tipo_pessoa': 'PJ', 'nome_razao_social': nome, 'cpf_cnpj': Cliente.chave_abertura(pf_cliente_id, n),
+                              'avulso': True, 'aberta_pela_casa': True, 'criado_por': criado_por, 'situacao': 'ATIVO',
+                              'celular': pf.get('celular')})
+        if cid:
+            execute_query('UPDATE clientes SET abertura_de_pf_id = %s, abertura_em = NOW(), abertura_por = %s WHERE id = %s',
+                          (pf_cliente_id, criado_por, cid))
+        return cid
+
+    @staticmethod
+    def aberturas_da_pessoa(pf_cliente_id):
+        """As empresas que esta pessoa pediu para abrir (em abertura primeiro)."""
+        return execute_query("SELECT id, nome_razao_social, cpf_cnpj, numero_cliente, avulso, abertura_em, abertura_concluida_em "
+                             "FROM clientes WHERE abertura_de_pf_id = %s ORDER BY (abertura_concluida_em IS NOT NULL), id",
+                             (pf_cliente_id,), fetch=True) or []
     
     @staticmethod
     def get_all(filters=None, page=1, per_page=10):

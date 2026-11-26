@@ -1,0 +1,53 @@
+{# Abertura de empresa (25/11/2026 — Anderson): a empresa nova nasce no orçamento (PF + "Abertura de empresa") como avulso
+   ligado ao CPF; aqui se vê de onde veio e se informa o CNPJ quando sair ("Saiu o CNPJ"): o mesmo cadastro segue. #}
+{% if abertura_pf or aberturas %}
+<style>
+.ab-card { grid-column:1 / -1; border-left:5px solid #f59e0b; }
+.ab-card.ab-ok { border-left-color:#16a34a; }
+.ab-txt { font-size:14px; color:#334155; line-height:1.55; margin:0 0 10px; }
+.ab-txt a { color:#15803d; font-weight:700; }
+.ab-form { display:grid; grid-template-columns:minmax(0,1.2fr) minmax(0,1.4fr) auto; gap:10px 12px; align-items:end; }
+.ab-form label { display:block; font-size:12px; font-weight:700; color:#0f3d2e; text-transform:uppercase; letter-spacing:.3px; }
+.ab-form label small { display:block; text-transform:none; letter-spacing:0; font-weight:500; color:#64748b; font-size:11.5px; margin:2px 0 4px; }
+.ab-form .form-control { height:40px; }
+.ab-form .ab-chk { grid-column:1 / -1; text-transform:none; letter-spacing:0; font-weight:600; font-size:13px; color:#334155; display:flex; align-items:center; gap:8px; }
+.ab-form .ab-chk input { width:18px; height:18px; accent-color:#16a34a; }
+.ab-form .btn { height:40px; white-space:nowrap; }
+.ab-lista { list-style:none; margin:0; padding:0; display:grid; gap:6px; }
+.ab-lista li { display:flex; flex-wrap:wrap; gap:4px 10px; align-items:baseline; background:#fffbeb; border:1px solid #fde68a; border-radius:10px; padding:8px 12px; }
+.ab-lista li.ok { background:#f0fdf4; border-color:#bbf7d0; }
+.ab-lista li a { font-weight:800; color:#0f172a; }
+.ab-lista li small { color:#64748b; font-size:12px; }
+@media (max-width:900px) { .ab-form { grid-template-columns:minmax(0,1fr); } }
+</style>
+{% endif %}
+{% if abertura_pf %}
+<section class="qb-b ab-card{{ ' ab-ok' if cliente.abertura_concluida_em }}" id="abertura">
+    <div class="qb-bh"><span class="qb-ico i-ambar"><i class="fas fa-rocket"></i></span><h3>{{ 'Empresa aberta' if cliente.abertura_concluida_em else 'Empresa em abertura' }}</h3>
+        <span class="qb-selo {{ 'qb-selo-ok' if cliente.abertura_concluida_em else 'qb-selo-amb' }}">{{ 'CNPJ informado' if cliente.abertura_concluida_em else 'sem CNPJ' }}</span></div>
+    <p class="ab-txt">Abertura pedida por <a href="{{ url_for('clientes.detalhes', id=abertura_pf.id) }}">{{ abertura_pf.nome_razao_social | nome_proprio }}</a>
+        (CPF {{ abertura_pf.cpf_cnpj }}){% if cliente.abertura_em %} em {{ cliente.abertura_em.strftime('%d/%m/%Y') }}{% endif %}.
+        {% if cliente.abertura_concluida_em %}CNPJ {{ cliente.cpf_cnpj }} informado em {{ cliente.abertura_concluida_em.strftime('%d/%m/%Y') }}{{ ' · cliente nº ' ~ cliente.numero_cliente if cliente.numero_cliente else ' · continua avulso: dê um número quando for virar cliente' }}.
+        {% else %}Ainda sem CNPJ: a cobrança da abertura sai no CPF de quem pediu ("Quem paga" no lançamento) ou espera o CNPJ. Assim que a Receita liberar, informe aqui: o cadastro, a pasta, o histórico e as cobranças seguem os mesmos.{% endif %}</p>
+    {% if not cliente.abertura_concluida_em and pode_rota('clientes.abertura_cnpj') %}
+    <form method="POST" action="{{ url_for('clientes.abertura_cnpj', id=cliente.id) }}" class="ab-form"
+          onsubmit="return confirm('Gravar o CNPJ nesta empresa? O cadastro, a pasta e as cobranças seguem os mesmos.')">
+        <label>CNPJ<small>o número que saiu na Receita</small><input name="cnpj" class="form-control mono" data-mask="cnpj" placeholder="00.000.000/0000-00" required autocomplete="off"></label>
+        <label>Número de cliente<small>opcional: com número já vira cliente; sem, continua avulso</small><input name="numero_cliente" class="form-control" inputmode="numeric" placeholder="deixe vazio para continuar avulso" autocomplete="off"></label>
+        <button type="submit" class="btn btn-primary"><i class="fas fa-check"></i> Saiu o CNPJ</button>
+        <label class="ab-chk"><input type="checkbox" name="usar_receita" value="1" checked> Trazer a razão social da Receita (se ela responder)</label>
+    </form>
+    {% endif %}
+</section>
+{% endif %}
+{% if aberturas %}
+<section class="qb-b ab-card" id="aberturas">
+    <div class="qb-bh"><span class="qb-ico i-ambar"><i class="fas fa-rocket"></i></span><h3>Empresas que esta pessoa está abrindo</h3><span class="qb-selo qb-selo-amb">{{ aberturas | length }}</span></div>
+    <ul class="ab-lista">
+    {% for a in aberturas %}
+        <li{{ ' class="ok"' | safe if a.abertura_concluida_em }}><a href="{{ url_for('clientes.detalhes', id=a.id) }}">{{ a.nome_razao_social }}</a>
+            <small>{{ ('CNPJ ' ~ a.cpf_cnpj) if a.abertura_concluida_em else 'em abertura · ainda sem CNPJ' }}{% if a.abertura_em %} · pedida em {{ a.abertura_em.strftime('%d/%m/%Y') }}{% endif %}{% if a.numero_cliente %} · cliente nº {{ a.numero_cliente }}{% elif a.avulso %} · avulso{% endif %}</small></li>
+    {% endfor %}
+    </ul>
+</section>
+{% endif %}

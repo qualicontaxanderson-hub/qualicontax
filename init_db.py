@@ -1825,6 +1825,15 @@ def _apply_migrations():
                 "AND TABLE_NAME = 'fin_lancamentos' AND COLUMN_NAME = %s", (_col_name,), fetch=True, fetch_one=True) or {}
             if _c.get('cnt', 0) == 0:
                 _migrate(f"ALTER TABLE fin_lancamentos ADD COLUMN {_col_name} {_col_def}")
+    # 25/11/2026: ABERTURA DE EMPRESA — a empresa nova nasce como avulso ligado ao CPF de quem pediu (orçamento PF +
+    # "Abertura de empresa"); cpf_cnpj leva a chave provisória ABERT-<pf>-<n> até "Saiu o CNPJ" (abertura_concluida_em).
+    for _col_name, _col_def in [('abertura_de_pf_id', 'INT NULL'), ('abertura_em', 'DATETIME NULL'),
+                                ('abertura_por', 'INT NULL'), ('abertura_concluida_em', 'DATETIME NULL')]:
+        _c = execute_query(
+            "SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() "
+            "AND TABLE_NAME = 'clientes' AND COLUMN_NAME = %s", (_col_name,), fetch=True, fetch_one=True) or {}
+        if _c.get('cnt', 0) == 0:
+            _migrate(f"ALTER TABLE clientes ADD COLUMN {_col_name} {_col_def}")
     # 19/11/2026: 13º em boletos próprios — a parcela é uma 2ª linha da empresa no lote (tipo DECIMO), boleto separado
     _t = execute_query("SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = DATABASE() "
                        "AND TABLE_NAME = 'fin_lote_itens'", fetch=True, fetch_one=True) or {}

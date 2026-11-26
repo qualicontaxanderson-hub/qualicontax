@@ -335,7 +335,8 @@ def lancamentos():
     cats_dre = usuario_dre.categorias_despesa() if sem_dre else []
     acordos = [a for a in FinComissaoAcordo.listar(usuario_id=_eu().id) if a['base'] == 'SERVICO']
     clientes = execute_query(
-        """SELECT id, numero_cliente AS num, nome_razao_social AS nome, cpf_cnpj AS doc, COALESCE(avulso, 0) AS av, cobranca_pagador_id AS pag
+        """SELECT id, numero_cliente AS num, nome_razao_social AS nome, cpf_cnpj AS doc, COALESCE(avulso, 0) AS av, cobranca_pagador_id AS pag,
+                  (abertura_de_pf_id IS NOT NULL AND abertura_concluida_em IS NULL) AS ab
              FROM clientes WHERE COALESCE(situacao, 'ATIVO') <> 'INATIVO' ORDER BY nome_razao_social""", fetch=True) or []
     mensal = {r['cliente_id']: float(r['v'] or 0) for r in execute_query(
         """SELECT cliente_id, SUM(valor) v FROM fin_contratos WHERE ativo = 1 AND COALESCE(situacao, 'ATIVO') = 'ATIVO'
@@ -345,7 +346,8 @@ def lancamentos():
     while len(comps) < 12:          # 18/11/2026: parcelas na mensalidade escolhem o mês de cada uma
         comps.append(date(comps[-1].year + (comps[-1].month == 12), comps[-1].month % 12 + 1, 1))
     caixa = {
-        'clientes': [{'id': c['id'], 'num': str(c['num'] or ''), 'nome': c['nome'], 'doc': c['doc'] or '', 'av': bool(c['av']),
+        'clientes': [{'id': c['id'], 'num': str(c['num'] or ''), 'nome': c['nome'], 'doc': '' if c.get('ab') else (c['doc'] or ''), 'av': bool(c['av']),
+                      'ab': bool(c.get('ab')),      # 25/11/2026: em abertura (sem CNPJ ainda)
                       'mensal': mensal.get(c['id'], 0), 'pag': c.get('pag') or None} for c in clientes],
         'servicos': [{'id': s['id'], 'nome': s['nome'], 'valor': float(s['valor_padrao'] or 0), 'nota': bool(s['emite_nota']),
                       'ct': s.get('comissao_tipo') or '', 'cv': float(s.get('comissao_valor') or 0), 'n': int(s.get('n') or 0)}
@@ -1082,6 +1084,11 @@ def _cobrar_avulso(l, usuario_id, conta_id=None):
     if not conta:
         return False, ['Não há conta de cobrança ativa para emitir o boleto.']
     paga = l.get('pagador_cliente_id') or l['cliente_id']        # 19/11/2026: "Quem paga" — boleto e nota em nome de quem paga
+    # 25/11/2026: empresa em abertura ainda não tem CNPJ — a cobrança sai no CPF de quem pediu ("Quem paga") ou espera o CNPJ
+    pc = execute_query('SELECT abertura_de_pf_id, abertura_concluida_em FROM clientes WHERE id = %s', (paga,), fetch=True, fetch_one=True) or {}
+    if pc.get('abertura_de_pf_id') and not pc.get('abertura_concluida_em'):
+        return False, ['%s está em abertura e ainda não tem CNPJ: cobre do CPF de quem pediu ("Quem paga" no pedido) ou aguarde sair o CNPJ '
+                       'no cadastro e use "Cobrar de novo".' % l['nome_razao_social']]
     t = tomador_do_cliente(paga)
     if not t or not t.get('documento'):
         return False, ['O cadastro da empresa %s não tem CPF/CNPJ para o boleto.' % ('que paga' if paga != l['cliente_id'] else '')]
@@ -1140,8 +1147,14 @@ def _cobrar_avulso(l, usuario_id, conta_id=None):
         b = FinBoleto.da_nota(nfse_id)
         boleto_id = (b or {}).get('id')
         titulo_id = (b or {}).get('titulo_id')
+        if titulo_id and paga != l['cliente_id']:
+            # 26/11/2026 (Anderson): "Quem paga" é só dado do boleto e da nota; a cobrança (título) fica no cadastro de quem
+            # recebeu o serviço — na abertura de empresa, a despesa é da empresa nova, não do CPF que pagou
+            execute_query('UPDATE fin_titulos SET cliente_id = %s WHERE id = %s', (l['cliente_id'], titulo_id))
     else:
-        boleto_id, ok, msg, aviso = emitir_boleto_avulso(l['empresa_id'], conta, _pagador_do_tomador(t), itens, total,
+        pagador = _pagador_do_tomador(t)
+        pagador['cliente_id'] = l['cliente_id']          # 26/11/2026: título no cadastro de quem recebeu o serviço (ver acima)
+        boleto_id, ok, msg, aviso = emitir_boleto_avulso(l['empresa_id'], conta, pagador, itens, total,
                                                          competencia, vencimento, mensagem, None, usuario_id,
                                                          desconto=desc_total if desc_total > 0 else None, desconto_nome=desc_nome)
         msgs.append(msg)

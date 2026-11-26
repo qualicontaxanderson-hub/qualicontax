@@ -312,7 +312,7 @@
 {% set cc_ = 'D' if l.origem == 'DESCONTO' else ('M' if l.destino == 'MENSAL' else ('N' if 'nota' in (l.como or '') else 'B')) %}
 <div class="tx-c {{ cls }}{% if adiantavel %} marcavel adi{% endif %}{% if l.origem == 'DESCONTO' %} desc{% endif %}" id="l{{ l.id }}" data-cc="{{ cc_ }}" data-parc="{{ '1' if (l.parcelas and l.parcelas > 1) or l.parcela else '' }}" data-quem="{{ l.lancado_por_nome or '' }}" data-dt="{{ (l.titulo_vencimento or l.vencimento or l.competencia).isoformat() if (l.titulo_vencimento or l.vencimento or l.competencia) else '' }}" data-busca="{{ l.numero_cliente or '' }} {{ l.nome_razao_social }} {{ l.servico_nome }} {{ l.lancado_por_nome }}"{% if adiantavel %} data-v="{{ l.comissao_valor | float }}" onclick="lmMarcar(this)"{% endif %}>
   {% if adiantavel %}<input type="checkbox" name="lanc" value="{{ l.id if l.carteira else 'a' ~ l.id }}" hidden><span class="lm-ck"><i class="fas fa-check"></i></span>{% endif %}
-  <div class="tx-c-top"><span class="tx-c-num">{{ l.numero_cliente or '—' }}</span><span class="tx-c-nome" title="{{ l.nome_razao_social }}">{{ l.nome_razao_social }}</span></div>
+  <div class="tx-c-top"><span class="tx-c-num">{{ l.numero_cliente or '—' }}</span><span class="tx-c-nome" title="{{ l.nome_razao_social }}">{{ l.nome_razao_social }}</span>{% if l.em_abertura %}<span class="tx-c-st" style="background:#fef3c7;border-color:#fde68a;color:#92400e;" title="A empresa está em abertura: sem CNPJ, a cobrança sai no CPF de quem pediu (Quem paga) ou espera o CNPJ"><i class="fas fa-rocket"></i> em abertura</span>{% endif %}</div>
   <div class="tx-c-meio"><div><div class="tx-c-val">{% if l.origem == 'DESCONTO' %}− {% endif %}{{ l.valor_total | float | format_currency }}</div>
     <div class="tx-c-desc">{{ l.descricao or l.servico_nome }}</div></div>
     <span class="tx-c-st">{% if fase == 'apr' %}<i class="fas fa-hourglass-half"></i> {{ 'pedido ' ~ l.lancado_em.strftime('%d/%m') if l.lancado_em else 'aguardando' }}
@@ -428,7 +428,7 @@
       <div class="lm-sec" style="margin-top:8px">Reprovados e cancelados <small>os últimos</small></div>
       <div class="tx-grade">{% for l in fora %}{% set rep_ = l.status == 'REPROVADO' %}
         <div class="tx-c {{ 'tx-ina' if rep_ else 'tx-perd' }} lm-fc">
-          <div class="tx-c-top"><span class="tx-c-num">{{ l.numero_cliente or '—' }}</span><span class="tx-c-nome" title="{{ l.nome_razao_social }}">{{ l.nome_razao_social }}</span></div>
+          <div class="tx-c-top"><span class="tx-c-num">{{ l.numero_cliente or '—' }}</span><span class="tx-c-nome" title="{{ l.nome_razao_social }}">{{ l.nome_razao_social }}</span>{% if l.em_abertura %}<span class="tx-c-st" style="background:#fef3c7;border-color:#fde68a;color:#92400e;" title="A empresa está em abertura: sem CNPJ, a cobrança sai no CPF de quem pediu (Quem paga) ou espera o CNPJ"><i class="fas fa-rocket"></i> em abertura</span>{% endif %}</div>
           <div class="tx-c-meio"><div><div class="tx-c-val">{{ l.valor_total | float | format_currency }}</div>
             <div class="tx-c-desc">{{ l.descricao or l.servico_nome }}</div>{% if l.descricao and l.servico_nome %}<div class="lm-fc-s">{{ l.servico_nome }}</div>{% endif %}</div>
             <span class="tx-c-st"><i class="fas {{ 'fa-xmark' if rep_ else 'fa-ban' }}"></i> {{ 'reprovado' if rep_ else 'cancelado' }}</span></div>
@@ -979,7 +979,7 @@
   function nsBtPinta(bt, c, vazioTxt, vazioSub, comX) {
     var sg = bt.querySelector('.sg'), b = bt.querySelector('b'), sm = bt.querySelector('small'), x = bt.querySelector('.x');
     if (c) { sg.innerHTML = esc(nsSigla(c.nome.replace(/\b(LTDA|EIRELI|ME|EPP|S\/?A)\b/gi, ''))); sg.style.background = nsCor(c.nome); sg.style.color = '#fff'; b.textContent = c.nome;
-             sm.textContent = (c.num ? 'nº ' + c.num + ' · ' : '') + (docf(c.doc) || 'sem CNPJ') + (c.av ? ' · avulso' : '') + (c.mensal ? ' · mensalidade ' + brl(c.mensal) : ' · sem honorários mensais'); bt.classList.remove('vazio');
+             sm.textContent = (c.num ? 'nº ' + c.num + ' · ' : '') + (c.ab ? 'em abertura · sem CNPJ' : (docf(c.doc) || 'sem CNPJ')) + (c.av ? ' · avulso' : '') + (c.mensal ? ' · mensalidade ' + brl(c.mensal) : ' · sem honorários mensais'); bt.classList.remove('vazio');
              if (comX && !x) { x = document.createElement('span'); x.className = 'x'; x.innerHTML = '<i class="fas fa-xmark"></i>'; x.title = 'Voltar para a própria empresa'; x.onclick = function (e) { e.stopPropagation(); tsPag.setValue(''); }; bt.insertBefore(x, bt.lastElementChild); } }
     else { sg.innerHTML = comX ? '<i class="fas fa-building"></i>' : '?'; sg.style.background = ''; sg.style.color = ''; b.textContent = vazioTxt; sm.textContent = vazioSub; bt.classList.toggle('vazio', !comX); if (x) x.remove(); }
   }
@@ -1176,7 +1176,7 @@
     tsCli = new TomSelect('#nsCli', {
       options: D.clientes.map(function (c) { return { value: String(c.id), text: (c.num ? c.num + ' · ' : '') + c.nome, busca: c.num + ' ' + c.nome + ' ' + c.doc, c: c }; }),
       searchField: ['text', 'busca'], maxOptions: 60, dropdownParent: 'body', dropdownClass: 'ts-dropdown ns-dd', closeAfterSelect: true,
-      render: { option: function (o) { return '<div class="ns-o"><span>' + esc(o.text) + (o.c.av ? ' <span class="av">AVULSO</span>' : '') + '</span><small>' + esc(docf(o.c.doc)) + '</small></div>'; },
+      render: { option: function (o) { return '<div class="ns-o"><span>' + esc(o.text) + (o.c.av ? ' <span class="av">AVULSO</span>' : '') + '</span><small>' + esc(o.c.ab ? 'em abertura · sem CNPJ' : docf(o.c.doc)) + '</small></div>'; },
                 no_results: function () { return '<div class="no-results">Nenhum cadastro com esse nome</div>'; } },
       onChange: resumo
     });

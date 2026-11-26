@@ -1872,6 +1872,10 @@ def detalhes(id):
                          cadastros_anp=cadastros_anp,
                          socios=socios,
                          ex_socios=ex_socios,
+                         # 25/11/2026: abertura de empresa — a empresa em abertura (avulso ligado ao CPF) e, na PF, as que ela pediu
+                         abertura_pf=(Cliente.get_by_id(cliente['abertura_de_pf_id']) if cliente.get('abertura_de_pf_id') else None),
+                         em_abertura=Cliente.em_abertura(cliente),
+                         aberturas=(Cliente.aberturas_da_pessoa(id) if cliente.get('tipo_pessoa') == 'PF' else []),
                          socio_em=(_empresas_do_socio(id) if cliente.get('tipo_pessoa') == 'PF' else []),
                          # "Copiar qualificação" (20/10/2026): o parágrafo do contrato
                          qualif=qualificacao(id), qualif_alvo=QUAL_ALVO,
@@ -3135,6 +3139,54 @@ def avulsos():
     }
     return render_template('clientes/avulsos.html', avulsos=lista,
                            busca=busca, stats=stats, contabilidades_json=_contab_combo())
+
+
+@clientes.route('/clientes/<int:id>/abertura/cnpj', methods=['POST'])
+@permission_required('clientes.edit')
+def abertura_cnpj(id):
+    """"Saiu o CNPJ" (25/11/2026 — Anderson): a empresa em abertura (avulso ligado ao CPF) recebe o CNPJ; o cadastro,
+    a pasta, o histórico, os lançamentos e os boletos seguem com o MESMO registro. Com número já vira cliente; sem
+    número continua avulso ("ele pode não ser cliente, pode ser só avulso"). Admin e a equipe da Legalização (quem
+    altera cadastro). Razão social da Receita entra se ela responder e a pessoa pediu."""
+    c = Cliente.get_by_id(id)
+    if not c:
+        flash('Cadastro não encontrado.', 'danger')
+        return redirect(url_for('clientes.index'))
+    if not Cliente.em_abertura(c):
+        flash('Este cadastro não está em abertura.', 'warning')
+        return redirect(url_for('clientes.detalhes', id=id))
+    campos = {'cpf_cnpj': request.form.get('cnpj') or ''}
+    numero = _numero_inteiro(request.form.get('numero_cliente') or '')
+    if numero:
+        campos['numero_cliente'] = numero
+    novo, erros = _validar_identidade(c, campos)
+    if erros:
+        flash(' '.join(erros), 'danger')
+        return redirect(url_for('clientes.detalhes', id=id) + '#abertura')
+    receita = None
+    if request.form.get('usar_receita') == '1':
+        try:
+            from utils import cnpj_receita
+            receita, _fonte = cnpj_receita.consultar(novo['cpf_cnpj'])
+        except Exception as e:                                        # Receita fora do ar não segura o CNPJ
+            logger.warning('[abertura] Receita não respondeu para %s: %s', novo['cpf_cnpj'], e)
+            receita = None
+        if receita and (receita.get('razao_social') or '').strip():
+            novo['nome_razao_social'] = ' '.join(receita['razao_social'].split()).upper()[:255]
+    salvos, erro, virou = _trocar_identidade(c, novo)
+    if erro:
+        flash(erro, 'danger')
+        return redirect(url_for('clientes.detalhes', id=id) + '#abertura')
+    execute_query('UPDATE clientes SET abertura_concluida_em = NOW() WHERE id = %s', (id,))
+    registrar('escrita.saiu_cnpj_abertura', 'cadastros', tabela='clientes', registro_id=id,
+              antes={'cpf_cnpj': c.get('cpf_cnpj'), 'razao': c.get('nome_razao_social'), 'avulso': True},
+              depois={'cpf_cnpj': novo['cpf_cnpj'], 'razao': novo.get('nome_razao_social') or c.get('nome_razao_social'),
+                      'numero_cliente': numero or None, 'virou_cliente': bool(virou), 'receita': bool(receita),
+                      'pedida_por_pf': c.get('abertura_de_pf_id')})
+    flash('CNPJ %s gravado em %s. %s' % (novo['cpf_cnpj'], novo.get('nome_razao_social') or c['nome_razao_social'],
+                                          ('Virou cliente nº %d: a pasta, o histórico e as cobranças seguem com ele.' % numero) if virou
+                                          else 'Continua avulso: quando for virar cliente, dê um número a ele.'), 'success')
+    return redirect(url_for('clientes.detalhes', id=id))
 
 
 @clientes.route('/clientes/<int:id>/converter', methods=['POST'])
