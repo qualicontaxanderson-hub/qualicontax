@@ -433,7 +433,14 @@ def vincular_pagamento(lanc_id):
     for b in soltas:
         b['mesmo_nome'] = bool(palavras) and all(w in (b['contraparte_nome'] or '').upper() for w in palavras[:2])
     soltas = [b for b in soltas if b['mesmo_nome']] or []
+    from utils import titulos_receber as TR
+    hist = None
+    if dup:                                 # 26/11/2026: a página conta o que aconteceu, como a janela laranja
+        ht, hb, hp = _historia_dup(dup)
+        hist = {'t': ht, 'bol': hb, 'primeira': hp, 'desc': TR._desc(ht) if ht else '', 'janela': _volta_dup(dup)}
+    quem = TR._nome(nome or '') or 'Quem pagou'
     return render_template('financeiro/vincular.html', modo='linha', lanc=lanc, feitas=feitas, titulos=titulos, soltas=soltas,
+                           hist=hist, quem=quem, iniciais=''.join(w[0] for w in quem.split()[:2]).upper() or '?',
                            sugestao=nome, pre=pre, meses=_proximos_meses(), hoje=t0, brl=_brl,
                            credito=credito, usado=usado, dup=dup,
                            **dict(zip(('volta_link', 'volta_rot'), _volta_de(
@@ -639,6 +646,20 @@ def _devolucao_do_dup(dup_id):
               (f'devolucao-dup:{dup_id}',), one=True)
 
 
+def _historia_dup(d):
+    """Título e boleto pagos duas vezes e a 1ª vez que o banco recebeu o boleto (janela e página Vincular)."""
+    t = _q("""SELECT t.*, c.numero_cliente FROM fin_titulos t LEFT JOIN clientes c ON c.id = t.cliente_id
+               WHERE t.id = %s""", (d['titulo_id'],), one=True) if d.get('titulo_id') else None
+    bol = _q('SELECT * FROM fin_boletos WHERE id = %s', (d['boleto_id'],), one=True) if d.get('boleto_id') else None
+    primeira = None
+    if bol and t:
+        primeira = _q("""SELECT x.data_baixa, l.data AS data_linha FROM fin_titulo_baixas x
+                           LEFT JOIN extrato_lancamentos l ON l.id = x.lancamento_id
+                          WHERE x.titulo_id = %s AND x.referencia = %s ORDER BY x.id LIMIT 1""",
+                      (t['id'], 'cora:' + str(bol.get('charge_id') or '')), one=True)
+    return t, bol, primeira
+
+
 def _volta_dup(d):
     l = _q('SELECT data FROM extrato_lancamentos WHERE id = %s', (d['lancamento_id'],), one=True) or {}
     mes = l['data'].strftime('%Y-%m') if l.get('data') else None
@@ -653,16 +674,8 @@ def duplicidade(dup_id):
     d = _dup(dup_id)
     info = duplicidade_da_linha(d['lancamento_id']) or d
     lanc = _q('SELECT * FROM extrato_lancamentos WHERE id = %s', (d['lancamento_id'],), one=True) or {}
-    t = _q("""SELECT t.*, c.numero_cliente FROM fin_titulos t LEFT JOIN clientes c ON c.id = t.cliente_id
-               WHERE t.id = %s""", (d['titulo_id'],), one=True) if d.get('titulo_id') else None
-    bol = _q('SELECT * FROM fin_boletos WHERE id = %s', (d['boleto_id'],), one=True) if d.get('boleto_id') else None
     # a 1ª vez que o banco recebeu este boleto: a baixa feita PELO boleto e a linha do extrato dela
-    primeira = None
-    if bol and t:
-        primeira = _q("""SELECT x.data_baixa, l.data AS data_linha FROM fin_titulo_baixas x
-                           LEFT JOIN extrato_lancamentos l ON l.id = x.lancamento_id
-                          WHERE x.titulo_id = %s AND x.referencia = %s ORDER BY x.id LIMIT 1""",
-                      (t['id'], 'cora:' + str(bol.get('charge_id') or '')), one=True)
+    t, bol, primeira = _historia_dup(d)
     usado = baixas_da_linha(d['lancamento_id'])
     abertos = []
     if t and t.get('cliente_id') and info.get('situacao') == 'A_DECIDIR' and info.get('resto', 0) > 0:
