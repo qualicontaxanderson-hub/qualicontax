@@ -225,7 +225,10 @@ def _fora_do_lote(empresa_id, competencia, ids, lote_id):
                AND t.origem IN ('boleto', 'nfse') AND t.status <> 'cancelado' AND t.cliente_id IN ({ph})
                AND SUBSTRING_INDEX(t.descricao, '— ', -1) LIKE '%%onor%%'
                AND SUBSTRING_INDEX(t.descricao, '— ', -1) NOT LIKE '13º%%'
-               AND t.id NOT IN (SELECT COALESCE(titulo_id, 0) FROM fin_lote_itens WHERE lote_id = %s)
+               -- 27/11/2026: a nota que o lote tirou e cujo boleto falhou (Muricel) tem título, mas o item do lote ficou sem
+               -- titulo_id — só com nfse_id. Esse título é DO lote, não "fora" dele.
+               AND NOT EXISTS (SELECT 1 FROM fin_lote_itens li WHERE li.lote_id = %s
+                                  AND (li.titulo_id = t.id OR (li.nfse_id IS NOT NULL AND li.nfse_id = t.nfse_id)))
              ORDER BY t.id DESC""", (empresa_id, competencia, CATEGORIA_HONORARIOS, *ids, lote_id or 0), fetch=True) or []
     out = {}
     for r in rows:
