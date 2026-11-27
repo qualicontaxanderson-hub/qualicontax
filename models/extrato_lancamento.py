@@ -666,8 +666,15 @@ class ExtratoLancamento:
                  'contraparte_doc': leitura['doc'],
                  'categoria_id': lanc['categoria_id'],
                  'centro_custo_id': lanc.get('centro_custo_id')}
-        # 26/11/2026 — Anderson: "vinculações pelo CNPJ, não pelo nome". Recebimento de cobrança da Efí: a própria
-        # Efí diz o CNPJ/CPF de quem pagou; o título nasce com documento e cliente, e o nome do banco não decide nada.
+        # 26/11/2026 — Anderson: "vinculações pelo CNPJ, não pelo nome... por todos os bancos". Qualquer banco: quando a
+        # linha traz o CPF/CNPJ de quem pagou (Pix, TED, boleto), o título nasce ligado ao cadastro com esse documento.
+        if leitura['doc']:
+            try:
+                from utils.efi_boletos import _cliente_pelo_doc
+                criar['cliente_id'] = _cliente_pelo_doc(re.sub(r'\D', '', leitura['doc']))
+            except Exception:
+                logger.exception('[extrato] cliente pelo documento (lançamento %s)', lanc.get('id'))
+        # Recebimento de cobrança da Efí: o extrato não traz o documento, mas a própria Efí diz o CNPJ/CPF de quem pagou.
         m = re.match(r'^Recebimento de cobrança: (\d+)', str(lanc.get('descricao') or ''))
         if m:
             try:
