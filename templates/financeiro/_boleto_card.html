@@ -76,6 +76,7 @@
                 <div class="nd-email-linha" style="flex-wrap:wrap"><input type="date" style="min-width:150px" id="bp_{{ boleto.id }}" name="data" class="form-control" value="{{ hoje_iso() }}" max="{{ hoje_iso() }}">
                 <button class="btn btn-outline" type="submit" style="flex:1 1 auto"><i class="fas fa-check-double"></i> Marcar como pago na Efí</button></div>
                 <small class="nd-ajuda">O boleto deixa de valer na Efí. Se o título ainda estiver em aberto, a baixa entra nesta data.</small>
+                <label class="nd-ajuda" style="display:flex;gap:8px;align-items:flex-start;margin-top:6px;cursor:pointer;color:#14532d;"><input type="checkbox" name="agradecer" value="1" style="margin-top:3px;"> <span>Enviar e-mail de agradecimento ao cliente ("Pagamento recebido")</span></label>
             </form>
         </div>
         {% elif boleto.situacao == 'expired' %}

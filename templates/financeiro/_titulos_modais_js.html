@@ -39,6 +39,11 @@ function ftAbrirBaixa(el) {
     var id = el.getAttribute('data-id');
     var form = document.getElementById('ftFormBaixa');
     form.action = FT_URL_BAIXA.replace('/0/', '/' + id + '/');
+    var agr = document.getElementById('ftAgradecer');
+    if (agr) {
+        agr.style.display = (el.getAttribute('data-tipo') === 'R' && el.getAttribute('data-cli')) ? 'flex' : 'none';
+        agr.querySelector('input').checked = false;
+    }
     document.getElementById('ftBaixaInfo').textContent =
         el.getAttribute('data-contra') + ' — ' + el.getAttribute('data-desc') +
         ' (em aberto: R$ ' + el.getAttribute('data-saldo').replace('.', ',') + ')';

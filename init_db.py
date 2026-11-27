@@ -2066,6 +2066,21 @@ def _apply_migrations():
         _migrate("ALTER TABLE fin_acordos ADD COLUMN pdf_sha256 CHAR(64) NULL, ADD COLUMN enviado_em DATETIME NULL, "
                  "ADD COLUMN pdf_path VARCHAR(400) NULL")
 
+    # 27/11/2026 — e-mail de AGRADECIMENTO quando o cliente paga (utils/pagamento_agradecimento.py). Uma linha por
+    # título: o UNIQUE garante um agradecimento só, mesmo com vários processos; 'pular' = a equipe escolheu não mandar.
+    _migrate("""
+        CREATE TABLE IF NOT EXISTS fin_agradecimentos (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            titulo_id INT NOT NULL,
+            situacao VARCHAR(12) NOT NULL,
+            para VARCHAR(255) NULL,
+            erro VARCHAR(255) NULL,
+            usuario_id INT NULL,
+            criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE KEY uk_agr_titulo (titulo_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    """)
+
     print("✓ Migrations concluídas")
 
 

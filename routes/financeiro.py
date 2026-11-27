@@ -466,7 +466,9 @@ def titulo_baixar(titulo_id):
                           'status_resultante': r['status'], **{
                               k: str(v) for k, v in extras.items() if v}})
         if r['status'] == 'liquidado':
-            flash('Baixa registrada — título liquidado!', 'success')
+            from utils.pagamento_agradecimento import depois_da_baixa_manual
+            flash('Baixa registrada — título liquidado!'
+                  + depois_da_baixa_manual(titulo_id, f.get('agradecer') == '1', current_user.id), 'success')
         else:
             flash('Baixa parcial registrada — título segue em aberto pelo saldo.',
                   'success')

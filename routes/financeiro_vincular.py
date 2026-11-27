@@ -606,6 +606,13 @@ def vincular_gravar(lanc_id):
         msg += f' A diferença de {_brl(dif)} virou o título {residuo_id}, vence {venc_residuo.strftime("%d/%m/%Y")}.'
     elif dif < 0 and not credito:
         msg += f' {_brl(-dif)} entraram como juros.'
+    # 27/11/2026: a pessoa escolhe se manda o agradecimento. Com diferença a cobrar (resíduo), o cliente ainda deve:
+    # nada de "pagamento recebido" (Anderson: "Só quando pagar tudo").
+    if not residuo_id:
+        from utils.pagamento_agradecimento import depois_da_baixa_manual
+        quer = request.form.get('agradecer') == '1'
+        txt = [depois_da_baixa_manual(t['id'], quer, current_user.id) for t in ts]
+        msg += next((x for x in txt if x), '')
     flash(msg, 'success')
 
     if residuo_id and acao == 'cobrar' and request.form.get('boleto') == '1':

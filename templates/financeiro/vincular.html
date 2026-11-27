@@ -334,6 +334,11 @@
         {% endif %}
       </div>
 
+      {# 27/11/2026: a pessoa escolhe se manda o "Pagamento recebido" (só sai com a cobrança paga por inteiro) #}
+      <label class="vj-agr" style="display:flex;gap:10px;align-items:flex-start;padding:10px 12px;margin:0 0 10px;border:1px solid #bbf7d0;background:#f0fdf4;border-radius:10px;cursor:pointer;color:#14532d;font-size:13px;">
+        <input type="checkbox" name="agradecer" value="1" style="margin-top:3px;">
+        <span><b>Enviar e-mail de agradecimento ao cliente</b><br><small style="color:#3f6212;">"Pagamento recebido", para os contatos do Financeiro. Só sai se a cobrança ficar paga por inteiro.</small></span>
+      </label>
       <button type="submit" id="vpOk" class="vj-ok" disabled><i class="fas fa-check"></i> {{ 'Dar baixa com o crédito' if credito else 'Vincular e dar baixa' }}</button>
       <small class="vj-nota vj-dica" id="vpOkDica" data-txt="Marque a cobrança que este {{ 'crédito' if credito else 'dinheiro' }} paga.">Marque a cobrança que este {{ 'crédito' if credito else 'dinheiro' }} paga.</small>
     </section>

@@ -1126,6 +1126,14 @@ def main() -> int:
     except Exception:
         logger.exception('[roteador] extrato do Cora falhou; tenta na próxima volta (a janela de 7 dias cobre).')
 
+    # E o e-mail de AGRADECIMENTO (27/11/2026): cobrança paga por inteiro pelo banco ou pelo extrato (baixa sem
+    # usuário) recebe "Pagamento recebido". Baixa à mão pergunta na tela. Desliga com AGRADECIMENTO_ATIVO=0.
+    try:
+        from utils.pagamento_agradecimento import rodar_automatico as agradecer_pagos
+        agradecer_pagos()
+    except Exception:
+        logger.exception('[roteador] agradecimento de pagamento falhou; tenta na próxima volta.')
+
     # E os certificados digitais deixados na _ENTRADA com a senha no nome
     # ("175 senha 1234.pfx"): vincula sozinho, pelo mesmo núcleo da tela.
     # Pedido do Anderson em 13/09/2026 — o .p12 do posto 175 estava lá parado.

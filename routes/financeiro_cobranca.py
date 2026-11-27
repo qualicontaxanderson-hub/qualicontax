@@ -852,8 +852,12 @@ def boleto_marcar_pago(boleto_id):
     registrar('escrita.marcou_boleto_pago_efi', 'financeiro', tabela='fin_boletos', registro_id=boleto_id,
               depois={'charge_id': b['charge_id'], 'titulo_id': b.get('titulo_id'), 'data': str(quando),
                       'baixa_titulo': (baixou or {}).get('status')})
+    agr = ''
+    if baixou and baixou.get('status') == 'liquidado':
+        from utils.pagamento_agradecimento import depois_da_baixa_manual
+        agr = depois_da_baixa_manual(b['titulo_id'], request.form.get('agradecer') == '1', current_user.id)
     flash('Boleto marcado como pago na Efí — não pode mais ser pago.'
-          + (f" Título baixado em {quando.strftime('%d/%m/%Y')}." if baixou else ' O título já estava quitado.'), 'success')
+          + (f" Título baixado em {quando.strftime('%d/%m/%Y')}." if baixou else ' O título já estava quitado.') + agr, 'success')
     return redirect(volta)
 
 

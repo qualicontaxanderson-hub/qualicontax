@@ -115,6 +115,7 @@
     </div>
 </div>
 
+<style>.fin-agr{display:flex;gap:10px;align-items:flex-start;padding:10px 12px;margin-bottom:12px;border:1px solid #bbf7d0;background:#f0fdf4;border-radius:10px;cursor:pointer;color:#14532d;}.fin-agr input{margin-top:4px;}.fin-agr small{color:#3f6212;}</style>
 <!-- ── Modal: baixa manual ────────────────────────────────────────── -->
 <div id="ftModalBaixa" class="modal" style="display:none;">
     <div class="modal-content" style="max-width:560px;">
@@ -176,6 +177,13 @@
                     <input type="text" name="referencia" class="form-control"
                            placeholder="Nº do comprovante, PIX, cheque... (opcional)">
                 </div>
+                {# 27/11/2026: baixa à mão PERGUNTA se manda o agradecimento (Anderson). Só título a receber de cliente;
+                   só sai quando a cobrança fica paga por inteiro. #}
+                <label id="ftAgradecer" class="fin-agr" style="display:none;">
+                    <input type="checkbox" name="agradecer" value="1">
+                    <span><b>Enviar e-mail de agradecimento ao cliente</b><br>
+                    <small>"Pagamento recebido", para os contatos do Financeiro. Só sai se a cobrança ficar paga por inteiro.</small></span>
+                </label>
                 <small style="color:#6b7280;">Baixa parcial é permitida: o título fica
                     <em>parcial</em> até completar o valor. Desconto conta para liquidar.</small>
             </div>
