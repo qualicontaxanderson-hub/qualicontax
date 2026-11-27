@@ -127,8 +127,10 @@ def _rico(s, apelido=None, parte=False):
     """Dá vida ao texto: nomes das partes, valores, datas, prazos e percentuais em negrito (Anderson, 06/11:
     "está seco, nomes em negrito, dar vida ao contrato")."""
     t = _esc(s)
-    if parte:                                                       # razão social até a primeira vírgula
-        t = re.sub(r'^([^,]+),', r'<b>\1</b>,', t, count=1)
+    if parte:                                                       # razão social até a primeira vírgula — de CADA empresa da lista
+        # 27/11/2026 — Anderson: "contrato com 3 empresas, a ACR não está em negrito, a AR Transportes está": as empresas
+        # vêm separadas por "; " e só a primeira era pega; agora cada "NOME, estabelecida à" / "NOME, residente" entra.
+        t = re.sub(r'(^|; )([^,;]+),(?= (?:estabelecida|residente|inscrit))', r'\1<b>\2</b>,', t)
     for pat in (r'(CNPJ nº [\d./-]+)', r'(CPF nº [\d.-]+)', r'(CRC nº [\w./-]+)', r'(R\$ [\d.]+,\d{2}(?: \([^)]+\))?)',
                 r'(\d{2}/\d{2}/\d{4})', r'(\d+%? \([a-zç ]+\)(?: (?:dias|meses|testemunhas?|honorário mensal))?)', r'(dia \d+ \([a-z]+\))'):
         t = re.sub(pat, r'<b>\1</b>', t)
