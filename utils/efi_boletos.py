@@ -245,6 +245,51 @@ def do_boleto_efi(c):
     return atual, valor, pago, credito
 
 
+_PAGADOR = {}            # charge_id -> {'doc', 'nome', 'cliente_id'} (por processo)
+
+
+def _cliente_pelo_doc(doc):
+    """O cadastro com este CNPJ/CPF (um só); entre repetidos, o ativo com número de cliente."""
+    if not doc:
+        return None
+    rs = _q("""SELECT id, numero_cliente, situacao, COALESCE(avulso, 0) AS avulso FROM clientes
+                WHERE REPLACE(REPLACE(REPLACE(cpf_cnpj, '.', ''), '/', ''), '-', '') = %s
+                ORDER BY (situacao = 'ATIVO') DESC, (numero_cliente IS NULL), avulso, id""", (doc,))
+    return rs[0]['id'] if rs else None
+
+
+def pagador_da_cobranca(charge_id, empresa_id=None):
+    """Quem pagou a cobrança nº ``charge_id``, pela API da Efí: {'doc' (só dígitos), 'nome', 'cliente_id'} ou None.
+
+    26/11/2026 — Anderson: "essas vinculações não deveria ser pelo nome e sim pelo CNPJ, para não ficar nisso". O OFX/CNAB
+    só traz o nome que o banco escreve (razão social antiga, erro de grafia, matriz e filial iguais); a cobrança na Efí
+    traz o CNPJ/CPF do pagador. Pergunta primeiro à aplicação "Conexa" (só consulta), depois às contas de produção."""
+    import re
+    cid = str(charge_id or '').strip()
+    if not cid.isdigit():
+        return None
+    if cid in _PAGADOR:
+        return _PAGADOR[cid]
+    from models.fin_cobranca import FinCobrancaConta
+    contas = _q("""SELECT id FROM fin_cobranca_contas WHERE provedor = 'efi' AND ambiente = 'producao' AND ativo = 1
+                    %s ORDER BY so_consulta DESC, id""" % ('AND empresa_id = %s' if empresa_id else ''), (empresa_id,) if empresa_id else ())
+    achado = None
+    for c in contas:
+        try:
+            efi, _ = FinCobrancaConta.cliente_efi(c['id'])
+            dados = efi.consultar(cid)
+        except Exception:
+            continue
+        cust = dados.get('customer') or {}
+        jp = cust.get('juridical_person') or {}
+        doc = re.sub(r'\D', '', jp.get('cnpj') or cust.get('cpf') or '')
+        if doc:
+            achado = {'doc': doc, 'nome': (jp.get('corporate_name') or cust.get('name') or '').strip(), 'cliente_id': _cliente_pelo_doc(doc), 'conta': c['id']}
+            break
+    _PAGADOR[cid] = achado
+    return achado
+
+
 def listar_tudo(efi, meses=MESES):
     """Todos os boletos que a aplicação criou nos últimos ``meses`` (mês a mês, 100 por página): {id: boleto}."""
     hoje = date.today()

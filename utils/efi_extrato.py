@@ -276,6 +276,13 @@ def baixar(lanc, seco=True, nome_pagador=None, irmaos_seco=0):
         return 'webhook', {'titulo_id': wh['titulo_id']}
 
     cli = _clientes_pelo_nome(nome_pagador) if nome_pagador else None
+    try:                                    # 26/11/2026: o CNPJ do pagador (pela Efí) decide antes do nome do OFX
+        from utils.efi_boletos import pagador_da_cobranca
+        p = pagador_da_cobranca(prot, lanc['empresa_id']) if prot else None
+        if p and p.get('cliente_id'):
+            cli = [p['cliente_id']]
+    except Exception:
+        logger.exception('[efi] pagador da cobrança %s', prot)
     mao = _baixas_a_mao(lanc['empresa_id'], lanc['data'], valor)
     if mao:
         if cli:

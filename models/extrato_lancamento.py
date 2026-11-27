@@ -601,6 +601,7 @@ class ExtratoLancamento:
                     emissao=lanc['data'], vencimento=lanc['data'],
                     valor=valor, empresa_id=lanc.get('empresa_id'),
                     contraparte_doc=(criar.get('contraparte_doc') or None),
+                    cliente_id=criar.get('cliente_id'),            # 26/11/2026: recebimento da Efí já vem com o cliente
                     centro_custo_id=criar.get('centro_custo_id'),
                     origem='extrato', chave_idem=chave)
                 if not titulo_id or titulo_id is True:
@@ -660,13 +661,25 @@ class ExtratoLancamento:
                     lanc, titulo_id=cand['id'], usuario_id=usuario_id)
                 return 'casou' if ok else 'erro'
 
-        ok, _, _ = ExtratoLancamento.conciliar(
-            lanc, criar={'competencia': lanc['data'].replace(day=1),
-                         'contraparte_nome': leitura['nome'] or cat['nome'],
-                         'contraparte_doc': leitura['doc'],
-                         'categoria_id': lanc['categoria_id'],
-                         'centro_custo_id': lanc.get('centro_custo_id')},
-            usuario_id=usuario_id)
+        criar = {'competencia': lanc['data'].replace(day=1),
+                 'contraparte_nome': leitura['nome'] or cat['nome'],
+                 'contraparte_doc': leitura['doc'],
+                 'categoria_id': lanc['categoria_id'],
+                 'centro_custo_id': lanc.get('centro_custo_id')}
+        # 26/11/2026 — Anderson: "vinculações pelo CNPJ, não pelo nome". Recebimento de cobrança da Efí: a própria
+        # Efí diz o CNPJ/CPF de quem pagou; o título nasce com documento e cliente, e o nome do banco não decide nada.
+        m = re.match(r'^Recebimento de cobrança: (\d+)', str(lanc.get('descricao') or ''))
+        if m:
+            try:
+                from utils.efi_boletos import pagador_da_cobranca
+                p = pagador_da_cobranca(m.group(1), lanc.get('empresa_id'))
+            except Exception:
+                logger.exception('[extrato] pagador da cobrança Efí (lançamento %s)', lanc.get('id'))
+                p = None
+            if p:
+                criar['contraparte_doc'] = p['doc']
+                criar['cliente_id'] = p['cliente_id']
+        ok, _, _ = ExtratoLancamento.conciliar(lanc, criar=criar, usuario_id=usuario_id)
         return 'criou' if ok else 'erro'
 
     @staticmethod
