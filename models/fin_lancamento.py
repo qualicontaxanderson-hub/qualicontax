@@ -89,11 +89,43 @@ class FinLoteMensal:
                                  WHERE l.id = %s AND l.rodando_desde IS NOT NULL AND l.rodando_desde >= NOW() - INTERVAL %s MINUTE""",
                              (lote_id, minutos), fetch=True, fetch_one=True)
 
+    # 27/11/2026 — Anderson: "fechei os honorários de 11/2026 do Auto Posto Cata Preta; se o usuário lançar uma
+    # mensalidade, como 11/26 já foi fechado, nem aparece para ele escolher". O fechamento é por EMPRESA: o item do
+    # lote que saiu (status ok) ou o honorário da competência emitido à mão (título de HONORÁRIOS, mesmo critério de
+    # utils.lote_mensal._fora_do_lote). O lote EMITIDO (mês fechado para todos) continua em ``emitido``.
+    _SQL_FECHADAS = """
+        SELECT i.cliente_id, l.competencia FROM fin_lote_itens i JOIN fin_lotes_mensais l ON l.id = i.lote_id
+         WHERE l.empresa_id = %s AND l.competencia BETWEEN %s AND %s AND i.status = 'ok' AND COALESCE(i.tipo, 'MENSAL') = 'MENSAL'{cli}
+        UNION
+        SELECT t.cliente_id, DATE_SUB(t.competencia, INTERVAL DAY(t.competencia) - 1 DAY) AS competencia FROM fin_titulos t
+         WHERE t.empresa_id = %s AND t.tipo = 'R' AND DATE_SUB(t.competencia, INTERVAL DAY(t.competencia) - 1 DAY) BETWEEN %s AND %s
+           AND t.categoria_id = %s
+           AND t.origem IN ('boleto', 'nfse') AND t.status <> 'cancelado'
+           AND SUBSTRING_INDEX(t.descricao, '— ', -1) LIKE '%%onor%%'
+           AND SUBSTRING_INDEX(t.descricao, '— ', -1) NOT LIKE '13º%%'{clt}"""
+
     @staticmethod
-    def competencia_aberta(empresa_id, a_partir=None):
-        """Primeira competência (dia 1) a partir de hoje cujo lote ainda não saiu."""
+    def fechadas(empresa_id, de, ate, cliente_id=None):
+        """{cliente_id: {competências (dia 1) cujo honorário da empresa já saiu}} entre ``de`` e ``ate``."""
+        from models.fin_contrato import CATEGORIA_HONORARIOS
+        extra = (cliente_id,) if cliente_id else ()
+        sql = FinLoteMensal._SQL_FECHADAS.format(cli=' AND i.cliente_id = %s' if cliente_id else '',
+                                                 clt=' AND t.cliente_id = %s' if cliente_id else '')
+        rows = execute_query(sql, (empresa_id, de, ate) + extra + (empresa_id, de, ate, CATEGORIA_HONORARIOS) + extra, fetch=True) or []
+        out = {}
+        for r in rows:
+            out.setdefault(r['cliente_id'], set()).add(r['competencia'])
+        return out
+
+    @staticmethod
+    def competencia_aberta(empresa_id, a_partir=None, cliente_id=None):
+        """Primeira competência (dia 1) a partir de hoje cujo lote ainda não saiu — e, com ``cliente_id``, cujo
+        honorário dessa empresa ainda não foi fechado (27/11/2026)."""
         c = (a_partir or date.today()).replace(day=1)
-        while FinLoteMensal.emitido(empresa_id, c):
+        fech = FinLoteMensal.fechadas(empresa_id, c, date(c.year + 4, c.month, 1), cliente_id).get(cliente_id, set()) if cliente_id else set()
+        for _ in range(60):
+            if not FinLoteMensal.emitido(empresa_id, c) and c not in fech:
+                break
             c = mes_seguinte(c)
         return c
 
@@ -228,7 +260,7 @@ class FinLancamento:
               vencimento=None, observacao=None, competencia=None, com_nota=None, comissao_tipo=None, comissao_valor=None,
               pagador_cliente_id=None):
         q, vu, competencia, cv = FinLancamento._validar(empresa_id, destino, quantidade, valor_unitario, vencimento,
-                                                          competencia, comissao_tipo, comissao_valor)
+                                                          competencia, comissao_tipo, comissao_valor, cliente_id)
         return execute_query(
             """INSERT INTO fin_lancamentos (empresa_id, cliente_id, servico_id, descricao, quantidade, valor_unitario,
                    valor_total, destino, competencia, vencimento, observacao, lancado_por, com_nota,
@@ -240,7 +272,7 @@ class FinLancamento:
              (pagador_cliente_id if destino == 'AVULSO' and pagador_cliente_id and int(pagador_cliente_id) != int(cliente_id) else None)), fetch=False)
 
     @staticmethod
-    def _validar(empresa_id, destino, quantidade, valor_unitario, vencimento, competencia, comissao_tipo, comissao_valor):
+    def _validar(empresa_id, destino, quantidade, valor_unitario, vencimento, competencia, comissao_tipo, comissao_valor, cliente_id=None):
         """As regras de um pedido (criar e editar usam as mesmas). Devolve (quantidade, valor, competência, comissão)."""
         if destino not in DESTINOS:
             raise ValueError('Escolha se a cobrança é avulsa ou entra no mensal.')
@@ -251,8 +283,8 @@ class FinLancamento:
         if destino == 'AVULSO' and not vencimento:
             raise ValueError('Informe o vencimento do boleto avulso.')
         if destino == 'MENSAL':
-            # corte do mês: lote já emitido empurra para a competência seguinte
-            competencia = FinLoteMensal.competencia_aberta(empresa_id, competencia)
+            # corte do mês: lote já emitido (ou o honorário desta empresa já fechado) empurra para a competência seguinte
+            competencia = FinLoteMensal.competencia_aberta(empresa_id, competencia, cliente_id)
         else:
             competencia = (competencia or date.today()).replace(day=1)
         if comissao_tipo not in (None, 'PADRAO', 'PCT', 'FIXO', 'SEM'):
@@ -278,7 +310,7 @@ class FinLancamento:
         if (l.get('origem') == 'DESCONTO') != bool(desconto) or l.get('parcela'):
             raise ValueError('Altere pelo pedido do serviço: o desconto vai junto.')
         q, vu, competencia, cv = FinLancamento._validar(l['empresa_id'], destino, 1, valor_unitario, vencimento,
-                                                          competencia, comissao_tipo, comissao_valor)
+                                                          competencia, comissao_tipo, comissao_valor, cliente_id)
         n = max(1, min(int(parcelas or 1), 12))
         execute_query(
             """UPDATE fin_lancamentos SET cliente_id = %s, servico_id = %s, descricao = %s, quantidade = 1, valor_unitario = %s,

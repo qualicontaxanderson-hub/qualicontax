@@ -587,7 +587,7 @@
         <div class="ns-bancos">{% for c in contas_cobranca %}<label class="ns-banco"><input type="radio" name="conta_cobranca_id" value="{{ c.id }}"{{ ' checked' if loop.first }}>
           <span>{{ logo_banco({'efi': '364', 'bradesco': '237', 'cora': '403'}.get(c.provedor, '364'), none, 30) }}<span class="nb"><b>{{ {'efi': 'Efí', 'bradesco': 'Bradesco', 'cora': 'Cora'}.get(c.provedor, c.provedor) }}</b></span></span></label>{% endfor %}</div></div>
       {% endif %}
-      <div class="ns-campo" id="nsCompBox" hidden><label>Mensalidade de</label><select class="ns-in" id="nsComp" name="competencia"></select><span class="ns-seg wrap" id="nsCompSeg"></span></div>
+      <div class="ns-campo" id="nsCompBox" hidden><label>Mensalidade de</label><select class="ns-in" id="nsComp" name="competencia"></select><span class="ns-seg wrap" id="nsCompSeg"></span><small id="nsCompObs" style="display:block; color:#b45309; font-size:12px; margin-top:6px" hidden></small></div>
       <div class="ns-campo" style="grid-column:1/-1"><label>Texto da nota / do boleto</label><input class="ns-in ns-up" id="nsDesc" name="descricao" maxlength="200" placeholder="o nome do serviço"></div>
     </div></section>
     <section class="ns-b" id="nsDescBox"><div class="ns-h"><i class="fas fa-tag"></i> Desconto <em>opcional · sai no boleto como linha própria e fica no controle</em></div>
@@ -632,7 +632,7 @@
       <div class="ns-com" id="apVencBox" style="margin-top:12px"><label style="font-size:12.5px; font-weight:700; color:#334155">Vencimento</label><input class="ns-in" type="date" id="apVenc" name="vencimento"><span id="apVencObs" style="font-size:12.5px; color:#64748b"></span></div>
       <div class="ns-parc" style="margin-top:12px"><label style="font-size:12.5px; font-weight:700; color:#334155">Parcelas</label><select class="ns-in" id="apParc" name="parcelas">{% for k in range(1, 13) %}<option value="{{ k }}">{{ k }}x</option>{% endfor %}</select><small id="apParcTxt"></small></div>
       <div class="ns-pl" id="apParcL" hidden></div>
-      <div class="ns-com" id="apCompBox" style="margin-top:12px" hidden><label style="font-size:12.5px; font-weight:700; color:#334155">Mensalidade de</label><select class="ns-in" id="apComp" name="competencia"></select></div></section>
+      <div class="ns-com" id="apCompBox" style="margin-top:12px" hidden><label style="font-size:12.5px; font-weight:700; color:#334155">Mensalidade de</label><select class="ns-in" id="apComp" name="competencia"></select><small id="apCompObs" style="display:block; color:#b45309; font-size:12px; margin-top:4px" hidden></small></div></section>
     {% if contas_cobranca %}
     <section class="ns-b" id="apBancoBox"><div class="ns-h"><i class="fas fa-building-columns"></i> Banco do boleto</div>
       <div class="ns-bancos">{% for c in contas_cobranca %}<label class="ns-banco"><input type="radio" name="conta_cobranca_id" value="{{ c.id }}"{{ ' checked' if loop.first }}>
@@ -725,11 +725,19 @@
 <script>
 (function () {
   var D = JSON.parse(document.getElementById('lmDados').textContent);
+  // 27/11/2026 — Anderson: o mês cujo honorário DESTA empresa já foi fechado "nem aparece para ele escolher" (D.fechados: {cliente: [meses]})
+  function compsDe(cid) { var f = (D.fechados || {})[String(cid || '')] || []; return D.comps.filter(function (c) { return f.indexOf(c.v) < 0; }); }
+  function compsObs(cid) {
+    var f = (D.fechados || {})[String(cid || '')] || []; if (!f.length) return '';
+    var r = D.comps.filter(function (c) { return f.indexOf(c.v) >= 0; }).map(function (c) { return c.rot; }), prox = compsDe(cid)[0];
+    if (!r.length) return '';
+    return (r.length === 1 ? 'O honorário de ' + r[0] : 'Os honorários de ' + r.join(', ')) + ' desta empresa já ' + (r.length === 1 ? 'foi fechado' : 'foram fechados') + (prox ? ': a mensalidade entra a partir de ' + prox.rot + '.' : '.');
+  }
   var APR = {
     {% for l in grupos.apr %}{{ l.id }}: { cli: {{ l.nome_razao_social | tojson }}, num: {{ (l.numero_cliente or '') | string | tojson }}, serv: {{ (l.descricao or l.servico_nome) | tojson }},
       valor: {{ l.valor_total | float }}, como: {{ l.como | tojson }}, por: {{ l.lancado_por_nome | tojson }}, venc: {{ ((l.vencimento.strftime('%d/%m/%Y')) if l.vencimento else '') | tojson }}, vi: {{ ((l.vencimento.isoformat()) if l.vencimento else '') | tojson }}, pc: {{ l.parcelas or 1 }}, pd: {{ (l.parcelas_datas or '') | tojson }}, cc: {{ ('MENSAL' if l.destino == 'MENSAL' else ('BOLETO_NOTA' if (l.emite_nota and (l.com_nota if l.com_nota is not none else l.emite_nota)) else 'BOLETO')) | tojson }}, nota: {{ 'true' if l.emite_nota else 'false' }}, ci: {{ (l.competencia.isoformat() if l.competencia else '') | tojson }},
       pt: {{ (l.comissao_pedida_tipo or 'PADRAO') | tojson }}, pv: {{ (l.comissao_pedida_valor | float) if l.comissao_pedida_valor else 0 }}, prev: {{ l.com_prev | float }}, trava: {{ 'true' if l.com_trava else 'false' }},
-      orc: {{ l.orcamento_id or 0 }}, orcn: {{ (l.orcamento_numero or '') | tojson }}, obs: {{ (l.observacao or '') | tojson }} }{{ ',' if not loop.last }}{% endfor %}
+      cid: {{ l.cliente_id or 0 }}, orc: {{ l.orcamento_id or 0 }}, orcn: {{ (l.orcamento_numero or '') | tojson }}, obs: {{ (l.observacao or '') | tojson }} }{{ ',' if not loop.last }}{% endfor %}
   };
   var URL_APROVAR = {{ url_for('financeiro.lancamento_aprovar', lid=999999) | tojson }}, URL_REPROVAR = {{ url_for('financeiro.lancamento_reprovar', lid=999999) | tojson }},
       URL_CANCELAR = {{ url_for('financeiro.lancamento_cancelar', lid=999999) | tojson }},
@@ -878,7 +886,11 @@
     var amanha = new Date(Date.parse(hj) + 86400000).toISOString().slice(0, 10);
     $('apVenc').min = hj; $('apVenc').value = l.vi && l.vi >= hj ? l.vi : (l.vi ? hj : amanha);
     $('apVencObs').textContent = l.venc ? 'pedido para ' + l.venc + (l.vi < hj ? ' (já passou: sai com hoje)' : '') : '';
-    $('apComp').innerHTML = D.comps.map(function (c) { return '<option value="' + c.v + '"' + (c.v === l.ci ? ' selected' : '') + '>' + c.rot + '</option>'; }).join('');
+    var apLista = compsDe(l.cid), apTem = apLista.some(function (c) { return c.v === l.ci; });
+    $('apComp').innerHTML = apLista.map(function (c) { return '<option value="' + c.v + '"' + (c.v === l.ci ? ' selected' : '') + '>' + c.rot + '</option>'; }).join('');
+    var apObs = $('apCompObs');
+    apObs.textContent = (!apTem && l.ci && /Mensalidade/.test(l.como) && apLista.length) ? 'Pediu ' + l.ci.slice(5, 7) + '/' + l.ci.slice(0, 4) + ', mas o honorário desse mês desta empresa já foi fechado: vai para ' + apLista[0].rot + '.' : compsObs(l.cid);
+    apObs.hidden = !apObs.textContent;
     $('apComoPed').textContent = 'pediu: ' + l.como + (l.pc > 1 ? ' em ' + l.pc + 'x' : '');
     $('apParc').value = String(l.pc || 1);
     $('apParcL').dataset.sig = ''; l._pd = l.pd;
@@ -910,14 +922,17 @@
     var base = Math.floor(valor * 100 / n) / 100, prim = Math.round((valor - base * (n - 1)) * 100) / 100;
     var d = /^\d{4}-\d{2}-\d{2}$/.test(inicio || '') ? inicio.split('-').map(Number) : null, h = '';
     var pre = (preset || '').split(',').filter(Boolean);
+    // 27/11/2026: nas parcelas da mensalidade só entram os meses abertos para a empresa (a lista do campo principal)
+    var lista = (mensal && principal && principal.options && principal.options.length) ? [].map.call(principal.options, function (o) { return { v: o.value, rot: o.textContent }; }) : D.comps;
     for (var k = 0; k < n; k++) {
       var v = pre.length === n ? pre[k] : '';
       if (!v && d) {
         var y = d[0] + Math.floor((d[1] - 1 + k) / 12), m = (d[1] - 1 + k) % 12 + 1, ult = new Date(y, m, 0).getDate();
         v = y + '-' + String(m).padStart(2, '0') + '-' + String(mensal ? 1 : Math.min(d[2], ult)).padStart(2, '0');
       }
+      if (mensal && !lista.some(function (c) { return c.v === v; })) { var nx = lista.filter(function (c) { return c.v > v; })[0]; if (nx) v = nx.v; }
       var campo = mensal
-        ? '<select class="ns-in" name="parc_comp">' + D.comps.map(function (c) { return '<option value="' + c.v + '"' + (c.v === v ? ' selected' : '') + '>' + c.rot + '</option>'; }).join('') + '</select>'
+        ? '<select class="ns-in" name="parc_comp">' + lista.map(function (c) { return '<option value="' + c.v + '"' + (c.v === v ? ' selected' : '') + '>' + c.rot + '</option>'; }).join('') + '</select>'
         : '<input class="ns-in" type="date" name="parc_venc" min="' + D.hoje + '" value="' + v + '">';
       h += '<div class="ns-pl-l"><b>' + (k + 1) + 'ª</b>' + campo + '<span>' + brl(k ? base : prim) + '</span></div>';
     }
@@ -1187,7 +1202,7 @@
                 no_results: function () { return '<div class="no-results">Nenhum cadastro com esse nome</div>'; } },
       onChange: function () { resumo(); nsMailCarrega(); }
     });
-    tsCli.on('change', function () { var c = cliente(); if (tsPag) tsPag.setValue(c && c.pag ? String(c.pag) : '', true); nsCliPinta(); nsPagPinta(); resumo(); nsMailCarrega(); });
+    tsCli.on('change', function () { var c = cliente(); if (tsPag) tsPag.setValue(c && c.pag ? String(c.pag) : '', true); nsCliPinta(); nsCompMonta(); nsPagPinta(); resumo(); nsMailCarrega(); });
     tsServ = new TomSelect('#nsServ', {
       options: D.servicos.map(function (s) { return { value: String(s.id), text: s.nome, s: s }; }), searchField: ['text'], maxOptions: 200,
       dropdownParent: 'body', dropdownClass: 'ts-dropdown ns-dd',
@@ -1207,8 +1222,15 @@
         resumo();
       }
     });
-    $('nsComp').innerHTML = D.comps.map(function (c) { return '<option value="' + c.v + '">' + c.rot + '</option>'; }).join('');
-    $('nsCompSeg').innerHTML = D.comps.map(function (c) { return '<button type="button" data-v="' + c.v + '">' + c.rot + '</button>'; }).join('');
+    function nsCompMonta() {           // 27/11/2026: a lista de meses é da empresa escolhida (sem o mês já fechado)
+      var c = cliente(), lista = compsDe(c && c.id), atual = $('nsComp').value;
+      $('nsComp').innerHTML = lista.map(function (x) { return '<option value="' + x.v + '">' + x.rot + '</option>'; }).join('');
+      if (lista.some(function (x) { return x.v === atual; })) $('nsComp').value = atual;
+      $('nsCompSeg').innerHTML = lista.map(function (x) { return '<button type="button" data-v="' + x.v + '">' + x.rot + '</button>'; }).join('');
+      var o = $('nsCompObs'); o.textContent = compsObs(c && c.id); o.hidden = !o.textContent;
+      $('nsParcL').dataset.sig = '';                                   // as parcelas remontam com a lista nova
+    }
+    nsCompMonta();
     $('nsCompSeg').addEventListener('click', function (e) { var b = e.target.closest('button'); if (b) { $('nsComp').value = b.dataset.v; $('nsComp').dispatchEvent(new Event('change')); } });
     $('nsParcSeg').addEventListener('click', function (e) { var b = e.target.closest('button'); if (b) { $('nsParc').value = b.dataset.v; $('nsParc').dispatchEvent(new Event('change')); } });
     var amanha = new Date(); amanha.setDate(amanha.getDate() + 1);       // amanhã no relógio daqui (não em UTC)

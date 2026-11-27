@@ -345,6 +345,8 @@ def lancamentos():
     comps = [comp0]
     while len(comps) < 12:          # 18/11/2026: parcelas na mensalidade escolhem o mês de cada uma
         comps.append(date(comps[-1].year + (comps[-1].month == 12), comps[-1].month % 12 + 1, 1))
+    # 27/11/2026 — por empresa: o mês cujo honorário já foi fechado sai da lista "Mensalidade de" (Anderson: "nem aparece")
+    fechados = {str(cid): sorted(c.isoformat() for c in cs) for cid, cs in FinLoteMensal.fechadas(EMP, comps[0], comps[-1]).items()}
     caixa = {
         'clientes': [{'id': c['id'], 'num': str(c['num'] or ''), 'nome': c['nome'], 'doc': '' if c.get('ab') else (c['doc'] or ''), 'av': bool(c['av']),
                       'ab': bool(c.get('ab')),      # 25/11/2026: em abertura (sem CNPJ ainda)
@@ -354,6 +356,7 @@ def lancamentos():
                      for s in _servicos() if s['nome'] != 'Desconto'],
         'acordos': [{'servico_id': a['servico_id'], 'tipo': a['tipo'], 'valor': float(a['valor'])} for a in acordos],
         'comps': [{'v': c.isoformat(), 'rot': c.strftime('%m/%Y')} for c in comps],
+        'fechados': fechados,
         'hoje': hoje.isoformat(), 'eu': getattr(_eu(), 'nome', ''), 'aprovador': aprov,
     }
     from models.contato_cliente import ContatoCliente
@@ -1221,10 +1224,14 @@ def _dividir(l, n, datas=None):
     mensal = l['destino'] == 'MENSAL'
     if datas and len(datas) == n:
         vencs = [None] * n if mensal else datas
-        comps = [FinLoteMensal.competencia_aberta(l['empresa_id'], d) for d in datas] if mensal else [l['competencia']] * n
+        comps = [FinLoteMensal.competencia_aberta(l['empresa_id'], d, l['cliente_id']) for d in datas] if mensal else [l['competencia']] * n
     else:
         vencs = [None] * n if mensal else [_somar_meses(l['vencimento'], k) for k in range(n)]
-        comps = [_somar_meses(l['competencia'], k) for k in range(n)] if mensal else [l['competencia']] * n
+        comps = [l['competencia']] * n
+        if mensal:                  # 27/11/2026: pula o mês já fechado para esta empresa, sem repetir competência
+            comps = []
+            for _k in range(n):
+                comps.append(FinLoteMensal.competencia_aberta(l['empresa_id'], _somar_meses(comps[-1], 1) if comps else l['competencia'], l['cliente_id']))
     execute_query("""UPDATE fin_lancamentos SET quantidade = 1, valor_unitario = %s, valor_total = %s, descricao = %s,
                          comissao_pedida_valor = %s, parcela = 1, parcelas = %s, parcela_grupo = id, vencimento = %s, competencia = %s
                       WHERE id = %s AND status = 'LANCADO'""",
@@ -1303,7 +1310,7 @@ def lancamento_aprovar(lid):
                     flash(SEM_MENSAL, 'danger')
                     return redirect(url_for('financeiro.lancamentos', aba='apr'))
                 destino, com_nota, venc = 'MENSAL', None, None
-                comp = FinLoteMensal.competencia_aberta(EMP, _data(request.form.get('competencia')) or l['competencia'])
+                comp = FinLoteMensal.competencia_aberta(EMP, _data(request.form.get('competencia')) or l['competencia'], l['cliente_id'])
             else:
                 destino, com_nota = 'AVULSO', 1 if como == 'BOLETO_NOTA' else 0
                 if com_nota and not l.get('emite_nota', 1):
