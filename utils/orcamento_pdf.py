@@ -188,18 +188,40 @@ def gerar_pdf(o, itens, link=None, data_doc=None):
     el.append(Paragraph('SERVIÇOS', st['sec']))
     dados = [[Paragraph('Serviço', st['th']), Paragraph('Qtd', st['thr']), Paragraph('Valor', st['thr']), Paragraph('Total', st['thr'])]]
     tem_taxa = False
-    for i in itens:
+    cabecalhos = []                                   # linhas de empresa (um boleto por empresa, 26/11/2026)
+
+    def _linha_item(i):
+        nonlocal tem_taxa
         nome = _esc(i['descricao'])
         if not i['emite_nota']:
             nome += ' <font color="#b45309" size="7.4">· taxa repassada, só no boleto</font>'; tem_taxa = True
         qd = Decimal(str(i['quantidade']))
         dados.append([Paragraph(nome, st['td']), Paragraph(('%g' % qd) if qd == qd.to_integral() else str(qd).replace('.', ','), st['tdr']),
                       Paragraph(_brl(i['valor_unitario']), st['tdr']), Paragraph(_brl(i['valor_total']), st['tdr'])])
+    if o.get('por_empresa'):
+        ids = [e['id'] for e in o.get('empresas') or []]
+        grupos = [(e['nome'], [i for i in itens if i.get('cliente_id') == e['id']]) for e in o.get('empresas') or []]
+        soltos = [i for i in itens if i.get('cliente_id') not in ids]
+        if soltos:
+            grupos.append((o.get('cliente_nome') or '', soltos))
+        for nome_e, its in grupos:
+            if not its:
+                continue
+            cabecalhos.append(len(dados))
+            sub = sum((Decimal(str(i['valor_total'])) for i in its), Decimal('0'))
+            dados.append([Paragraph('<b>%s</b> <font color="#64748b" size="7.4">· boleto próprio</font>' % _esc(nome_e), st['td']), '', '', Paragraph('<b>%s</b>' % _brl(sub), st['tdr'])])
+            for i in its:
+                _linha_item(i)
+    else:
+        for i in itens:
+            _linha_item(i)
     t = Table(dados, colWidths=[LW * .60, LW * .09, LW * .155, LW * .155], repeatRows=1)
     est = [('BACKGROUND', (0, 0), (-1, 0), VERDE2), ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'), ('LINEBELOW', (0, 1), (-1, -1), 0.4, LINHA),
            ('LEFTPADDING', (0, 0), (-1, -1), 8), ('RIGHTPADDING', (0, 0), (-1, -1), 8), ('TOPPADDING', (0, 0), (-1, -1), 6), ('BOTTOMPADDING', (0, 0), (-1, -1), 6)]
     for r in range(1, len(dados)):
-        if r % 2 == 0:
+        if r in cabecalhos:
+            est += [('SPAN', (0, r), (2, r)), ('BACKGROUND', (0, r), (-1, r), colors.HexColor('#e8f3ec')), ('LINEABOVE', (0, r), (-1, r), 0.8, VERDE2)]
+        elif r % 2 == 0:
             est.append(('BACKGROUND', (0, r), (-1, r), FUNDO))
     t.setStyle(TableStyle(est))
     el.append(t)
@@ -223,6 +245,10 @@ def gerar_pdf(o, itens, link=None, data_doc=None):
     pag = [Paragraph('PAGAMENTO', st['k'])]
     if como:
         pag.append(Paragraph(_esc(como) + ((', em %d parcelas' % o['parcelas']) if o.get('parcelas') and o['parcelas'] > 1 else ', à vista'), st['obs']))
+    if o.get('por_empresa'):
+        pag.append(Paragraph('Um boleto para cada empresa, com os serviços dela.', st['obs']))
+    elif o.get('pagador_outro'):
+        pag.append(Paragraph('Boleto único em nome de <b>%s</b>, com os serviços de todas as empresas.' % _esc(o['pagador_nome']), st['obs']))
     if tem_taxa:
         pag.append(Paragraph('As taxas repassadas são valores pagos a terceiros (Junta Comercial, cartório, Correios) sem acréscimo; entram no boleto e não compõem a nota fiscal.', st['mi']))
     if validade and not aceito:

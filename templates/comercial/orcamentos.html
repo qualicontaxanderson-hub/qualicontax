@@ -59,6 +59,7 @@
 .oc-it .oc-sv-bt .tx { flex:1; min-width:0; display:flex; flex-direction:column; line-height:1.2; } .oc-it .oc-sv-bt .tx b { font-size:13px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; } .oc-it .oc-sv-bt .tx small { color:#64748b; font-size:11px; }
 .oc-it .ns-in.qtd { text-align:center; height:46px; font-weight:800; } .oc-it .ns-money { height:46px; }
 .oc-it .rm { width:34px; height:46px; border:1px solid #e2e8f0; border-radius:10px; background:#fff; color:#b91c1c; cursor:pointer; } .oc-it .rm:disabled { opacity:.3; cursor:default; }
+.oc-it .oc-it-emp { grid-column:1 / -1; margin:-2px 0 4px; } .oc-it .oc-it-emp button { padding:4px 10px; font-size:12px; } .oc-it .oc-it-emp button.on { background:#0f3d2e; border-color:#0f3d2e; }
 .oc-add { align-self:flex-start; border:1px dashed #9fc9b3; background:#f6faf7; color:#15803d; font:inherit; font-weight:800; font-size:12.5px; border-radius:10px; padding:8px 12px; cursor:pointer; }
 .oc-chips { display:flex; flex-wrap:wrap; gap:6px; } .oc-sol { display:grid; grid-template-columns:1.4fr 1.2fr .8fr; gap:8px; } .oc-chips button.sol { border-style:dashed; }
 @media (max-width:900px) { .oc-sol { grid-template-columns:1fr; } } .oc-chips button { border:1px solid #e2e8f0; background:#fff; color:#475569; border-radius:99px; padding:7px 12px; font:inherit; font-size:12.5px; font-weight:700; cursor:pointer; }
@@ -162,7 +163,7 @@
 <div class="pk-fundo" id="ocNovoFundo" hidden>
   <form class="ns" id="ocForm" method="POST" action="{{ url_for('comercial.orcamento_novo') }}" autocomplete="off">
     <input type="hidden" name="orcamento_id" id="ocId" value=""><input type="hidden" name="cliente_id" id="ocCli" value=""><input type="hidden" name="empresas_mais" id="ocMais" value="">{# ids dos campos escondidos NÃO podem ser iguais aos nomes das funções: no onclick, o nome resolve para o campo do form (ocComo virava o input) #}<input type="hidden" name="como" id="ocComoIn" value="BOLETO_NOTA">
-    <input type="hidden" name="parcelas" id="ocParc" value="1"><input type="hidden" name="comissao_tipo" id="ocCtIn" value="PADRAO"><input type="hidden" name="validade_dias" id="ocVal" value="15"><input type="hidden" name="acao" id="ocAcao" value="rascunho"><input type="hidden" name="interno" id="ocInterno" value="0">
+    <input type="hidden" name="parcelas" id="ocParc" value="1"><input type="hidden" name="comissao_tipo" id="ocCtIn" value="PADRAO"><input type="hidden" name="validade_dias" id="ocVal" value="15"><input type="hidden" name="acao" id="ocAcao" value="rascunho"><input type="hidden" name="interno" id="ocInterno" value="0"><input type="hidden" name="cobranca_modo" id="ocCobModo" value="UNICA"><input type="hidden" name="pagador_cliente_id" id="ocPagador" value="">
     <header class="ns-cab"><span class="ns-logo"><img src="{{ url_for('static', filename='images/logo.png') }}" alt="Qualicontax"></span>
       <div class="ns-tit"><b id="ocTit">Novo orçamento</b><span>escolha a empresa, os serviços e os valores · depois vai para aprovação</span></div>
       <div class="ns-prev"><small>total do orçamento</small><b id="ocPrevTot">R$ 0,00</b><span id="ocPrevSub">nenhum serviço ainda</span></div>
@@ -189,6 +190,13 @@
             <button type="button" class="ns-op" data-v="BOLETO" onclick="ocComo(this)"><i class="fas fa-barcode"></i><b>Só boleto</b><small>sem nota fiscal</small></button>
             <button type="button" class="ns-op" data-v="MENSAL" onclick="ocComo(this)"><i class="fas fa-calendar-plus"></i><b>Na mensalidade</b><small>entra no boleto do mês, junto com os honorários</small></button></div>
           <div class="ns-parc" style="margin-top:10px"><small>Parcelas</small><div class="oc-chips" id="ocParcs">{% for n in (1, 2, 3, 4, 5, 6, 10, 12) %}<button type="button" data-v="{{ n }}"{{ ' class=on' if n == 1 }} onclick="ocParcela(this)">{{ n }}x</button>{% endfor %}</div></div></section>
+        {# cobrança do grupo (26/11/2026 — Anderson): mais de uma empresa → um boleto para tudo (quem paga) ou um boleto por empresa #}
+        <section class="ns-b" id="ocGrupoSec" hidden><div class="ns-h"><i class="fas fa-building-circle-check"></i> Cobrança do grupo <em>mais de uma empresa no orçamento: como sai a cobrança</em></div>
+          <div class="ns-ops" id="ocGrupoOps" style="grid-template-columns:repeat(2, minmax(0,1fr))">
+            <button type="button" class="ns-op on" data-v="UNICA" onclick="ocGrupoModo(this)"><i class="fas fa-file-invoice-dollar"></i><b>Um boleto para tudo</b><small>uma cobrança só, no nome de quem paga</small></button>
+            <button type="button" class="ns-op" data-v="POR_EMPRESA" onclick="ocGrupoModo(this)"><i class="fas fa-layer-group"></i><b>Um boleto por empresa</b><small>cada serviço diz de qual empresa é; sai uma cobrança para cada</small></button></div>
+          <div id="ocPagBox" style="margin-top:10px"><small style="display:block; font-size:11.5px; font-weight:700; color:#0f3d2e; text-transform:uppercase; letter-spacing:.3px; margin-bottom:6px">Quem paga</small><div class="oc-chips" id="ocPagChips"></div></div>
+          <div id="ocPorEmpDica" class="ns-aviso" hidden style="margin-top:10px"><i class="fas fa-circle-info"></i> Em cada serviço acima, toque na empresa de quem ele é.</div></section>
         <section class="ns-b"><div class="ns-h"><i class="fas fa-hand-holding-dollar"></i> Comissão pedida <em>{% if comissao_padrao %}seu padrão: {{ ('%g%%' % comissao_padrao.valor) if comissao_padrao.tipo == 'PCT' else (comissao_padrao.valor | format_currency) }}{% else %}você não tem comissão padrão cadastrada{% endif %}</em></div>
           <div class="ns-seg" id="ocSeg"><button type="button" data-v="PADRAO" class="on" onclick="ocCt(this)">Meu padrão</button><button type="button" data-v="PCT" onclick="ocCt(this)">Outro %</button><button type="button" data-v="FIXO" onclick="ocCt(this)">Valor fixo</button><button type="button" data-v="SEM" onclick="ocCt(this)">Sem comissão</button></div>
           <div class="ns-money pct" id="ocCvBox" hidden style="width:170px; margin-top:8px"><span id="ocCvUn">%</span><input class="ns-in" name="comissao_valor" id="ocCv" inputmode="decimal" placeholder="10" oninput="ocResumo()"></div></section>
@@ -324,11 +332,13 @@
     ocEmpPinta(null); $('ocItens').innerHTML = ''; ocItemAdd();
     ocComo(document.querySelector('#ocOps .ns-op[data-v=BOLETO_NOTA]')); ocParcela(document.querySelector('#ocParcs [data-v="1"]')); ocCt(document.querySelector('#ocSeg [data-v=PADRAO]')); ocValidade(document.querySelector('#ocVals [data-v="15"]'));
     ocIntSet(document.querySelector('#ocIntOps .ns-op[data-v="0"]')); ocSolZera(); $('ocMais').value = ''; $('ocNova').value = '';
+    $('ocCobModo').value = 'UNICA'; $('ocPagador').value = ''; ocGrupoPinta();
     if (dados) {
       ocIntSet(document.querySelector('#ocIntOps .ns-op[data-v="' + (dados.interno ? 1 : 0) + '"]')); $('ocSolNome').value = dados.solicitante_nome || ''; $('ocSolEmail').value = dados.solicitante_email || ''; $('ocSolFone').value = dados.solicitante_fone || ''; ocSolCarrega(dados.cliente_id);
       $('ocMais').value = (dados.empresas_mais || []).join(','); $('ocNova').value = dados.empresa_nova_nome || ''; ocSolPre = dados.solicitante_email || ''; ocSolCarrega(dados.cliente_id);
+      $('ocCobModo').value = dados.cobranca_modo || 'UNICA'; $('ocPagador').value = dados.pagador_cliente_id || ''; document.querySelectorAll('#ocGrupoOps .ns-op').forEach(function (x) { x.classList.toggle('on', x.dataset.v === $('ocCobModo').value); });
       $('ocId').value = dados.id; $('ocTit').textContent = 'Alterar orçamento'; $('ocCli').value = dados.cliente_id; ocEmpPinta(CLI.find(function (c) { return String(c.id) === String(dados.cliente_id); }));
-      $('ocItens').innerHTML = ''; (dados.itens || []).forEach(function (i) { ocItemAdd(i); });
+      $('ocItens').innerHTML = ''; (dados.itens || []).forEach(function (i) { ocItemAdd(i); }); ocGrupoPinta();
       if (dados.como) ocComo(document.querySelector('#ocOps .ns-op[data-v=' + dados.como + ']'));
       ocParcela(document.querySelector('#ocParcs [data-v="' + (dados.parcelas || 1) + '"]') || document.querySelector('#ocParcs [data-v="1"]'));
       ocCt(document.querySelector('#ocSeg [data-v=' + (dados.comissao_tipo || 'PADRAO') + ']')); if (dados.comissao_valor) $('ocCv').value = String(dados.comissao_valor).replace('.', ',');
@@ -414,7 +424,7 @@
     CaixaCliente.abrir({ clientes: CLI, atual: atual, varios: true, titulo: 'Empresa do orçamento', sub: 'cliente cadastrado ou avulso · toque em uma, ou em várias para um orçamento ao grupo (a 1ª recebe a cobrança)', z: 1300,
       onUsar: function (cs) {
         if (!cs) return; if (!Array.isArray(cs)) cs = [cs]; if (!cs.length) return;
-        var c = cs[0]; $('ocCli').value = c.id; $('ocMais').value = cs.slice(1).map(function (x) { return x.id; }).join(','); ocEmpPinta(c); ocSolCarrega(c.id); ocResumo();
+        var c = cs[0]; $('ocCli').value = c.id; $('ocMais').value = cs.slice(1).map(function (x) { return x.id; }).join(','); ocEmpPinta(c); ocSolCarrega(c.id); ocGrupoPinta(); ocResumo();
         var bm = document.querySelector('#ocOps .ns-op[data-v=MENSAL]'); bm.classList.toggle('sem', !c.mensal); if (!c.mensal && $('ocComoIn').value === 'MENSAL') ocComo(document.querySelector('#ocOps .ns-op[data-v=BOLETO_NOTA]'));
       } });
   };
@@ -423,14 +433,15 @@
   window.ocItemAdd = function (i) {
     i = i || {};
     var r = document.createElement('div'); r.className = 'oc-it';
-    r.innerHTML = '<input type="hidden" name="item_servico_id" value="' + esc(i.servico_id || '') + '"><input type="hidden" name="item_descricao" value="' + esc(i.descricao || '') + '">'
+    r.innerHTML = '<input type="hidden" name="item_servico_id" value="' + esc(i.servico_id || '') + '"><input type="hidden" name="item_descricao" value="' + esc(i.descricao || '') + '"><input type="hidden" name="item_cliente_id" value="' + esc(i.cliente_id || '') + '">'
       + '<button type="button" class="oc-sv-bt" onclick="ocSvAbrir(this)"><span class="sg"><i class="fas fa-plus"></i></span><span class="tx"><b>Escolher o serviço</b><small>do catálogo</small></span></button>'
       + '<input class="ns-in qtd" name="item_qtd" inputmode="numeric" value="' + esc(i.qtd || 1) + '" title="quantidade" oninput="ocResumo()">'
       + '<div class="ns-money fixo"><span>R$</span><input class="ns-in rg-din" name="item_valor" inputmode="numeric" placeholder="0,00" value="' + (i.valor ? esc(Number(i.valor).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })) : '') + '"></div>'
-      + '<button type="button" class="rm" title="Tirar este serviço" onclick="ocItemRm(this)"><i class="fas fa-xmark"></i></button>';
+      + '<button type="button" class="rm" title="Tirar este serviço" onclick="ocItemRm(this)"><i class="fas fa-xmark"></i></button>'
+      + '<div class="oc-it-emp oc-chips" hidden></div>';
     $('ocItens').appendChild(r); ocMask(r.querySelector('.rg-din'));
     if (i.servico_id) ocSvPinta(r, SRVI[String(i.servico_id)], i.descricao);
-    ocRmEstado(); ocResumo();
+    ocGrupoPintaItem(r); ocRmEstado(); ocResumo();
   };
   window.ocItemRm = function (bt) { bt.closest('.oc-it').remove(); ocRmEstado(); ocResumo(); };
   function ocRmEstado() { var rs = document.querySelectorAll('#ocItens .oc-it'); rs.forEach(function (r) { r.querySelector('.rm').disabled = rs.length === 1; }); }
@@ -452,6 +463,28 @@
   };
   function ocMask(el) { el.addEventListener('input', function () { var d = el.value.replace(/\D/g, '').replace(/^0+/, '').slice(0, 11); el.value = d ? (parseInt(d, 10) / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : ''; ocResumo(); }); }
 
+  // ── cobrança do grupo (26/11/2026) ──
+  function ocEmpresasSel() { var ids = [$('ocCli').value].concat(($('ocMais').value || '').split(',')).filter(Boolean); return ids.map(function (id) { return CLI.find(function (c) { return String(c.id) === String(id); }); }).filter(Boolean); }
+  window.ocGrupoModo = function (b) { if (!b) return; $('ocCobModo').value = b.dataset.v; document.querySelectorAll('#ocGrupoOps .ns-op').forEach(function (x) { x.classList.toggle('on', x === b); }); ocGrupoPinta(); };
+  window.ocPagSet = function (id) { $('ocPagador').value = id; document.querySelectorAll('#ocPagChips button').forEach(function (x) { x.classList.toggle('on', String(x.dataset.v) === String(id)); }); ocResumo(); };
+  window.ocItemEmp = function (bt) { var r = bt.closest('.oc-it'); r.querySelector('[name=item_cliente_id]').value = bt.dataset.v; r.querySelectorAll('.oc-it-emp button').forEach(function (x) { x.classList.toggle('on', x === bt); }); ocResumo(); };
+  function ocGrupoPintaItem(r) {
+    var emps = ocEmpresasSel(), por = $('ocCobModo').value === 'POR_EMPRESA' && emps.length > 1, box = r.querySelector('.oc-it-emp'), inp = r.querySelector('[name=item_cliente_id]');
+    if (!box) return; box.hidden = !por; if (!por) return;
+    if (!emps.some(function (c) { return String(c.id) === inp.value; })) inp.value = String(emps[0].id);
+    box.innerHTML = emps.map(function (c) { return '<button type="button" data-v="' + c.id + '" class="' + (String(c.id) === inp.value ? 'on' : '') + '" onclick="ocItemEmp(this)" title="' + esc(c.nome) + '">' + esc(c.nome.length > 28 ? c.nome.slice(0, 28) + '…' : c.nome) + '</button>'; }).join('');
+  }
+  window.ocGrupoPinta = function () {
+    var emps = ocEmpresasSel(); $('ocGrupoSec').hidden = emps.length < 2;
+    if (emps.length < 2) { $('ocCobModo').value = 'UNICA'; $('ocPagador').value = ''; document.querySelectorAll('#ocGrupoOps .ns-op').forEach(function (x) { x.classList.toggle('on', x.dataset.v === 'UNICA'); }); }
+    var por = $('ocCobModo').value === 'POR_EMPRESA' && emps.length > 1;
+    $('ocPagBox').hidden = por; $('ocPorEmpDica').hidden = !por;
+    if (!por && emps.length > 1) {
+      if (!emps.some(function (c) { return String(c.id) === $('ocPagador').value; })) $('ocPagador').value = String(emps[0].id);
+      $('ocPagChips').innerHTML = emps.map(function (c) { return '<button type="button" data-v="' + c.id + '" class="' + (String(c.id) === $('ocPagador').value ? 'on' : '') + '" onclick="ocPagSet(' + c.id + ')">' + esc(c.nome) + (String(c.id) === String(emps[0].id) ? ' <small>· principal</small>' : '') + '</button>'; }).join('');
+    }
+    document.querySelectorAll('#ocItens .oc-it').forEach(ocGrupoPintaItem); ocResumo();
+  };
   window.ocComo = function (b) { if (!b) return; $('ocComoIn').value = b.dataset.v; document.querySelectorAll('#ocOps .ns-op').forEach(function (x) { x.classList.toggle('on', x === b); }); ocResumo(); };
   window.ocParcela = function (b) { if (!b) return; $('ocParc').value = b.dataset.v; document.querySelectorAll('#ocParcs button').forEach(function (x) { x.classList.toggle('on', x === b); }); ocResumo(); };
   window.ocValidade = function (b) { if (!b) return; $('ocVal').value = b.dataset.v; document.querySelectorAll('#ocVals button').forEach(function (x) { x.classList.toggle('on', x === b); }); ocResumo(); };
@@ -471,18 +504,26 @@
       h += '<div class="oc-res-it"><span>' + esc((r.querySelector('[name=item_descricao]').value || s.nome)) + (q > 1 ? ' × ' + q : '') + (s.nota ? '' : ' <small style="color:#b45309">só boleto</small>') + '</span><b>' + brl(q * v) + '</b></div>';
     });
     var como = $('ocComoIn').value, parc = parseInt($('ocParc').value || '1', 10), ct = $('ocCtIn').value, cv = num($('ocCv').value);
+    var emps = ocEmpresasSel(), por = $('ocCobModo').value === 'POR_EMPRESA' && emps.length > 1, gh = '';
+    if (emps.length > 1) {
+      if (por) {
+        var sub = {}; document.querySelectorAll('#ocItens .oc-it').forEach(function (r) { var s = SRVI[r.querySelector('[name=item_servico_id]').value]; if (!s) return; var q = num(r.querySelector('[name=item_qtd]').value) || 1, v = num(r.querySelector('[name=item_valor]').value), cid = r.querySelector('[name=item_cliente_id]').value; sub[cid] = (sub[cid] || 0) + q * v; });
+        gh = emps.map(function (c) { return sub[String(c.id)] ? '<div class="oc-res-it" style="border:0"><span><i class="fas fa-building" style="color:#64748b"></i> ' + esc(c.nome) + ' <small style="color:#64748b">boleto próprio</small></span><b>' + brl(sub[String(c.id)]) + '</b></div>' : ''; }).join('');
+      } else { var pg = emps.find(function (c) { return String(c.id) === $('ocPagador').value; }) || emps[0]; gh = '<div class="oc-res-it" style="border:0"><span>um boleto só · paga</span><b style="font-weight:700">' + esc(pg.nome) + '</b></div>'; }
+    }
     var rc = { PADRAO: 'meu padrão', PCT: (cv ? cv.toLocaleString('pt-BR') + '%' : '% a definir'), FIXO: (cv ? brl(cv) : 'valor a definir'), SEM: 'sem comissão' }[ct];
     $('ocRes').innerHTML = (cli ? '<div class="oc-res-it"><span><b>' + esc(cli.nome) + '</b></span><b style="font-weight:600; color:#64748b">' + (cli.av ? 'avulso' : 'nº ' + (cli.num || '—')) + '</b></div>' : '<div class="oc-res-it"><span style="color:#b45309">escolha a empresa</span><b></b></div>')
       + (h || '<div class="oc-res-it"><span style="color:#94a3b8">nenhum serviço com valor ainda</span><b></b></div>')
       + '<div class="oc-res-tot"><span>Total' + (parc > 1 ? ' <small style="color:#64748b">em ' + parc + 'x de ' + brl(tot / parc) + '</small>' : '') + '</span><b>' + brl(tot) + '</b></div>'
       + (como === 'BOLETO_NOTA' && nota !== tot && n ? '<div class="oc-res-it" style="border:0"><span>nota fiscal</span><b>' + brl(nota) + '</b></div><div class="oc-res-it" style="border:0"><span>boleto</span><b>' + brl(tot) + '</b></div>' : '')
-      + '<div class="oc-res-it" style="border:0"><span>comissão pedida</span><b style="color:#6d28d9">' + esc(rc) + '</b></div>';
+      + gh + '<div class="oc-res-it" style="border:0"><span>comissão pedida</span><b style="color:#6d28d9">' + esc(rc) + '</b></div>';
     $('ocPrevTot').textContent = brl(tot); $('ocPrevSub').textContent = n ? (n + ' serviço' + (n > 1 ? 's' : '') + ' · ' + { BOLETO_NOTA: 'boleto + nota', BOLETO: 'só boleto', MENSAL: 'na mensalidade' }[como] + (parc > 1 ? ' · ' + parc + 'x' : '')) : 'nenhum serviço ainda';
     if (!cli) falta = 'Escolha a empresa.'; else if (!n && !falta) falta = 'Ponha ao menos um serviço com valor.'; else if ((ct === 'PCT' || ct === 'FIXO') && !cv) falta = falta || 'Diga quanto é a comissão pedida.';
     if (!falta && $('ocInterno').value !== '1' && !$('ocSolEmail').value.trim()) falta = $('ocSol').classList.contains('red') ? 'Sem contato com e-mail: inclua o contato que pediu o serviço (botão "Adicionar contato").' : 'Toque no contato que pediu o serviço (ou marque "Só controle interno").';
     var abert = !!(cli && cli.pf && ocTemAbertura()); $('ocNovaSec').hidden = !abert;      // PF + Abertura de empresa → nome da empresa nova (25/11/2026)
     if (!falta && abert && !$('ocNova').value.trim()) falta = 'Abertura de empresa para pessoa física: diga o nome da empresa nova.';
     if (!falta && como === 'MENSAL' && cli && !cli.mensal) falta = 'Esta empresa não tem honorários mensais: cobre com boleto.';
+    if (!falta && por && Array.prototype.some.call(document.querySelectorAll('#ocItens .oc-it'), function (r) { return r.querySelector('[name=item_servico_id]').value && !r.querySelector('[name=item_cliente_id]').value; })) falta = 'Um boleto por empresa: diga de qual empresa é cada serviço.';
     var msg = $('ocMsg'); msg.textContent = falta || ('Pronto: ' + n + ' serviço' + (n > 1 ? 's' : '') + ', ' + brl(tot) + '.'); msg.classList.toggle('ok', !falta);
     $('ocSalvar').disabled = !cli; $('ocEnviar').disabled = !!falta;
   };

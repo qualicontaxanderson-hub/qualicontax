@@ -84,6 +84,10 @@ def _texto_whatsapp(o, itens, link):
     for i in itens:
         linhas.append('📌 %s – R$ %s%s' % (i['descricao'], _brl(i['valor_total']), '' if i['emite_nota'] else ' (taxa repassada)'))
     linhas.append('💰 *Total: R$ %s*%s' % (_brl(o['total']), (' · em %dx' % o['parcelas']) if o.get('parcelas') and o['parcelas'] > 1 else ''))
+    if o.get('por_empresa'):
+        linhas.append('🧾 Um boleto por empresa')
+    elif o.get('pagador_outro'):
+        linhas.append('🧾 Boleto único em nome de %s' % o['pagador_nome'])
     if o.get('como'):
         linhas.append('💳 Pagamento: %s' % COMO[o['como']])
     if o.get('validade'):
@@ -93,7 +97,9 @@ def _texto_whatsapp(o, itens, link):
     return '\n'.join(linhas)
 
 
-def _texto_financeiro(o, itens, lanc):
+def _texto_financeiro(o, itens, lancs):
+    lanc = lancs[0] if isinstance(lancs, list) else lancs
+    varios = lancs if isinstance(lancs, list) else [lancs]
     """Aviso pronto para quem monta o orçamento mandar ao Financeiro aprovar a cobrança (22/11/2026 — Anderson: "temos que ter um
     texto para facilitar a vida deles lá... quanto mais fácil for para eles e para nós")."""
     quem = (o.get('criado_por_nome') or '').split(' ')[0].title()
@@ -101,8 +107,12 @@ def _texto_financeiro(o, itens, lanc):
               'Serviço feito, pode aprovar a cobrança? 🙏', '',
               '🏢 *%s*' % _nome_cli(o), '📄 Orçamento *%s*%s' % (o['numero'], (' — ' + o['titulo']) if o.get('titulo') else '')]
     for i in itens:
-        linhas.append('📌 %s – R$ %s' % (i['descricao'], _brl(i['valor_total'])))
+        linhas.append('📌 %s%s – R$ %s' % ((i['empresa_nome'] + ' · ') if i.get('empresa_nome') else '', i['descricao'], _brl(i['valor_total'])))
     linhas.append('💰 *Total: R$ %s*' % _brl(o['total']))
+    if o.get('por_empresa'):
+        linhas.append('🧾 Um boleto por empresa (%d)' % len(varios))
+    elif o.get('pagador_outro'):
+        linhas.append('🧾 Boleto único em nome de %s' % o['pagador_nome'])
     if o.get('aceito_em'):
         linhas.append('✅ Aceito pelo cliente: %s em %s' % (o.get('aceito_nome') or '', o['aceito_em'].strftime('%d/%m/%Y %H:%M')))
     elif o.get('interno'):
@@ -110,7 +120,7 @@ def _texto_financeiro(o, itens, lanc):
     como = COMO.get(lanc.get('como') or o.get('como') or '', '')
     venc = lanc.get('vencimento')
     linhas.append('💳 %s%s' % (como or 'cobrança', (' · vence %s' % venc.strftime('%d/%m/%Y')) if venc else ''))
-    linhas += ['', '👉 Lançamento nº %s em Financeiro › Lançamentos › Para aprovar:' % lanc['id'],
+    linhas += ['', '👉 Lançamento%s nº %s em Financeiro › Lançamentos › Para aprovar:' % ('s' if len(varios) > 1 else '', ', '.join(str(l['id']) for l in varios)),
                url_for('financeiro.lancamentos', aba='apr', _external=True) + '#l%s' % lanc['id'], '',
                '🔎 Histórico completo no orçamento:', url_for('comercial.orcamentos', abrir=o['id'], _external=True)]
     return '\n'.join(linhas)
@@ -237,7 +247,8 @@ def orcamento_janela(oid):
     o['rot'], o['cls'], o['ico'] = STATUS.get(o['status'], (o['status'], 'tx-perd', 'fa-circle'))
     itens = Orcamento.itens(oid)
     eventos = Orcamento.eventos(oid)
-    lanc = FinLancamento.get(o['lancamento_id']) if o.get('lancamento_id') else None
+    lancs = _lancamentos_do(o)                       # um, ou um por empresa (26/11/2026)
+    lanc = lancs[0] if lancs else None
     from utils.cobranca_email import destinatarios_cobranca
     try:
         dest = destinatarios_cobranca(o['cliente_id'])
@@ -248,7 +259,7 @@ def orcamento_janela(oid):
     datas_venc = [((hoje + timedelta(days=d)).isoformat(), 'em %d dias' % d, (hoje + timedelta(days=d)).strftime('%d/%m'), d == 7) for d in (3, 7, 10, 15, 30)]
     link = url_for('proposta.ver', token=o['token'], _external=True) if not o.get('interno') else None
     texto_wa = _texto_whatsapp(o, itens, link) if link else None
-    texto_fin = _texto_financeiro(o, itens, lanc) if (o['status'] == 'COBRANCA' and lanc and lanc['status'] == 'LANCADO') else None
+    texto_fin = _texto_financeiro(o, itens, lancs) if (o['status'] == 'COBRANCA' and lancs and any(l['status'] == 'LANCADO' for l in lancs)) else None
     aprov_wa = None
     if o['status'] == 'APROVACAO':                   # WhatsApp para cobrar a aprovação (26/11/2026)
         from routes.financeiro_contratos import _wa_link
@@ -257,39 +268,51 @@ def orcamento_janela(oid):
                    for a in _aprovadores() if a['id'] != current_user.id and a['id'] != 1]
         aprov_wa = {'texto': t, 'pessoas': pessoas}
     # boleto cancelado: o lançamento voltou para "aprovado sem cobrança" (22/11/2026 — Anderson: "mostra que cancelou o boleto, e agora?")
-    sem_cobranca = bool(lanc and lanc['status'] == 'APROVADO' and not lanc.get('titulo_id') and o['status'] == 'COBRANCA')
+    sem_cobranca = bool(lancs and all(l['status'] == 'APROVADO' and not l.get('titulo_id') for l in lancs) and o['status'] == 'COBRANCA')
     _, bloqueio = _lancamento_vivo(o)
     editavel = o['status'] in Orcamento.EDITAVEIS and not bloqueio and (o['criado_por'] == current_user.id or _aprovador())
-    return render_template('comercial/_orcamento_janela.html', aprov_wa=aprov_wa, texto_fin=texto_fin, sem_cobranca=sem_cobranca, bloqueio=bloqueio, editavel=editavel, o=o, itens=itens, eventos=eventos, lanc=lanc, dest=dest, hoje=hoje, datas_venc=datas_venc, link=link,
+    return render_template('comercial/_orcamento_janela.html', lancs=lancs, aprov_wa=aprov_wa, texto_fin=texto_fin, sem_cobranca=sem_cobranca, bloqueio=bloqueio, editavel=editavel, o=o, itens=itens, eventos=eventos, lanc=lanc, dest=dest, hoje=hoje, datas_venc=datas_venc, link=link,
                            texto_wa=texto_wa, wa_link=_wa_link(o.get('solicitante_fone'), texto_wa) if texto_wa else None,
                            aprovador=_aprovador(), dono=o['criado_por'] == current_user.id, STATUS=STATUS, COMO=COMO, COMISSAO=COMISSAO,
                            vencido=Orcamento.vencido(o), n_nota=sum(1 for i in itens if i['emite_nota']),
                            total_nota=sum((Decimal(str(i['valor_total'])) for i in itens if i['emite_nota']), Decimal('0')))
 
 
+def _lancamentos_do(o):
+    """Os lançamentos vivos deste orçamento (um só, ou um por empresa desde 26/11/2026), do mais antigo ao mais novo."""
+    ids = [r['id'] for r in execute_query("""SELECT id FROM fin_lancamentos WHERE orcamento_id = %s AND status NOT IN ('CANCELADO', 'REPROVADO')
+                                                 ORDER BY id""", (o['id'],), fetch=True) or []]
+    if not ids and o.get('lancamento_id'):
+        ids = [o['lancamento_id']]
+    out = []
+    for lid in ids:
+        l = FinLancamento.get(lid)
+        if l and l['status'] not in ('CANCELADO', 'REPROVADO'):
+            out.append(l)
+    return out
+
+
 def _lancamento_vivo(o):
-    """O lançamento deste orçamento que ainda não virou cobrança (LANCADO ou APROVADO sem título): pode ser cancelado junto
-    com o orçamento ou ao alterá-lo. Devolve (lancamento, bloqueio): bloqueio = texto quando há cobrança viva (boleto/título)."""
-    if not o.get('lancamento_id'):
-        return None, None
-    l = FinLancamento.get(o['lancamento_id'])
-    if not l or l['status'] in ('CANCELADO', 'REPROVADO'):
-        return None, None
-    if l['status'] == 'FATURADO' or l.get('titulo_id'):
-        return l, 'A cobrança deste orçamento já saiu (lançamento nº %s). Cancele o boleto em Cobranças primeiro; o orçamento volta para "Em cobrança" e aí dá para alterar ou cancelar.' % l['id']
-    return l, None
+    """Os lançamentos deste orçamento que ainda não viraram cobrança (LANCADO ou APROVADO sem título): podem ser cancelados
+    junto com o orçamento ou ao alterá-lo. Devolve (lancamentos, bloqueio): bloqueio = texto quando há cobrança viva (boleto/título)."""
+    ls = _lancamentos_do(o)
+    if not ls:
+        return [], None
+    saiu = [l for l in ls if l['status'] == 'FATURADO' or l.get('titulo_id')]
+    if saiu:
+        return ls, 'A cobrança deste orçamento já saiu (lançamento nº %s). Cancele o boleto em Cobranças primeiro; o orçamento volta para "Em cobrança" e aí dá para alterar ou cancelar.' % ', '.join(str(l['id']) for l in saiu)
+    return ls, None
 
 
 def _cancelar_lancamento_junto(o, motivo):
-    l, bloqueio = _lancamento_vivo(o)
+    ls, bloqueio = _lancamento_vivo(o)
     if bloqueio:
         raise ValueError(bloqueio)
-    if l:
+    for l in ls:
         FinLancamento.cancelar(l['id'], motivo)
         registrar('escrita.cancelou_lancamento', 'financeiro', tabela='fin_lancamentos', registro_id=l['id'],
                   depois={'empresa': l['nome_razao_social'], 'servico': l['servico_nome'], 'motivo': motivo, 'orcamento': o['numero']})
-        return l['id']
-    return None
+    return ls[0]['id'] if ls else None
 
 
 @comercial.route('/comercial/orcamentos/<int:oid>/dados')
@@ -304,7 +327,8 @@ def orcamento_dados(oid):
                     'validade': o['validade'].isoformat() if o['validade'] else '', 'observacao': o['observacao'] or '', 'nota_interna': o['nota_interna'] or '',
                     'solicitante_nome': o.get('solicitante_nome') or '', 'solicitante_email': o.get('solicitante_email') or '', 'solicitante_fone': o.get('solicitante_fone') or '', 'interno': int(o.get('interno') or 0),
                     'empresas_mais': o.get('empresas_mais_ids') or [], 'empresa_nova_nome': o.get('empresa_nova_nome') or '',
-                    'itens': [{'servico_id': i['servico_id'], 'descricao': i['descricao'], 'qtd': float(i['quantidade']), 'valor': float(i['valor_unitario'])} for i in Orcamento.itens(oid)]})
+                    'cobranca_modo': o.get('cobranca_modo') or 'UNICA', 'pagador_cliente_id': o.get('pagador_cliente_id') or '',
+                    'itens': [{'servico_id': i['servico_id'], 'descricao': i['descricao'], 'qtd': float(i['quantidade']), 'valor': float(i['valor_unitario']), 'cliente_id': i.get('cliente_id') or ''} for i in Orcamento.itens(oid)]})
 
 
 @comercial.route('/comercial/orcamentos/contatos/<int:cid>')
@@ -571,29 +595,52 @@ def orcamento_cobrar(oid):
         except ValueError:
             flash('Escolha o vencimento do boleto.', 'danger')
             return _volta(oid)
+    # cobrança do grupo (26/11/2026 — Anderson): um lançamento só (no nome de quem recebeu o serviço; quem paga é dado do
+    # boleto) ou um lançamento por empresa, cada um com os seus serviços
+    if o.get('por_empresa'):
+        grupos = []
+        for e in o['empresas']:
+            its = [i for i in itens if i.get('cliente_id') == e['id']]
+            if its:
+                grupos.append((e['id'], e['nome'], its, None))
+        soltos = [i for i in itens if i.get('cliente_id') not in [e['id'] for e in o['empresas']]]
+        if soltos:
+            grupos.append((o['cliente_id'], o['cliente_nome'], soltos, None))
+    else:
+        grupos = [(o['cliente_id'], o['cliente_nome'], itens, o['pagador_id'] if o.get('pagador_outro') else None)]
     if destino == 'MENSAL':
         from routes.financeiro_lancamentos import _contrato_ativo
-        if not _contrato_ativo(o['cliente_id']):
-            flash('Esta empresa não tem honorários mensais: não há mensalidade para incluir. Cobre com boleto.', 'danger')
+        sem = [nome for cid, nome, _, _ in grupos if not _contrato_ativo(cid)]
+        if sem:
+            flash('%s sem honorários mensais: não há mensalidade para incluir. Cobre com boleto.' % ', '.join(sem), 'danger')
             return _volta(oid)
-    principal = next((i for i in itens if i['emite_nota']), itens[0])
-    total = sum((Decimal(str(i['valor_total'])) for i in itens), Decimal('0'))
-    descricao = ' + '.join(i['descricao'] for i in itens)[:200]
     ct = o['comissao_tipo'] if o['comissao_tipo'] in ('PADRAO', 'PCT', 'FIXO', 'SEM') else 'PADRAO'
+    lids, total = [], Decimal('0')
     try:
-        lid = FinLancamento.criar(EMP, o['cliente_id'], principal['servico_id'], descricao, 1, total, destino, o['criado_por'],
-                                  vencimento=venc, observacao=('Orçamento %s' % o['numero']) + ((' · ' + (o['nota_interna'] or ''))[:300] if o['nota_interna'] else ''),
-                                  com_nota=None if destino == 'MENSAL' else (como == 'BOLETO_NOTA'),
-                                  comissao_tipo=ct, comissao_valor=o['comissao_valor'] if ct in ('PCT', 'FIXO') else None)
+        for cid, nome, its, pagador in grupos:
+            principal = next((i for i in its if i['emite_nota']), its[0])
+            sub = sum((Decimal(str(i['valor_total'])) for i in its), Decimal('0'))
+            descricao = ' + '.join(i['descricao'] for i in its)[:200]
+            lid = FinLancamento.criar(EMP, cid, principal['servico_id'], descricao, 1, sub, destino, o['criado_por'],
+                                      vencimento=venc, observacao=('Orçamento %s' % o['numero']) + ((' · ' + (o['nota_interna'] or ''))[:300] if o['nota_interna'] else ''),
+                                      com_nota=None if destino == 'MENSAL' else (como == 'BOLETO_NOTA' and any(i['emite_nota'] for i in its)),
+                                      comissao_tipo=ct, comissao_valor=o['comissao_valor'] if ct in ('PCT', 'FIXO') else None,
+                                      pagador_cliente_id=pagador)
+            execute_query('UPDATE fin_lancamentos SET orcamento_id = %s WHERE id = %s', (oid, lid), fetch=False)
+            lids.append(lid); total += sub
     except ValueError as e:
+        for lid in lids:                       # não fica meio caminho: o que já nasceu é cancelado
+            FinLancamento.cancelar(lid, 'orçamento %s: falhou o lançamento de outra empresa (%s)' % (o['numero'], str(e)[:120]))
         flash(str(e), 'danger')
         return _volta(oid)
-    execute_query('UPDATE fin_lancamentos SET orcamento_id = %s WHERE id = %s', (oid, lid), fetch=False)
-    Orcamento.mudar(oid, 'COBRANCA', current_user, 'cobranca', 'Serviço feito: mandado para a cobrança por %s (%s%s). Aguardando aprovação em Financeiro › Lançamentos.'
-                    % (current_user.nome, COMO[como], (' · vence %s' % venc.strftime('%d/%m/%Y')) if venc else ''),
-                    feito_em='NOW()', lancamento_id=lid, como=como)
-    registrar('escrita.orcamento_para_cobranca', 'comercial', tabela='com_orcamentos', registro_id=oid, depois={'lancamento_id': lid, 'como': como, 'total': str(total)})
-    flash('Orçamento %s mandado para a cobrança: lançamento nº %s aguardando aprovação em Financeiro › Lançamentos.' % (o['numero'], lid), 'success')
+    nums = ', '.join('nº %s' % l for l in lids)
+    Orcamento.mudar(oid, 'COBRANCA', current_user, 'cobranca', 'Serviço feito: mandado para a cobrança por %s (%s%s%s). Aguardando aprovação em Financeiro › Lançamentos.'
+                    % (current_user.nome, COMO[como], (' · vence %s' % venc.strftime('%d/%m/%Y')) if venc else '',
+                       (' · um lançamento por empresa: %s' % nums) if len(lids) > 1 else ((' · boleto em nome de %s' % o['pagador_nome']) if o.get('pagador_outro') else '')),
+                    feito_em='NOW()', lancamento_id=lids[0], como=como)
+    registrar('escrita.orcamento_para_cobranca', 'comercial', tabela='com_orcamentos', registro_id=oid,
+              depois={'lancamento_id': lids[0], 'lancamentos': lids, 'como': como, 'total': str(total), 'cobranca': o.get('cobranca_modo'), 'pagador': o.get('pagador_id')})
+    flash('Orçamento %s mandado para a cobrança: lançamento%s %s aguardando aprovação em Financeiro › Lançamentos.' % (o['numero'], 's' if len(lids) > 1 else '', nums), 'success')
     return _volta(oid)
 
 

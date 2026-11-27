@@ -60,6 +60,7 @@ class Orcamento:
                        (SELECT GROUP_CONCAT(cl.nome_razao_social ORDER BY e.ordem SEPARATOR '|') FROM com_orcamento_empresas e JOIN clientes cl ON cl.id = e.cliente_id
                          WHERE e.orcamento_id = o.id AND e.cliente_id <> o.cliente_id) AS empresas_mais_nomes,
                        (SELECT a.nome_razao_social FROM clientes a WHERE a.id = o.empresa_nova_id) AS empresa_nova_cliente,
+                       (SELECT pg.nome_razao_social FROM clientes pg WHERE pg.id = o.pagador_cliente_id) AS pagador_nome,
                        u.nome AS criado_por_nome, u.email AS criado_por_email, u.telefone AS criado_por_fone, a.nome AS aprovado_por_nome
                   FROM com_orcamentos o
                   JOIN clientes c ON c.id = o.cliente_id
@@ -79,6 +80,14 @@ class Orcamento:
         o['empresas_mais_ids'] = [int(x) for x in (o.get('empresas_mais_csv') or '').split(',') if str(x).strip().isdigit()]
         o['empresas_mais'] = [x for x in (o.get('empresas_mais_nomes') or '').split('|') if x]
         o['n_empresas'] = 1 + len(o['empresas_mais'])
+        # cobrança do grupo (26/11/2026): um boleto para tudo (quem paga) ou um boleto por empresa
+        o['empresas'] = [{'id': o['cliente_id'], 'nome': o.get('cliente_nome')}] + [{'id': i, 'nome': n} for i, n in zip(o['empresas_mais_ids'], o['empresas_mais'])]
+        o['cobranca_modo'] = (o.get('cobranca_modo') or 'UNICA') if o['n_empresas'] > 1 else 'UNICA'
+        o['por_empresa'] = o['cobranca_modo'] == 'POR_EMPRESA'
+        o['pagador_id'] = None if o['por_empresa'] else (o.get('pagador_cliente_id') or o['cliente_id'])
+        o['pagador_outro'] = bool(o['pagador_id'] and o['pagador_id'] != o['cliente_id'])
+        if not o['pagador_outro']:
+            o['pagador_nome'] = o.get('cliente_nome')
         return o
 
     @staticmethod
@@ -108,7 +117,8 @@ class Orcamento:
 
     @staticmethod
     def itens(oid):
-        return execute_query('SELECT * FROM com_orcamento_itens WHERE orcamento_id = %s ORDER BY ordem, id', (oid,), fetch=True) or []
+        return execute_query("""SELECT i.*, c.nome_razao_social AS empresa_nome FROM com_orcamento_itens i
+                                  LEFT JOIN clientes c ON c.id = i.cliente_id WHERE i.orcamento_id = %s ORDER BY i.ordem, i.id""", (oid,), fetch=True) or []
 
     @staticmethod
     def eventos(oid):
@@ -127,6 +137,7 @@ class Orcamento:
         """item_servico_id[], item_descricao[], item_qtd[], item_valor[] → lista de itens validada (com emite_nota do catálogo)."""
         from models.nfse_emissao import NfseServico
         ids, descs, qtds, vals = (f.getlist('item_servico_id'), f.getlist('item_descricao'), f.getlist('item_qtd'), f.getlist('item_valor'))
+        clis = f.getlist('item_cliente_id')          # de qual empresa é o serviço (cobrança por empresa, 26/11/2026)
         catalogo = {s['id']: s for s in NfseServico.listar(2)}
         itens = []
         for i in range(max(len(ids), len(vals))):
@@ -143,7 +154,8 @@ class Orcamento:
                 raise ValueError('Item %d (%s): informe o valor.' % (i + 1, s['nome']))
             desc = ' '.join((descs[i] if i < len(descs) else '').split())[:200] or s['nome']
             itens.append({'servico_id': s['id'], 'descricao': desc, 'quantidade': q, 'valor_unitario': v,
-                          'valor_total': (q * v).quantize(Decimal('0.01')), 'emite_nota': 0 if str(s.get('emite_nota', 1)) == '0' else 1})
+                          'valor_total': (q * v).quantize(Decimal('0.01')), 'emite_nota': 0 if str(s.get('emite_nota', 1)) == '0' else 1,
+                          'cliente_id': int(clis[i]) if i < len(clis) and str(clis[i]).strip().isdigit() else None})
         if not itens:
             raise ValueError('Ponha ao menos um serviço no orçamento.')
         return itens
@@ -177,7 +189,14 @@ class Orcamento:
             if x.strip().isdigit() and int(x) != cid and int(x) not in mais:
                 mais.append(int(x))
         nova = ' '.join((f.get('empresa_nova_nome') or '').split())[:160].upper() or None
-        return {'cliente_id': cid, 'titulo': ' '.join((f.get('titulo') or '').split())[:160] or None, 'como': como, 'parcelas': parcelas,
+        # cobrança do grupo (26/11/2026 — Anderson): um boleto para tudo (no nome de quem paga) ou um por empresa
+        modo = 'POR_EMPRESA' if (f.get('cobranca_modo') == 'POR_EMPRESA' and mais) else 'UNICA'
+        pagador = f.get('pagador_cliente_id', type=int)
+        if modo == 'UNICA' and mais and pagador and pagador != cid and pagador not in mais:
+            raise ValueError('Quem paga precisa ser uma das empresas do orçamento.')
+        if modo != 'UNICA' or not mais or not pagador or pagador == cid:
+            pagador = None
+        return {'cliente_id': cid, 'cobranca_modo': modo, 'pagador_cliente_id': pagador, 'titulo': ' '.join((f.get('titulo') or '').split())[:160] or None, 'como': como, 'parcelas': parcelas,
                 'comissao_tipo': ct, 'comissao_valor': cv, 'validade': validade, 'empresas_mais': mais, 'empresa_nova_nome': nova,
                 'solicitante_nome': sol, 'solicitante_email': sol_email, 'solicitante_fone': sol_fone, 'interno': interno,
                 'observacao': (f.get('observacao') or '').strip()[:4000].upper() or None,
@@ -221,6 +240,18 @@ class Orcamento:
         return None
 
     @staticmethod
+    def _confere_grupo(d, itens):
+        """Um boleto por empresa: cada serviço diz de qual empresa é (uma das do orçamento). Um boleto só: o serviço não tem empresa."""
+        ids = [d['cliente_id']] + list(d.get('empresas_mais') or [])
+        if d.get('cobranca_modo') == 'POR_EMPRESA':
+            for n, i in enumerate(itens, 1):
+                if i.get('cliente_id') not in ids:
+                    raise ValueError('Um boleto por empresa: diga de qual empresa é o serviço %d (%s).' % (n, i['descricao']))
+        else:
+            for i in itens:
+                i['cliente_id'] = None
+
+    @staticmethod
     def _gravar_empresas(oid, cliente_id, mais):
         execute_query('DELETE FROM com_orcamento_empresas WHERE orcamento_id = %s', (oid,), fetch=False)
         for n, cid in enumerate([cliente_id] + [x for x in (mais or []) if x != cliente_id], 1):
@@ -230,17 +261,19 @@ class Orcamento:
     def criar(f, usuario, empresa_id=2):
         d = Orcamento._dados_do_form(f)
         itens = Orcamento._itens_do_form(f)
+        Orcamento._confere_grupo(d, itens)
         if Orcamento._abertura_pf(d['cliente_id'], itens) and not d['empresa_nova_nome']:
             raise ValueError('Abertura de empresa para pessoa física: diga o nome da empresa nova.')
         total = sum((i['valor_total'] for i in itens), Decimal('0'))
         nova_id = Orcamento._avulso_abertura(d, usuario)
         oid = execute_query("""INSERT INTO com_orcamentos (empresa_id, numero, cliente_id, titulo, status, validade, como, parcelas, comissao_tipo,
                                    comissao_valor, total, observacao, nota_interna, token, criado_por, solicitante_nome, solicitante_email, solicitante_fone, interno,
-                                   empresa_nova_nome, empresa_nova_id)
-                               VALUES (%s, %s, %s, %s, 'RASCUNHO', %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
+                                   empresa_nova_nome, empresa_nova_id, cobranca_modo, pagador_cliente_id)
+                               VALUES (%s, %s, %s, %s, 'RASCUNHO', %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
                             (empresa_id, novo_numero(), d['cliente_id'], d['titulo'], d['validade'], d['como'], d['parcelas'], d['comissao_tipo'],
                              d['comissao_valor'], total, d['observacao'], d['nota_interna'], secrets.token_urlsafe(24)[:40], usuario.id,
-                             d['solicitante_nome'], d['solicitante_email'], d['solicitante_fone'], d['interno'], d['empresa_nova_nome'], nova_id), fetch=False)
+                             d['solicitante_nome'], d['solicitante_email'], d['solicitante_fone'], d['interno'], d['empresa_nova_nome'], nova_id,
+                             d['cobranca_modo'], d['pagador_cliente_id']), fetch=False)
         Orcamento._gravar_empresas(oid, d['cliente_id'], d['empresas_mais'])
         Orcamento._gravar_itens(oid, itens)
         Orcamento.evento(oid, 'criado', 'Orçamento montado: %d serviço%s, total R$ %s' % (len(itens), 's' if len(itens) != 1 else '', _brl(total)), usuario)
@@ -258,6 +291,7 @@ class Orcamento:
             raise ValueError('Este orçamento não pode mais ser alterado: cancele-o e monte outro.')
         d = Orcamento._dados_do_form(f)
         itens = Orcamento._itens_do_form(f)
+        Orcamento._confere_grupo(d, itens)
         if Orcamento._abertura_pf(d['cliente_id'], itens) and not d['empresa_nova_nome']:
             raise ValueError('Abertura de empresa para pessoa física: diga o nome da empresa nova.')
         total = sum((i['valor_total'] for i in itens), Decimal('0'))
@@ -265,12 +299,14 @@ class Orcamento:
         execute_query("""UPDATE com_orcamentos SET cliente_id = %s, titulo = %s, validade = %s, como = %s, parcelas = %s, comissao_tipo = %s,
                              comissao_valor = %s, total = %s, observacao = %s, nota_interna = %s, status = 'RASCUNHO', motivo = NULL,
                              solicitante_nome = %s, solicitante_email = %s, solicitante_fone = %s, interno = %s, empresa_nova_nome = %s, empresa_nova_id = %s,
+                             cobranca_modo = %s, pagador_cliente_id = %s,
                              aprovado_por = NULL, aprovado_em = NULL, enviado_em = NULL, enviado_para = NULL, pdf_sha256 = NULL,
                              codigo_hash = NULL, codigo_enviado_em = NULL, codigo_para = NULL, codigo_tentativas = 0,
                              aceito_em = NULL, aceito_nome = NULL, aceito_cpf = NULL, aceito_email = NULL, aceito_ip = NULL, aceito_agente = NULL, aceito_hash = NULL,
                              feito_em = NULL, lancamento_id = NULL WHERE id = %s""",
                       (d['cliente_id'], d['titulo'], d['validade'], d['como'], d['parcelas'], d['comissao_tipo'], d['comissao_valor'], total,
-                       d['observacao'], d['nota_interna'], d['solicitante_nome'], d['solicitante_email'], d['solicitante_fone'], d['interno'], d['empresa_nova_nome'], nova_id, oid), fetch=False)
+                       d['observacao'], d['nota_interna'], d['solicitante_nome'], d['solicitante_email'], d['solicitante_fone'], d['interno'], d['empresa_nova_nome'], nova_id,
+                       d['cobranca_modo'], d['pagador_cliente_id'], oid), fetch=False)
         Orcamento._gravar_empresas(oid, d['cliente_id'], d['empresas_mais'])
         execute_query('DELETE FROM com_orcamento_itens WHERE orcamento_id = %s', (oid,), fetch=False)
         Orcamento._gravar_itens(oid, itens)
@@ -285,9 +321,9 @@ class Orcamento:
     @staticmethod
     def _gravar_itens(oid, itens):
         for n, i in enumerate(itens, 1):
-            execute_query("""INSERT INTO com_orcamento_itens (orcamento_id, servico_id, descricao, quantidade, valor_unitario, valor_total, emite_nota, ordem)
-                             VALUES (%s, %s, %s, %s, %s, %s, %s, %s)""",
-                          (oid, i['servico_id'], i['descricao'], i['quantidade'], i['valor_unitario'], i['valor_total'], i['emite_nota'], n), fetch=False)
+            execute_query("""INSERT INTO com_orcamento_itens (orcamento_id, cliente_id, servico_id, descricao, quantidade, valor_unitario, valor_total, emite_nota, ordem)
+                             VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)""",
+                          (oid, i.get('cliente_id'), i['servico_id'], i['descricao'], i['quantidade'], i['valor_unitario'], i['valor_total'], i['emite_nota'], n), fetch=False)
 
     @staticmethod
     def mudar(oid, status, usuario, tipo, texto, **campos):

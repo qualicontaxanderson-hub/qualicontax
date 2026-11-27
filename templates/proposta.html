@@ -68,7 +68,10 @@ input.cod { letter-spacing:8px; font-size:22px; text-align:center; font-family:m
             <div><div class="l">Responsável</div><div class="v"><small>{{ o.criado_por_nome }}</small></div></div>
         </div>
         <div class="as-itens">
-            {% for i in itens %}<div class="as-it"><span>{{ i.descricao }}{% if not i.emite_nota %} <small style="color:#b45309">· taxa repassada</small>{% endif %}</span><b>{{ i.valor_total | float | format_currency }}</b></div>{% endfor %}
+            {% if o.por_empresa %}{% for e in o.empresas %}{% set its = itens | selectattr('cliente_id', 'equalto', e.id) | list %}{% if its %}<div class="as-it" style="border:0; padding-bottom:2px"><span style="font-weight:800">{{ e.nome }} <small style="color:#64748b">· boleto próprio</small></span><b style="color:#64748b">{{ its | sum(attribute='valor_total') | float | format_currency }}</b></div>
+            {% for i in its %}<div class="as-it" style="padding-left:12px"><span>{{ i.descricao }}{% if not i.emite_nota %} <small style="color:#b45309">· taxa repassada</small>{% endif %}</span><b>{{ i.valor_total | float | format_currency }}</b></div>{% endfor %}{% endif %}{% endfor %}
+            {% else %}{% for i in itens %}<div class="as-it"><span>{{ i.descricao }}{% if not i.emite_nota %} <small style="color:#b45309">· taxa repassada</small>{% endif %}</span><b>{{ i.valor_total | float | format_currency }}</b></div>{% endfor %}{% endif %}
+            {% if o.pagador_outro %}<div class="as-it" style="border:0"><span style="color:#64748b">boleto único em nome de</span><b style="font-weight:700">{{ o.pagador_nome }}</b></div>{% endif %}
             <div class="as-it tot"><span>Total</span><b>{{ o.total | float | format_currency }}</b></div>
         </div>
         <iframe class="as-frame" src="{{ url_for('proposta.pdf', token=o.token) }}#toolbar=1" title="Orçamento"></iframe>

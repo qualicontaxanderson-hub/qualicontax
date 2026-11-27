@@ -34,7 +34,7 @@ def _base(o, titulo, eyebrow, saudacao, intro):
 
 
 def _itens(itens):
-    return [{'nome': i['descricao'], 'valor': _brl(i['valor_total']), 'obs': '' if i['emite_nota'] else 'taxa repassada · só no boleto'} for i in itens]
+    return [{'nome': ((i['empresa_nome'] + ' · ') if i.get('empresa_nome') else '') + i['descricao'], 'valor': _brl(i['valor_total']), 'obs': '' if i['emite_nota'] else 'taxa repassada · só no boleto'} for i in itens]
 
 
 def _kpis(o):

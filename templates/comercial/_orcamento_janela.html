@@ -11,6 +11,7 @@
           {% if doc %}<code data-copiar data-copiar-rotulo="CPF/CNPJ" title="Clique para copiar">{{ doc | format_cnpj if doc|length == 14 else (doc | format_cpf if doc|length == 11 else doc) }}</code>{% endif %}
           {% if o.cliente_avulso %}<span class="tj-chip">avulso</span>{% elif o.cliente_num %}<span class="tj-chip">cliente nº {{ o.cliente_num }}</span>{% endif %}
           {% if o.empresas_mais %}<span class="tj-chip" title="{{ o.empresas_mais | join(', ') }}"><i class="fas fa-building"></i> + {{ o.empresas_mais | length }} empresa{{ 's' if o.empresas_mais | length > 1 }}: {{ o.empresas_mais | join(', ') | truncate(60) }}</span>{% endif %}
+          {% if o.n_empresas > 1 %}<span class="tj-chip" title="cobrança do grupo"><i class="fas fa-file-invoice-dollar"></i> {% if o.por_empresa %}um boleto por empresa{% else %}um boleto só · paga {{ o.pagador_nome }}{% endif %}</span>{% endif %}
           {% if o.empresa_nova_nome %}<span class="tj-chip" title="abertura de empresa para pessoa física"><i class="fas fa-seedling"></i> empresa a abrir: {{ o.empresa_nova_nome }}{% if o.empresa_nova_cliente %} · avulso criado{% endif %}</span>{% endif %}
           <a href="{{ url_for('clientes.detalhes', id=o.cliente_id) }}" target="_blank"><i class="fas fa-arrow-up-right-from-square"></i> cadastro</a>
           {% if o.solicitante_nome %}<span class="tj-chip" title="quem pediu o serviço, do lado do cliente"><i class="fas fa-user-tag"></i> pedido por {{ o.solicitante_nome }}{% if o.solicitante_email %} · {{ o.solicitante_email }}{% endif %}{% if o.solicitante_fone %} · {{ o.solicitante_fone }}{% endif %}</span>{% endif %}
@@ -56,9 +57,14 @@
       <section class="tj-sec">
         <h4><i class="fas fa-list-check"></i> Serviços <small>· {{ o.total | float | format_currency }}</small></h4>
         <div class="tj-itens">
-          {% for i in itens %}
-          <div class="tj-it"><span>{{ i.descricao }}{% if i.quantidade and i.quantidade != 1 %} <small>× {{ '%g' % (i.quantidade | float) }}</small>{% endif %}{% if not i.emite_nota %} <small style="color:#b45309">· só no boleto (taxa)</small>{% endif %}</span><b>{{ i.valor_total | float | format_currency }}</b></div>
-          {% endfor %}
+          {% macro it_linha(i, recuo=False) %}<div class="tj-it"{% if recuo %} style="padding-left:14px"{% endif %}><span>{{ i.descricao }}{% if i.quantidade and i.quantidade != 1 %} <small>× {{ '%g' % (i.quantidade | float) }}</small>{% endif %}{% if not i.emite_nota %} <small style="color:#b45309">· só no boleto (taxa)</small>{% endif %}</span><b>{{ i.valor_total | float | format_currency }}</b></div>{% endmacro %}
+          {% if o.por_empresa %}{# um boleto por empresa (26/11/2026): serviços agrupados #}
+            {% set ids = o.empresas | map(attribute='id') | list %}
+            {% for e in o.empresas %}{% set its = itens | selectattr('cliente_id', 'equalto', e.id) | list %}{% if its %}
+            <div class="tj-it" style="border:0; padding-bottom:2px"><span style="font-weight:800; color:#0f3d2e"><i class="fas fa-building"></i> {{ e.nome }}</span><b style="color:#64748b">{{ its | sum(attribute='valor_total') | float | format_currency }}</b></div>
+            {% for i in its %}{{ it_linha(i, True) }}{% endfor %}{% endif %}{% endfor %}
+            {% for i in itens if i.cliente_id not in ids %}{{ it_linha(i) }}{% endfor %}
+          {% else %}{% for i in itens %}{{ it_linha(i) }}{% endfor %}{% endif %}
           <div class="tj-it tj-it-tot"><span>Total</span><b>{{ o.total | float | format_currency }}</b></div>
           {% if n_nota and n_nota != itens|length %}<div class="tj-it"><span style="color:#64748b">nota fiscal</span><b style="color:#64748b">{{ total_nota | float | format_currency }}</b></div><div class="tj-it"><span style="color:#64748b">boleto</span><b style="color:#64748b">{{ o.total | float | format_currency }}</b></div>{% endif %}
         </div>
@@ -71,12 +77,14 @@
           {% if editavel %}<button type="button" onclick="ocEditar({{ o.id }})"><i class="fas fa-pen"></i> Alterar</button>{% endif %}
         </div>
       </section>
-      {% if lanc %}
+      {% if lancs %}
       <section class="tj-sec">
-        <h4><i class="fas fa-barcode"></i> Cobrança no Financeiro</h4>
-        <div class="tj-it"><span>Lançamento nº {{ lanc.id }} · {{ {'LANCADO': 'aguardando aprovação', 'APROVADO': 'aprovado', 'FATURADO': 'cobrado', 'REPROVADO': 'reprovado', 'CANCELADO': 'cancelado'}.get(lanc.status, lanc.status) }}</span><b>{{ lanc.valor_total | float | format_currency }}</b></div>
-        <div class="tj-bts" style="margin-top:10px"><a href="{{ url_for('financeiro.lancamentos', aba='apr' if lanc.status == 'LANCADO' else 'com') }}#l{{ lanc.id }}"><i class="fas fa-arrow-right"></i> Abrir em Lançamentos</a>
-          {% if lanc.titulo_id %}<a href="{{ url_for('financeiro.titulo_cobranca', titulo_id=lanc.titulo_id) }}" target="_blank"><i class="fas fa-file-invoice-dollar"></i> Ver a cobrança</a>{% endif %}</div>
+        <h4><i class="fas fa-barcode"></i> Cobrança no Financeiro{% if lancs | length > 1 %} <small>· um lançamento por empresa</small>{% endif %}</h4>
+        {% for l in lancs %}
+        <div class="tj-it"><span>Lançamento nº {{ l.id }}{% if lancs | length > 1 %} · {{ l.nome_razao_social }}{% endif %} · {{ {'LANCADO': 'aguardando aprovação', 'APROVADO': 'aprovado', 'FATURADO': 'cobrado', 'REPROVADO': 'reprovado', 'CANCELADO': 'cancelado'}.get(l.status, l.status) }}{% if l.pagador_nome %} · <small>boleto em nome de {{ l.pagador_nome }}</small>{% endif %}</span><b>{{ l.valor_total | float | format_currency }}</b></div>
+        <div class="tj-bts" style="margin:6px 0 10px"><a href="{{ url_for('financeiro.lancamentos', aba='apr' if l.status == 'LANCADO' else 'com') }}#l{{ l.id }}"><i class="fas fa-arrow-right"></i> Abrir em Lançamentos</a>
+          {% if l.titulo_id %}<a href="{{ url_for('financeiro.titulo_cobranca', titulo_id=l.titulo_id) }}" target="_blank"><i class="fas fa-file-invoice-dollar"></i> Ver a cobrança</a>{% endif %}</div>
+        {% endfor %}
       </section>
       {% endif %}
     </div>
@@ -133,7 +141,7 @@
           </div>
         {% elif o.status == 'COBRANCA' and sem_cobranca %}
           <div class="tj-aviso" style="background:#fff7ed; border:1px solid #fed7aa; color:#9a3412; margin:0 0 10px"><i class="fas fa-triangle-exclamation"></i> <b>A cobrança foi cancelada</b> (boleto cancelado). O serviço continua feito{% if o.aceito_em %} e aceito{% endif %}; só a cobrança precisa sair de novo. Escolha abaixo o que fazer.</div>
-          {% if aprovador %}<form method="POST" action="{{ url_for('financeiro.lancamento_cobrar', lid=lanc.id) }}"><button type="submit" class="tj-acao prim"><i class="fas fa-barcode"></i><span><b>Cobrar de novo</b><small>emite a cobrança do lançamento nº {{ lanc.id }} do mesmo jeito</small></span></button></form>
+          {% if aprovador %}{% for l in lancs %}<form method="POST" action="{{ url_for('financeiro.lancamento_cobrar', lid=l.id) }}"><button type="submit" class="tj-acao prim"><i class="fas fa-barcode"></i><span><b>Cobrar de novo{% if lancs | length > 1 %}: {{ l.nome_razao_social }}{% endif %}</b><small>emite a cobrança do lançamento nº {{ l.id }} do mesmo jeito</small></span></button></form>{% endfor %}
           {% else %}<div class="tj-aviso" style="margin:0 0 8px"><i class="fas fa-user-shield"></i> Quem aprova cobra de novo em Financeiro › Lançamentos › Cobrados (botão Cobrar de novo). Se os valores mudaram, altere aqui antes.</div>{% endif %}
           {% if editavel %}<button type="button" class="tj-acao" onclick="ocEditar({{ o.id }})"><i class="fas fa-pen"></i><span><b>Alterar o orçamento</b><small>valores, serviços, condições; volta para aprovação{% if o.aceito_em %} e o cliente aceita de novo{% endif %}</small></span></button>{% endif %}
         {% elif o.status == 'COBRANCA' %}
