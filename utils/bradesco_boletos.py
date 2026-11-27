@@ -344,7 +344,7 @@ _CHAVE_DIA = 'bradesco_boletos_ultima_lista'
 
 
 def rodar_de_hora_em_hora():
-    """A cada tick do roteador: uma vez por hora, 7h-22h (Brasília), nas contas Bradesco de produção ativas;
+    """A cada tick do roteador: de 5 em 5 min (BRADESCO_BOLETOS_MIN), 7h-22h (Brasília), nas contas Bradesco de produção ativas;
     a lista de liquidados uma vez por dia. Desliga com BRADESCO_BOLETOS_SYNC=0."""
     from zoneinfo import ZoneInfo
     if os.getenv('BRADESCO_BOLETOS_SYNC', '1').strip() != '1':
@@ -355,7 +355,13 @@ def rodar_de_hora_em_hora():
     contas = _q("SELECT id FROM fin_cobranca_contas WHERE provedor = 'bradesco' AND ambiente = 'producao' AND ativo = 1")
     if not contas:
         return None
-    marca = agora.strftime('%Y-%m-%d %H')
+    # 27/11/2026: de 5 em 5 min (Anderson: "Pode alterar para 5 min"), até o aviso do banco (webhook)
+    # ficar pronto. BRADESCO_BOLETOS_MIN muda o intervalo (60 = o antigo, de hora em hora).
+    try:
+        passo = max(1, min(60, int(os.getenv('BRADESCO_BOLETOS_MIN', '5'))))
+    except ValueError:
+        passo = 5
+    marca = agora.strftime('%Y-%m-%d %H') + ':%02d' % (agora.minute // passo * passo)
     r = _q('SELECT valor FROM app_config WHERE chave = %s', (_CHAVE,), one=True)
     if r and r.get('valor') == marca:
         return None

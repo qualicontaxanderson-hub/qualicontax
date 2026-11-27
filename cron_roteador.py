@@ -1059,7 +1059,7 @@ def main() -> int:
     except Exception:
         logger.exception('[roteador] consulta dos boletos da Efí falhou; tenta na próxima hora.')
 
-    # Boletos do Bradesco (14/11/2026), de hora em hora 7h-22h: o aviso (webhook) do banco exige SSL
+    # Boletos do Bradesco (14/11/2026), de 5 em 5 min desde 27/11 (BRADESCO_BOLETOS_MIN), 7h-22h: o aviso (webhook) do banco exige SSL
     # EV/OV que o Railway não tem, então a baixa sai da consulta (pago no dia aparece em 20 min) e da
     # lista de liquidados uma vez por dia. Só age se houver conta Bradesco de produção ativa.
     # Desliga com BRADESCO_BOLETOS_SYNC=0.
