@@ -69,7 +69,10 @@ def _historico(clientes, de, ate):
               FROM fin_titulos t LEFT JOIN fin_categorias cat ON cat.id = t.categoria_id
              WHERE t.tipo = 'R' AND t.status <> 'cancelado' AND t.vencimento >= %s AND t.vencimento < %s
                AND (cat.nome LIKE 'Honor%%' OR t.descricao LIKE 'Honor%%')
-               AND t.descricao NOT LIKE 'Honorários e serviços —%%'
+               -- 27/11/2026: o título que o PRÓPRIO LOTE tira também se chama "Honorários e serviços — Honorários Contábeis - Mês/Ano";
+               -- sem esta exceção a empresa seguia "a emitir" depois de emitida (Phoenix, lote 7). O avulso de Nova cobrança continua fora.
+               AND (t.descricao NOT LIKE 'Honorários e serviços —%%'
+                    OR t.id IN (SELECT li.titulo_id FROM fin_lote_itens li WHERE li.titulo_id IS NOT NULL AND li.tipo = 'MENSAL'))
                AND (t.cliente_id IN ({ph}) OR t.cliente_id IS NULL)
              ORDER BY t.vencimento, t.id""", (de, ate, *ids), fetch=True) or []
     hoje = date.today()
