@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Este e-mail é da Qualicontax? · Verificação</title>
+{# "Este e-mail é da Qualicontax?" (27/11/2026) — mesma moldura da página de pagamento (financeiro/pagar_publico.html):
+   cartão verde com o que foi enviado, resumo do documento e o código de confirmação que vai para o próprio e-mail do cliente. #}
+<style>
+  :root { --verde:#1e4d2b; --verde2:#2f8f3e; --verde-f:#f3f8f4; --tinta:#1f2933; --cinza:#667085; --linha:#e4ebe6; --ambar:#b45309; --verm:#b91c1c; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:#eef3ee; color:var(--tinta); font:16px/1.45 -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; -webkit-text-size-adjust:100%; }
+  .pg { max-width:520px; margin:0 auto; padding:14px 14px 40px; }
+  .topo { display:flex; align-items:center; gap:12px; padding:6px 2px 14px; }
+  .topo img { height:48px; width:auto; }
+  .topo b { display:block; font-size:17px; color:var(--verde); }
+  .topo small { color:var(--cinza); font-size:13px; }
+  .card { background:#fff; border:1px solid var(--linha); border-radius:16px; padding:16px; margin-bottom:12px; box-shadow:0 1px 2px rgba(30,77,43,.05); }
+  .cab { background:var(--verde); color:#fff; border:0; }
+  .cab .eyebrow { font-size:12.5px; letter-spacing:.08em; text-transform:uppercase; opacity:.85; font-weight:700; }
+  .cab .nome { font-size:21px; font-weight:800; line-height:1.25; margin:6px 0 10px; }
+  .cab .quando { font-size:15px; opacity:.95; }
+  .pill { display:inline-block; margin-top:12px; padding:6px 13px; border-radius:999px; font-weight:800; font-size:13.5px; background:#fff; color:var(--verde); }
+  .pill.ok { background:#bbf7d0; color:#14532d; }
+  h2 { margin:0 0 10px; font-size:12.5px; text-transform:uppercase; letter-spacing:.6px; color:var(--cinza); font-weight:800; }
+  .it { display:flex; justify-content:space-between; gap:14px; padding:8px 0; border-bottom:1px dashed var(--linha); font-size:15px; }
+  .it:last-child { border-bottom:0; }
+  .it span { color:var(--cinza); flex:0 0 auto; }
+  .it b { text-align:right; word-break:break-word; min-width:0; }
+  .btn { display:flex; align-items:center; justify-content:center; gap:10px; width:100%; min-height:54px; padding:12px 16px; border-radius:14px; border:2px solid var(--verde2); background:var(--verde2); color:#fff; font-family:inherit; font-weight:800; font-size:16.5px; line-height:1.2; text-decoration:none; cursor:pointer; -webkit-tap-highlight-color:transparent; }
+  .btn:active { transform:scale(.99); }
+  .btn[disabled] { opacity:.55; cursor:default; }
+  .btn.sec { background:#fff; color:var(--verde); border-color:#cfe3d4; font-weight:700; font-size:15px; min-height:46px; }
+  .dica { font-size:14px; color:var(--cinza); margin:10px 0 0; line-height:1.45; }
+  .cod { display:block; width:100%; margin:12px 0 10px; padding:14px; border:2px solid var(--linha); border-radius:12px; font:30px/1.1 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; letter-spacing:8px; text-align:center; color:var(--verde); outline:0; }
+  .cod:focus { border-color:var(--verde2); }
+  .erro { color:var(--verm); font-size:14.5px; margin:8px 0 0; font-weight:700; }
+  .aviso { padding:14px 16px; border-radius:14px; font-size:15px; line-height:1.45; }
+  .aviso.ok { background:#dcfce7; color:#14532d; }
+  .aviso.alerta { background:#fff7ed; color:#7c2d12; border:1px solid #fed7aa; }
+  .rod { text-align:center; color:var(--cinza); font-size:13px; margin-top:18px; line-height:1.6; }
+  .rod b { display:block; color:var(--verde); font-size:14.5px; font-weight:800; }
+  [hidden] { display:none !important; }
+  @media (min-width:600px) { .pg { padding-top:28px; } }
+</style>
+</head>
+<body>
+<div class="pg">
+  <div class="topo">
+    <img src="{{ url_for('static', filename='images/logo.png') }}" alt="Qualicontax">
+    <div><b>Qualicontax Assessoria Contábil</b><small>Verificação de e-mail</small></div>
+  </div>
+
+  <div class="card cab">
+    <div class="eyebrow">Este e-mail saiu do sistema da Qualicontax</div>
+    <div class="nome">{{ e.assunto }}</div>
+    <div class="quando">Enviado em {{ e.dia }} às {{ e.hora }}</div>
+    <span class="pill{% if confirmado %} ok{% endif %}" id="vfPill">{% if confirmado %}Confirmado por você em {{ e.confirmado_txt }}{% else %}Registrado no sistema{% endif %}</span>
+  </div>
+
+  <div class="card">
+    <h2>O que foi enviado</h2>
+    <div class="it"><span>Tipo</span><b>{{ servico }}</b></div>
+    <div class="it"><span>Pela caixa</span><b>{{ e.remetente }}</b></div>
+    <div class="it"><span>Para</span><b>{{ para | join(', ') }}</b></div>
+    {% for rot, val in resumo %}<div class="it"><span>{{ rot }}</span><b>{{ val }}</b></div>{% endfor %}
+  </div>
+
+  <div class="card" id="vfCard">
+    <h2>Confirmar com código</h2>
+    <div id="vfFeito" class="aviso ok" {% if not confirmado %}hidden{% endif %}><b>Confirmado.</b> Este e-mail é da Qualicontax: o código que chegou no seu e-mail bateu com o registro do sistema.</div>
+    <div id="vfPasso1" {% if confirmado %}hidden{% endif %}>
+      <p class="dica" style="margin:0 0 12px;">Para ter certeza, peça um código. Ele chega no <b>mesmo e-mail</b> que recebeu esta mensagem ({{ para | join(', ') }}). Depois digite aqui.</p>
+      <button type="button" class="btn" id="vfPedir" {% if not pode_codigo %}disabled{% endif %}>Receber código no meu e-mail</button>
+      {% if not pode_codigo %}<p class="erro">Já foram enviados 3 códigos para este e-mail. Confira a caixa de entrada e o spam.</p>{% endif %}
+      <p class="erro" id="vfErro1" hidden></p>
+    </div>
+    <div id="vfPasso2" hidden>
+      <p class="dica" style="margin:0;">Código enviado para <b id="vfPara"></b>. Vale por 15 minutos. Digite os 6 dígitos:</p>
+      <form id="vfForm" autocomplete="off">
+        <input class="cod" id="vfCod" name="codigo" inputmode="numeric" pattern="[0-9]*" maxlength="6" placeholder="••••••" aria-label="Código de 6 dígitos">
+        <button type="submit" class="btn" id="vfConfirmar">Confirmar</button>
+      </form>
+      <p class="erro" id="vfErro2" hidden></p>
+      <button type="button" class="btn sec" id="vfDeNovo" style="margin-top:10px;">Não chegou? Pedir outro código</button>
+    </div>
+  </div>
+
+  <div class="card aviso alerta"><b>Não reconhece este e-mail ou esta cobrança?</b> Não pague e não responda com dados. Fale com a Qualicontax pelos canais de sempre (telefone ou WhatsApp do escritório).</div>
+
+  <div class="rod"><b>{{ slogan }}</b>A Qualicontax nunca pede senha, cartão ou código por telefone.</div>
+</div>
+<script>
+(function () {
+  var base = {{ (url_for('verifica.ver', token=e.token)) | tojson }};
+  var p1 = document.getElementById('vfPasso1'), p2 = document.getElementById('vfPasso2'), feito = document.getElementById('vfFeito');
+  var e1 = document.getElementById('vfErro1'), e2 = document.getElementById('vfErro2'), pill = document.getElementById('vfPill');
+  function erro(el, msg) { el.textContent = msg || ''; el.hidden = !msg; }
+  function post(rota, body) {
+    return fetch(base + rota, {method: 'POST', body: body || new FormData(), credentials: 'same-origin', headers: {'X-Requested-With': 'fetch'}})
+      .then(function (r) { return r.json().catch(function () { return {ok: false, erro: 'Falha de rede (' + r.status + '). Tente de novo.'}; }); });
+  }
+  function pedir(btn, elErro) {
+    btn.disabled = true; erro(elErro, '');
+    post('/codigo').then(function (j) {
+      btn.disabled = false;
+      if (j.ok && j.confirmado) { concluir(); return; }
+      if (!j.ok) { erro(elErro, j.erro); return; }
+      document.getElementById('vfPara').textContent = j.email || '';
+      p1.hidden = true; p2.hidden = false; erro(e2, ''); document.getElementById('vfCod').focus();
+    }).catch(function () { btn.disabled = false; erro(elErro, 'Sem conexão. Tente de novo.'); });
+  }
+  function concluir(quando) {
+    p1.hidden = true; p2.hidden = true; feito.hidden = false;
+    pill.classList.add('ok'); pill.textContent = quando ? 'Confirmado por você em ' + quando : 'Confirmado por você';
+  }
+  document.getElementById('vfPedir').addEventListener('click', function () { pedir(this, e1); });
+  document.getElementById('vfDeNovo').addEventListener('click', function () { pedir(this, e2); });
+  document.getElementById('vfForm').addEventListener('submit', function (ev) {
+    ev.preventDefault();
+    var btn = document.getElementById('vfConfirmar'); btn.disabled = true; erro(e2, '');
+    post('/confirmar', new FormData(this)).then(function (j) {
+      btn.disabled = false;
+      if (j.ok) { concluir(j.quando); } else { erro(e2, j.erro); }
+    }).catch(function () { btn.disabled = false; erro(e2, 'Sem conexão. Tente de novo.'); });
+  });
+})();
+</script>
+</body>
+</html>

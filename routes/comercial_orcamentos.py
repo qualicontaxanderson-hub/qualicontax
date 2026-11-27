@@ -532,7 +532,8 @@ def orcamento_enviar(oid):
     assunto, html, texto = orcamento_email.proposta(o, itens, link)
     ok, erro = False, ''
     try:
-        ok, erro = enviar(paras, assunto, html, texto, anexos=[('Orcamento-%s.pdf' % o['numero'], pdf, 'application/pdf')], servico='orcamento', usuario_id=current_user.id)
+        ok, erro = enviar(paras, assunto, html, texto, anexos=[('Orcamento-%s.pdf' % o['numero'], pdf, 'application/pdf')], servico='orcamento', usuario_id=current_user.id,
+                          referencia=('orcamento', oid))
     except Exception as exc:
         logger.exception('[orcamento] e-mail do orçamento %s', oid); erro = str(exc)
     if not ok:
@@ -669,7 +670,7 @@ def _avisar(paras, assunto, texto):
         return
     try:
         from utils.email_envio import enviar
-        enviar(paras, assunto, texto.replace('\n', '<br>'), texto, servico='orcamento', usuario_id=current_user.id)
+        enviar(paras, assunto, texto.replace('\n', '<br>'), texto, servico='orcamento', usuario_id=current_user.id, cliente=False)   # aviso à equipe: sem cópia/rodapé de cliente
     except Exception:
         logger.exception('[orcamento] aviso por e-mail')
 

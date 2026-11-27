@@ -125,7 +125,7 @@ def codigo(token):
     from utils import orcamento_email
     from utils.email_envio import enviar
     assunto, html, texto = orcamento_email.codigo(o, cod)
-    ok, err = enviar([para], assunto, html, texto, servico='orcamento')
+    ok, err = enviar([para], assunto, html, texto, servico='orcamento', referencia=('orcamento', o['id']))
     if not ok:
         return jsonify({'ok': False, 'erro': 'Não consegui enviar o e-mail: %s' % err}), 500
     return jsonify({'ok': True, 'email': _mascara(para)})
@@ -182,9 +182,9 @@ def _confirmar(o):
         copia = [quem['email']] if quem.get('email') else []
         anexo = [('Orcamento-%s-aceito.pdf' % o['numero'], pdf, 'application/pdf')]
         if para:
-            a, h, t = orcamento_email.aceite(o, itens); enviar(para, a, h, t, anexos=anexo, servico='orcamento')
+            a, h, t = orcamento_email.aceite(o, itens); enviar(para, a, h, t, anexos=anexo, servico='orcamento', referencia=('orcamento', o['id']))
         if copia:
-            a, h, t = orcamento_email.aceite(o, itens, para_equipe=True); enviar(copia, a, h, t, anexos=anexo, servico='orcamento')
+            a, h, t = orcamento_email.aceite(o, itens, para_equipe=True); enviar(copia, a, h, t, anexos=anexo, servico='orcamento', cliente=False)
     except Exception:
         logger.exception('[proposta] confirmação do aceite %s', o['id'])
 

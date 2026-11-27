@@ -106,9 +106,9 @@ def _email(a, **extra):
     return _email_contrato(_c_fake(a), **extra)
 
 
-def _enviar(para, assunto, html, texto, anexos=None):
+def _enviar(para, assunto, html, texto, anexos=None, referencia=None):
     from routes.financeiro_contratos import _enviar as enviar_contrato
-    return enviar_contrato(para, assunto, html, texto, anexos=anexos)
+    return enviar_contrato(para, assunto, html, texto, anexos=anexos, referencia=referencia)
 
 
 def _quem_assina_txt(a):
@@ -146,7 +146,7 @@ def email_convite(a, s, link):
     texto = '\n'.join([d['eyebrow'], d['titulo'] + ' · ' + d['cliente_nome'], '', d['saudacao'], _sem_tags(d['intro']), '',
                        'Ver e assinar o termo: ' + link, ''] + ['%d. %s %s' % (i + 1, t, tx) for i, (t, tx) in enumerate(d['passos'])]
                       + ['', _sem_tags(d['aviso']), '', d['rodape']])
-    return _enviar([s['email']], 'Para assinar: termo do acordo %s · %s' % (a['numero'], d['cliente_nome']), html, texto)
+    return _enviar([s['email']], 'Para assinar: termo do acordo %s · %s' % (a['numero'], d['cliente_nome']), html, texto, referencia=('acordo', a['id']))
 
 
 def link_de(s):
@@ -239,7 +239,7 @@ def email_codigo(a, s, codigo):
                      rodape='Enviado por Qualicontax Assessoria Contábil. O código vale por 30 minutos e só serve para você. '
                             'Se não foi você que pediu, ignore este e-mail.')
     return _enviar([s['email']], 'Seu código para assinar: %s' % codigo, html,
-                   'Seu código para assinar o termo do acordo nº %s: %s (vale 30 minutos).' % (a['numero'], codigo))
+                   'Seu código para assinar o termo do acordo nº %s: %s (vale 30 minutos).' % (a['numero'], codigo), referencia=('acordo', a['id']))
 
 
 def assinar(a, s, cpf, ip, agente):
@@ -294,7 +294,7 @@ def concluir(aid):
     try:
         _enviar(para, 'Termo assinado · acordo %s · %s' % (a['numero'], d['cliente_nome']), html,
                 'Termo do acordo nº %s assinado por todas as partes. Via assinada em anexo (%s).' % (a['numero'], nome_arq),
-                anexos=[(nome_arq, pdf, 'application/pdf')])
+                anexos=[(nome_arq, pdf, 'application/pdf')], referencia=('acordo', a['id']))
     except Exception:
         logger.exception('[acordo] e-mail da via assinada %s', a['numero'])
     AC.evento(aid, 'Via assinada enviada a todos', ('Dropbox: ' + path) if path else 'Dropbox indisponível: a via está na janela',

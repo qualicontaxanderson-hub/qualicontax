@@ -1857,6 +1857,24 @@ def _apply_migrations():
                                "AND TABLE_NAME = %s AND COLUMN_NAME = %s", (_tab, _col), fetch=True, fetch_one=True) or {}
             if _c.get('cnt', 0) == 0:
                 _migrate(f"ALTER TABLE {_tab} ADD COLUMN {_col} {_def}")
+    # 27/11/2026: todo e-mail a CLIENTE sai com cópia oculta para o app@ e com o link "Este e-mail é da Qualicontax?" (/v/<código>):
+    # a linha de email_envios guarda a cópia, o código do link, o documento de origem e a confirmação pelo cliente — ver utils/email_envio.py
+    _t = execute_query("SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'email_envios'",
+                       fetch=True, fetch_one=True) or {}
+    if _t.get('cnt', 0):
+        for _col, _def in (('copia', "VARCHAR(120) NULL COMMENT 'cópia oculta (caixa do sistema)'"), ('token', 'VARCHAR(40) NULL'),
+                           ('referencia_tipo', "VARCHAR(20) NULL COMMENT 'boleto|grupo|orcamento|contrato|acordo'"), ('referencia_id', 'INT NULL'),
+                           ('aberto_em', 'DATETIME NULL'), ('codigo', "VARCHAR(64) NULL COMMENT 'sha256 do código de 6 dígitos'"),
+                           ('codigo_em', 'DATETIME NULL'), ('codigo_envios', 'TINYINT NOT NULL DEFAULT 0'),
+                           ('codigo_tentativas', 'TINYINT NOT NULL DEFAULT 0'), ('confirmado_em', 'DATETIME NULL')):
+            _c = execute_query("SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() "
+                               "AND TABLE_NAME = 'email_envios' AND COLUMN_NAME = %s", (_col,), fetch=True, fetch_one=True) or {}
+            if _c.get('cnt', 0) == 0:
+                _migrate(f"ALTER TABLE email_envios ADD COLUMN {_col} {_def}")
+        _i = execute_query("SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.STATISTICS WHERE TABLE_SCHEMA = DATABASE() "
+                           "AND TABLE_NAME = 'email_envios' AND INDEX_NAME = 'uq_email_envios_token'", fetch=True, fetch_one=True) or {}
+        if _i.get('cnt', 0) == 0:
+            _migrate("ALTER TABLE email_envios ADD UNIQUE KEY uq_email_envios_token (token)")
     # 19/11/2026: desconto mensal no contrato de honorários (fixo ou %), com motivo e validade
     _t = execute_query("SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = DATABASE() "
                        "AND TABLE_NAME = 'fin_contratos'", fetch=True, fetch_one=True) or {}

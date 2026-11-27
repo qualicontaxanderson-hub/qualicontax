@@ -43,8 +43,10 @@ def _remetente():
         return None
 
 
-def _enviar(para, assunto, html, texto, anexos=None):
-    return email_envio.enviar(para, assunto, html, texto, remetente=_remetente(), anexos=anexos, servico='Contrato')
+def _enviar(para, assunto, html, texto, anexos=None, cliente=None, referencia=None):
+    """``cliente``/``referencia``: ver utils/email_envio.enviar (27/11/2026) — aviso à equipe vai com cliente=False."""
+    return email_envio.enviar(para, assunto, html, texto, remetente=_remetente(), anexos=anexos, servico='Contrato',
+                              cliente=cliente, referencia=referencia)
 
 
 # ---------------------------------------------------------------- montagem do formulário
@@ -419,7 +421,7 @@ def _avisar_aprovadores(c):
                 '<p><a href="%s" style="background:#15803d;color:#fff;padding:10px 18px;border-radius:8px;text-decoration:none;">Conferir e aprovar</a></p>'
                 % (_esc_html(getattr(current_user, 'nome', '')), _esc_html(emp), brl(c['dados'].get('valor')), link))
         _enviar([r['email'] for r in rows], 'Contrato para aprovar – %s' % emp, html,
-                '%s pediu a aprovação do contrato de %s. Abra: %s' % (getattr(current_user, 'nome', ''), emp, link))
+                '%s pediu a aprovação do contrato de %s. Abra: %s' % (getattr(current_user, 'nome', ''), emp, link), cliente=False)
     except Exception:
         logger.exception('[contratos] aviso de aprovação')
 
@@ -841,7 +843,7 @@ def _email_assinatura(a, c, link):
     sem_tags = lambda t: re.sub(r'<[^>]+>', '', str(t))          # a versão só texto do e-mail vai sem o negrito
     texto = '\n'.join([d['eyebrow'], d['titulo'] + ' · ' + d['cliente_nome'], '', d['saudacao'], sem_tags(d['intro']), '',
                        'Ver e assinar o contrato: ' + link, ''] + ['%d. %s %s' % (i + 1, t, x) for i, (t, x) in enumerate(d['passos'])] + ['', sem_tags(d['aviso']), '', d['rodape']])
-    return _enviar([a['email']], 'Para assinar: %s · %s' % (d['titulo'], d['cliente_nome']), html, texto)
+    return _enviar([a['email']], 'Para assinar: %s · %s' % (d['titulo'], d['cliente_nome']), html, texto, referencia=('contrato', c['id']))
 
 
 @financeiro.route('/comercial/contratos/<int:cid>/enviar', methods=['POST'])
@@ -1067,7 +1069,8 @@ def assinar_codigo(token):
     html, d = _email_contrato(c, saudacao=('Olá, %s!' % primeiro) if primeiro else 'Olá!', codigo=codigo,
                               intro='Aqui está o seu código para assinar o contrato acima. Volte à página do contrato e digite os 6 dígitos.',
                               rodape='Enviado por Qualicontax Assessoria Contábil. O código vale por 30 minutos e só serve para você. Se não foi você que pediu, ignore este e-mail.')
-    ok, err = _enviar([a['email']], 'Seu código para assinar: %s' % codigo, html, 'Seu código para assinar o contrato nº %s: %s (vale 30 minutos).' % (c.get('numero') or c['id'], codigo))
+    ok, err = _enviar([a['email']], 'Seu código para assinar: %s' % codigo, html, 'Seu código para assinar o contrato nº %s: %s (vale 30 minutos).' % (c.get('numero') or c['id'], codigo),
+                      referencia=('contrato', c['id']))
     if not ok:
         return jsonify({'ok': False, 'erro': 'Não consegui enviar o e-mail: %s' % err}), 500
     return jsonify({'ok': True, 'email': _mascara(a['email'])})
@@ -1142,7 +1145,7 @@ def _concluir(c):
                               intro='O contrato acima foi assinado eletronicamente por todas as partes. A via assinada, com o registro de cada assinatura, está em anexo neste e-mail. Guarde-a com você.',
                               aviso=_quem_assina(c), anexos_txt='Em anexo: %s' % nome_arq)
     _enviar(para, 'Contrato assinado · %s' % d['cliente_nome'], html, 'Contrato nº %s assinado por todas as partes. Via assinada em anexo (%s).' % (c.get('numero') or c['id'], nome_arq),
-            anexos=[(nome_arq, pdf, 'application/pdf')])
+            anexos=[(nome_arq, pdf, 'application/pdf')], referencia=('contrato', c['id']))
     registrar('escrita.concluiu_contrato_prestacao', 'financeiro', tabela='prest_contratos', registro_id=c['id'],
               depois={'empresa': emp.get('razao'), 'dropbox': path, 'copias_para': para})
 

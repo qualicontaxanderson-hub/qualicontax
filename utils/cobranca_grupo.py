@@ -368,7 +368,8 @@ def enviar_email(grupo_id, para, usuario_id=None, ciente=False):
         return False, f'{exc} Preencha o bloco "E-mail de cobrança" na conta de cobrança.', d
     empresa_nome = _empresa(primeiro['empresa_id'])
     assunto, html, texto = montar_email(d, link, empresa_nome, telefone=_telefone_empresa(primeiro['empresa_id']))
-    ok, erro = email_envio.enviar(destinos, assunto, html, texto, remetente=rem, servico='Boleto', usuario_id=usuario_id)
+    ok, erro = email_envio.enviar(destinos, assunto, html, texto, remetente=rem, servico='Boleto', usuario_id=usuario_id,
+                                   referencia=('grupo', pag['id']))
     if not ok:
         return False, f'O e-mail não saiu: {erro}', d
     para_txt = ', '.join(destinos)[:500]

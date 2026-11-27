@@ -182,6 +182,8 @@ from routes.financeiro_contratos import assinatura   # noqa: E402  (assinatura e
 app.register_blueprint(assinatura)
 from routes.acordo_publico import acordo_assinatura   # noqa: E402  (assinatura do termo de acordo de dívida, por token; 26/11/2026)
 app.register_blueprint(acordo_assinatura)
+from routes.email_verifica import verifica   # noqa: E402  ("Este e-mail é da Qualicontax?" — /v/<código> de todo e-mail a cliente; 27/11/2026)
+app.register_blueprint(verifica)
 app.register_blueprint(robo_saidas)
 app.register_blueprint(colabore_api)
 app.register_blueprint(cadastro_bp)
