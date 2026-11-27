@@ -3,206 +3,237 @@
 {% block title %}Honorários - Financeiro - Qualicontax{% endblock %}
 
 {% block extra_css %}
+{% include 'financeiro/_lanc_tx_css.html' %}
 <style>
 {% include 'clientes/_pk_css.html' %}
-/* Honorários (06/11/2026): tabela .fin-tab da identidade; só o que é desta tela fica aqui */
-.ho-abas { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin:14px 0 10px; }
-.ho-busca { margin-left:auto; display:flex; gap:6px; }
-.ho-busca input { width:260px; }
-.ho-num { color:#94a3b8; font-size:12px; font-variant-numeric:tabular-nums; }
-.ho-plano { font-size:11px; color:#7d968a; display:block; }
-.ho-falta { color:#b91c1c; font-weight:600; }
-.ho-ok { color:#15803d; }
 {% include 'financeiro/_honorario_janela_css.html' %}
-.modal-body .form-group { margin-bottom:0; }
-@media (max-width:640px) { .ho-busca { margin-left:0; width:100%; } .ho-busca input { width:100%; } }
-/* Sem honorários: como cada empresa paga (25/11/2026) */
-.ho-cobf { display:flex; flex-wrap:wrap; gap:6px; margin:0 0 10px; }
-.ho-cobf button { border:1px solid #e2e8f0; background:#fff; color:#475569; border-radius:99px; padding:6px 12px; font:inherit; font-size:12.5px; font-weight:700; cursor:pointer; }
-.ho-cobf button strong { font-weight:900; margin-left:3px; } .ho-cobf button.on { background:#0f172a; border-color:#0f172a; color:#fff; }
-.ho-cobf button.c-via_grupo.on { background:#1d4ed8; border-color:#1d4ed8; } .ho-cobf button.c-sem_movimento.on { background:#b45309; border-color:#b45309; }
-.ho-cobf button.c-pendente.on { background:#be123c; border-color:#be123c; } .ho-cobf button.c-propria.on { background:#15803d; border-color:#15803d; }
-.ho-cobtag { display:inline-flex; align-items:center; gap:6px; border-radius:99px; padding:3px 10px; font-size:12px; font-weight:800; white-space:nowrap; }
+{# 26/11/2026 — Anderson: "veja a página feia por trás". As listas (Com/Sem honorários, Aguardando aprovação, Encerrados)
+   saem das tabelas .fin-tab e entram no molde do painel Honorários: quadros coloridos em cima, cartões embaixo (tx-*). #}
+.ho-acoes { display:flex; gap:10px; flex-wrap:wrap; justify-content:flex-end; align-items:center; }
+.ho-btn { display:inline-flex; align-items:center; gap:9px; padding:11px 18px; border-radius:14px; border:0; background:#fff; color:#0f3d2e; font:inherit; font-weight:800; font-size:14.5px; box-shadow:0 10px 26px rgba(0,0,0,.18); cursor:pointer; text-decoration:none; }
+.ho-btn i { color:#16a34a; }
+.ho-btn2 { background:rgba(255,255,255,.14); color:#fff; box-shadow:none; border:1px solid rgba(255,255,255,.35); font-size:13.5px; padding:10px 14px; } .ho-btn2 i { color:#bbf7d0; }
+.tx-abas.ho-abas4 { grid-template-columns:repeat(4, minmax(0,1fr)); } .tx-abas.ho-abas2 { grid-template-columns:repeat(2, minmax(0,1fr)); max-width:720px; }
+a.tx-aba { text-decoration:none; opacity:.72; transition:opacity .15s, transform .15s; } a.tx-aba:hover { opacity:1; } a.tx-aba.on { opacity:1; transform:translateY(-2px); box-shadow:0 0 0 3px #fff, 0 0 0 5px var(--cor); }
+.ho-barra { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin:0 0 14px; }
+.ho-barra .tx-filtros button.on { background:#0f172a; border-color:#0f172a; color:#fff; } .ho-barra .tx-filtros button.on b { color:#fff; opacity:.8; }
+.ho-barra .tx-filtros button.c-via_grupo.on { background:#1d4ed8; border-color:#1d4ed8; } .ho-barra .tx-filtros button.c-sem_movimento.on { background:#b45309; border-color:#b45309; }
+.ho-barra .tx-filtros button.c-pendente.on { background:#be123c; border-color:#be123c; } .ho-barra .tx-filtros button.c-propria.on { background:#15803d; border-color:#15803d; }
+.ho-barra form.tx-busca { display:flex; gap:6px; } .ho-barra form.tx-busca button { height:38px; border:1px solid var(--linha); background:#fff; border-radius:11px; padding:0 12px; color:#0f3d2e; cursor:pointer; }
+.ho-aviso { display:flex; gap:10px; align-items:flex-start; background:#fff; border:1px solid var(--linha); border-radius:14px; padding:11px 14px; font-size:13px; color:#334155; margin:0 0 14px; line-height:1.45; } .ho-aviso i { color:#2563eb; margin-top:2px; }
+.ho-grade { display:grid; grid-template-columns:repeat(auto-fill, minmax(320px, 1fr)); gap:12px; margin-bottom:22px; } .ho-grade .tx-c[hidden] { display:none !important; }
+.ho-c { padding-bottom:12px; cursor:default; } .ho-c.clic { cursor:pointer; } .ho-c .tx-c-meio { margin-top:10px; align-items:flex-start; }
+.ho-c .tx-c-nome { font-size:14px; }
+.ho-c .tx-c-val { font-size:20px; } .ho-c .tx-c-desc b { color:#0f3d2e; }
+.ho-c .tx-c-acoes { opacity:1; position:static; padding:0; margin-left:auto; }
+.ho-doc { font-size:12px; color:#64748b; font-variant-numeric:tabular-nums; margin-top:3px; }
+.ho-chips { display:flex; flex-wrap:wrap; gap:6px; margin-top:10px; }
+.ho-chips span, .ho-chips a { display:inline-flex; align-items:center; gap:5px; border:1px solid #e6eeea; background:#f8fafc; color:#334155; border-radius:99px; padding:4px 10px; font-size:12px; font-weight:700; text-decoration:none; }
+.ho-chips span i, .ho-chips a i { color:#64748b; font-size:11px; }
+.ho-chips .ok { background:#f0fdf4; border-color:#bbf7d0; color:#15803d; } .ho-chips .ok i { color:#16a34a; }
+.ho-chips .falta { background:#fef2f2; border-color:#fecaca; color:#b91c1c; } .ho-chips .falta i { color:#dc2626; }
+.ho-chips .alerta { background:#fff7ed; border-color:#fed7aa; color:#c2410c; } .ho-chips .alerta i { color:#ea580c; }
+.ho-chips .roxo { background:#f5f3ff; border-color:#ddd6fe; color:#6d28d9; } .ho-chips .roxo i { color:#7c3aed; }
+.ho-cobtag { display:inline-flex; align-items:center; gap:6px; border-radius:99px; padding:4px 10px; font-size:12px; font-weight:800; white-space:nowrap; }
 .ho-cobtag small { font-weight:600; opacity:.85; }
 .ho-cobtag.c-pendente { background:#fff1f2; color:#be123c; } .ho-cobtag.c-propria { background:#f0fdf4; color:#15803d; }
 .ho-cobtag.c-via_grupo { background:#eff6ff; color:#1d4ed8; } .ho-cobtag.c-sem_movimento { background:#fff7ed; color:#b45309; }
-#ho-tab-sem tr[hidden] { display:none; }
+.ho-quem { margin-top:10px; font-size:12.5px; color:#475569; } .ho-quem b { color:#0f172a; } .ho-quem small { display:block; color:#94a3b8; }
+.ho-recado { margin-top:8px; background:#fffbeb; border:1px solid #fde68a; color:#92400e; border-radius:10px; padding:7px 10px; font-size:12.5px; }
+.ho-ac { display:flex; gap:6px; flex-wrap:wrap; margin-top:12px; padding-top:10px; border-top:1px dashed #e6eeea; }
+.ho-ac a, .ho-ac button { display:inline-flex; align-items:center; gap:6px; height:32px; padding:0 12px; border-radius:9px; border:1px solid var(--linha); background:#fff; color:#0f3d2e; font:inherit; font-size:12.5px; font-weight:700; cursor:pointer; text-decoration:none; }
+.ho-ac a:hover, .ho-ac button:hover { border-color:#9fc9b3; }
+.ho-ac .prim { background:#0f3d2e; border-color:#0f3d2e; color:#fff; } .ho-ac .ok { background:#16a34a; border-color:#16a34a; color:#fff; } .ho-ac .red { color:#b91c1c; border-color:#fecaca; }
+.ho-ac .ok.conf { background:#b45309; border-color:#b45309; }
+.ho-rep { display:none; margin-top:10px; gap:6px; } .ho-rep.on { display:flex; } .ho-rep textarea { flex:1; min-height:38px; border:1px solid #d7e3dc; border-radius:10px; padding:8px 10px; font:inherit; font-size:13px; }
+.ho-rep button { height:38px; border:0; border-radius:10px; background:#dc2626; color:#fff; font:inherit; font-weight:800; padding:0 12px; cursor:pointer; }
+.ho-sec { font-size:12px; font-weight:800; letter-spacing:.07em; text-transform:uppercase; color:#0f3d2e; margin:6px 0 10px; }
+.ho-conv { display:grid; grid-template-columns:repeat(auto-fill, minmax(320px, 1fr)); gap:10px; margin-bottom:22px; }
+.ho-conv .tx-c b.n { display:block; font-size:13.5px; } .ho-conv .tx-c small { display:block; color:#64748b; font-size:12px; margin-top:3px; }
+.ho-conv code { display:block; margin-top:8px; font-size:11px; word-break:break-all; background:#f8fafc; border:1px solid #e6eeea; border-radius:8px; padding:6px 8px; }
+.modal-body .form-group { margin-bottom:0; }
+@media (max-width:900px) { .tx-abas.ho-abas4 { grid-template-columns:repeat(2, minmax(0,1fr)); } .ho-barra form.tx-busca { width:100%; margin-left:0; } .ho-grade { grid-template-columns:minmax(0,1fr); } }
 </style>
 {% endblock %}
 
 {% block content %}
 {% include 'financeiro/_nav_financeiro.html' %}
-
-<div class="page-header">
+<div class="tx">
+<div class="ef-hero">
+  <div class="ef-hero-inner ef-hero-head">
     <div>
-        <h1 class="page-title"><i class="fas fa-file-signature" style="color: var(--primary-green);"></i> {{ 'Honorários' if modo == 'admin' else 'Cadastrar honorários' }}</h1>
-        <p class="page-subtitle">{% if modo == 'admin' %}O contrato mensal de cada empresa: valor, vencimento, 13º e reajuste{% elif modo == 'convite' %}Cadastro dos honorários de {{ convite.nome_razao_social }} — vai para aprovação do Anderson{% else %}As empresas que você cadastrou e ainda não têm honorários; o que você enviar vai para aprovação do Anderson{% endif %}</p>
+      <h1 class="ef-hero-title">{{ 'Honorários' if modo == 'admin' else 'Cadastrar honorários' }}</h1>
+      <p class="ef-hero-sub">{% if modo == 'admin' %}O contrato mensal de cada empresa: valor, vencimento, 13º e reajuste{% elif modo == 'convite' %}Cadastro dos honorários de {{ convite.nome_razao_social }} — vai para aprovação do escritório{% else %}As empresas que você cadastrou e ainda não têm honorários, e o que você já enviou{% endif %}</p>
     </div>
-    {% if modo == 'admin' %}<div class="page-actions">
-        <button class="btn btn-primary" onclick="hoNovo()"><i class="fas fa-plus"></i> Novo contrato</button>
+    {% if modo == 'admin' %}<div class="ho-acoes">
+      <a class="ho-btn ho-btn2" href="{{ url_for('financeiro.honorarios') }}"><i class="fas fa-arrow-left"></i> Cobrança do mês</a>
+      {% if pode_rota('financeiro.honorarios_reajuste') %}<a class="ho-btn ho-btn2" href="{{ url_for('financeiro.honorarios_reajuste') }}"><i class="fas fa-arrow-trend-up"></i> Reajuste de janeiro</a>{% endif %}
+      <button type="button" class="ho-btn" onclick="hoNovo()"><i class="fas fa-plus"></i> Novo contrato</button>
     </div>{% endif %}
+  </div>
 </div>
 
-{% if modo == 'admin' %}
-<div class="fin-kpis">
-    <div class="fin-kpi"><div class="fin-kpi-lbl">Contratos ativos</div><div class="fin-kpi-val">{{ resumo.n or 0 }}</div><div class="fin-kpi-pe">empresas com honorários</div></div>
-    <div class="fin-kpi"><div class="fin-kpi-lbl">Honorários por mês</div><div class="fin-kpi-val">{{ (resumo.total or 0) | float | format_currency }}</div><div class="fin-kpi-pe">soma dos contratos ativos</div></div>
-    <div class="fin-kpi"><div class="fin-kpi-lbl">Sem honorários</div><div class="fin-kpi-val">{{ resumo.sem_contrato or 0 }}</div><div class="fin-kpi-pe">empresas ativas sem contrato</div></div>
-    <div class="fin-kpi"><div class="fin-kpi-lbl">Com 13º</div><div class="fin-kpi-val">{{ resumo.com_decimo or 0 }}</div><div class="fin-kpi-pe">parcela única ou duas parcelas</div></div>
-    {% if resumo.pendentes %}<div class="fin-kpi"><div class="fin-kpi-lbl">Aguardando aprovação</div><div class="fin-kpi-val">{{ resumo.pendentes }}</div><div class="fin-kpi-pe">cadastrados por funcionários</div></div>{% endif %}
-</div>
-{% endif %}
+<div class="ef-body">
+  {% if modo == 'admin' %}
+  <div class="tx-abas ho-abas4">
+    <a class="tx-aba tx-a-rec{{ ' on' if aba == 'com' }}" href="{{ url_for('financeiro.honorarios', aba='com', busca=busca) }}"><span class="tx-aba-ico"><i class="fas fa-file-signature"></i></span>
+      <span class="tx-aba-txt"><span class="tx-aba-lbl">Com honorários</span><span class="tx-aba-val">{{ (resumo.total or 0) | float | format_currency }}</span><span class="tx-aba-sub">por mês · {{ resumo.com_decimo or 0 }} com 13º</span></span><span class="tx-aba-n">{{ contratos | length }}</span></a>
+    <a class="tx-aba tx-a-atr{{ ' on' if aba == 'sem' }}" href="{{ url_for('financeiro.honorarios', aba='sem', busca=busca) }}"><span class="tx-aba-ico"><i class="fas fa-building-circle-exclamation"></i></span>
+      <span class="tx-aba-txt"><span class="tx-aba-lbl">Sem honorários</span><span class="tx-aba-val">{{ sem_contrato | length }} empresa{{ 's' if sem_contrato | length != 1 }}</span><span class="tx-aba-sub">ativas, sem contrato de honorários</span></span><span class="tx-aba-n">{{ sem_contrato | length }}</span></a>
+    <a class="tx-aba tx-a-abe{{ ' on' if aba == 'pendentes' }}" href="{{ url_for('financeiro.honorarios', aba='pendentes') }}"><span class="tx-aba-ico"><i class="fas fa-stamp"></i></span>
+      <span class="tx-aba-txt"><span class="tx-aba-lbl">Aguardando aprovação</span><span class="tx-aba-val">{{ (pendentes | sum(attribute='valor')) | float | format_currency }}</span><span class="tx-aba-sub">cadastrados pela equipe</span></span><span class="tx-aba-n">{{ pendentes | length }}</span></a>
+    <a class="tx-aba tx-a-perd{{ ' on' if aba == 'enc' }}" href="{{ url_for('financeiro.honorarios', aba='enc', busca=busca) }}"><span class="tx-aba-ico"><i class="fas fa-box-archive"></i></span>
+      <span class="tx-aba-txt"><span class="tx-aba-lbl">Encerrados</span><span class="tx-aba-val">{{ encerrados | length }} contrato{{ 's' if encerrados | length != 1 }}</span><span class="tx-aba-sub">não entram mais na cobrança do mês</span></span><span class="tx-aba-n">{{ encerrados | length }}</span></a>
+  </div>
+  {% elif modo == 'cadastrar' %}
+  <div class="tx-abas ho-abas2">
+    <a class="tx-aba tx-a-atr{{ ' on' if aba == 'sem' }}" href="{{ url_for('financeiro.honorarios_cadastrar', aba='sem') }}"><span class="tx-aba-ico"><i class="fas fa-building-circle-exclamation"></i></span>
+      <span class="tx-aba-txt"><span class="tx-aba-lbl">Minhas empresas sem honorários</span><span class="tx-aba-val">{{ sem_contrato | length }}</span><span class="tx-aba-sub">cadastre e mande para aprovação</span></span><span class="tx-aba-n">{{ sem_contrato | length }}</span></a>
+    <a class="tx-aba tx-a-rec{{ ' on' if aba == 'com' }}" href="{{ url_for('financeiro.honorarios_cadastrar', aba='com') }}"><span class="tx-aba-ico"><i class="fas fa-paper-plane"></i></span>
+      <span class="tx-aba-txt"><span class="tx-aba-lbl">Enviados</span><span class="tx-aba-val">{{ contratos | length }}</span><span class="tx-aba-sub">o que você já cadastrou</span></span><span class="tx-aba-n">{{ contratos | length }}</span></a>
+  </div>
+  {% endif %}
 
-<div class="ho-abas fin-abas-claras">
-    {% if modo == 'admin' %}
-    <a class="fin-chip" href="{{ url_for('financeiro.honorarios') }}" style="background:#0f3d2e;color:#fff;border-color:#0f3d2e"><i class="fas fa-arrow-left"></i> Cobrança do mês</a>
-    <a class="fin-chip {{ 'ativo' if aba == 'com' }}" href="{{ url_for('financeiro.honorarios', aba='com', busca=busca) }}">Com honorários <strong>{{ contratos | length }}</strong></a>
-    <a class="fin-chip {{ 'ativo' if aba == 'sem' }}" href="{{ url_for('financeiro.honorarios', aba='sem', busca=busca) }}">Sem honorários <strong>{{ sem_contrato | length }}</strong></a>
-    <a class="fin-chip {{ 'ativo' if aba == 'pendentes' }}" href="{{ url_for('financeiro.honorarios', aba='pendentes') }}">Aguardando aprovação <strong>{{ pendentes | length }}</strong></a>
-    <a class="fin-chip {{ 'ativo' if aba == 'enc' }}" href="{{ url_for('financeiro.honorarios', aba='enc', busca=busca) }}" title="Contratos encerrados: não entram mais na cobrança do mês"><i class="fas fa-box-archive"></i> Encerrados <strong>{{ encerrados | length }}</strong></a>
-    <a class="fin-chip" href="{{ url_for('financeiro.honorarios_reajuste') }}"><i class="fas fa-arrow-trend-up"></i> Reajuste de janeiro</a>
-    {% elif modo == 'cadastrar' %}
-    <a class="fin-chip {{ 'ativo' if aba == 'sem' }}" href="{{ url_for('financeiro.honorarios_cadastrar', aba='sem') }}">Minhas empresas sem honorários <strong>{{ sem_contrato | length }}</strong></a>
-    <a class="fin-chip {{ 'ativo' if aba == 'com' }}" href="{{ url_for('financeiro.honorarios_cadastrar', aba='com') }}">Enviados <strong>{{ contratos | length }}</strong></a>
-    {% endif %}
-    {% if modo == 'admin' %}<form class="ho-busca" method="GET" action="{{ url_for('financeiro.honorarios') }}">
-        <input type="hidden" name="aba" value="{{ aba }}">
-        <input type="text" name="busca" class="form-control" placeholder="empresa, número ou CNPJ" value="{{ busca or '' }}">
-        <button class="btn btn-outline" type="submit"><i class="fas fa-search"></i></button>
-    </form>{% endif %}
-</div>
+  {% set p_key = {'com': 'rec', 'sem': 'atr', 'pendentes': 'abe', 'enc': 'perd'}.get(aba, 'rec') %}
+  <div class="tx-painel on" data-p="{{ p_key }}">
 
-<div class="fin-caixa">
-{% if aba == 'sem' %}
-    {% if sem_contrato %}
+  {% if aba == 'sem' %}
     {# 25/11/2026 (Anderson): "Sem movimento" e "Via grupo" não pagam; a lista mostra como cada empresa paga e filtra por isso #}
     {% set ns_cob = namespace(n={}) %}{% for c in sem_contrato %}{% set _ = ns_cob.n.__setitem__(c.cobranca, (ns_cob.n.get(c.cobranca) or 0) + 1) %}{% endfor %}
-    <div class="ho-cobf" id="ho-cobf">
-        <button type="button" class="on" data-v="" onclick="hoCobF(this)">Todas <strong>{{ sem_contrato | length }}</strong></button>
+    <div class="ho-barra">
+      {% if sem_contrato %}<div class="tx-filtros" id="ho-cobf">
+        <button type="button" class="tx-f on" data-v="" onclick="hoCobF(this)">Todas <b>{{ sem_contrato | length }}</b></button>
         {% for v, rot in [('PENDENTE', 'Pendente'), ('PROPRIA', 'Própria, sem honorários'), ('VIA_GRUPO', 'Via grupo'), ('SEM_MOVIMENTO', 'Sem movimento')] %}{% if ns_cob.n.get(v) %}
-        <button type="button" class="c-{{ v | lower }}" data-v="{{ v }}" onclick="hoCobF(this)">{{ rot }} <strong>{{ ns_cob.n.get(v) }}</strong></button>{% endif %}{% endfor %}
+        <button type="button" class="tx-f c-{{ v | lower }}" data-v="{{ v }}" onclick="hoCobF(this)">{{ rot }} <b>{{ ns_cob.n.get(v) }}</b></button>{% endif %}{% endfor %}
+      </div>{% endif %}
+      {% if modo == 'admin' %}<form class="tx-busca" method="GET" action="{{ url_for('financeiro.honorarios') }}"><input type="hidden" name="aba" value="{{ aba }}"><i class="fas fa-magnifying-glass"></i><input type="search" name="busca" placeholder="empresa, número ou CNPJ · Enter para buscar" value="{{ busca or '' }}"></form>{% endif %}
     </div>
-    <div class="fin-rolar">
-        <table class="fin-tab" id="ho-tab-sem">
-            <thead><tr><th>Nº</th><th>Empresa</th><th>CPF/CNPJ</th><th>Tipo</th><th>Como paga</th><th></th></tr></thead>
-            <tbody>
-            {% for c in sem_contrato %}
-                <tr data-cob="{{ c.cobranca }}">
-                    <td class="fin-num">{{ c.numero_cliente }}</td>
-                    <td class="fin-td-titulo"><a href="{{ url_for('clientes.detalhes', id=c.id) }}">{{ c.nome_razao_social }}</a>{% if c.encerrado_em %}<span class="ho-plano" title="Teve honorários e o contrato foi encerrado. Se a empresa fechou, inative o cadastro em Clientes para ela sair desta lista."><i class="fas fa-box-archive"></i> honorários encerrados em {{ c.encerrado_em.strftime('%m/%Y') }}</span>{% endif %}</td>
-                    <td class="fin-td-oculta ho-num">{{ c.cpf_cnpj or '—' }}</td>
-                    <td class="fin-td-oculta">{{ c.tipo_pessoa or '' }}</td>
-                    <td><span class="ho-cobtag c-{{ c.cobranca | lower }}">{% if c.cobranca == 'VIA_GRUPO' %}<i class="fas fa-people-group"></i> Via grupo{% if c.pagador_nome %} <small>· paga {{ c.pagador_nome | nome_proprio }}</small>{% endif %}{% elif c.cobranca == 'SEM_MOVIMENTO' %}<i class="fas fa-circle-pause"></i> Sem movimento{% elif c.cobranca == 'PROPRIA' %}<i class="fas fa-building"></i> Própria{% else %}<i class="fas fa-hourglass-half"></i> Pendente{% endif %}</span></td>
-                    <td><button class="btn btn-outline btn-sm" onclick="hoNovo({{ c.id }}, {{ c.nome_razao_social | tojson }}, {{ c.numero_cliente | tojson }})"><i class="fas fa-plus"></i> Cadastrar honorários</button>
-                        {% if modo == 'admin' %}<button class="btn btn-outline btn-sm" title="Gerar link para quem cadastrou a empresa preencher" onclick="hoConvite({{ c.id }}, {{ c.nome_razao_social | tojson }})"><i class="fas fa-link"></i> Link</button>{% endif %}</td>
-                </tr>
-            {% endfor %}
-            </tbody>
-        </table>
+    {% if sem_contrato %}
+    <div class="ho-grade" id="ho-grade-sem">
+      {% for c in sem_contrato %}
+      <div class="tx-c ho-c tx-venc" data-cob="{{ c.cobranca }}">
+        <div class="tx-c-top"><span class="tx-c-num">{{ c.numero_cliente or ('PF' if c.tipo_pessoa == 'PF' else '—') }}</span><span class="tx-c-nome" title="{{ c.nome_razao_social }}">{{ c.nome_razao_social }}</span></div>
+        <div class="tx-c-meio"><div>
+          <div class="ho-doc">{{ c.cpf_cnpj or 'sem CPF/CNPJ' }}{% if c.tipo_pessoa %} · {{ c.tipo_pessoa }}{% endif %}</div>
+          <div class="ho-chips"><span class="ho-cobtag c-{{ (c.cobranca or 'PENDENTE') | lower }}">{% if c.cobranca == 'VIA_GRUPO' %}<i class="fas fa-people-group"></i> Via grupo{% if c.pagador_nome %} <small>· paga {{ c.pagador_nome | nome_proprio }}</small>{% endif %}{% elif c.cobranca == 'SEM_MOVIMENTO' %}<i class="fas fa-pause"></i> Sem movimento{% elif c.cobranca == 'PROPRIA' %}<i class="fas fa-file-invoice-dollar"></i> Própria <small>· sem honorários</small>{% else %}<i class="fas fa-circle-question"></i> Pendente <small>· ainda não definido</small>{% endif %}</span>
+            {% if c.encerrado_em %}<span class="alerta" title="Teve honorários e o contrato foi encerrado. Se a empresa fechou, inative o cadastro em Clientes."><i class="fas fa-box-archive"></i> contrato encerrado</span>{% endif %}</div>
+        </div></div>
+        <div class="ho-ac">
+          <button type="button" class="prim" onclick="hoNovo({{ c.id }}, {{ c.nome_razao_social | tojson }}, {{ c.numero_cliente | tojson }})"><i class="fas fa-plus"></i> Cadastrar honorários</button>
+          {% if modo == 'admin' %}<button type="button" title="Gerar link para quem cadastrou a empresa preencher" onclick="hoConvite({{ c.id }}, {{ c.nome_razao_social | tojson }})"><i class="fas fa-link"></i> Link</button>{% endif %}
+          <a href="{{ url_for('clientes.detalhes', id=c.id) }}" target="_blank" title="Abrir o cadastro"><i class="fas fa-arrow-up-right-from-square"></i> Cadastro</a>
+        </div>
+      </div>
+      {% endfor %}
     </div>
-    {% else %}<div class="fin-vazio"><i class="fas fa-check-circle"></i> {{ 'Todas as empresas ativas têm contrato de honorários.' if modo == 'admin' else 'Nenhuma empresa sua sem honorários.' }}</div>{% endif %}
+    {% else %}<div class="tx-vazio"><i class="fas fa-check-circle"></i> {{ 'Todas as empresas ativas têm contrato de honorários.' if modo == 'admin' else 'Nenhuma empresa sua sem honorários.' }}</div>{% endif %}
     {% if modo == 'admin' and convites %}
-    <p class="ho-sec" style="margin-top:16px;">Links em aberto</p>
-    <table class="fin-tab"><thead><tr><th>Empresa</th><th>Para</th><th>Vale até</th><th>Link</th></tr></thead><tbody>
-    {% for v in convites %}<tr><td>{{ v.nome_razao_social }}</td><td>{{ v.usuario_nome or 'qualquer usuário' }}</td><td>{{ v.expira_em.strftime('%d/%m/%Y') }}</td><td><code style="font-size:11px;">{{ url_for('financeiro.honorarios_convite', token=v.token, _external=True) }}</code></td></tr>{% endfor %}
-    </tbody></table>
+    <p class="ho-sec"><i class="fas fa-link"></i> Links em aberto</p>
+    <div class="ho-conv">{% for v in convites %}<div class="tx-c tx-fut"><b class="n">{{ v.nome_razao_social }}</b><small>para {{ v.usuario_nome or 'qualquer usuário' }} · vale até {{ v.expira_em.strftime('%d/%m/%Y') }}</small><code data-copiar data-copiar-rotulo="Link" title="Clique para copiar">{{ url_for('financeiro.honorarios_convite', token=v.token, _external=True) }}</code></div>{% endfor %}</div>
     {% endif %}
     {% if modo == 'cadastrar' and convites_meus %}
-    <p class="ho-sec" style="margin-top:16px;">Links que o Anderson mandou para você</p>
-    <table class="fin-tab"><thead><tr><th>Empresa</th><th>Vale até</th><th></th></tr></thead><tbody>
-    {% for v in convites_meus %}<tr><td>{{ v.numero_cliente }} · {{ v.nome_razao_social }}</td><td>{{ v.expira_em.strftime('%d/%m/%Y') }}</td><td><a class="btn btn-primary btn-sm" href="{{ url_for('financeiro.honorarios_convite', token=v.token) }}">Cadastrar</a></td></tr>{% endfor %}
-    </tbody></table>
+    <p class="ho-sec"><i class="fas fa-link"></i> Links que o escritório mandou para você</p>
+    <div class="ho-conv">{% for v in convites_meus %}<div class="tx-c tx-hoje"><b class="n">{{ v.numero_cliente }} · {{ v.nome_razao_social }}</b><small>vale até {{ v.expira_em.strftime('%d/%m/%Y') }}</small><div class="ho-ac"><a class="prim" href="{{ url_for('financeiro.honorarios_convite', token=v.token) }}"><i class="fas fa-pen"></i> Cadastrar</a></div></div>{% endfor %}</div>
     {% endif %}
-{% elif aba == 'enc' and modo == 'admin' %}
+
+  {% elif aba == 'enc' and modo == 'admin' %}
+    <div class="ho-barra">
+      <div class="ho-aviso" style="margin:0; flex:1"><i class="fas fa-circle-info"></i><span>Contrato encerrado não entra mais na cobrança do mês a partir da competência seguinte ao último dia como cliente. As cobranças já emitidas continuam em Cobranças. Para voltar a cobrar, cadastre honorários de novo em Sem honorários.</span></div>
+      <form class="tx-busca" method="GET" action="{{ url_for('financeiro.honorarios') }}"><input type="hidden" name="aba" value="{{ aba }}"><i class="fas fa-magnifying-glass"></i><input type="search" name="busca" placeholder="empresa, número ou CNPJ · Enter para buscar" value="{{ busca or '' }}"></form>
+    </div>
     {% if encerrados %}
-    <p class="ho-sec"><i class="fas fa-circle-info"></i> Contrato encerrado não entra mais na cobrança do mês a partir da competência seguinte ao último dia como cliente. As cobranças já emitidas continuam em Cobranças. Para voltar a cobrar, cadastre honorários de novo pela aba Sem honorários.</p>
-    <div class="fin-rolar">
-        <table class="fin-tab" id="ho-tab-enc">
-            <thead><tr><th>Nº</th><th>Empresa</th><th style="text-align:right;">Honorários</th><th>Vigência</th><th>Último dia como cliente</th><th>Última competência cobrada</th><th>Cadastro da empresa</th><th>Ações</th></tr></thead>
-            <tbody>
-            {% for c in encerrados %}
-                <tr>
-                    <td class="fin-num fin-td-meta">{{ c.numero_cliente }}</td>
-                    <td class="fin-td-titulo"><a href="{{ url_for('clientes.detalhes', id=c.cliente_id) }}">{{ c.nome_razao_social }}</a>{% if c.plano %}<span class="ho-plano">{{ c.plano }}</span>{% endif %}</td>
-                    <td class="fin-valor fin-td-valor">{{ c.valor | float | format_currency }}</td>
-                    <td class="fin-td-oculta">{{ c.inicio.strftime('%m/%Y') if c.inicio else '—' }} <span class="ho-num">até</span> {{ c.fim.strftime('%m/%Y') if c.fim else '—' }}</td>
-                    <td class="fin-td-oculta"><strong>{{ c.fim.strftime('%d/%m/%Y') if c.fim else '—' }}</strong></td>
-                    <td class="fin-td-oculta">{% if c.fim %}{{ c.fim.strftime('%m/%Y') }} <span class="ho-num">vence em {{ '%02d/%d' % ((c.fim.month % 12) + 1, c.fim.year + (1 if c.fim.month == 12 else 0)) }}</span>{% else %}—{% endif %}</td>
-                    <td class="fin-td-extra"><span class="fin-pilula cancelado">Encerrado</span> {% if c.cliente_situacao == 'ATIVO' %}<span class="fin-pilula alerta" title="O cadastro em Clientes continua ativo: a empresa aparece em Sem honorários. Se ela fechou, inative o cadastro.">cadastro ainda ativo</span>{% else %}<span class="fin-pilula cancelado" title="Cadastro do cliente">{{ c.cliente_situacao | capitalize }}</span>{% endif %}</td>
-                    <td><button class="btn btn-outline btn-sm" onclick="hoEditar({{ c.id }})" title="Abrir o contrato"><i class="fas fa-folder-open"></i> Abrir</button></td>
-                </tr>
-            {% endfor %}
-            </tbody>
-        </table>
+    <div class="ho-grade">
+      {% for c in encerrados %}
+      <div class="tx-c ho-c tx-fut clic" onclick="hoEditar({{ c.id }})" title="Abrir o contrato">
+        <div class="tx-c-top"><span class="tx-c-num">{{ c.numero_cliente or '—' }}</span><span class="tx-c-nome" title="{{ c.nome_razao_social }}">{{ c.nome_razao_social }}</span></div>
+        <div class="tx-c-meio"><div><div class="tx-c-val">{{ c.valor | float | format_currency }}</div>
+          <div class="tx-c-desc">por mês · {{ c.inicio.strftime('%m/%Y') if c.inicio else '—' }} até <b>{{ c.fim.strftime('%m/%Y') if c.fim else '—' }}</b>{% if c.plano %} · {{ c.plano }}{% endif %}</div></div>
+          <span class="tx-c-st"><i class="fas fa-box-archive"></i> encerrado</span></div>
+        <div class="ho-chips">
+          {% if c.fim %}<span title="Último dia como cliente"><i class="fas fa-calendar-xmark"></i> último dia {{ c.fim.strftime('%d/%m/%Y') }}</span>
+          <span title="Última competência cobrada"><i class="fas fa-file-invoice-dollar"></i> última competência {{ c.fim.strftime('%m/%Y') }} <small>· vence {{ '%02d/%d' % ((c.fim.month % 12) + 1, c.fim.year + (1 if c.fim.month == 12 else 0)) }}</small></span>{% endif %}
+          {% if c.cliente_situacao == 'ATIVO' %}<span class="alerta" title="O cadastro em Clientes continua ativo: a empresa aparece em Sem honorários. Se ela fechou, inative o cadastro."><i class="fas fa-triangle-exclamation"></i> cadastro ainda ativo</span>{% else %}<span><i class="fas fa-building"></i> cadastro {{ (c.cliente_situacao or 'inativo') | lower }}</span>{% endif %}
+        </div>
+        <div class="ho-ac">
+          <button type="button" onclick="event.stopPropagation(); hoEditar({{ c.id }})"><i class="fas fa-folder-open"></i> Abrir o contrato</button>
+          <a href="{{ url_for('clientes.detalhes', id=c.cliente_id) }}" target="_blank" onclick="event.stopPropagation()"><i class="fas fa-arrow-up-right-from-square"></i> Cadastro</a>
+        </div>
+      </div>
+      {% endfor %}
     </div>
-    {% else %}<div class="fin-vazio"><i class="fas fa-box-archive"></i> Nenhum contrato encerrado{% if busca %} com essa busca{% endif %}.</div>{% endif %}
-{% elif aba == 'pendentes' and modo == 'admin' %}
+    {% else %}<div class="tx-vazio"><i class="fas fa-box-archive"></i> Nenhum contrato encerrado{% if busca %} com essa busca{% endif %}.</div>{% endif %}
+
+  {% elif aba == 'pendentes' and modo == 'admin' %}
     {% if pendentes %}
-    <div class="fin-rolar">
-        <table class="fin-tab" id="ho-tab-pend">
-            <thead><tr><th>Nº</th><th>Empresa</th><th style="text-align:right;">Honorários</th><th>Vence dia</th><th>Início</th><th>13º</th><th>Quem cadastrou</th><th>Recado</th><th>Ações</th></tr></thead>
-            <tbody>
-            {% for c in pendentes %}
-                <tr>
-                    <td class="fin-num">{{ c.numero_cliente }}</td>
-                    <td class="fin-td-titulo"><a href="{{ url_for('clientes.detalhes', id=c.cliente_id) }}">{{ c.nome_razao_social }}</a>{% if c.plano %}<span class="ho-plano">{{ c.plano }}</span>{% endif %}</td>
-                    <td class="fin-valor">{{ c.valor | float | format_currency }}</td>
-                    <td>dia {{ c.dia_vencimento }}</td>
-                    <td>{{ c.inicio.strftime('%m/%Y') if c.inicio else '—' }}</td>
-                    <td>{% if c.decimo_tipo == 'DUAS' %}2 parcelas{% elif c.decimo_tipo == 'UNICA' %}única{% elif c.decimo_tipo == 'PROPRIO' %}boletos próprios{% else %}<span class="ho-num">sem</span>{% endif %}</td>
-                    <td>{{ c.criado_por_nome or '—' }}<span class="ho-plano">{{ c.criado_em.strftime('%d/%m/%Y %H:%M') if c.criado_em else '' }}</span></td>
-                    <td>{{ c.observacao or '' }}</td>
-                    <td class="la-acoes" style="white-space:nowrap;">
-                        <form method="POST" action="{{ url_for('financeiro.honorarios_aprovar', cid=c.id) }}" style="display:inline;" onsubmit="return confirm('Aprovar os honorários de {{ c.nome_razao_social }} ({{ c.valor | float | format_currency }})?')"><button class="btn btn-primary btn-sm" title="Aprovar"><i class="fas fa-check"></i></button></form>
-                        <button class="btn btn-outline btn-sm" title="Alterar antes de aprovar" onclick="hoEditar({{ c.id }})"><i class="fas fa-pen"></i></button>
-                        <button class="btn btn-outline btn-sm" title="Reprovar" onclick="hoReprovar({{ c.id }}, {{ c.nome_razao_social | tojson }})"><i class="fas fa-thumbs-down"></i></button>
-                    </td>
-                </tr>
-            {% endfor %}
-            </tbody>
-        </table>
+    <div class="ho-aviso"><i class="fas fa-circle-info"></i><span>Honorários cadastrados pela equipe. Confira e aprove: aprovado, o contrato passa a valer e entra na cobrança do mês. Para corrigir antes, abra o contrato; para devolver, reprove com o motivo (vai para quem cadastrou).</span></div>
+    <div class="ho-grade">
+      {% for c in pendentes %}
+      <div class="tx-c ho-c tx-hoje" id="ho-pend-{{ c.id }}">
+        <div class="tx-c-top"><span class="tx-c-num">{{ c.numero_cliente or '—' }}</span><span class="tx-c-nome" title="{{ c.nome_razao_social }}">{{ c.nome_razao_social }}</span></div>
+        <div class="tx-c-meio"><div><div class="tx-c-val">{{ c.valor | float | format_currency }}</div>
+          <div class="tx-c-desc">por mês · vence <b>dia {{ c.dia_vencimento }}</b> · início {{ c.inicio.strftime('%m/%Y') if c.inicio else '—' }}{% if c.plano %} · {{ c.plano }}{% endif %}</div></div>
+          <span class="tx-c-st"><i class="fas fa-hourglass-half"></i> aguardando</span></div>
+        <div class="ho-chips">
+          <span class="roxo"><i class="fas fa-gift"></i> 13º {% if c.decimo_tipo == 'DUAS' %}em 2 parcelas{% elif c.decimo_tipo == 'UNICA' %}parcela única{% elif c.decimo_tipo == 'PROPRIO' %}boletos próprios{% else %}não cobra{% endif %}</span>
+        </div>
+        <div class="ho-quem"><small>cadastrado por</small><b>{{ c.criado_por_nome or '—' }}</b>{% if c.criado_em %} · {{ c.criado_em.strftime('%d/%m/%Y %H:%M') }}{% endif %}</div>
+        {% if c.observacao %}<div class="ho-recado"><i class="fas fa-comment"></i> {{ c.observacao }}</div>{% endif %}
+        <div class="ho-ac">
+          <form method="POST" action="{{ url_for('financeiro.honorarios_aprovar', cid=c.id) }}" onsubmit="return hoAprovarPasso(this)"><button type="submit" class="ok" data-nome="{{ c.nome_razao_social }}" data-valor="{{ c.valor | float | format_currency }}"><i class="fas fa-check"></i> <span>Aprovar</span></button></form>
+          <button type="button" title="Alterar antes de aprovar" onclick="hoEditar({{ c.id }})"><i class="fas fa-pen"></i> Abrir</button>
+          <button type="button" class="red" title="Reprovar, com o motivo" onclick="hoReprovarAbrir({{ c.id }})"><i class="fas fa-thumbs-down"></i> Reprovar</button>
+        </div>
+        <form class="ho-rep" id="ho-rep-{{ c.id }}" method="POST" action="{{ url_for('financeiro.honorarios_reprovar', cid=c.id) }}" onsubmit="return hoReprovarOk(this)"><textarea name="motivo" placeholder="motivo da reprovação (obrigatório; vai para quem cadastrou)" maxlength="400"></textarea><button type="submit"><i class="fas fa-thumbs-down"></i> Devolver</button></form>
+      </div>
+      {% endfor %}
     </div>
-    {% else %}<div class="fin-vazio"><i class="fas fa-check-circle"></i> Nada aguardando aprovação.</div>{% endif %}
-{% elif modo == 'cadastrar' %}
+    {% else %}<div class="tx-vazio"><i class="fas fa-check-circle"></i> Nada aguardando aprovação.</div>{% endif %}
+
+  {% elif modo == 'cadastrar' %}
     {% if contratos %}
-    <table class="fin-tab">
-        <thead><tr><th>Nº</th><th>Empresa</th><th>Enviado em</th><th>Situação</th></tr></thead>
-        <tbody>{% for c in contratos %}<tr><td class="fin-num">{{ c.numero_cliente }}</td><td>{{ c.nome_razao_social }}</td><td>{{ c.criado_em.strftime('%d/%m/%Y') if c.criado_em else '' }}</td><td><span class="fin-pilula {{ 'liquidado' if c.situacao == 'ATIVO' else ('alerta' if c.situacao == 'PENDENTE' else 'cancelado') }}">{{ {'PENDENTE': 'Aguardando aprovação', 'ATIVO': 'Aprovado', 'REPROVADO': 'Reprovado', 'ENCERRADO': 'Encerrado'}.get(c.situacao, c.situacao) }}</span>{% if c.situacao == 'REPROVADO' and c.observacao %}<span class="ho-plano">{{ c.observacao }}</span>{% endif %}</td></tr>{% endfor %}</tbody>
-    </table>
-    {% else %}<div class="fin-vazio">Você ainda não enviou nenhum cadastro de honorários.</div>{% endif %}
-{% else %}
-    {% if contratos %}
-    <div class="fin-rolar">
-        <table class="fin-tab" id="ho-tab-com">
-            <thead>
-                <tr><th>Nº</th><th>Empresa</th><th style="text-align:right;">Honorários</th><th>Vence dia</th><th>Início</th><th>13º</th><th>Próximo reajuste</th><th>Cobrança vai para</th><th>Situação</th><th>Ações</th></tr>
-            </thead>
-            <tbody>
-            {% for c in contratos %}
-                <tr>
-                    <td class="fin-num fin-td-meta">{{ c.numero_cliente }}</td>
-                    <td class="fin-td-titulo">
-                        <a href="{{ url_for('clientes.detalhes', id=c.cliente_id) }}">{{ c.nome_razao_social }}</a>
-                        {% if c.plano %}<span class="ho-plano">{{ c.plano }}{% if c.n_itens > 1 %} · {{ c.n_itens }} discriminações{% endif %}</span>{% endif %}
-                    </td>
-                    <td class="fin-valor fin-td-valor">{{ c.valor | float | format_currency }}</td>
-                    <td class="fin-td-oculta"><strong>dia {{ c.dia_vencimento }}</strong> <span class="ho-num">do mês seguinte</span></td>
-                    <td class="fin-td-oculta">{{ c.inicio.strftime('%m/%Y') if c.inicio else '—' }}{% if c.fim %} <span class="ho-num">até {{ c.fim.strftime('%m/%Y') }}</span>{% endif %}</td>
-                    <td class="fin-td-oculta">{% if c.decimo_tipo == 'DUAS' %}2 parcelas{% elif c.decimo_tipo == 'UNICA' %}parcela única{% elif c.decimo_tipo == 'PROPRIO' %}boletos próprios{% else %}<span class="ho-num">sem 13º</span>{% endif %}</td>
-                    <td class="fin-td-oculta">{% if c.reajuste_tipo == 'SALARIO_MINIMO' %}{{ c.proximo_reajuste.strftime('%m/%Y') if c.proximo_reajuste else '—' }} <span class="ho-num">sal. mínimo</span>{% else %}{{ REAJUSTE_TIPOS.get(c.reajuste_tipo, c.reajuste_tipo) }}{% if c.proximo_reajuste %} <span class="ho-num">{{ c.proximo_reajuste.strftime('%m/%Y') }}</span>{% endif %}{% endif %}</td>
-                    <td class="fin-td-oculta">{% if c.n_contatos_fin %}<span class="ho-ok"><i class="fas fa-envelope"></i> {{ c.n_contatos_fin }} contato{{ 's' if c.n_contatos_fin > 1 }}</span>{% else %}<span class="ho-falta" title="Nenhum contato com e-mail marcado no departamento Financeiro"><i class="fas fa-triangle-exclamation"></i> sem contato Financeiro</span>{% endif %}</td>
-                    <td class="fin-td-extra"><span class="fin-pilula {{ 'liquidado' if c.situacao == 'ATIVO' else ('alerta' if c.situacao == 'PENDENTE' else 'cancelado') }}">{{ c.situacao | capitalize }}</span>{% if c.cliente_situacao != 'ATIVO' %} <span class="fin-pilula cancelado" title="Cadastro do cliente">{{ c.cliente_situacao | capitalize }}</span>{% endif %}</td>
-                    <td>
-                        <button class="btn btn-outline btn-sm" onclick="hoEditar({{ c.id }})" title="Editar"><i class="fas fa-pen"></i></button>
-                        {% if c.situacao in ('ATIVO', 'PENDENTE') %}<button class="btn btn-outline btn-sm" onclick="hoEncerrar({{ c.id }}, {{ c.nome_razao_social | tojson }})" title="Encerrar contrato"><i class="fas fa-ban"></i></button>{% endif %}
-                    </td>
-                </tr>
-            {% endfor %}
-            </tbody>
-        </table>
+    <div class="ho-grade">
+      {% for c in contratos %}
+      <div class="tx-c ho-c {{ 'tx-ok' if c.situacao == 'ATIVO' else ('tx-hoje' if c.situacao == 'PENDENTE' else 'tx-fut') }}">
+        <div class="tx-c-top"><span class="tx-c-num">{{ c.numero_cliente or '—' }}</span><span class="tx-c-nome" title="{{ c.nome_razao_social }}">{{ c.nome_razao_social }}</span></div>
+        <div class="tx-c-meio"><div><div class="tx-c-desc">enviado em <b>{{ c.criado_em.strftime('%d/%m/%Y') if c.criado_em else '—' }}</b></div></div>
+          <span class="tx-c-st">{% if c.situacao == 'ATIVO' %}<i class="fas fa-circle-check"></i> aprovado{% elif c.situacao == 'PENDENTE' %}<i class="fas fa-hourglass-half"></i> aguardando aprovação{% else %}<i class="fas fa-circle-xmark"></i> {{ c.situacao | lower }}{% endif %}</span></div>
+      </div>
+      {% endfor %}
     </div>
-    {% else %}<div class="fin-vazio"><i class="fas fa-file-signature"></i> Nenhum contrato{% if busca %} para "{{ busca }}"{% endif %}.</div>{% endif %}
-{% endif %}
+    {% else %}<div class="tx-vazio"><i class="fas fa-paper-plane"></i> Você ainda não enviou nenhum cadastro de honorários.</div>{% endif %}
+
+  {% else %}
+    <div class="ho-barra">
+      <div class="tx-filtros"><span class="tx-f" style="cursor:default">{{ contratos | length }} contrato{{ 's' if contratos | length != 1 }} ativo{{ 's' if contratos | length != 1 }}{% if busca %} para "{{ busca }}"{% endif %}</span></div>
+      <form class="tx-busca" method="GET" action="{{ url_for('financeiro.honorarios') }}"><input type="hidden" name="aba" value="com"><i class="fas fa-magnifying-glass"></i><input type="search" name="busca" placeholder="empresa, número ou CNPJ · Enter para buscar" value="{{ busca or '' }}"></form>
+    </div>
+    {% if contratos %}
+    <div class="ho-grade">
+      {% for c in contratos %}
+      <div class="tx-c ho-c {{ 'tx-ok' if c.situacao == 'ATIVO' else 'tx-venc' }} clic" onclick="hoEditar({{ c.id }})" title="Abrir o contrato">
+        <div class="tx-c-top"><span class="tx-c-num">{{ c.numero_cliente or '—' }}</span><span class="tx-c-nome" title="{{ c.nome_razao_social }}">{{ c.nome_razao_social }}</span></div>
+        <div class="tx-c-meio"><div><div class="tx-c-val">{{ c.valor | float | format_currency }}</div>
+          <div class="tx-c-desc">por mês · vence <b>dia {{ c.dia_vencimento }}</b> do mês seguinte · desde {{ c.inicio.strftime('%m/%Y') if c.inicio else '—' }}{% if c.fim %} até {{ c.fim.strftime('%m/%Y') }}{% endif %}</div>
+          {% if c.plano %}<div class="ho-doc">{{ c.plano }}{% if c.n_itens > 1 %} · {{ c.n_itens }} discriminações{% endif %}</div>{% endif %}</div>
+          <span class="tx-c-st">{% if c.situacao == 'ATIVO' %}<i class="fas fa-circle-check"></i> ativo{% else %}<i class="fas fa-hourglass-half"></i> {{ c.situacao | lower }}{% endif %}</span></div>
+        <div class="ho-chips">
+          <span class="roxo"><i class="fas fa-gift"></i> 13º {% if c.decimo_tipo == 'DUAS' %}em 2 parcelas{% elif c.decimo_tipo == 'UNICA' %}parcela única{% elif c.decimo_tipo == 'PROPRIO' %}boletos próprios{% else %}não cobra{% endif %}</span>
+          <span><i class="fas fa-arrow-trend-up"></i> {% if c.reajuste_tipo == 'SALARIO_MINIMO' %}reajuste {{ c.proximo_reajuste.strftime('%m/%Y') if c.proximo_reajuste else '—' }} <small>· sal. mínimo</small>{% else %}{{ REAJUSTE_TIPOS.get(c.reajuste_tipo, c.reajuste_tipo) }}{% if c.proximo_reajuste %} · {{ c.proximo_reajuste.strftime('%m/%Y') }}{% endif %}{% endif %}</span>
+          {% if c.n_contatos_fin %}<span class="ok" title="Quem recebe a cobrança"><i class="fas fa-envelope"></i> {{ c.n_contatos_fin }} contato{{ 's' if c.n_contatos_fin > 1 }}</span>{% else %}<span class="falta" title="Nenhum contato com e-mail: a cobrança não tem para quem ir"><i class="fas fa-envelope-circle-check"></i> sem contato com e-mail</span>{% endif %}
+          {% if c.cliente_situacao != 'ATIVO' %}<span class="alerta"><i class="fas fa-triangle-exclamation"></i> cadastro {{ (c.cliente_situacao or 'inativo') | lower }}</span>{% endif %}
+        </div>
+        <div class="ho-ac">
+          <button type="button" onclick="event.stopPropagation(); hoEditar({{ c.id }})"><i class="fas fa-pen"></i> Abrir o contrato</button>
+          {% if c.situacao in ('ATIVO', 'PENDENTE') %}<button type="button" class="red" onclick="event.stopPropagation(); hoEncerrar({{ c.id }}, {{ c.nome_razao_social | tojson }})"><i class="fas fa-ban"></i> Encerrar</button>{% endif %}
+          <a href="{{ url_for('clientes.detalhes', id=c.cliente_id) }}" target="_blank" onclick="event.stopPropagation()"><i class="fas fa-arrow-up-right-from-square"></i> Cadastro</a>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}<div class="tx-vazio"><i class="fas fa-file-signature"></i> Nenhum contrato{% if busca %} para "{{ busca }}"{% endif %}.</div>{% endif %}
+  {% endif %}
+  </div>
+</div>
 </div>
 
 {% include 'financeiro/_honorario_janela.html' %}
@@ -216,7 +247,7 @@
                 <p style="margin:0 0 10px; font-weight:600;" id="hc-nome"></p>
                 <div class="form-group"><label>Para quem</label><select name="usuario_id" class="form-control"><option value="">qualquer usuário com login</option>{% for p in pessoas %}<option value="{{ p.id }}">{{ p.nome }}{% if p.departamento %} · {{ p.departamento }}{% endif %}</option>{% endfor %}</select></div>
                 <div class="form-group" style="margin-top:10px;"><label>Vale por (dias)</label><input type="number" name="dias" class="form-control" value="7" min="1" max="60"></div>
-                <p class="ho-num" style="margin:10px 0 0;">A pessoa entra com o login e a senha dela, vê só esta empresa, cadastra e o link morre. O contrato chega para você aprovar.</p>
+                <p class="ho-doc" style="margin:10px 0 0;">A pessoa entra com o login e a senha dela, vê só esta empresa, cadastra e o link morre. O contrato chega para você aprovar.</p>
             </div>
             <div class="modal-footer"><button type="button" class="btn btn-secondary" onclick="document.getElementById('hoConviteModal').style.display='none'">Cancelar</button><button type="submit" class="btn btn-primary"><i class="fas fa-link"></i> Gerar link</button></div>
         </form>
@@ -235,9 +266,20 @@
 function hoCobF(bt) {
     document.querySelectorAll('#ho-cobf button').forEach(function (b) { b.classList.toggle('on', b === bt); });
     var v = bt.dataset.v;
-    document.querySelectorAll('#ho-tab-sem tbody tr').forEach(function (tr) { tr.hidden = !!v && tr.dataset.cob !== v; });
+    document.querySelectorAll('#ho-grade-sem .tx-c').forEach(function (c) { c.hidden = !!v && c.dataset.cob !== v; });
 }
 function hoConvite(id, nome) { document.getElementById('hc-cliente').value = id; document.getElementById('hc-nome').textContent = nome; document.getElementById('hoConviteModal').style.display = 'block'; }
+// aprovar em dois toques (sem janela do navegador): o botão pede a confirmação e só o segundo toque manda
+function hoAprovarPasso(f) {
+    var b = f.querySelector('button');
+    if (b.classList.contains('conf')) return true;
+    b.classList.add('conf'); b.querySelector('span').textContent = 'Confirmar: ' + b.dataset.valor + ' de ' + b.dataset.nome.split(' ').slice(0, 2).join(' ');
+    setTimeout(function () { b.classList.remove('conf'); b.querySelector('span').textContent = 'Aprovar'; }, 6000);
+    return false;
+}
+function hoReprovarAbrir(cid) { var f = document.getElementById('ho-rep-' + cid); f.classList.toggle('on'); if (f.classList.contains('on')) f.querySelector('textarea').focus(); }
+function hoReprovarOk(f) { var m = f.querySelector('textarea').value.trim(); if (!m) { f.querySelector('textarea').focus(); f.querySelector('textarea').style.borderColor = '#dc2626'; return false; } return true; }
+window.hoReprovar = function (cid) { hoReprovarAbrir(cid); };     // a janela chamava um prompt do navegador; aqui o motivo é escrito no cartão
 {% if modo == 'convite' %}
 document.addEventListener('DOMContentLoaded', function () { hoNovo({{ convite.cliente_id }}, {{ convite.nome_razao_social | tojson }}, {{ convite.numero_cliente | tojson }}); document.getElementById('ho-cli-trocar').style.display = 'none'; });
 {% endif %}
