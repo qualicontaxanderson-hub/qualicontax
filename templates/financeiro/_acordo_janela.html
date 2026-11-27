@@ -10,7 +10,10 @@
     <div class="ns-prev"><small>Total do acordo</small><b>{{ brl(a.total) }}</b><span>{{ a.texto_parcelas }} · {{ FORMA[a.forma] }}</span></div>
     <button type="button" class="ns-x" onclick="acFecharJan()" title="Fechar"><i class="fas fa-xmark"></i></button></header>
   <div class="jk">
-    <div><i class="fas fa-file-signature"></i><div><dt>Assinatura</dt><dd>{{ {'ENVIAR': 'enviar', 'DEPOIS': 'depois', 'SEM': 'sem termo'}[a.assinatura] }}</dd><small>{{ 'falta enviar' if a.situacao == 'FALTA_ENVIAR' else ('falta o cliente assinar' if a.situacao == 'FALTA_ASSINAR' else ('combinado' if a.assinatura == 'SEM' else 'assinado')) }}</small></div></div>
+    {% set n_ass = a.assinantes | selectattr('assinado_em') | list | length %}
+    <div><i class="fas fa-file-signature"></i><div><dt>Assinatura</dt>{% if a.assinantes and a.situacao == 'FALTA_ASSINAR' %}<dd>enviado</dd><small>falta{{ 'm' if a.assinantes|length - n_ass > 1 }} {{ a.assinantes|length - n_ass }} de {{ a.assinantes|length }} assinar</small>
+      {% elif a.assinantes and n_ass == a.assinantes|length and a.situacao not in ('FALTA_ENVIAR', 'FALTA_ASSINAR') %}<dd>assinado</dd><small>por todos · termo com registro</small>
+      {% else %}<dd>{{ {'ENVIAR': 'enviar', 'DEPOIS': 'depois', 'SEM': 'sem termo'}[a.assinatura] }}</dd><small>{{ 'falta enviar' if a.situacao == 'FALTA_ENVIAR' else ('falta o cliente assinar' if a.situacao == 'FALTA_ASSINAR' else ('combinado' if a.assinatura == 'SEM' else 'assinado')) }}</small>{% endif %}</div></div>
     <div><i class="fas fa-coins"></i><div><dt>Pago</dt><dd>{{ brl(a.pago_total) }}</dd><small>{{ a.n_pagas }} de {{ a.parcelas|length }} parcela{{ 's' if a.parcelas|length != 1 }}</small></div></div>
     <div><i class="fas fa-calendar-day"></i><div><dt>Próxima</dt><dd>{{ a.proxima.venc.strftime('%d/%m/%Y') if a.proxima else '—' }}</dd><small>{% if a.proxima %}{{ brl(a.proxima.valor) }}{% if a.forma == 'JUNTO' %} + honorário{% endif %}{% else %}nada a vencer{% endif %}</small></div></div>
     <div><i class="fas fa-building-columns"></i><div><dt>Cobrança</dt><dd>{{ {'bradesco': 'Bradesco', 'cora': 'Cora', 'efi': 'Efí'}.get(a.banco_provedor, a.banco_apelido or '—') }}</dd><small>{{ FORMA[a.forma] }}</small></div></div>
@@ -20,17 +23,27 @@
     <div>
       <div class="ns-b"><div class="ns-h"><i class="fas fa-file-signature"></i> Termo do acordo <em>{{ 'o acordo começa a valer quando todos assinarem' if a.situacao in ('FALTA_ENVIAR', 'FALTA_ASSINAR') else ASSINATURA[a.assinatura] }}</em></div>
         <div class="as">
+          {% if a.assinantes %}{% for x in a.assinantes %}
+          <div class="as-p"><div class="q"><span class="av"{% if x.papel == 'CREDORA' %} style="background:#dcfce7;color:#15803d"{% endif %}>{{ (x.nome.split()[0][:1] ~ (x.nome.split()[-1][:1] if x.nome.split()|length > 1 else '')) | upper }}</span>
+            <div><b>{{ x.nome.title() }}{% if x.papel == 'CREDORA' %} · pela Qualicontax{% endif %}</b><small>{{ x.cargo or '' }}{% if x.email %} · {{ x.email }}{% endif %}</small></div>
+            <span class="st{{ ' ok' if x.assinado_em }}">{% if x.assinado_em %}assinou {{ x.assinado_em.strftime('%d/%m %H:%M') }}{% elif a.situacao == 'FALTA_ASSINAR' %}falta assinar{% else %}falta enviar{% endif %}</span></div>
+            {% if pode and a.situacao == 'FALTA_ASSINAR' and not x.assinado_em %}<div class="as-lk">
+              <button type="button" class="mini" onclick="acCopiar(this, {{ links[x.id].link | tojson | forceescape }})"><i class="fas fa-link"></i> Copiar o link</button>
+              <a class="mini" target="_blank" rel="noopener" href="https://wa.me/{{ ('55' ~ (x.celular | replace('(', '') | replace(')', '') | replace('-', '') | replace(' ', ''))) if x.celular else '' }}?text={{ links[x.id].wa | urlencode }}"><i class="fab fa-whatsapp"></i> WhatsApp</a>
+              {% if x.aviso_enviado_em %}<small>e-mail enviado {{ x.aviso_enviado_em.strftime('%d/%m %H:%M') }}</small>{% endif %}</div>{% endif %}</div>
+          {% endfor %}{% else %}
           <div class="as-p"><div class="q"><span class="av">{{ ((a.assina_nome or '?').split()[0][:1] ~ ((a.assina_nome or '').split()[-1][:1] if (a.assina_nome or '').split()|length > 1 else '')) | upper }}</span>
             <div><b>{{ a.assina_nome.title() if a.assina_nome else ('Combinado com o cliente' if a.assinatura == 'SEM' else 'Quem assina pela empresa') }}</b><small>{{ a.assina_cargo or '' }}{% if a.assina_email %} · {{ a.assina_email }}{% endif %}</small></div>
             <span class="st{{ ' ok' if a.situacao not in ('FALTA_ENVIAR', 'FALTA_ASSINAR') and a.assinatura != 'SEM' }}">{{ 'falta enviar' if a.situacao == 'FALTA_ENVIAR' else ('falta assinar' if a.situacao == 'FALTA_ASSINAR' else ('sem termo' if a.assinatura == 'SEM' else 'assinou')) }}</span></div></div>
           {% if a.qc_nome %}<div class="as-p"><div class="q"><span class="av" style="background:#dcfce7;color:#15803d">{{ (a.qc_nome.split()[0][:1] ~ (a.qc_nome.split()[-1][:1] if a.qc_nome.split()|length > 1 else '')) | upper }}</span>
             <div><b>{{ a.qc_nome.title() }} · pela Qualicontax</b><small>{{ a.qc_cargo or '' }}</small></div></div></div>{% endif %}
+          {% endif %}
           <div class="as-bt"><a class="mini v" href="{{ url_for('financeiro.acdiv_termo_pdf', aid=a.id) }}" target="_blank" rel="noopener"><i class="fas fa-file-pdf"></i> Ver o termo</a>
             <a class="mini" href="{{ url_for('financeiro.acdiv_termo_pdf', aid=a.id, baixar=1) }}"><i class="fas fa-download"></i> Baixar PDF</a></div>
           {% if a.situacao == 'ROMPIDO' %}<div class="ns-aviso" style="margin:0;border-color:#fecaca;background:#fef2f2;color:#991b1b"><i class="fas fa-link-slash"></i><span><b>Acordo rompido{% if a.encerrado_em %} em {{ a.encerrado_em.strftime('%d/%m/%Y') }}{% endif %}.</b>
             {% if a.desconto %}O desconto de {{ brl(a.desconto) }} foi cancelado: {% endif %}a dívida voltou pelo valor original ({{ brl(a.divida) }}) menos o que já pagou ({{ brl(a.pago_total) }}).
             {% if a.saldo_romper %}Está na cobrança nº {{ a.saldo_romper.id }}, {{ brl(a.saldo_romper.valor) }}, na aba Atrasados.{% endif %}</span></div>{% endif %}
-          {% if a.situacao in ('FALTA_ENVIAR', 'FALTA_ASSINAR') %}<div class="ns-aviso" style="margin:0"><i class="fas fa-circle-info"></i><span>O envio do termo por link e código chega na próxima etapa. Se o cliente já combinou, use "Ativar sem assinatura".</span></div>{% endif %}
+          {% if a.situacao in ('FALTA_ENVIAR', 'FALTA_ASSINAR') %}<div class="ns-aviso" style="margin:0{% if prazo_vencido %};border-color:#fecaca;background:#fef2f2;color:#991b1b{% endif %}"><i class="fas {{ 'fa-triangle-exclamation' if prazo_vencido else 'fa-circle-info' }}"></i><span>{% if prazo_vencido %}<b>O 1º vencimento já passou</b> e o termo não pode mais ser assinado: cancele e monte o acordo de novo.{% elif a.situacao == 'FALTA_ASSINAR' %}Cada um recebeu o link pessoal por e-mail; assina com os dígitos do CPF e o código que chega no e-mail. Quando todos assinarem, o acordo começa a valer sozinho e a via assinada vai para todos.{% else %}O termo ainda não foi para o cliente: use "Enviar o termo para assinar". Se o cliente já combinou, use "Ativar sem assinatura".{% endif %}</span></div>{% endif %}
         </div></div>
       <div class="ns-b"><div class="ns-h"><i class="fas fa-box-archive"></i> Dívida renegociada <em>{{ a.n_itens }} ite{{ 'm' if a.n_itens == 1 else 'ns' }} · {{ brl(a.divida) }}{% if a.desconto %} − desconto {{ brl(a.desconto) }}{% endif %}</em></div>
         <div class="chips">{% for i in a.itens %}<span title="{{ i.descricao }}">{{ i.descricao }}{% if i.vencimento %} · {{ i.vencimento.strftime('%d/%m/%y') }}{% endif %} · {{ brl(i.valor) }}</span>{% endfor %}</div>
@@ -56,6 +69,9 @@
       {% if pode and a.situacao not in ('CANCELADO', 'QUITADO', 'ROMPIDO') %}
       <div class="ns-b"><div class="ns-h"><i class="fas fa-bolt"></i> O que fazer</div>
         <div class="acoes">
+          {% if a.situacao in ('FALTA_ENVIAR', 'FALTA_ASSINAR') and not prazo_vencido %}
+          <button type="button" class="acao" onclick="acEnviar({{ a.id }}, {{ 'true' if a.situacao == 'FALTA_ASSINAR' else 'false' }})"><i class="fas fa-paper-plane"></i><span><b>{{ 'Reenviar o termo' if a.situacao == 'FALTA_ASSINAR' else 'Enviar o termo para assinar' }}</b><small>{{ 'manda o link de novo a quem falta assinar' if a.situacao == 'FALTA_ASSINAR' else 'link por e-mail para a devedora e para a Qualicontax' }}</small></span></button>
+          {% endif %}
           {% if a.situacao in ('FALTA_ENVIAR', 'FALTA_ASSINAR') %}
           <button type="button" class="acao" onclick="acAcao({{ a.id }}, 'ativar', 'Ativar o acordo sem assinatura? Os títulos são renegociados e as parcelas vão para o A receber.\n\nComo foi combinado com o cliente?')"><i class="fas fa-circle-check"></i><span><b>Ativar sem assinatura</b><small>combinado por WhatsApp ou telefone</small></span></button>
           {% endif %}

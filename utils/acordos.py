@@ -289,7 +289,16 @@ def criar(v, cli, usuario):
     if situacao == 'ATIVO':
         v['avisos'] = ativar(aid, usuario, 'Sem assinatura: combinado com o cliente')
     else:
-        x('UPDATE fin_acordos SET situacao = %s WHERE id = %s', (situacao, aid))
+        x("UPDATE fin_acordos SET situacao = 'FALTA_ENVIAR' WHERE id = %s", (aid,))
+        from utils import acordo_assinatura as AS
+        AS.preparar(get(aid))
+        if situacao == 'FALTA_ASSINAR':          # etapa 2: "enviar para assinar" manda o link na hora
+            try:
+                enviados, falhas = AS.enviar(aid, usuario)
+                v['avisos'] = (['Termo enviado para assinar: ' + ', '.join(enviados) + '.'] if enviados else []) + \
+                              (['Não foi o e-mail de: ' + '; '.join(falhas) + '. Use "Enviar o termo" na janela do acordo.'] if falhas else [])
+            except AcordoInvalido as exc:
+                v['avisos'] = [f'O termo não foi enviado: {exc} O acordo ficou em "Falta enviar".']
     return aid
 
 
@@ -685,6 +694,11 @@ def get(aid):
                     'a vencer' if p.get('titulo_id') else 'espera assinar')
     a['eventos'] = q("""SELECT e.*, u.nome AS quem FROM fin_acordo_eventos e LEFT JOIN usuarios u ON u.id = e.usuario_id
                          WHERE e.acordo_id = %s ORDER BY e.id""", (aid,))
+    try:                                  # etapa 2: quem assina o termo e se já assinou
+        a['assinantes'] = q("""SELECT * FROM fin_acordo_assinantes WHERE acordo_id = %s
+                                ORDER BY FIELD(papel, 'DEVEDORA', 'CREDORA'), id""", (aid,))
+    except Exception:
+        a['assinantes'] = []
     a['saldo_romper'] = None
     if a['situacao'] == 'ROMPIDO':        # etapa 4: a cobrança do saldo (a dívida sem o desconto, menos o que pagou)
         a['saldo_romper'] = q("""SELECT id, valor, valor_baixado, status, vencimento FROM fin_titulos

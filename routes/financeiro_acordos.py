@@ -73,7 +73,7 @@ def acdiv_criar(cliente_id):
               depois={'numero': a['numero'], 'cliente_id': cliente_id, 'total': str(a['total']), 'parcelas': a['n_parcelas'],
                       'forma': a['forma'], 'assinatura': a['assinatura']})
     msg = {'ATIVO': 'Acordo %s criado e já valendo: os títulos foram renegociados e as parcelas estão no A receber.',
-           'FALTA_ASSINAR': 'Acordo %s criado. O envio para assinar chega na próxima etapa: por enquanto ele fica em "Falta assinar".',
+           'FALTA_ASSINAR': 'Acordo %s criado e o termo foi para assinar. Quando todos assinarem, ele começa a valer sozinho.',
            'FALTA_ENVIAR': 'Acordo %s guardado em "Falta enviar".'}.get(a['situacao'], 'Acordo %s criado.') % a['numero']
     return jsonify(ok=True, id=aid, msg=msg, avisos=v.get('avisos') or [])
 
@@ -100,8 +100,11 @@ def acdiv_previa_pdf(cliente_id=None):
 @permission_required('financeiro.titulos')
 def acdiv_janela(aid):
     a = _acordo_ou_404(aid)
+    from utils import acordo_assinatura as AS
+    links = {s['id']: {'link': AS.link_de(s), 'wa': AS.texto_whatsapp(a, s)} for s in a.get('assinantes') or []}
     return render_template('financeiro/_acordo_janela.html', a=a, brl=AC.brl, FORMA=AC.FORMA, ROMPE=AC.ROMPE,
-                           ASSINATURA=AC.ASSINATURA, pode=current_user.has_permission(PERM), hoje=AC.hoje())
+                           ASSINATURA=AC.ASSINATURA, pode=current_user.has_permission(PERM), hoje=AC.hoje(), links=links,
+                           prazo_vencido=AS.prazo_vencido(a))
 
 
 @financeiro.route('/financeiro/acordos/<int:aid>/termo.pdf')
@@ -109,7 +112,10 @@ def acdiv_janela(aid):
 def acdiv_termo_pdf(aid):
     from utils.acordo_pdf import de_acordo, gerar_pdf
     a = _acordo_ou_404(aid)
-    r = make_response(gerar_pdf(de_acordo(a)))
+    from utils import acordo_assinatura as AS
+    reg = [s for s in a.get('assinantes') or [] if s.get('assinado_em')]
+    feito = bool(reg) and len(reg) == len(a['assinantes'])         # etapa 2: todos assinaram = a via com o registro
+    r = make_response(AS.termo_bytes(a, registro=reg) if feito else gerar_pdf(de_acordo(a)))
     r.headers['Content-Type'] = 'application/pdf'
     r.headers['Content-Disposition'] = '%s; filename="Termo_de_Acordo_%s.pdf"' % (
         'attachment' if request.args.get('baixar') else 'inline', a['numero'])
@@ -128,6 +134,21 @@ def acdiv_ativar(aid):
         return jsonify(ok=False, erro='Escreva como foi combinado com o cliente.')
     avisos = AC.ativar(aid, current_user, f'Sem assinatura, por {current_user.nome}: {motivo}')
     return jsonify(ok=True, msg='Acordo valendo: títulos renegociados e parcelas no A receber.', avisos=avisos)
+
+
+@financeiro.route('/financeiro/acordos/<int:aid>/enviar', methods=['POST'])
+@permission_required(PERM)
+def acdiv_enviar(aid):
+    """Etapa 2: manda (ou reenvia) o link do termo por e-mail a quem ainda não assinou."""
+    _acordo_ou_404(aid)
+    from utils import acordo_assinatura as AS
+    try:
+        enviados, falhas = AS.enviar(aid, current_user)
+    except AC.AcordoInvalido as exc:
+        return jsonify(ok=False, erro=str(exc))
+    if not enviados:
+        return jsonify(ok=False, erro='Não consegui mandar o e-mail: ' + '; '.join(falhas))
+    return jsonify(ok=True, msg='Termo enviado para assinar: %s.%s' % (', '.join(enviados), (' Falhou: ' + '; '.join(falhas)) if falhas else ''))
 
 
 @financeiro.route('/financeiro/acordos/<int:aid>/cancelar', methods=['POST'])

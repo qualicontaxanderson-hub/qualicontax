@@ -62,6 +62,7 @@ BLUEPRINTS_PUBLICOS = {
     'cobranca_publica',  # links do e-mail de cobrança ao cliente (código aleatório do boleto na URL)
     'assinatura',        # assinatura eletrônica do contrato de prestação (token do signatário na URL + código por e-mail)
     'proposta',          # aceite do orçamento pelo cliente (token na URL + código por e-mail; 21/11/2026)
+    'acordo_assinatura', # assinatura do termo de acordo de dívida (token na URL + CPF + código por e-mail; 26/11/2026)
 }
 ENDPOINTS_PUBLICOS = {'static', 'health'}
 
@@ -542,6 +543,7 @@ MAPA = {
     'financeiro.acdiv_cancelar': 'financeiro.cobranca.vincular',
     'financeiro.acdiv_anotar': 'financeiro.cobranca.vincular',
     'financeiro.acdiv_boleto': 'financeiro.cobranca.vincular',
+    'financeiro.acdiv_enviar': 'financeiro.cobranca.vincular',
     'financeiro.titulo_novo': 'financeiro.titulos.incluir',
     # grupos
     'grupos.desativar': 'grupos.excluir',

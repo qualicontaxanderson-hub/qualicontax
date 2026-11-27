@@ -2014,6 +2014,28 @@ def _apply_migrations():
         "AND TABLE_NAME = 'fin_acordo_parcelas' AND COLUMN_NAME = 'titulo_proprio_id'", fetch=True, fetch_one=True) or {}
     if _c.get('cnt', 0) == 0:
         _migrate("ALTER TABLE fin_acordo_parcelas ADD COLUMN titulo_proprio_id INT NULL, ADD KEY idx_acordo_parc_proprio (titulo_proprio_id)")
+    # 26/11/2026 — Acordo, etapa 2: o termo assinado por link e código (mesmo caminho do contrato, tabela própria).
+    _migrate("""
+        CREATE TABLE IF NOT EXISTS fin_acordo_assinantes (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            acordo_id INT NOT NULL,
+            papel VARCHAR(10) NOT NULL,
+            nome VARCHAR(150) NOT NULL, cpf VARCHAR(20) NULL, cargo VARCHAR(80) NULL,
+            email VARCHAR(150) NULL, celular VARCHAR(30) NULL,
+            token VARCHAR(64) NOT NULL,
+            codigo_hash CHAR(64) NULL, codigo_enviado_em DATETIME NULL, codigo_tentativas INT NOT NULL DEFAULT 0,
+            aviso_enviado_em DATETIME NULL,
+            assinado_em DATETIME NULL, assinado_nome VARCHAR(150) NULL, assinado_cpf VARCHAR(20) NULL,
+            assinado_ip VARCHAR(64) NULL, assinado_agente VARCHAR(255) NULL, assinado_hash CHAR(64) NULL,
+            UNIQUE KEY uk_acordo_ass_token (token), KEY idx_acordo_ass (acordo_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    """)
+    _c = execute_query(
+        "SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() "
+        "AND TABLE_NAME = 'fin_acordos' AND COLUMN_NAME = 'pdf_sha256'", fetch=True, fetch_one=True) or {}
+    if _c.get('cnt', 0) == 0:
+        _migrate("ALTER TABLE fin_acordos ADD COLUMN pdf_sha256 CHAR(64) NULL, ADD COLUMN enviado_em DATETIME NULL, "
+                 "ADD COLUMN pdf_path VARCHAR(400) NULL")
 
     print("✓ Migrations concluídas")
 

@@ -11,7 +11,7 @@ from reportlab.lib.pagesizes import A4
 from reportlab.lib.units import cm
 from reportlab.platypus import KeepTogether, PageBreak, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
-from utils.prest_contrato_pdf import (LW, ML, MR, _FUNDO, _FUNDO2, _LINHA2, _VERDE2, _cabecalho, _caixa, _esc, _estilos,
+from utils.prest_contrato_pdf import (LW, ML, MR, _FUNDO, _FUNDO2, _LINHA2, _VERDE2, _VERDE3, _cabecalho, _caixa, _esc, _estilos,
                                       _faixa_titulo, _nome_curto, _pessoa, _rico)
 
 TEAL = colors.HexColor('#115e59')
@@ -45,8 +45,9 @@ def _brl(v):
     return brl(v)
 
 
-def gerar_pdf(a, rodape=None):
-    """``a`` = dict com numero, devedora{razao, cnpj, endereco}, assina{nome, cpf, cargo}, qc{nome, cargo}, itens[{descricao,
+def gerar_pdf(a, rodape=None, registro=None):
+    """``registro`` (etapa 2) = assinaturas feitas (fin_acordo_assinantes): cartões assinados e a página de registro no fim.
+    ``a`` = dict com numero, devedora{razao, cnpj, endereco}, assina{nome, cpf, cargo}, qc{nome, cargo}, itens[{descricao,
     vencimento, valor}], divida, desconto, motivo_desconto, total, plano[(n, venc, valor, entrada)], forma, rompe, dia,
     contratada{razao, cnpj, endereco, cabecalho}, cidade_data. Devolve bytes."""
     from utils.acordos import FORMA, ROMPE, mes_rot
@@ -197,21 +198,58 @@ def gerar_pdf(a, rodape=None):
     el += [Spacer(1, 10), Paragraph('E, por estarem justas e acordadas, as partes assinam eletronicamente este termo, que produz efeitos '
                                     'a partir da última assinatura.', st['base'])]
 
-    def cartao(rot, nome, sub):
-        t = Table([[[Paragraph('ASSINATURA ELETRÔNICA', st['card_st_wait']), Spacer(1, 3), Paragraph(_esc(_pessoa(nome) or '—'), st['card_nome']),
-                     Paragraph(_esc(sub), st['card_sub']), Paragraph(_esc(rot), st['card_sub']), Paragraph('aguardando', st['card_sub'])]]],
+    feitas = {r['papel']: r for r in (registro or [])}
+
+    def cartao(rot, nome, sub, papel):
+        f = feitas.get(papel)
+        t = Table([[[Paragraph('✔ ASSINADO ELETRONICAMENTE' if f else 'ASSINATURA ELETRÔNICA', st['card_st_ok'] if f else st['card_st_wait']),
+                     Spacer(1, 3), Paragraph(_esc(_pessoa((f or {}).get('assinado_nome') or nome) or '—'), st['card_nome']),
+                     Paragraph(_esc(sub), st['card_sub']), Paragraph(_esc(rot), st['card_sub']),
+                     Paragraph(f['assinado_em'].strftime('%d/%m/%Y às %H:%M') if f else 'aguardando', st['card_sub'])]]],
                   colWidths=[LW / 2 - 6])
-        t.setStyle(_caixa(_FUNDO, _LINHA2, pad=10))
+        t.setStyle(_caixa(_FUNDO2 if f else _FUNDO, _VERDE3 if f else _LINHA2, pad=10))
         return t
 
     fim = [Spacer(1, 14), Paragraph('<b>%s</b>' % _esc(a['cidade_data']), st['centro']), Spacer(1, 12),
            Table([['']], colWidths=[LW], style=[('LINEBELOW', (0, 0), (-1, -1), 1.0, _VERDE2)]),
            Paragraph('ASSINATURAS', st['parte_n']), Spacer(1, 8)]
-    par = Table([[cartao('pela DEVEDORA · ' + dev['razao'], ass.get('nome'), ('CPF ' + ass['cpf']) if ass.get('cpf') else ''),
-                  cartao('pela CREDORA · ' + _nome_curto(qc_emp['razao']), qc.get('nome'), qc.get('cargo') or '')]], colWidths=[LW / 2] * 2)
+    par = Table([[cartao('pela DEVEDORA · ' + dev['razao'], ass.get('nome'), ('CPF ' + ass['cpf']) if ass.get('cpf') else '', 'DEVEDORA'),
+                  cartao('pela CREDORA · ' + _nome_curto(qc_emp['razao']), qc.get('nome'), qc.get('cargo') or '', 'CREDORA')]], colWidths=[LW / 2] * 2)
     par.setStyle(TableStyle([('VALIGN', (0, 0), (-1, -1), 'TOP'), ('LEFTPADDING', (0, 0), (-1, -1), 0), ('RIGHTPADDING', (0, 0), (-1, -1), 0)]))
     fim.append(par)
     el.append(KeepTogether(fim))
+    if registro:                     # etapa 2: página de registro (mesmo texto e desenho do contrato de prestação)
+        el += [PageBreak(), _faixa_titulo('REGISTRO DE ASSINATURAS ELETRÔNICAS', st), Spacer(1, 10),
+               Paragraph(_esc('Este registro integra o Termo de Acordo e Confissão de Dívida nº %s e comprova as assinaturas feitas pelo '
+                              'sistema da Qualicontax (app.qualicontax.com.br), com a identidade de cada pessoa confirmada por dígitos do CPF '
+                              'e por código enviado ao seu e-mail. A impressão digital SHA-256 abaixo é a do termo que cada uma viu e aceitou.'
+                              % a['numero']), st['reg']), Spacer(1, 8)]
+        cards = []
+        for r in registro:
+            ln = [Paragraph(('PELA DEVEDORA · ' + _esc(dev['razao'])) if r['papel'] == 'DEVEDORA' else
+                            ('PELA CREDORA · ' + _esc(_nome_curto(qc_emp['razao']))), st['card_st_ok']), Spacer(1, 3),
+                  Paragraph(_esc(_pessoa(r.get('assinado_nome') or r.get('nome'))), st['card_nome']),
+                  Paragraph(_esc(' · '.join(v for v in (('CPF ' + (r.get('assinado_cpf') or r.get('cpf') or '')) if (r.get('assinado_cpf') or r.get('cpf')) else '',
+                                                        r.get('email') or '') if v)), st['card_sub']),
+                  Paragraph(_esc('%s · IP %s' % (r['assinado_em'].strftime('%d/%m/%Y às %H:%M:%S'), r.get('assinado_ip') or '')), st['card_sub'])]
+            if r.get('assinado_agente'):
+                ln.append(Paragraph(_esc(r['assinado_agente'][:110]), st['card_sub']))
+            t = Table([[ln]], colWidths=[LW / 2 - 6]); t.setStyle(_caixa(_FUNDO2, _VERDE3, pad=10)); cards.append(t)
+        for i in range(0, len(cards), 2):
+            pr = cards[i:i + 2]
+            t = Table([[pr[0], pr[1] if len(pr) > 1 else '']], colWidths=[LW / 2] * 2)
+            t.setStyle(TableStyle([('VALIGN', (0, 0), (-1, -1), 'TOP'), ('LEFTPADDING', (0, 0), (-1, -1), 0), ('RIGHTPADDING', (0, 0), (-1, -1), 0),
+                                   ('TOPPADDING', (0, 0), (-1, -1), 4), ('BOTTOMPADDING', (0, 0), (-1, -1), 4)]))
+            el.append(t)
+        sha = Table([[[Paragraph('IMPRESSÃO DIGITAL (SHA-256) DO TERMO ACEITO', st['k']), Paragraph(_esc(registro[0].get('assinado_hash') or ''), st['mono'])]]],
+                    colWidths=[LW])
+        sha.setStyle(_caixa(_FUNDO, _LINHA2, pad=10))
+        quando = max(r['assinado_em'] for r in registro)
+        el += [Spacer(1, 10), sha, Spacer(1, 8),
+               Paragraph(_esc('Registro consolidado em %s, quando a última pessoa assinou; o acordo produz efeitos a partir dessa data. '
+                              'Fundamento: art. 10, § 2º, da MP nº 2.200-2/2001 e art. 4º da Lei nº 14.063/2020 (assinatura eletrônica). '
+                              'A impressão digital é calculada sobre o PDF exatamente como foi apresentado a cada pessoa; qualquer alteração '
+                              'posterior produz outra impressão.' % quando.strftime('%d/%m/%Y %H:%M:%S')), st['reg'])]
     doc.build(el, onFirstPage=_cabecalho, onLaterPages=_cabecalho)
     return buf.getvalue()
 

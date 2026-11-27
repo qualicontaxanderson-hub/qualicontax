@@ -230,7 +230,9 @@ a.tx-c { text-decoration:none; color:inherit; }
 .pa-l.atr { border-color:#fed7aa; background:#fff7ed; } .pa-l .s.atr { background:#ffedd5; color:#c2410c; }
 .pa-l small a { color:#1d4ed8; font-weight:700; text-decoration:none; } .pa-l small a i, .pa-bt i { margin-right:3px; }
 .pa-bt { white-space:nowrap; border:1px solid #bfdbfe; background:#eff6ff; color:#1d4ed8; border-radius:8px; padding:2px 8px; font:inherit; font-size:11.5px; font-weight:700; cursor:pointer; }
-.pa-bt:hover { background:#dbeafe; } .pa-q { display:block; font-size:11px; color:#94a3b8; }
+.pa-bt:hover { background:#dbeafe; }
+.as-lk { display:flex; flex-wrap:wrap; align-items:center; gap:6px; margin-top:8px; padding-top:8px; border-top:1px dashed #e2e8f0; }
+.as-lk small { color:#94a3b8; font-size:11px; } .as-lk .fa-whatsapp { color:#16a34a; } .pa-q { display:block; font-size:11px; color:#94a3b8; }
 @media (max-width: 600px) { .pa-l { grid-template-columns:34px minmax(0,1fr) auto; } .pa-l > small { grid-column:1 / -1; order:5; } .pa-l small .pa-q { display:inline; margin-left:6px; } }
 .lt { display:flex; flex-direction:column; }
 .lt > div { display:flex; gap:10px; font-size:12.5px; padding-bottom:12px; position:relative; }
@@ -1586,6 +1588,21 @@ a.tx-c { text-decoration:none; color:inherit; }
         if (qual === 'anotar') acAbrirJan(id); else location.reload();
       })
       .catch(function () { alert('Não consegui agora. Tente de novo.'); });
+  };
+  // 26/11/2026 — etapa 2: enviar (ou reenviar) o termo para assinar; copiar o link de quem assina
+  window.acEnviar = function (id, de_novo) {
+    if (!confirm(de_novo ? 'Mandar o link do termo de novo, por e-mail, a quem ainda não assinou?'
+                         : 'Enviar o termo para assinar? Cada um recebe o link pessoal por e-mail.')) return;
+    var fd = new FormData(); fd.append('csrf_token', CSRF_AC);
+    fetch(URL_AC_JAN.replace('999999999', id) + '/enviar', {method: 'POST', credentials: 'same-origin', body: fd, headers: {'X-CSRFToken': CSRF_AC}})
+      .then(function (r) { return r.json(); })
+      .then(function (j) { alert(j.ok ? j.msg : j.erro); if (j.ok) acAbrirJan(id); })
+      .catch(function () { alert('Não consegui agora. Tente de novo.'); });
+  };
+  window.acCopiar = function (bt, txt) {
+    var ok = function () { var h = bt.innerHTML; bt.innerHTML = '<i class="fas fa-check"></i> Copiado'; setTimeout(function () { bt.innerHTML = h; }, 1800); };
+    if (navigator.clipboard && window.isSecureContext) { navigator.clipboard.writeText(txt).then(ok, function () { prompt('Copie o link:', txt); }); }
+    else { prompt('Copie o link:', txt); }
   };
   // 26/11/2026 — etapa 3: "emitir boleto agora" de uma parcela (sai pelo banco do acordo e vai por e-mail)
   window.acBoleto = function (id, pid, rot) {
