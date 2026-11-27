@@ -118,13 +118,28 @@ class FinLoteMensal:
         return out
 
     @staticmethod
+    def faltam(empresa_id, competencia):
+        """Empresas com contrato ATIVO cujo honorário desta competência ainda não saiu: nem pelo lote (item ok), nem fora dele
+        (título de honorários da competência). 27/11/2026 — no 1º lote real Anderson emitiu 40 de 217 e o painel pulou para
+        12/2026, porque o lote vira EMITIDO a cada rodada; o mês só está fechado quando não falta ninguém."""
+        fech = FinLoteMensal.fechadas(empresa_id, competencia, competencia)
+        rows = execute_query("""SELECT DISTINCT cliente_id FROM fin_contratos
+                                 WHERE empresa_id = %s AND situacao = 'ATIVO' AND valor > 0 AND (inicio IS NULL OR inicio < %s)""",
+                             (empresa_id, mes_seguinte(competencia)), fetch=True) or []
+        return [r['cliente_id'] for r in rows if competencia not in fech.get(r['cliente_id'], set())]
+
+    @staticmethod
     def competencia_aberta(empresa_id, a_partir=None, cliente_id=None):
-        """Primeira competência (dia 1) a partir de hoje cujo lote ainda não saiu — e, com ``cliente_id``, cujo
-        honorário dessa empresa ainda não foi fechado (27/11/2026)."""
+        """Primeira competência (dia 1) a partir de hoje em que ainda falta emitir honorário de alguma empresa (lote não
+        saiu, ou saiu só para parte delas) — e, com ``cliente_id``, cujo honorário dessa empresa ainda não foi fechado
+        (27/11/2026)."""
         c = (a_partir or date.today()).replace(day=1)
         fech = FinLoteMensal.fechadas(empresa_id, c, date(c.year + 4, c.month, 1), cliente_id).get(cliente_id, set()) if cliente_id else set()
         for _ in range(60):
-            if not FinLoteMensal.emitido(empresa_id, c) and c not in fech:
+            if cliente_id:
+                if c not in fech:
+                    break
+            elif not FinLoteMensal.emitido(empresa_id, c) or FinLoteMensal.faltam(empresa_id, c):
                 break
             c = mes_seguinte(c)
         return c
