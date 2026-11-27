@@ -440,6 +440,89 @@ def email_falso(email):
     return '.' not in dom or dom in _EMAIL_FALSO_DOMINIOS or nome in _EMAIL_FALSO_NOMES
 
 
+# 26/11/2026 — Anderson, antes do 1º lote de honorários pelo app: "os que tiver @qualicontax.com.br tb não enviar!! Precisa
+# ter no cadastro o contato comercial". No lote de teste de 10/2026 a AOS Logística recebeu em legalizacao@qualicontax.com.br
+# e a MM Costa em gabriel@qualicontax.com.br: e-mail da própria Qualicontax cadastrado como contato da empresa não é
+# destinatário de cobrança.
+DOMINIOS_INTERNOS = ('qualicontax.com.br',)
+
+
+def email_interno(email):
+    """True quando o endereço é da própria Qualicontax (não recebe cobrança)."""
+    e = (email or '').strip().lower()
+    return '@' in e and e.rsplit('@', 1)[1] in DOMINIOS_INTERNOS
+
+
+def destinatarios_detalhe(cliente_ids):
+    """Quem recebe a cobrança de cada empresa, numa consulta só para a lista inteira (a conferência do lote olha 200+
+    empresas). Devolve {cliente_id: {'destinos': [{'email','nome','fonte'}], 'internos': [e-mails da Qualicontax
+    descartados], 'falsos': [e-mails de preenchimento descartados]}} — a mesma regra de ``destinatarios_cobranca``."""
+    ids = sorted({int(c) for c in (cliente_ids or []) if c})
+    out = {c: {'destinos': [], 'internos': [], 'falsos': []} for c in ids}
+    if not ids:
+        return out
+    ph = ','.join(['%s'] * len(ids))
+    contatos = execute_query(
+        f"""SELECT c.cliente_id, c.id, c.nome, c.email, c.principal,
+                   EXISTS(SELECT 1 FROM contatos_departamentos cd WHERE cd.contato_id = c.id AND cd.departamento_id = 8) AS financeiro,
+                   (SELECT GROUP_CONCAT(m.valor SEPARATOR ',') FROM contatos_meios m WHERE m.contato_id = c.id AND m.tipo = 'EMAIL') AS mais
+              FROM contatos_clientes c WHERE c.cliente_id IN ({ph}) AND c.ativo = 1
+             ORDER BY c.cliente_id, c.principal DESC, c.id""", tuple(ids), fetch=True) or []
+    por_cliente = {}
+    for c in contatos:
+        por_cliente.setdefault(c['cliente_id'], []).append(c)
+    cad = {r['id']: r for r in execute_query(
+        f'SELECT id, tipo_pessoa, email, abertura_de_pf_id, abertura_concluida_em FROM clientes WHERE id IN ({ph})',
+        tuple(ids), fetch=True) or []}
+    # Empresa em abertura (25/11/2026): ainda sem CNPJ nem contatos próprios — a cobrança vai para quem pediu a abertura
+    abrindo = {c: cad[c]['abertura_de_pf_id'] for c in ids
+               if cad.get(c) and cad[c].get('abertura_de_pf_id') and not cad[c].get('abertura_concluida_em')}
+    pfs = destinatarios_detalhe(set(abrindo.values()) - set(ids)) if abrindo else {}
+    for c in ids:
+        d = out[c]
+        vistos = set()
+
+        def add(email, nome, fonte):
+            e = (email or '').strip().lower()
+            if '@' not in e or e in vistos:
+                return
+            vistos.add(e)
+            if email_falso(e):
+                d['falsos'].append(e)
+            elif email_interno(e):
+                d['internos'].append(e)
+            else:
+                d['destinos'].append({'email': e, 'nome': (nome or '').strip(), 'fonte': fonte})
+
+        if c in abrindo:
+            pf = abrindo[c]
+            fonte = pfs.get(pf) or out.get(pf) or {'destinos': [], 'internos': [], 'falsos': []}
+            d['destinos'] = [dict(x, fonte=x['fonte'] + ' de quem pediu a abertura') for x in fonte['destinos']]
+            d['internos'], d['falsos'] = list(fonte['internos']), list(fonte['falsos'])
+            continue
+        lista = por_cliente.get(c, [])
+        for filtro, fonte in ((lambda x: x['financeiro'], 'contato do Financeiro'),
+                              (lambda x: x['principal'], 'contato principal'),
+                              (lambda x: True, 'contato da empresa')):
+            for ct in lista:
+                if filtro(ct):
+                    add(ct['email'], ct['nome'], fonte)
+                    for m in (ct['mais'] or '').split(','):
+                        add(m, ct['nome'], fonte)
+            if d['destinos']:
+                break
+        if not d['destinos'] and (cad.get(c) or {}).get('tipo_pessoa') == 'PF':
+            # Pessoa física: sem contato, vale o e-mail da própria pessoa, que fica no cadastro (não é "e-mail do CNPJ").
+            # 103 PFs ativas em 25/11/2026 só têm esse e-mail. Para PJ o e-mail do cadastro nunca entra.
+            add(cad[c].get('email'), '', 'e-mail da pessoa (cadastro)')
+    return out
+
+
+def destinatarios_em_lote(cliente_ids):
+    """{cliente_id: [{'email','nome','fonte'}]} para várias empresas de uma vez (ver ``destinatarios_detalhe``)."""
+    return {c: d['destinos'] for c, d in destinatarios_detalhe(cliente_ids).items()}
+
+
 def destinatarios_cobranca(cliente_id, email_cadastro=None):
     """Quem recebe a cobrança, em ordem de preferência — Anderson (15/11/2026): "está puxando o e-mail do
     CNPJ porque no cadastro está outro... isso não pode falhar de jeito nenhum".
@@ -449,41 +532,11 @@ def destinatarios_cobranca(cliente_id, email_cadastro=None):
     3. senão, qualquer contato ativo com e-mail.
     25/11/2026 — Anderson: "o e-mail do CNPJ nunca é para ser usado no Financeiro, e sim o do contato": o e-mail do
     cadastro da empresa saiu da lista (``email_cadastro`` fica só para quem ainda chama assim e é ignorado).
-    E-mails de preenchimento (email_falso) não contam. Devolve [{'email', 'nome', 'fonte'}] sem repetir e-mail."""
-    out, vistos = [], set()
-
-    def add(email, nome, fonte):
-        e = (email or '').strip().lower()
-        if '@' in e and e not in vistos and not email_falso(e):
-            vistos.add(e); out.append({'email': e, 'nome': (nome or '').strip(), 'fonte': fonte})
-
-    if cliente_id:
-        contatos = execute_query(
-            """SELECT c.id, c.nome, c.email, c.principal,
-                      EXISTS(SELECT 1 FROM contatos_departamentos cd WHERE cd.contato_id = c.id AND cd.departamento_id = 8) AS financeiro,
-                      (SELECT GROUP_CONCAT(m.valor SEPARATOR ',') FROM contatos_meios m WHERE m.contato_id = c.id AND m.tipo = 'EMAIL') AS mais
-                 FROM contatos_clientes c WHERE c.cliente_id = %s AND c.ativo = 1
-                ORDER BY c.principal DESC, c.id""", (cliente_id,), fetch=True) or []
-        for filtro, fonte in ((lambda c: c['financeiro'], 'contato do Financeiro'),
-                              (lambda c: c['principal'], 'contato principal'),
-                              (lambda c: True, 'contato da empresa')):
-            for c in contatos:
-                if filtro(c):
-                    add(c['email'], c['nome'], fonte)
-                    for m in (c['mais'] or '').split(','):
-                        add(m, c['nome'], fonte)
-            if out:
-                return out
-        # Pessoa física: sem contato, vale o e-mail da própria pessoa, que fica no cadastro (não é "e-mail do CNPJ").
-        # 103 PFs ativas em 25/11/2026 só têm esse e-mail. Para PJ o e-mail do cadastro nunca entra.
-        c = execute_query('SELECT tipo_pessoa, email, abertura_de_pf_id, abertura_concluida_em FROM clientes WHERE id = %s',
-                          (cliente_id,), fetch=True, fetch_one=True) or {}
-        if c.get('abertura_de_pf_id') and not c.get('abertura_concluida_em'):
-            # Empresa em abertura (25/11/2026): ainda sem CNPJ nem contatos próprios — a cobrança vai para quem pediu a abertura
-            return [dict(d, fonte=d['fonte'] + ' de quem pediu a abertura') for d in destinatarios_cobranca(c['abertura_de_pf_id'])]
-        if c.get('tipo_pessoa') == 'PF':
-            add(c.get('email'), '', 'e-mail da pessoa (cadastro)')
-    return out
+    E-mails de preenchimento (email_falso) e da própria Qualicontax (email_interno, 26/11/2026) não contam.
+    Devolve [{'email', 'nome', 'fonte'}] sem repetir e-mail."""
+    if not cliente_id:
+        return []
+    return destinatarios_detalhe([cliente_id]).get(int(cliente_id), {}).get('destinos', [])
 
 
 def emails_do_cliente(cliente_id):

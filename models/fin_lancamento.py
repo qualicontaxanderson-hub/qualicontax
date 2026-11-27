@@ -1,3 +1,4 @@
+import uuid
 # -*- coding: utf-8 -*-
 """Lançamento de serviço avulso, lote mensal e comissões (parte 6, etapa 2 — 06/11/2026).
 
@@ -55,6 +56,38 @@ class FinLoteMensal:
     def marcar_emitido(lote_id, usuario_id, qtd, total):
         execute_query("""UPDATE fin_lotes_mensais SET status = 'EMITIDO', emitido_por = %s, emitido_em = NOW(),
                          qtd_cobrancas = %s, total = %s WHERE id = %s""", (usuario_id, qtd, _d(total), lote_id), fetch=False)
+
+    # 26/11/2026 — trava no banco (Anderson, antes do 1º lote pelo app: "trava para não enviar o mesmo novamente"). O
+    # servidor tem 4 processos e a marca em memória (lote_mensal._rodando) não cruza processo: dois cliques ou duas abas
+    # podiam emitir o mesmo lote em paralelo. A reserva vale ``minutos``; a rodada bate o relógio a cada empresa.
+    @staticmethod
+    def reservar(lote_id, usuario_id, minutos=30):
+        """Marca o lote como "emitindo" por esta rodada. Devolve o token quando conseguiu; None quando outra rodada
+        está em andamento (marca com menos de ``minutos``)."""
+        token = uuid.uuid4().hex
+        execute_query("""UPDATE fin_lotes_mensais SET rodando_desde = NOW(), rodando_por = %s, rodando_token = %s
+                          WHERE id = %s AND (rodando_desde IS NULL OR rodando_desde < NOW() - INTERVAL %s MINUTE)""",
+                      (usuario_id, token, lote_id, minutos), fetch=False)
+        l = execute_query('SELECT rodando_token FROM fin_lotes_mensais WHERE id = %s', (lote_id,), fetch=True, fetch_one=True) or {}
+        return token if l.get('rodando_token') == token else None
+
+    @staticmethod
+    def bater(lote_id, token):
+        """A rodada avisa que continua viva (depois de cada empresa)."""
+        execute_query('UPDATE fin_lotes_mensais SET rodando_desde = NOW() WHERE id = %s AND rodando_token = %s', (lote_id, token), fetch=False)
+
+    @staticmethod
+    def liberar(lote_id, token):
+        execute_query("""UPDATE fin_lotes_mensais SET rodando_desde = NULL, rodando_por = NULL, rodando_token = NULL
+                          WHERE id = %s AND rodando_token = %s""", (lote_id, token), fetch=False)
+
+    @staticmethod
+    def rodando(lote_id, minutos=30):
+        """Quem está emitindo este lote agora, pelo banco (vale para todos os processos), ou None."""
+        return execute_query("""SELECT l.rodando_desde, l.rodando_por, u.nome AS rodando_por_nome
+                                  FROM fin_lotes_mensais l LEFT JOIN usuarios u ON u.id = l.rodando_por
+                                 WHERE l.id = %s AND l.rodando_desde IS NOT NULL AND l.rodando_desde >= NOW() - INTERVAL %s MINUTE""",
+                             (lote_id, minutos), fetch=True, fetch_one=True)
 
     @staticmethod
     def competencia_aberta(empresa_id, a_partir=None):

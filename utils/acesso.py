@@ -341,6 +341,8 @@ MAPA = {
     'comercial.proposta_reprovar':                  'financeiro.lancamentos.aprovar',
     'financeiro.lote_emitir':              'financeiro.lote.incluir',
     'financeiro.lote_status':              'financeiro.lote',
+    'financeiro.lote_conferir':            'financeiro.lote',             # 26/11/2026: quem recebe, antes de emitir
+    'financeiro.lote_conferir_arquivo':    'financeiro.lote',             # 26/11/2026: a mesma lista em PDF/Excel
     'financeiro.lote_reabrir':             'financeiro.lote.reabrir',
     'financeiro.honorarios_escolha':       'financeiro.lote.incluir',    # 18/11/2026: banco/nota da empresa
     'financeiro.honorarios_alterar':       'financeiro.lote.incluir',    # 25/11/2026: vencimento/banco/valor das marcadas

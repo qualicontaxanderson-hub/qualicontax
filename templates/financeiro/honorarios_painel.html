@@ -176,6 +176,29 @@
 .hp-cal { margin-top:10px; background:#fff; border:1px solid #e2e8f0; border-radius:14px; padding:10px 10px 8px; width:min(100%, 320px); }
 .hp-cal-cab { display:flex; align-items:center; justify-content:space-between; margin-bottom:6px; } .hp-cal-cab b { font-size:13.5px; }
 #hpEmCx { padding-top:4vh; } #hpEmCx .hp-cx { max-height:92vh; overflow:auto; }
+/* 26/11/2026 — conferência "Quem recebe" antes de emitir (Anderson: "garantia para quem será enviado todos os boletos") */
+.hp-err.vermelho { background:#fef2f2; border-color:#fecaca; color:#991b1b; } .hp-err a { color:inherit; font-weight:800; text-decoration:underline; }
+.hp-cf-res { display:grid; grid-template-columns:repeat(4, 1fr); gap:8px; }
+.hp-cf-res div { background:#fff; border:1px solid #e6eeea; border-radius:12px; padding:8px 10px; } .hp-cf-res small { display:block; font-size:10px; font-weight:800; letter-spacing:.06em; text-transform:uppercase; color:#64748b; }
+.hp-cf-res b { font-size:16px; color:#0f172a; } .hp-cf-res div.ok { border-color:#bbf7d0; background:#f0fdf4; } .hp-cf-res div.ok b { color:#15803d; }
+.hp-cf-res div.bad { border-color:#fecaca; background:#fef2f2; } .hp-cf-res div.bad b { color:#b91c1c; } .hp-cf-res div.amb { border-color:#fde68a; background:#fffbeb; } .hp-cf-res div.amb b { color:#b45309; }
+.hp-cf-lista { display:flex; flex-direction:column; gap:6px; max-height:46vh; overflow:auto; padding-right:2px; }
+.hp-cf-row { display:grid; grid-template-columns:auto minmax(0,1.1fr) minmax(0,1.6fr); gap:6px 10px; align-items:start; background:#fff; border:1.5px solid #e2e8f0; border-radius:12px; padding:9px 11px; font-size:12.5px; }
+.hp-cf-row.bad { border-color:#fecaca; background:#fff7f7; } .hp-cf-row.amb { border-color:#fde68a; background:#fffdf3; }
+.hp-cf-row .n { font-size:10.5px; font-weight:800; color:#64748b; background:#f1f5f4; border-radius:6px; padding:2px 6px; font-variant-numeric:tabular-nums; }
+.hp-cf-row .nome { min-width:0; } .hp-cf-row .nome b { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:#0f172a; }
+.hp-cf-row .nome small { display:block; color:#64748b; font-size:11px; }
+.hp-cf-mails { display:flex; flex-direction:column; gap:3px; min-width:0; }
+#hpEmCx [hidden] { display:none !important; }   /* .hp-op e .hp-em-res têm display próprio; o passo 2 esconde pelo atributo */
+#hpEmCx .hp-cx.conf { width:min(820px, calc(100vw - 24px)); }
+.hp-cf-mail { display:flex; flex-wrap:wrap; gap:2px 6px; align-items:baseline; min-width:0; } .hp-cf-mail i { color:#16a34a; font-size:11px; flex:0 0 auto; }
+.hp-cf-mail span { overflow-wrap:anywhere; font-weight:700; color:#0f172a; } .hp-cf-mail em { font-style:normal; color:#64748b; font-size:11px; }
+.hp-cf-bad { color:#b91c1c; font-weight:700; } .hp-cf-bad i { margin-right:4px; } .hp-cf-bad a { color:#991b1b; text-decoration:underline; }
+.hp-cf-amb { color:#92400e; font-weight:600; } .hp-cf-amb label { display:inline-flex; align-items:center; gap:6px; margin-top:4px; font-weight:800; cursor:pointer; } .hp-cf-amb input { width:16px; height:16px; accent-color:#ea580c; }
+.hp-cf-arq { display:flex; gap:8px; flex-wrap:wrap; } .hp-cf-arq a { display:inline-flex; align-items:center; gap:7px; padding:8px 12px; border-radius:10px; border:1.5px solid #e2e8f0; background:#fff; color:#0f172a; font-weight:700; font-size:12.5px; text-decoration:none; }
+.hp-cf-arq a:hover { border-color:#16a34a; } .hp-cf-arq a i { color:#15803d; } .hp-cf-arq a.pdf i { color:#dc2626; }
+.hp-cf-aviso { font-size:12px; color:#475569; line-height:1.4; }
+@media (max-width:640px) { .hp-cf-res { grid-template-columns:repeat(2, 1fr); } .hp-cf-row { grid-template-columns:auto minmax(0,1fr); } .hp-cf-row .hp-cf-mails { grid-column:1 / -1; } }
 .hp-cal-cab button { width:30px; height:30px; border-radius:9px; border:1px solid #e2e8f0; background:#fff; cursor:pointer; color:#334155; } .hp-cal-cab button:disabled { opacity:.35; cursor:default; }
 .hp-cal-g { display:grid; grid-template-columns:repeat(7, 1fr); gap:3px; }
 .hp-cal-g span { text-align:center; font-size:10px; font-weight:800; color:#94a3b8; letter-spacing:.04em; padding:2px 0 4px; }
@@ -300,7 +323,7 @@ span.hp-bco, span.hp-nf { cursor:default; }
 {% set f = l.fase %}
 {% set cls = {'emitir': 'tx-venc', 'erro': 'tx-venc', 'cobradas': 'tx-hoje', 'pagas': 'tx-ok', 'atrasadas': 'tx-ina'}.get(f, 'tx-fut') %}
 {% set d13 = l.dec13 %}
-{% set marca = l.pendente and pode_emitir %}
+{% set marca = l.pendente and pode_emitir and not l.bloqueio %}   {# 26/11/2026: sem e-mail válido não emite #}
 {% set muda = f in ('emitir', 'erro') and pode_esc %}
 <div class="tx-c hp-c {{ cls }}{{ ' marcavel' if marca }}" data-dec13="{{ 1 if (d13 and d13.pendente) else 0 }}" data-banco="{{ l.banco.id if l.banco else '' }}" data-nota="{{ 1 if l.nota else 0 }}" data-v="{{ ((l.total if f in ('emitir', 'erro') else 0) + (d13.total if (d13 and d13.pendente) else 0)) | float }}" data-cli="{{ l.cliente_id }}" data-venc="{{ l.vencimento.isoformat() if l.vencimento else '' }}" data-grupo="{{ l.grupo or '' }}" data-dec="{{ 1 if l.decimo else 0 }}" data-lan="{{ 'pend' if l.pendentes else ('1' if l.lancs else '0') }}" data-hon="{{ l.honorarios if l.honorarios is not none else '' }}" data-dia="{{ l.contrato.dia_vencimento or '' }}"
      data-busca="{{ l.numero or '' }} {{ l.empresa }} {{ l.contrato.nome_fantasia or '' }} {{ l.contrato.cpf_cnpj or '' }} {{ l.grupo or '' }}"{% if marca %} onclick="hpMarcar(event, this)"{% endif %}>
@@ -323,6 +346,8 @@ span.hp-bco, span.hp-nf { cursor:default; }
     {% for p in l.pendentes %}<div class="hp-lan-it pend"><span><i class="fas fa-hourglass-half"></i> {{ p.nome }}<small>aguardando aprovação{% if p.por %} · pedido por {{ p.por.split()[0] }}{% endif %} · aprove em Lançamentos para entrar</small></span><b>{% if p.valor < 0 %}− {{ (p.valor | float | abs) | format_currency }}{% else %}{{ p.valor | float | format_currency }}{% endif %}</b></div>{% endfor %}
   </div>
   {% endif %}
+  {% if l.bloqueio and f in ('emitir', 'erro') %}<div class="hp-err vermelho"><i class="fas fa-envelope-circle-check"></i> <b>Não emite:</b> {% if l.bloqueio == 'interno' %}só tem e-mail da própria Qualicontax ({{ l.internos | join(', ') }}).{% else %}nenhum contato com e-mail.{% endif %} <a href="{{ url_for('clientes.detalhes', id=l.cliente_id) }}">Cadastre o contato comercial da empresa</a> e volte aqui.</div>{% endif %}
+  {% if l.fora_lote and f in ('emitir', 'erro') %}<div class="hp-err"><i class="fas fa-triangle-exclamation"></i> <b>Já tem cobrança desta competência fora do lote:</b> título {{ l.fora_lote.id }}, {{ l.fora_lote.valor | float | format_currency }}{% if l.fora_lote.vencimento %}, vence {{ l.fora_lote.vencimento.strftime('%d/%m/%Y') }}{% endif %}. Na conferência dá para emitir mesmo assim.</div>{% endif %}
   {% if f == 'erro' %}{% set mf = motivo_nfse(l.feito.erro) if motivo_nfse is defined else {} %}<div class="hp-err"><i class="fas fa-triangle-exclamation"></i> {% if mf and mf.texto %}<b>{{ mf.texto }}</b>{% if mf.fazer %}<br>{{ mf.fazer }}{% endif %}{% else %}{{ l.feito.erro or 'A nota ou o boleto não saíram.' }}{% endif %} Corrija e emita de novo.</div>{% endif %}
   <div class="hp-linha">
     {% if l.banco %}
@@ -339,7 +364,8 @@ span.hp-bco, span.hp-nf { cursor:default; }
     {%- else %}<span class="hp-nf{{ ' sem' if not l.nota }}{{ ' mes' if l.nota_mes }}">{% endif -%}
       <i class="fas {{ 'fa-file-invoice' if l.nota else 'fa-barcode' }}"></i> {{ 'nota + boleto' if l.nota else 'só boleto' }} <small>{{ rotn }}</small>{% if muda %} <i class="fas fa-pen"></i>{% endif %}
     {%- if muda %}</button>{% else %}</span>{% endif %}
-    <span class="hp-chip{{ ' semct' if not l.contatos }}" title="Contatos do Financeiro que recebem a cobrança por e-mail"><i class="fas fa-envelope"></i> {{ (l.contatos ~ ' contato' ~ ('s' if l.contatos != 1 else '')) if l.contatos else 'sem contato' }}</span>
+    {# 26/11/2026 — a etiqueta conta quem recebe DE VERDADE (contato do Financeiro, senão principal, senão qualquer contato; e-mail da Qualicontax não conta) #}
+    <span class="hp-chip{{ ' semct' if l.bloqueio }}" title="{% if l.destinos %}Quem recebe por e-mail: {{ l.destinos | map(attribute='email') | join(', ') }}{% elif l.bloqueio == 'interno' %}Só tem e-mail da própria Qualicontax ({{ l.internos | join(', ') }}): não emite{% else %}Nenhum contato com e-mail: não emite{% endif %}"><i class="fas fa-envelope"></i> {% if l.bloqueio == 'interno' %}só e-mail da Qualicontax{% elif l.bloqueio %}sem e-mail{% else %}{{ l.contatos }} e-mail{{ 's' if l.contatos != 1 }}{% endif %}</span>
   </div>
   {% if d13 %}{% set df = d13.fase %}<div class="hp-13-bl {{ 'pend' if d13.pendente else df }}" title="13º de {{ d13.parcela.ano }} em {{ d13.parcela.de }} boletos próprios, separados da mensalidade{% if d13.parcela.n < d13.parcela.de %} · a parcela {{ d13.parcela.n + 1 }}/{{ d13.parcela.de }} vem no painel do mês que vem{% endif %}"><span class="hp-13"><i class="fas fa-gift"></i> 13º {{ d13.parcela.n }}/{{ d13.parcela.de }}</span><span class="t">boleto próprio · {% if df == 'emitir' %}sai junto · vence{% elif df == 'erro' %}não saiu, emita de novo · vence{% elif df == 'pagas' %}pago · venceu{% elif df == 'atrasadas' %}em atraso · venceu{% else %}emitido · vence{% endif %} <b>{{ (d13.atual.venc if d13.atual else d13.vencimento).strftime('%d/%m/%Y') }}</b></span><b class="v">{{ (d13.atual.valor if d13.atual else d13.total) | float | format_currency }}</b></div>{% endif %}
   <div class="hp-meses">{% for m in l.meses %}<span class="hp-m {{ m.status }}{{ ' atual' if loop.last }}" title="vencimento {{ m.mes }}/{{ m.ano }}: {{ {'pago': 'pago', 'aberto': 'a vencer', 'atrasado': 'atrasado', 'parcial': 'pago em parte', 'sem': 'a emitir' if loop.last else 'sem cobrança'}[m.status] }}{% if m.valor %} · {{ m.valor | float | format_currency }}{% endif %}">{{ m.mes }}<i></i></span>{% endfor %}</div>
@@ -373,7 +399,7 @@ span.hp-bco, span.hp-nf { cursor:default; }
 <div class="ef-body">
   {% if status_lote and status_lote.rodando %}
   <div class="hp-rodando" id="hpRodando" data-url="{{ url_for('financeiro.lote_status', lote_id=P.lote.id) }}"><i class="fas fa-circle-notch fa-spin"></i>
-    <span><b>Emitindo a cobrança de {{ competencia.strftime('%m/%Y') }}…</b> <span id="hpRodTxt">{{ status_lote.ok or 0 }} prontas{% if status_lote.erro %}, {{ status_lote.erro }} com erro{% endif %}</span>. A tela atualiza sozinha quando terminar.</span></div>
+    <span><b>Emitindo a cobrança de {{ competencia.strftime('%m/%Y') }}{% if status_lote.rodando_por %} ({{ status_lote.rodando_por.split()[0] }}){% endif %}…</b> <span id="hpRodTxt">{{ status_lote.ok or 0 }} prontas{% if status_lote.erro %}, {{ status_lote.erro }} com erro{% endif %}</span>. A tela atualiza sozinha quando terminar.</span></div>
   {% endif %}
   {% set T = P.tot %}
   <div class="tx-abas">
@@ -469,10 +495,18 @@ span.hp-bco, span.hp-nf { cursor:default; }
       <label class="hp-op" id="hpEmOpCada" onclick="hpEmVenc('cada')"><input type="radio" name="hpvenc" value="cada"><span class="hp-ic"><i class="fas fa-calendar-days"></i></span>
         <span class="tx"><b>Data por empresa</b><small>cada empresa marcada com a sua data (já vem a do contrato; mude a que quiser)</small>
           <div class="hp-em-cada" id="hpEmCada"></div></span></label>
-      <div class="hp-em-nota"><i class="fas fa-envelope"></i> Cada empresa recebe a nota (quando tiver) e o boleto por e-mail, nos contatos do Financeiro.</div>
+      <div class="hp-em-nota" id="hpEmNotaTxt"><i class="fas fa-envelope"></i> Cada empresa recebe a nota (quando tiver) e o boleto por e-mail, nos contatos do Financeiro (senão no contato principal). Antes de emitir você confere a lista de quem recebe.</div>
+      {# 26/11/2026 — passo 2: quem recebe (Anderson: "garantia para quem será enviado todos os boletos") #}
+      <div id="hpConf" hidden>
+        <div class="hp-em-tit"><i class="fas fa-envelope-open-text"></i> Quem recebe cada cobrança</div>
+        <div class="hp-cf-res" id="hpConfRes"></div>
+        <div class="hp-cf-lista" id="hpConfLista"></div>
+        <div class="hp-cf-arq" id="hpConfArq"></div>
+        <div class="hp-cf-aviso" id="hpConfAviso"></div>
+      </div>
       <div class="hp-msg" id="hpEmMsg"></div>
     </div>
-    <div class="hp-cx-pe"><button type="button" onclick="hpEmFechar()">Voltar</button><button type="button" class="prim em" id="hpEmOk" onclick="hpEmConfirmar()"><i class="fas fa-paper-plane"></i> <span>Emitir</span></button></div>
+    <div class="hp-cx-pe"><button type="button" id="hpEmVoltar" onclick="hpEmVoltar()">Voltar</button><button type="button" class="prim em" id="hpEmOk" onclick="hpEmConfirmar()"><i class="fas fa-paper-plane"></i> <span>Emitir</span></button></div>
   </div>
 </div>
 <div class="hp-fundo" id="hpAltCx" onclick="if (event.target === this) hpAltFechar()" role="dialog" aria-modal="true" aria-labelledby="hpAltTit">
@@ -832,6 +866,7 @@ function hpEmRotulo() {
   var outra = document.getElementById('hpEmOpOutra').classList.contains('on'), cada = document.getElementById('hpEmOpCada').classList.contains('on'), d = document.getElementById('hpEmData').value;
   var n = parseInt(document.getElementById('hpEmQtd').textContent, 10) || 0;
   document.getElementById('hpEmOk').querySelector('span').textContent = 'Emitir ' + (n === 1 ? '1 cobrança' : n + ' cobranças') + (outra && d ? ' para ' + hpBr(d) : (cada ? (n === 1 ? ' na data escolhida' : ', cada uma na sua data') : ''));
+  hpEmRotuloConf();                                          // 26/11/2026: no passo 1 o botão leva à conferência
 }
 function hpEmCadaMonta(cards) {   // 19/11/2026: uma linha por empresa marcada, já com a data do contrato (ou hoje, se passou)
   var box = document.getElementById('hpEmCada'); if (!box) return;
@@ -866,13 +901,92 @@ function hpEmAbrir() {
   document.getElementById('hpEmData').value = ''; document.getElementById('hpEmMsg').textContent = '';
   document.getElementById('hpEmCal').hidden = true; hpEmChipsPinta();
   hpEmCadaMonta(cards);
+  hpEmPasso(1);
   hpEmVenc('contrato');
   document.getElementById('hpEmCx').classList.add('on'); document.body.style.overflow = 'hidden';
 }
-function hpEmFechar() { document.getElementById('hpEmCx').classList.remove('on'); document.body.style.overflow = ''; }
+function hpEmFechar() { document.getElementById('hpEmCx').classList.remove('on'); document.body.style.overflow = ''; hpEmPasso(1); }
+/* 26/11/2026 — a caixa tem dois passos: 1) vencimento; 2) QUEM RECEBE (conferência) e só então "Emitir". Anderson: "eu quero
+   ter a garantia para quem será enviado todos os boletos"; quem não tem e-mail (ou só tem e-mail da Qualicontax) não sai. */
+var URL_CONF = "{{ url_for('financeiro.lote_conferir') }}";
+var hpConfPasso = 1, hpConfN = 0;
+function hpEmPasso(p) {
+  hpConfPasso = p;
+  document.querySelector('#hpEmCx .hp-cx').classList.toggle('conf', p === 2);   // a lista precisa de largura
+  var cx = document.querySelector('#hpEmCx .hp-cx-corpo');
+  [].forEach.call(cx.children, function (el) {
+    if (el.id === 'hpEmMsg') return;
+    if (el.id === 'hpConf') el.hidden = p !== 2; else el.hidden = p === 2;
+  });
+  document.getElementById('hpEmMsg').textContent = '';
+  var ok = document.getElementById('hpEmOk'); ok.disabled = false;
+  if (p === 1) { ok.innerHTML = '<i class="fas fa-list-check"></i> <span></span>'; hpEmRotuloConf(); }
+  document.getElementById('hpEmVoltar').textContent = p === 2 ? 'Voltar ao vencimento' : 'Voltar';
+}
+function hpEmRotuloConf() {
+  if (hpConfPasso !== 1) return;
+  var n = parseInt(document.getElementById('hpEmQtd').textContent, 10) || 0;
+  document.getElementById('hpEmOk').querySelector('span').textContent = 'Conferir quem recebe (' + n + ')';
+}
+function hpEmVoltar() { if (hpConfPasso === 2) hpEmPasso(1); else hpEmFechar(); }
+function hpEsc(t) { return String(t == null ? '' : t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+function hpConfCarregar() {
+  var form = document.getElementById('hpForm'), fd = new FormData(form), msg = document.getElementById('hpEmMsg');
+  form.querySelectorAll('.hp-forcar').forEach(function (i) { i.remove(); });
+  var ok = document.getElementById('hpEmOk'); ok.disabled = true; ok.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> Conferindo quem recebe…';
+  fetch(URL_CONF, { method: 'POST', body: fd, credentials: 'same-origin', headers: { 'X-Requested-With': 'fetch' } })
+    .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+    .then(function (x) { hpConfMostrar(x); })
+    .catch(function (e) { hpEmPasso(1); msg.className = 'hp-msg erro'; msg.textContent = 'Não deu para montar a lista de quem recebe (' + e.message + '). Tente de novo.'; });
+}
+function hpConfMostrar(x) {
+  var r = x.resumo || {}, L = x.linhas || [];
+  document.getElementById('hpConfRes').innerHTML =
+    '<div class="ok"><small>Vão sair</small><b>' + (r.ok || 0) + '</b><span style="font-size:11px;color:#64748b"> · ' + brl(r.v_ok || 0) + ' · ' + (r.emails || 0) + ' e-mail' + (r.emails === 1 ? '' : 's') + '</span></div>'
+    + '<div class="' + (r.sem_email ? 'bad' : '') + '"><small>Sem e-mail</small><b>' + (r.sem_email || 0) + '</b></div>'
+    + '<div class="' + (r.interno ? 'bad' : '') + '"><small>Só e-mail da Qualicontax</small><b>' + (r.interno || 0) + '</b></div>'
+    + '<div class="' + (r.fora_lote ? 'amb' : '') + '"><small>Já cobrada fora do lote</small><b>' + (r.fora_lote || 0) + '</b></div>';
+  var h = '';
+  L.forEach(function (l) {
+    var cls = (l.situacao === 'sem_email' || l.situacao === 'interno') ? 'bad' : (l.situacao === 'fora_lote' ? 'amb' : '');
+    var desc = [brl(l.total), l.nota ? 'nota + boleto' : 'só boleto'];
+    if (l.tem13) desc.push('13º em boleto próprio'); if (l.vencimento) desc.push('vence ' + l.vencimento);
+    var m = '';
+    if (l.situacao === 'sem_email') m = '<div class="hp-cf-bad"><i class="fas fa-ban"></i>Nenhum contato com e-mail: <b>não sai</b>. <a href="' + hpEsc(l.cadastro) + '" target="_blank">cadastrar o contato comercial</a></div>';
+    else if (l.situacao === 'interno') m = '<div class="hp-cf-bad"><i class="fas fa-ban"></i>Só tem e-mail da Qualicontax (' + hpEsc((l.internos || []).join(', ')) + '): <b>não sai</b>. <a href="' + hpEsc(l.cadastro) + '" target="_blank">cadastrar o contato comercial</a></div>';
+    else {
+      (l.destinos || []).forEach(function (d) { m += '<div class="hp-cf-mail"><i class="fas fa-envelope"></i><span>' + hpEsc(d.email) + '</span><em>' + hpEsc(d.fonte) + (d.nome ? ' · ' + hpEsc(d.nome) : '') + '</em></div>'; });
+      if (l.situacao === 'fora_lote' || l.situacao === 'forcado') {
+        var f = l.fora || {};
+        m += '<div class="hp-cf-amb"><i class="fas fa-triangle-exclamation"></i> Já tem cobrança desta competência fora do lote: título ' + hpEsc(f.id) + ', ' + brl(f.valor || 0) + (f.vencimento ? ', vence ' + hpEsc(f.vencimento) : '') + '.'
+          + '<br><label><input type="checkbox" class="hp-cf-forcar" data-cli="' + l.cliente_id + '"' + (l.situacao === 'forcado' ? ' checked' : '') + ' onchange="hpConfConta()"> emitir mesmo assim</label></div>';
+      }
+    }
+    h += '<div class="hp-cf-row ' + cls + '" data-sit="' + l.situacao + '"><span class="n">' + hpEsc(l.numero || '—') + '</span><div class="nome"><b title="' + hpEsc(l.empresa) + '">' + hpEsc(l.empresa) + '</b><small>' + hpEsc(desc.join(' · ')) + '</small></div><div class="hp-cf-mails">' + m + '</div></div>';
+  });
+  document.getElementById('hpConfLista').innerHTML = h || '<div class="hp-cf-aviso">Nenhuma empresa para conferir.</div>';
+  document.getElementById('hpConfArq').innerHTML = '<a class="pdf" href="' + hpEsc(x.pdf) + '" target="_blank"><i class="fas fa-file-pdf"></i> Guardar em PDF</a><a href="' + hpEsc(x.xlsx) + '"><i class="fas fa-file-excel"></i> Baixar em Excel</a>';
+  document.getElementById('hpConfAviso').innerHTML = 'Quem está em <b style="color:#b91c1c">vermelho</b> não sai neste lote: cadastre o contato comercial e emita depois. A lista em PDF ou Excel é a sua garantia de para quem foi cada cobrança.';
+  hpEmPasso(2);
+  hpConfConta();
+}
+function hpConfConta() {
+  var n = document.querySelectorAll('#hpConfLista .hp-cf-row[data-sit="ok"]').length + document.querySelectorAll('#hpConfLista .hp-cf-forcar:checked').length;
+  hpConfN = n;
+  var ok = document.getElementById('hpEmOk'); ok.disabled = !n;
+  ok.innerHTML = '<i class="fas fa-paper-plane"></i> <span>' + (n ? 'Emitir ' + (n === 1 ? '1 cobrança' : n + ' cobranças') : 'Nada para emitir') + '</span>';
+}
 function hpEmConfirmar() {
   var outra = document.getElementById('hpEmOpOutra').classList.contains('on'), d = document.getElementById('hpEmData').value, msg = document.getElementById('hpEmMsg');
   msg.className = 'hp-msg erro';
+  if (hpConfPasso === 2) {                                   // passo 2: emitir o que foi conferido
+    if (!hpConfN) { msg.textContent = 'Nenhuma empresa com e-mail para receber. Cadastre os contatos e volte.'; return; }
+    var form = document.getElementById('hpForm'); form.querySelectorAll('.hp-forcar').forEach(function (i) { i.remove(); });
+    document.querySelectorAll('#hpConfLista .hp-cf-forcar:checked').forEach(function (c) { var h = document.createElement('input'); h.type = 'hidden'; h.className = 'hp-forcar'; h.name = 'forcar'; h.value = c.dataset.cli; form.appendChild(h); });
+    var ok = document.getElementById('hpEmOk'); ok.disabled = true; ok.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> Emitindo…';
+    document.getElementById('hpForm').submit();
+    return;
+  }
   if (outra && !d) { msg.textContent = 'Escolha a data de vencimento: toque numa das datas ou abra o calendário.'; return; }
   if (outra && d < HOJE) { msg.textContent = 'Essa data já passou. Escolha hoje ou uma data à frente.'; return; }
   var form = document.getElementById('hpForm'); form.querySelectorAll('.hp-vcada').forEach(function (i) { i.remove(); });
@@ -887,8 +1001,8 @@ function hpEmConfirmar() {
     if (falta) { msg.textContent = falta; return; }
   }
   document.getElementById('hpVencInput').value = outra ? d : '';
-  var ok = document.getElementById('hpEmOk'); ok.disabled = true; ok.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> Emitindo…';
-  document.getElementById('hpForm').submit();
+  msg.className = 'hp-msg';
+  hpConfCarregar();                                          // passo 2: quem recebe, e só então Emitir
 }
 document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && document.getElementById('hpEmCx') && document.getElementById('hpEmCx').classList.contains('on')) hpEmFechar(); });
 /* 25/11/2026 — "Alterar" as marcadas (Anderson: "vencimento se alterar, perguntar só essa ou todas? / Banco / Valor se

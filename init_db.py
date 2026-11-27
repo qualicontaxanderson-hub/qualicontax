@@ -1846,6 +1846,17 @@ def _apply_migrations():
                            "AND TABLE_NAME = 'fin_lote_itens' AND INDEX_NAME = 'uq_li_lote_cliente_tipo'", fetch=True, fetch_one=True) or {}
         if _i.get('cnt', 0) == 0:
             _migrate("ALTER TABLE fin_lote_itens DROP INDEX uq_li_lote_cliente, ADD UNIQUE KEY uq_li_lote_cliente_tipo (lote_id, cliente_id, tipo)")
+    # 26/11/2026: trava do lote no banco (fin_lotes_mensais.rodando_*) e reserva da linha (fin_lote_itens.reserva) antes do
+    # 1º lote de honorários pelo app — ver utils/lote_mensal.py e FinLoteMensal.reservar
+    for _tab, _col, _def in (('fin_lotes_mensais', 'rodando_desde', 'DATETIME NULL'), ('fin_lotes_mensais', 'rodando_por', 'INT NULL'),
+                             ('fin_lotes_mensais', 'rodando_token', 'VARCHAR(36) NULL'), ('fin_lote_itens', 'reserva', 'VARCHAR(36) NULL')):
+        _t = execute_query("SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = %s",
+                           (_tab,), fetch=True, fetch_one=True) or {}
+        if _t.get('cnt', 0):
+            _c = execute_query("SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() "
+                               "AND TABLE_NAME = %s AND COLUMN_NAME = %s", (_tab, _col), fetch=True, fetch_one=True) or {}
+            if _c.get('cnt', 0) == 0:
+                _migrate(f"ALTER TABLE {_tab} ADD COLUMN {_col} {_def}")
     # 19/11/2026: desconto mensal no contrato de honorários (fixo ou %), com motivo e validade
     _t = execute_query("SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = DATABASE() "
                        "AND TABLE_NAME = 'fin_contratos'", fetch=True, fetch_one=True) or {}

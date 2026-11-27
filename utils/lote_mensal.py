@@ -13,18 +13,23 @@ import calendar
 import json
 import logging
 import threading
+import uuid
 from datetime import date, datetime
 from decimal import Decimal
 
 from werkzeug.datastructures import MultiDict
 
-from models.fin_contrato import EMPRESA_QUALICONTAX, SERVICO_DECIMO_PROPRIO, SERVICO_HONORARIOS, FinContrato
+from models.fin_contrato import CATEGORIA_HONORARIOS, EMPRESA_QUALICONTAX, SERVICO_DECIMO_PROPRIO, SERVICO_HONORARIOS, FinContrato
 from models.fin_lancamento import FinLancamento, FinLoteMensal, mes_seguinte
 from utils.db_helper import execute_query
 
 logger = logging.getLogger(__name__)
 SERVICO_DECIMO = {('DUAS', 0): 2, ('DUAS', 1): 3, ('UNICA', 0): 4}     # nfse_servicos: 13º 1ª, 2ª, única
 _rodando = {}
+
+
+class JaEmitindo(ValueError):
+    """Outra rodada deste lote está em andamento (em qualquer processo do servidor)."""
 
 
 def _d(v):
@@ -175,7 +180,57 @@ def previa(empresa_id, competencia, so_clientes=None, so_decimo=None):
                                feito=feitos.get((c['cliente_id'], 'DECIMO'))))
         if so_clientes is not None and c['cliente_id'] not in so_clientes:
             linhas.remove(l)                                   # só a parcela do 13º foi marcada; a mensalidade não
+    # 26/11/2026 — Anderson, antes do 1º lote pelo app: "garantia para quem será enviado todos os boletos"; "os que não
+    # tem e-mails não enviar e os que tiver @qualicontax.com.br tb não enviar!! Precisa ter no cadastro o contato
+    # comercial". Cada linha ganha os destinatários reais (mesma regra do e-mail: destinatarios_detalhe), o motivo do
+    # bloqueio quando não há para quem mandar, e o aviso de cobrança desta competência já feita FORA do lote.
+    from utils.cobranca_email import destinatarios_detalhe
+    ids = sorted({l['cliente_id'] for l in linhas})
+    det = destinatarios_detalhe(ids) if ids else {}
+    fora = _fora_do_lote(empresa_id, competencia, ids, lote['id'] if lote else None)
+    for l in linhas:
+        d = det.get(l['cliente_id']) or {'destinos': [], 'internos': [], 'falsos': []}
+        l['destinos'], l['internos'] = d['destinos'], d['internos']
+        l['contatos'] = len(d['destinos'])                     # a etiqueta do cartão conta quem recebe de verdade
+        l['bloqueio'] = None if d['destinos'] else ('interno' if d['internos'] else 'sem_email')
+        l['fora_lote'] = fora.get(l['cliente_id']) if (l.get('tipo') or 'MENSAL') == 'MENSAL' else None
     return lote, linhas
+
+
+BLOQUEIOS = {'sem_email': 'sem contato com e-mail: cadastre o contato comercial da empresa',
+             'interno': 'só tem e-mail da própria Qualicontax: cadastre o contato comercial da empresa'}
+
+
+def motivo_bloqueio(linha):
+    m = BLOQUEIOS.get(linha.get('bloqueio') or '')
+    if linha.get('bloqueio') == 'interno' and linha.get('internos'):
+        m = 'só tem e-mail da própria Qualicontax (%s): cadastre o contato comercial da empresa' % ', '.join(linha['internos'])
+    return m
+
+
+def _fora_do_lote(empresa_id, competencia, ids, lote_id):
+    """Títulos a receber de HONORÁRIOS desta competência que NÃO nasceram neste lote — a mensalidade emitida à mão em Nova
+    cobrança, por exemplo (26/11/2026: "honorário da mesma empresa e competência já emitido fora do lote aparece como
+    aviso na conferência, não emite de novo"). Serviço avulso cobrado na mesma competência (abertura de empresa, DRE,
+    alteração contratual...) NÃO conta: a descrição do título do lote é "Honorários e serviços — Honorários contábeis",
+    então só entra o título cuja parte depois do travessão fala em honorário (e não é parcela do 13º).
+    {cliente_id: título mais recente}."""
+    if not ids:
+        return {}
+    ph = ','.join(['%s'] * len(ids))
+    rows = execute_query(
+        f"""SELECT t.id, t.cliente_id, t.valor, t.origem, t.vencimento, t.status, t.descricao, t.boleto_id, t.nfse_id
+              FROM fin_titulos t
+             WHERE t.empresa_id = %s AND t.tipo = 'R' AND t.competencia = %s AND t.categoria_id = %s
+               AND t.origem IN ('boleto', 'nfse') AND t.status <> 'cancelado' AND t.cliente_id IN ({ph})
+               AND SUBSTRING_INDEX(t.descricao, '— ', -1) LIKE '%%onor%%'
+               AND SUBSTRING_INDEX(t.descricao, '— ', -1) NOT LIKE '13º%%'
+               AND t.id NOT IN (SELECT COALESCE(titulo_id, 0) FROM fin_lote_itens WHERE lote_id = %s)
+             ORDER BY t.id DESC""", (empresa_id, competencia, CATEGORIA_HONORARIOS, *ids, lote_id or 0), fetch=True) or []
+    out = {}
+    for r in rows:
+        out.setdefault(r['cliente_id'], r)
+    return out
 
 
 def _abate_desconto(itens, desconto, rotulo='desconto mensal', primeiro=None):
@@ -239,13 +294,51 @@ def _cobrar(linha, lote_id, usuario_id, conta, cfg, empresa_id):
         (lote_id, linha['cliente_id'], tipo, linha['contrato']['id'], json.dumps(itens, ensure_ascii=False), total, venc), fetch=False)
 
     def fechar(status, erro=None, titulo_id=None, nfse_id=None, boleto_id=None, email=None):
-        execute_query("""UPDATE fin_lote_itens SET status = %s, erro = %s, titulo_id = %s, nfse_id = %s, boleto_id = %s, email = %s
+        execute_query("""UPDATE fin_lote_itens SET status = %s, erro = %s, titulo_id = %s, nfse_id = %s, boleto_id = %s, email = %s,
+                                                   reserva = NULL, atualizado_em = NOW()
                          WHERE lote_id = %s AND cliente_id = %s AND tipo = %s""",
                       (status, (erro or None), titulo_id, nfse_id, boleto_id, (email or '')[:255] or None, lote_id, linha['cliente_id'], tipo), fetch=False)
         return status
 
+    # 26/11/2026 — reserva da linha no banco: só a rodada que conseguir marcar 'emitindo' segue; outra rodada em paralelo
+    # (outro processo, outra aba) encontra a linha ocupada e não mexe. Uma reserva parada há mais de 20 min (servidor
+    # reiniciou no meio) pode ser retomada — e a retomada reaproveita o que já saiu (abaixo).
+    reserva = uuid.uuid4().hex
+    execute_query("""UPDATE fin_lote_itens SET status = 'emitindo', reserva = %s, atualizado_em = NOW()
+                      WHERE lote_id = %s AND cliente_id = %s AND tipo = %s
+                        AND (status IN ('pendente', 'erro', 'pulado')
+                             OR (status = 'emitindo' AND atualizado_em < NOW() - INTERVAL 20 MINUTE))""",
+                  (reserva, lote_id, linha['cliente_id'], tipo), fetch=False)
+    r = execute_query('SELECT reserva, status FROM fin_lote_itens WHERE lote_id = %s AND cliente_id = %s AND tipo = %s',
+                      (lote_id, linha['cliente_id'], tipo), fetch=True, fetch_one=True) or {}
+    if r.get('reserva') != reserva:
+        return 'ocupado'                                        # outra rodada está com esta empresa (ou ela já saiu)
+
     if total <= 0:
         return fechar('pulado', 'sem valor a cobrar')
+    if linha.get('bloqueio'):                                   # sem para quem mandar: não emite (Anderson, 26/11/2026)
+        return fechar('pulado', motivo_bloqueio(linha))
+    if linha.get('fora_lote') and not linha.get('forcar'):
+        f = linha['fora_lote']
+        return fechar('pulado', 'já existe cobrança de honorários desta competência fora do lote (título %s, R$ %s, vence %s): '
+                                'confira antes de emitir; na conferência dá para emitir mesmo assim'
+                      % (f['id'], _brl(f['valor']), f['vencimento'].strftime('%d/%m/%Y') if f.get('vencimento') else '—'))
+    # 26/11/2026 — retomada sem repetir: o que uma tentativa anterior desta linha já tirou é reaproveitado
+    feito = linha.get('feito') or {}
+    if feito.get('boleto_id'):
+        b0 = FinBoleto.get(feito['boleto_id'])
+        if b0 and b0.get('situacao') not in ('erro', 'canceled', 'rascunho'):
+            return fechar('ok', titulo_id=b0.get('titulo_id'), nfse_id=b0.get('nfse_id') or feito.get('nfse_id'), boleto_id=b0['id'],
+                          email='boleto já tinha saído numa tentativa anterior; nada foi repetido')
+        if b0 and b0.get('situacao') == 'rascunho':
+            return fechar('erro', 'o boleto %s ficou em rascunho numa tentativa interrompida: confira no banco se ele existe lá; '
+                                  'se não existir, cancele o rascunho antes de emitir de novo' % b0['id'],
+                          nfse_id=feito.get('nfse_id'), boleto_id=b0['id'])
+    nota_pronta = None
+    if feito.get('nfse_id'):
+        n0 = NfseEmitida.get(feito['nfse_id'])
+        if n0 and n0.get('situacao') == 'autorizada':
+            nota_pronta = n0
     t = tomador_do_cliente(linha['cliente_id'])
     if not t or not t.get('documento'):
         return fechar('erro', 'cadastro sem CPF/CNPJ')
@@ -256,11 +349,14 @@ def _cobrar(linha, lote_id, usuario_id, conta, cfg, empresa_id):
     acordo_its = [i for i in itens if i.get('origem') == 'acordo']
     itens, desconto = _aplicar_descontos([i for i in itens if i.get('origem') != 'acordo'])
     itens = itens + acordo_its
-    emite_nota = bool(cfg) and linha['nota'] and any(i['servico_id'] for i in itens)
+    emite_nota = (bool(cfg) and linha['nota'] and any(i['servico_id'] for i in itens)) or bool(nota_pronta)
     nfse_id = boleto_id = titulo_id = None
     avisos = []
     try:
-        if emite_nota:
+        if emite_nota and nota_pronta:
+            nfse_id = nota_pronta['id']                        # a nota já estava autorizada: só falta o boleto
+            avisos.append('nota já autorizada numa tentativa anterior, reaproveitada')
+        elif emite_nota:
             serie = cfg.get('serie_nacional') if (cfg.get('emissor') or 'nacional') == 'nacional' else cfg.get('serie_sp')
             # 21/11/2026: o texto da nota discrimina cada linha (bruto) e o desconto como linha própria; o valor
             # declarado continua o líquido dos itens já abatidos (itens).
@@ -281,6 +377,7 @@ def _cobrar(linha, lote_id, usuario_id, conta, cfg, empresa_id):
                 return fechar('erro', 'nota não autorizada: %s' % ((nota or {}).get('erro') or (nota or {}).get('situacao') or 'falha'),
                               nfse_id=(nota or {}).get('id'))
             nfse_id = nota['id']
+        if emite_nota:
             if linha['boleto']:
                 n = NfseEmitida.get(nfse_id)
                 ok, msg, aviso = gerar_boleto_da_nota(n, conta, venc, mensagem, usuario_id, extras=[
@@ -320,19 +417,26 @@ def _cobrar(linha, lote_id, usuario_id, conta, cfg, empresa_id):
     return fechar('ok', titulo_id=titulo_id, nfse_id=nfse_id, boleto_id=boleto_id, email='; '.join(a for a in avisos if a))
 
 
-def rodar(app, empresa_id, competencia, usuario_id, so_clientes=None, vencimento=None, so_decimo=None, vencimentos=None):
+def rodar(app, empresa_id, competencia, usuario_id, so_clientes=None, vencimento=None, so_decimo=None, vencimentos=None, forcar=None):
     """Emite o lote inteiro (ou só ``so_clientes``) numa thread. Devolve o id do lote.
     ``vencimento`` (date): a pessoa escolheu outra data na janela de emissão — vale para todas as empresas desta
-    rodada no lugar do dia do contrato (19/11/2026, Anderson: "escolher data do contrato ou outra data")."""
+    rodada no lugar do dia do contrato (19/11/2026, Anderson: "escolher data do contrato ou outra data").
+    ``forcar``: empresas que a pessoa mandou emitir mesmo já tendo cobrança desta competência fora do lote (26/11/2026).
+    Levanta ``JaEmitindo`` quando outra rodada deste lote está em andamento (trava no banco, vale para os 4 processos)."""
     from models.fin_cobranca import FinCobrancaConta
     from models.nfse_emissao import NfseConfig
     lote_id = FinLoteMensal.abrir(empresa_id, competencia)
-    if _rodando.get(lote_id):
-        return lote_id
+    quem = FinLoteMensal.rodando(lote_id)
+    if _rodando.get(lote_id) or quem:
+        raise JaEmitindo(_msg_ja_emitindo(competencia, quem))
     conta = FinCobrancaConta.padrao_da_empresa(empresa_id)
     cfg = NfseConfig.get(empresa_id)
     if not conta:
         raise ValueError('Não há conta de cobrança ativa.')
+    token = FinLoteMensal.reservar(lote_id, usuario_id)
+    if not token:
+        raise JaEmitindo(_msg_ja_emitindo(competencia, FinLoteMensal.rodando(lote_id)))
+    forcar = set(forcar or [])
     contas = {}
 
     def conta_da(linha):
@@ -353,7 +457,9 @@ def rodar(app, empresa_id, competencia, usuario_id, so_clientes=None, vencimento
                 for linha in linhas:
                     if linha['feito'] and linha['feito']['status'] == 'ok':
                         continue
+                    FinLoteMensal.bater(lote_id, token)                                   # a reserva continua viva
                     linha['competencia'] = competencia
+                    linha['forcar'] = linha['cliente_id'] in forcar
                     if (linha.get('tipo') or 'MENSAL') == 'MENSAL':                      # a parcela do 13º fica na data combinada
                         if vencimentos and linha['cliente_id'] in vencimentos:          # "Data por empresa" (19/11/2026)
                             linha['vencimento'] = vencimentos[linha['cliente_id']]
@@ -367,14 +473,30 @@ def rodar(app, empresa_id, competencia, usuario_id, so_clientes=None, vencimento
             logger.exception('[lote] rodada do lote %s', lote_id)
         finally:
             _rodando.pop(lote_id, None)
+            try:
+                with app.app_context():
+                    FinLoteMensal.liberar(lote_id, token)
+            except Exception:
+                logger.exception('[lote] liberar a trava do lote %s', lote_id)
 
     threading.Thread(target=alvo, name='lote-%s' % lote_id, daemon=True).start()
     return lote_id
 
 
+def _msg_ja_emitindo(competencia, quem):
+    q = quem or {}
+    por = (' por %s' % q['rodando_por_nome'].split()[0]) if q.get('rodando_por_nome') else ''
+    desde = (' desde %s' % q['rodando_desde'].strftime('%H:%M')) if q.get('rodando_desde') else ''
+    return ('A cobrança de %s já está sendo emitida%s%s. Nada foi emitido de novo: espere terminar, a tela acompanha sozinha.'
+            % (competencia.strftime('%m/%Y'), por, desde))
+
+
 def status(lote_id):
-    r = execute_query("""SELECT COUNT(*) total, SUM(status = 'ok') ok, SUM(status = 'erro') erro, SUM(status = 'pendente') pendente,
-                                SUM(status = 'pulado') pulado, COALESCE(SUM(CASE WHEN status = 'ok' THEN total END), 0) valor_ok
+    r = execute_query("""SELECT COUNT(*) total, SUM(status = 'ok') ok, SUM(status = 'erro') erro,
+                                SUM(status IN ('pendente', 'emitindo')) pendente, SUM(status = 'pulado') pulado,
+                                COALESCE(SUM(CASE WHEN status = 'ok' THEN total END), 0) valor_ok
                            FROM fin_lote_itens WHERE lote_id = %s""", (lote_id,), fetch=True, fetch_one=True) or {}
-    r['rodando'] = bool(_rodando.get(lote_id))
+    quem = FinLoteMensal.rodando(lote_id)                       # 26/11/2026: pelo banco, vale para os 4 processos
+    r['rodando'] = bool(_rodando.get(lote_id)) or bool(quem)
+    r['rodando_por'] = (quem or {}).get('rodando_por_nome') or ''
     return r
