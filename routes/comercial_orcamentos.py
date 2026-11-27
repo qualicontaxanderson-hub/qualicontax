@@ -38,6 +38,18 @@ def _aprovador():
     return current_user.is_admin() or current_user.has_permission(APROVAR)
 
 
+@comercial.app_context_processor
+def _sinal_comercial():
+    """Selo no item Comercial do menu (26/11/2026): quantos compromissos a pessoa tem (aprovar / enviar / corrigir)."""
+    if not current_user.is_authenticated or request.endpoint in (None, 'static') or not current_user.has_permission('modulos.comercial'):
+        return {}
+    try:
+        from utils.comercial_pendencias import pendencias
+        return {'com_sinal': len(pendencias(current_user))}
+    except Exception:
+        return {}
+
+
 def _dono_ou_aprovador(o):
     return _aprovador() or o['criado_por'] == current_user.id
 

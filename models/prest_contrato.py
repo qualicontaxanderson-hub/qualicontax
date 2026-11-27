@@ -447,6 +447,8 @@ class PrestContrato:
 
     @staticmethod
     def mudar_status(cid, status, pdf_sha256=None, pdf_path=None):
+        from utils.comercial_pendencias import esquecer
+        esquecer()                                   # selo de compromissos no menu (26/11/2026)
         col = {'ENVIADO': 'enviado_em', 'ASSINADO': 'assinado_em', 'CANCELADO': 'cancelado_em'}.get(status)
         sets, params = ['status = %s'], [status]
         if col:

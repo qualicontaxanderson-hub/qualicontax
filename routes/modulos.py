@@ -322,7 +322,9 @@ def api_cadastros_destaques():
 @modulos.route('/comercial/')
 @permission_required('modulos.comercial')
 def comercial():
-    return render_template('comercial/index.html')
+    from flask_login import current_user
+    from utils.comercial_pendencias import pendencias
+    return render_template('comercial/index.html', compromissos=pendencias(current_user, fresco=True))
 
 
 @modulos.route('/dp/')

@@ -328,6 +328,8 @@ class Orcamento:
     @staticmethod
     def mudar(oid, status, usuario, tipo, texto, **campos):
         """Troca o status gravando os campos extras (aprovado_por, motivo...) e o evento da linha do tempo."""
+        from utils.comercial_pendencias import esquecer
+        esquecer()                                   # selo de compromissos no menu (26/11/2026)
         sets, vals = ['status = %s'], [status]
         for k, v in campos.items():
             if v == 'NOW()':                     # hora do banco (o app roda em UTC: datetime.now() daria 3 h a mais)

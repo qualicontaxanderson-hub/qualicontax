@@ -65,6 +65,8 @@
                 <a href="{{ url_for('modulos.comercial') }}" class="rail-link rail-comercial {% if request.endpoint == 'modulos.comercial' or request.path.startswith('/comercial/') %}active{% endif %}" title="Comercial">
                     <i class="fas fa-handshake"></i>
                     <span>Comercial</span>
+                    {# 26/11/2026 — Anderson: "o sinal de pendente para o usuário aprovar ou enviar": compromissos do Comercial da pessoa (utils/comercial_pendencias) #}
+                    {% if com_sinal %}<em class="rail-badge rail-badge-nv">{{ com_sinal if com_sinal < 100 else '99+' }}</em>{% endif %}
                 </a>
             </li>
             {% endif %}

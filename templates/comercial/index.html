@@ -1,5 +1,22 @@
 {% extends "base.html" %}
 {% block title %}Comercial - Qualicontax{% endblock %}
+{% block extra_css %}
+<style>
+/* 26/11/2026 — Anderson: "aparecer o sinal de pendente para o usuário aprovar ou enviar": a lista do que está na mão de quem entrou */
+.cp-bloco { background:#fff; border:1px solid #e6eeea; border-radius:18px; padding:14px 16px 8px; margin:0 0 22px; box-shadow:0 10px 30px rgba(15,61,46,.06); }
+.cp-cab { display:flex; align-items:center; gap:10px; margin-bottom:8px; } .cp-cab b { font-size:15px; color:#0f3d2e; } .cp-cab small { color:#64748b; font-size:12.5px; }
+.cp-cab .n { margin-left:auto; background:#16a34a; color:#fff; font-weight:800; font-size:12px; border-radius:99px; padding:3px 10px; }
+.cp-it { display:flex; align-items:center; gap:12px; padding:10px 4px; border-top:1px solid #f1f5f4; text-decoration:none; color:#0f172a; }
+.cp-it:first-of-type { border-top:0; } .cp-it:hover { background:#f8fbf9; border-radius:10px; }
+.cp-ico { width:38px; height:38px; border-radius:12px; display:inline-flex; align-items:center; justify-content:center; font-size:15px; flex-shrink:0; }
+.cp-it.laranja .cp-ico { background:#fff4ec; color:#c2410c; } .cp-it.azul .cp-ico { background:#eff4ff; color:#1d4ed8; } .cp-it.vermelho .cp-ico { background:#fef2f2; color:#b91c1c; } .cp-it.roxo .cp-ico { background:#f5f3ff; color:#6d28d9; }
+.cp-tx { flex:1; min-width:0; line-height:1.25; } .cp-tx b { display:block; font-size:13.5px; } .cp-tx small { display:block; color:#64748b; font-size:12px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.cp-ac { flex-shrink:0; font-size:12.5px; font-weight:800; color:#fff; background:#0f3d2e; border-radius:9px; padding:7px 12px; }
+.cp-it.laranja .cp-ac { background:#c2410c; } .cp-it.vermelho .cp-ac { background:#b91c1c; } .cp-it.roxo .cp-ac { background:#6d28d9; } .cp-it.azul .cp-ac { background:#1d4ed8; }
+.cp-quando { flex-shrink:0; font-size:11.5px; color:#94a3b8; min-width:62px; text-align:right; }
+@media (max-width:640px) { .cp-quando { display:none; } .cp-tx small { white-space:normal; } }
+</style>
+{% endblock %}
 {% block content %}
 {% include 'comercial/_nav_comercial.html' %}
 {# 21/11/2026 — Anderson: "bora arrumar o início igual temos no Financeiro". Mesmo molde da home do Financeiro: barra no
@@ -27,6 +44,19 @@
 </div>
 
 <div class="ef-body">
+    {% if compromissos %}
+    <div class="cp-bloco" id="cpBloco">
+      <div class="cp-cab"><i class="fas fa-bell" style="color:#16a34a"></i><b>Seus compromissos</b><small>o que está na sua mão: aprovar, enviar ou corrigir</small><span class="n">{{ compromissos | length }}</span></div>
+      {% for c in compromissos %}
+      <a class="cp-it {{ c.cor }}" href="{{ c.url }}">
+        <span class="cp-ico"><i class="fas {{ c.icone }}"></i></span>
+        <span class="cp-tx"><b>{{ c.titulo }}</b><small>{{ c.texto }}</small></span>
+        <span class="cp-quando">{% if c.quando %}{{ c.quando.strftime('%d/%m') }}{% endif %}</span>
+        <span class="cp-ac">{{ c.acao }}</span>
+      </a>
+      {% endfor %}
+    </div>
+    {% endif %}
     <div class="ef-section-label">Dia a dia</div>
     <div class="ef-grid">
         {% if pode_rota('comercial.orcamentos') %}
