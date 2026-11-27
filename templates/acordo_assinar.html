@@ -40,6 +40,33 @@ input.cod { letter-spacing:8px; font-size:22px; text-align:center; font-family:m
 .as-flash .success { background:#f0fdf4; color:#166534; border:1px solid #bbf7d0; } .as-flash .danger { background:#fff1f2; color:#9f1239; border:1px solid #fecdd3; } .as-flash .warning { background:#fff7ed; color:#9a3412; border:1px solid #fed7aa; }
 #f-ass.esperando { opacity:.45; pointer-events:none; }
 .as-rodape { text-align:center; font-size:11.5px; color:#94a3b8; padding:18px; }
+.ac-cab { display:flex; justify-content:space-between; gap:16px; align-items:center; padding:18px 20px; color:#fff;
+  background:radial-gradient(120% 140% at 0% 0%, #2dd4bf 0%, #0d9488 45%, #134e4a 100%); }
+.ac-cab small { display:block; font-size:10.5px; font-weight:800; letter-spacing:.6px; text-transform:uppercase; opacity:.85; }
+.ac-cab b { display:block; font-size:21px; font-weight:800; margin:2px 0; } .ac-cab span { font-size:12.5px; opacity:.92; }
+.ac-cab-d { text-align:right; } .ac-cab-d b { font-size:26px; }
+.ac-kpis { display:grid; grid-template-columns:repeat(4, minmax(0,1fr)); border-bottom:1px solid #eef2f0; }
+.ac-kpis > div { display:flex; gap:10px; align-items:flex-start; padding:14px 16px; border-right:1px solid #eef2f0; min-width:0; } .ac-kpis > div:last-child { border-right:0; }
+.ac-kpis i { width:34px; height:34px; border-radius:10px; background:#ecfdf5; color:#0d9488; display:inline-flex; align-items:center; justify-content:center; flex:none; font-size:14px; }
+.ac-kpis .vd i { background:#f0fdf4; color:#15803d; }
+.ac-kpis dt { font-size:10.5px; font-weight:800; color:#7d968a; text-transform:uppercase; letter-spacing:.5px; } .ac-kpis dd { margin:2px 0 0; font-size:15px; font-weight:800; color:var(--escuro); }
+.ac-kpis small { font-size:11.5px; color:#64748b; }
+.ac-corpo { display:grid; grid-template-columns:1fr 1fr; gap:0; }
+.ac-corpo section { padding:16px 18px; border-bottom:1px solid #eef2f0; min-width:0; } .ac-corpo section:first-child { border-right:1px solid #eef2f0; }
+.ac-corpo .ac-regras { grid-column:1 / -1; }
+.ac-corpo h4 { margin:0 0 10px; font-size:12px; font-weight:800; color:var(--escuro); text-transform:uppercase; letter-spacing:.5px; } .ac-corpo h4 i { color:#0d9488; margin-right:5px; }
+.ac-lin > div { display:flex; justify-content:space-between; gap:10px; align-items:flex-start; padding:8px 0; border-bottom:1px dashed #e2e8f0; font-size:13px; }
+.ac-lin span { min-width:0; } .ac-lin small { display:block; font-size:11.5px; color:#94a3b8; } .ac-lin b { white-space:nowrap; }
+.ac-lin .desc b { color:#15803d; } .ac-lin .tot { border-bottom:0; font-weight:800; font-size:14px; color:var(--escuro); }
+.ac-parc > div { display:grid; grid-template-columns:1fr auto auto; gap:12px; align-items:center; padding:8px 10px; border:1px solid #e3ece7; border-radius:10px; margin-bottom:6px; font-size:13px; }
+.ac-parc > div.ent { background:#f0fdfa; border-color:#99f6e4; } .ac-parc .n { font-weight:700; } .ac-parc .d { color:#475569; font-variant-numeric:tabular-nums; } .ac-parc b { font-variant-numeric:tabular-nums; }
+.ac-nota { margin:8px 0 0; font-size:12px; color:#64748b; } .ac-nota i { color:#0d9488; margin-right:4px; }
+.ac-regras ul { list-style:none; margin:0; padding:0; display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+.ac-regras li { display:flex; gap:10px; align-items:flex-start; padding:10px 12px; border-radius:11px; background:#f8fbf9; border:1px solid #eef2f0; font-size:13px; line-height:1.45; }
+.ac-regras li i { color:#0d9488; margin-top:2px; } .ac-regras li.at { background:#fff7ed; border-color:#fed7aa; color:#7c2d12; } .ac-regras li.at i { color:#ea580c; }
+@media (max-width:900px) { .ac-cab { flex-direction:column; align-items:flex-start; } .ac-cab-d { text-align:left; }
+  .ac-kpis { grid-template-columns:1fr 1fr; } .ac-kpis > div:nth-child(2) { border-right:0; } .ac-kpis > div:nth-child(-n+2) { border-bottom:1px solid #eef2f0; }
+  .ac-corpo, .ac-regras ul { grid-template-columns:1fr; } .ac-corpo section:first-child { border-right:0; } }
 .so-cel { display:none; }
 @media (max-width:900px) { .as-wrap { grid-template-columns:1fr; } .as-top .sel { display:none; }
   .as-frame { display:none; } .so-pc { display:none; } .so-cel { display:inline; }
@@ -58,18 +85,46 @@ input.cod { letter-spacing:8px; font-size:22px; text-align:center; font-family:m
 <div class="as-wrap" style="grid-template-columns:1fr; max-width:560px;"><div class="as-card"><div class="as-body"><div class="as-erro">{{ erro }}</div><p class="as-msg">Se você recebeu este link da Qualicontax, responda o e-mail avisando que ele não abriu.</p></div></div></div>
 {% else %}
 {% set ent = a.parcelas | selectattr('entrada') | list %}
+{% set normais = a.parcelas | rejectattr('entrada') | list %}
 <div class="as-wrap">
-    <div class="as-card">
-        <div class="as-res">
-            <div><div class="l">Devedora</div><div class="v">{{ a.nome_razao_social }}</div></div>
-            <div><div class="l">Dívida</div><div class="v">{{ brl(a.divida) }}{% if a.desconto %} <small>− desconto {{ brl(a.desconto) }}</small>{% endif %}</div></div>
-            <div><div class="l">Total do acordo</div><div class="v">{{ brl(a.total) }} <small>sem juros</small></div></div>
-            <div><div class="l">Entrada</div><div class="v">{% if ent %}{{ brl(ent[0].valor) }} <small>vence {{ ent[0].vencimento.strftime('%d/%m/%Y') }}</small>{% else %}<small>sem entrada</small>{% endif %}</div></div>
-            <div><div class="l">Parcelas</div><div class="v">{{ a.n_parcelas }}x {{ brl(a.valor_parcela) }} <small>dia {{ a.dia }} · {{ FORMA[a.forma] }}</small></div></div>
-            <div><div class="l">Se não pagar</div><div class="v"><small>{{ ROMPE[a.rompe][0] | lower }}{% if a.desconto and a.rompe != 'SEM' %}; o desconto cai{% endif %}</small></div></div>
+    <div class="as-card ac">
+        <div class="ac-cab">
+            <div class="ac-cab-e"><small>Termo de acordo e confissão de dívida</small><b>Acordo nº {{ a.numero }}</b>
+                <span>{{ a.nome_razao_social }}</span></div>
+            <div class="ac-cab-d"><small>Total do acordo</small><b>{{ brl(a.total) }}</b>
+                <span>{{ ('entrada + ' if ent else '') }}{{ normais | length }}x de {{ brl(normais[0].valor) if normais else '' }} · sem juros</span></div>
         </div>
-        <iframe class="as-frame" src="{{ url_for('acordo_assinatura.assinar_pdf', token=s.token) }}#toolbar=1" title="Termo do acordo"></iframe>
-        <div class="as-abrir"><span><i class="fas fa-file-pdf" style="color:#15803d;"></i> <span class="so-pc">O termo completo está acima. Não aparece?</span><span class="so-cel">Leia o termo completo, com todas as cláusulas, em PDF.</span></span> <a class="btn btn-o sm" href="{{ url_for('acordo_assinatura.assinar_pdf', token=s.token) }}" target="_blank"><i class="fas fa-file-pdf"></i> <span class="so-pc">Abrir o PDF</span><span class="so-cel">Abrir o termo em PDF</span></a></div>
+        <div class="ac-kpis">
+            <div><i class="fas fa-box-archive"></i><div><dt>Dívida</dt><dd>{{ brl(a.divida) }}</dd><small>{{ a.itens | length }} ite{{ 'm' if a.itens | length == 1 else 'ns' }}</small></div></div>
+            <div class="vd"><i class="fas fa-tag"></i><div><dt>Desconto</dt><dd>{{ brl(a.desconto) if a.desconto else 'nenhum' }}</dd><small>{{ 'se cumprir o acordo' if a.desconto and a.rompe != 'SEM' else (a.motivo_desconto or '—') }}</small></div></div>
+            <div><i class="fas fa-hand-holding-dollar"></i><div><dt>Entrada</dt><dd>{{ brl(ent[0].valor) if ent else 'sem entrada' }}</dd><small>{{ 'vence ' ~ ent[0].vencimento.strftime('%d/%m/%Y') if ent else '—' }}</small></div></div>
+            <div><i class="fas fa-calendar-days"></i><div><dt>Parcelas</dt><dd>{{ normais | length }}x {{ brl(normais[0].valor) if normais else '' }}</dd><small>todo dia {{ a.dia }}</small></div></div>
+        </div>
+        <div class="ac-corpo">
+            <section>
+                <h4><i class="fas fa-list-check"></i> O que entra no acordo</h4>
+                <div class="ac-lin">{% for it in a.itens %}<div><span>{{ it.descricao }}{% if it.vencimento %}<small>venceu em {{ it.vencimento.strftime('%d/%m/%Y') }}</small>{% endif %}</span><b>{{ brl(it.valor) }}</b></div>{% endfor %}
+                    {% if a.desconto %}<div class="desc"><span>Desconto{% if a.motivo_desconto %}<small>{{ a.motivo_desconto }}</small>{% endif %}</span><b>− {{ brl(a.desconto) }}</b></div>{% endif %}
+                    <div class="tot"><span>Total do acordo</span><b>{{ brl(a.total) }}</b></div></div>
+            </section>
+            <section>
+                <h4><i class="fas fa-calendar-check"></i> Quando pagar</h4>
+                <div class="ac-parc">{% for p in a.parcelas %}<div{% if p.entrada %} class="ent"{% endif %}><span class="n">{{ 'Entrada' if p.entrada else (p.n ~ 'ª parcela') }}</span><span class="d">{{ p.vencimento.strftime('%d/%m/%Y') }}</span><b>{{ brl(p.valor) }}</b></div>{% endfor %}</div>
+                <p class="ac-nota"><i class="fas fa-barcode"></i> {% if a.forma == 'JUNTO' %}A entrada vem em boleto próprio; as parcelas vêm no mesmo boleto do honorário do mês, numa linha à parte.{% else %}Cada parcela tem o seu boleto, que chega por e-mail antes de vencer.{% endif %}</p>
+            </section>
+            <section class="ac-regras">
+                <h4><i class="fas fa-scale-balanced"></i> O que você está combinando</h4>
+                <ul>
+                    <li><i class="fas fa-percent"></i><span><b>Sem juros e sem correção</b> em todo o acordo.</span></li>
+                    {% if a.rompe != 'SEM' %}<li class="at"><i class="fas fa-triangle-exclamation"></i><span><b>Se não pagar:</b> {{ ROMPE[a.rompe][0] | lower }}{% if a.rompe == '2_ATRASADAS' %} (consecutivas ou não){% endif %}.
+                        {% if a.desconto %}Aí <b>o desconto de {{ brl(a.desconto) }} cai</b> e a dívida volta pelo valor original, {{ brl(a.divida) }}, menos o que você já pagou.{% else %}Aí o que faltar pagar vence de uma vez.{% endif %}</span></li>
+                    {% else %}<li><i class="fas fa-circle-info"></i><span>Parcela atrasada continua devida e é cobrada como qualquer cobrança vencida.</span></li>{% endif %}
+                    <li><i class="fas fa-circle-check"></i><span><b>Pagou a última parcela:</b> a Qualicontax dá quitação de tudo o que está na lista acima.</span></li>
+                    <li><i class="fas fa-file-contract"></i><span>O contrato de prestação de serviços <b>continua igual</b>: os honorários do mês seguem normalmente.</span></li>
+                </ul>
+            </section>
+        </div>
+        <div class="as-abrir"><span><i class="fas fa-file-pdf" style="color:#15803d;"></i> O termo completo, com todas as cláusulas, está em PDF.</span> <a class="btn btn-o sm" href="{{ url_for('acordo_assinatura.assinar_pdf', token=s.token) }}" target="_blank"><i class="fas fa-file-pdf"></i> Abrir o termo em PDF</a></div>
     </div>
     <div>
         <div class="as-card" style="margin-bottom:12px;"><div class="as-body">
@@ -78,7 +133,7 @@ input.cod { letter-spacing:8px; font-size:22px; text-align:center; font-family:m
             <div class="as-ok"><i class="fas fa-circle-check"></i> <b>Você assinou</b> em {{ s.assinado_em.strftime('%d/%m/%Y às %H:%M') }}.<br>
                 {% if a.situacao not in ('FALTA_ENVIAR', 'FALTA_ASSINAR') %}Todas as partes assinaram: o acordo está valendo e a via com o registro das assinaturas foi enviada ao seu e-mail.{% else %}Quando todos assinarem, o acordo começa a valer e a via final vai para o seu e-mail.{% endif %}</div>
             {% else %}
-            <div class="as-passo"><span class="as-n">1</span><div style="flex:1;"><b>Leia o termo</b> <span class="so-pc">ao lado</span><span class="so-cel">acima (o PDF completo)</span>.</div></div>
+            <div class="as-passo"><span class="as-n">1</span><div style="flex:1;"><b>Leia o acordo</b> <span class="so-pc">ao lado</span><span class="so-cel">acima</span> e, se quiser, o termo completo em PDF.</div></div>
             <div class="as-passo"><span class="as-n {{ 'ok' if codigo_pedido }}" id="n2">2</span><div style="flex:1;"><b>Confirme quem você é</b>
                 <div class="as-lbl">Quem assina</div><div class="as-nome"><i class="fas fa-user"></i> {{ s.nome | nome_proprio }}</div><div class="as-msg">Não é você? Fale com a Qualicontax.</div>
                 {% if desafio %}<div class="as-lbl">{{ 'Os 3 primeiros dígitos do seu CPF' if desafio == 'ini' else 'Os 2 últimos dígitos do seu CPF' }}</div>
