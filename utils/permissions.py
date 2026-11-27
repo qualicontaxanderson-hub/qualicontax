@@ -130,10 +130,14 @@ DEPARTAMENTOS_PERMISSOES = [
     {'grupo': 'Financeiro', 'sigla': 'FI', 'cor': 'fin', 'telas': [
         {'id': 'fin', 'nome': 'Acessar o Financeiro', 'ver': ('financeiro.index', 'abrir o painel')},
         {'id': 'tit', 'nome': 'Contas a pagar e receber',
-         'ver': ('financeiro.titulos', 'títulos'),
+         'ver': ('financeiro.titulos', 'Cobranças: atrasados, inadimplentes, acordos, perdidos e cancelados'),
          'inc': ('financeiro.titulos.incluir', 'novo título'),
          'alt': ('financeiro.titulos.alterar', 'dar baixa'),
-         'exc': [('financeiro.titulos.excluir', 'cancelar e excluir título')]},
+         'exc': [('financeiro.titulos.excluir', 'cancelar e excluir título')],
+         # 27/11/2026 — Anderson (acesso da Alessandra): "As COBRANÇAS, só aparecer as ATRASADAS, INADIMPLENTES, ACORDOS,
+         # PERDIDOS e CANCELADOS... RECEBIDOS e A RECEBER não aparecer". Sem esta ação, os dois quadros, as contas a
+         # pagar e o relatório do que entrou ficam fora.
+         'outros': [('financeiro.titulos.recebidos', 'ver também Recebido, A receber e as contas a pagar (o dinheiro que entrou e o que vai entrar)', False)]},
         {'id': 'rec', 'nome': 'Recebimentos',
          'ver': ('financeiro.recebimento', 'recebimentos'),
          'exc': [('financeiro.recebimento.excluir', 'excluir um e em lote')]},
@@ -187,7 +191,8 @@ DEPARTAMENTOS_PERMISSOES = [
          'inc': ('financeiro.lancamentos.incluir', 'lançar serviço'),
          'exc': [('financeiro.lancamentos.excluir', 'cancelar lançamento')],
          # 17/11/2026 — Anderson: a Alessandra "não será ADMIN mas terá a prerrogativa de autorizar"
-         'outros': [('financeiro.lancamentos.aprovar', 'aprovar solicitações da equipe e pagar comissões', True)]},
+         # 27/11/2026: esta ação também abre os contratos e propostas de TODOS no Comercial (quem aprova vê tudo)
+         'outros': [('financeiro.lancamentos.aprovar', 'aprovar solicitações da equipe, pagar comissões e ver os lançamentos, contratos e propostas de todos', True)]},
         {'id': 'lot', 'nome': 'Lote mensal de honorários',
          'ver': ('financeiro.lote', 'lotes'),
          'inc': ('financeiro.lote.incluir', 'emitir o lote'),

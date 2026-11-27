@@ -139,6 +139,7 @@ a.tx-c { text-decoration:none; color:inherit; }
 .tx-a-ina  { --cor:#dc2626; --cor-e:#991b1b; }
 .tx-a-perd { --cor:#475569; --cor-e:#1e293b; } .tx-a-canc { --cor:#7c3aed; --cor-e:#5b21b6; }
 .tx-abas { grid-template-columns:repeat(7, minmax(0,1fr)); }
+.tx-abas.cinco { grid-template-columns:repeat(5, minmax(0,1fr)); }   /* 27/11/2026: sem Recebido / A receber, os 5 quadros enchem a largura */
 /* 26/11/2026: ACORDOS (desenho aprovado) — aba, cartões, caixa Novo acordo e janela do acordo */
 .tx-a-ac { --cor:#0d9488; --cor-e:#115e59; }
 .tx-painel[data-p="ac"] { --sec:#0d9488; --sec-e:#115e59; --sec-f:#f0fdfa; --sec-b:#99f6e4; }
@@ -756,11 +757,14 @@ a.tx-c { text-decoration:none; color:inherit; }
     {% if g.mes %}<div class="tx-mesb" data-mes="{{ g.mes.k }}"><b>{{ g.mes.rot }}</b><span></span><small><b>{{ g.mes.tot }}</b> · {{ g.mes.n }} {{ palavra }}{{ 's' if g.mes.n != 1 }} no mês</small></div>{% endif %}
     <div class="tx-dia{{ ' tx-dia-hoje' if g.hoje }}" data-sec><div class="tx-data"><b>{{ g.data }}</b><em>{{ g.sub }}</em></div><span></span><small><b>{{ g.tot }}</b> · {{ g.n }} {{ palavra }}{{ 's' if g.n != 1 }}</small></div>
 {% endmacro %}
-  <div class="tx-abas">
+  <div class="tx-abas{{ '' if ve_rec else ' cinco' }}">
+    {# 27/11/2026 — Anderson (acesso da Alessandra): Recebido e A receber só para quem tem "ver Recebido, A receber e as contas a pagar" #}
+    {% if ve_rec %}
     <button type="button" class="tx-aba tx-a-rec{{ ' on' if aba == 'rec' }}" data-p="rec"><span class="tx-aba-ico"><i class="fas fa-circle-check"></i></span>
       <span class="tx-aba-txt"><span class="tx-aba-lbl">Recebido</span><span class="tx-aba-val">{{ m.rec_tot }}</span><span class="tx-aba-sub">{{ m.rec_sub }}</span></span><span class="tx-aba-n">{{ m.rec_n }}</span></button>
     <button type="button" class="tx-aba tx-a-abe{{ ' on' if aba == 'abe' }}" data-p="abe"><span class="tx-aba-ico"><i class="fas fa-hourglass-half"></i></span>
       <span class="tx-aba-txt"><span class="tx-aba-lbl">A receber</span><span class="tx-aba-val">{{ m.abe_tot }}</span><span class="tx-aba-sub">a vencer · {{ m.abe_cli }} cliente{{ 's' if m.abe_cli != 1 }}</span></span><span class="tx-aba-n">{{ m.abe_n }}</span></button>
+    {% endif %}
     <button type="button" class="tx-aba tx-a-atr{{ ' on' if aba == 'atr' }}" data-p="atr"><span class="tx-aba-ico"><i class="fas fa-clock"></i></span>
       <span class="tx-aba-txt"><span class="tx-aba-lbl">Atrasados</span><span class="tx-aba-val">{{ m.atr_tot }}</span><span class="tx-aba-sub">1 vencido · cobrar já</span></span><span class="tx-aba-n">{{ m.atr_n }}</span></button>
     <button type="button" class="tx-aba tx-a-ina{{ ' on' if aba == 'ina' }}" data-p="ina"><span class="tx-aba-ico"><i class="fas fa-user-clock"></i></span>
@@ -794,6 +798,7 @@ a.tx-c { text-decoration:none; color:inherit; }
   </div>
 
   {# ── A RECEBER: o que ainda vai vencer, por data ── #}
+  {% if ve_rec %}
   <div class="tx-painel{{ ' on' if aba == 'abe' }}" data-p="abe">
     <div class="tx-faixa">
       <div class="tx-filtros" data-tipo="per">{% for f in m.abe_f if f[2] or f[0] == "todos" %}<button type="button" class="tx-f{{ ' on' if loop.first }}" data-v="{{ f[0] }}">{{ f[1] }} <b>{{ f[2] }}</b></button>{% endfor %}</div>
@@ -810,6 +815,7 @@ a.tx-c { text-decoration:none; color:inherit; }
     <div class="tx-vazio" data-nada style="display:none;"><i class="fas fa-magnifying-glass"></i>Nada encontrado com esse filtro.</div>
     <button type="button" class="tx-mais" style="display:none;"></button>
   </div>
+  {% endif %}
 
   {# ── ATRASADOS: cliente com 1 só vencido ── #}
   <div class="tx-painel{{ ' on' if aba == 'atr' }}" data-p="atr">
@@ -830,6 +836,7 @@ a.tx-c { text-decoration:none; color:inherit; }
   </div>
 
   {# ── RECEBIDO ── #}
+  {% if ve_rec %}
   <div class="tx-painel{{ ' on' if aba == 'rec' }}" data-p="rec">
     <div class="tx-faixa">
       <div class="tx-filtros" data-tipo="auto"><button type="button" class="tx-f on" data-v="todos">Todos <b>{{ m.rec_n }}</b></button><button type="button" class="tx-f" data-v="1">Pelo banco <b>{{ m.rec_auto }}</b></button><button type="button" class="tx-f" data-v="0">Sem extrato <b>{{ m.rec_n - m.rec_auto }}</b></button></div>
@@ -877,6 +884,7 @@ a.tx-c { text-decoration:none; color:inherit; }
     <div class="tx-vazio" data-nada style="display:none;"><i class="fas fa-magnifying-glass"></i>Nada encontrado com esse filtro.</div>
     <button type="button" class="tx-mais" style="display:none;"></button>
   </div>
+  {% endif %}
 
   {# ── INADIMPLENTES ── #}
   <div class="tx-painel{{ ' on' if aba == 'ina' }}" data-p="ina">

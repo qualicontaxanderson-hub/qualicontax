@@ -39,6 +39,7 @@ SITS = OrderedDict([
     ('vencido', ('Vencidos', '#B91C1C', '#FEF2F2')),
     ('perdido', ('Perdidos', '#334155', '#F1F5F9')),
 ])
+SITS_ATRASO = ('vencido', 'perdido')          # 27/11/2026: o que quem não vê "Recebido / A receber" pode tirar no relatório
 ORGANIZAR = OrderedDict([('sit', 'Situação'), ('cliente', 'Cliente'), ('grupo', 'Grupo'), ('servico', 'Serviço'),
                          ('banco', 'Banco'), ('mes', 'Mês'), ('dia', 'Dia'), ('empresa', 'Empresa do escritório')])
 DATA_REF = {'mov': 'pago pela data do pagamento, em aberto pelo vencimento', 'venc': 'pelo vencimento', 'comp': 'pela competência'}
@@ -356,13 +357,14 @@ def ler_filtros(a):
             'servlinhas': a.get('servlinhas', '1') != '0'}
 
 
-def previa(f):
+def previa(f, sits=None):
     base, _ = coletar(f, so_base=True)
     fatos = filtrar(base, f)
-    por = {k: [0, 0.0] for k in SITS}
+    por = {k: [0, 0.0] for k in (sits or SITS)}
     for x in fatos:
-        por[x['sit']][0] += 1
-        por[x['sit']][1] += x['valor']
+        if x['sit'] in por:
+            por[x['sit']][0] += 1
+            por[x['sit']][1] += x['valor']
     return {'n': len(fatos), 'total': round(sum(x['valor'] for x in fatos), 2),
             'clientes': len({x['cliente_id'] or x['nome'] for x in fatos}),
             'por': {k: [v[0], round(v[1], 2)] for k, v in por.items()},

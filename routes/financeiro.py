@@ -176,6 +176,20 @@ def _empresas_ctx():
     return emps, sel, mapa
 
 
+def _ve_recebidos():
+    """27/11/2026 — Anderson (acesso da Alessandra): quem não tem "ver Recebido, A receber e as contas a pagar" enxerga em
+    Cobranças só Atrasados, Inadimplentes, Acordos, Perdidos e Cancelados; o admin vê tudo."""
+    return current_user.is_admin() or current_user.has_permission('financeiro.titulos.recebidos')
+
+
+def _sits_permitidas(f):
+    """Relatório de cobranças: sem "ver Recebido / A receber", só vencidos e perdidos."""
+    from utils import relatorio_titulos as RT
+    if not _ve_recebidos():
+        f['sit'] = (f['sit'] & set(RT.SITS_ATRASO)) or set(RT.SITS_ATRASO)
+    return f
+
+
 @financeiro.route('/financeiro/titulos')
 @permission_required('financeiro.titulos')
 def titulos():
@@ -183,6 +197,9 @@ def titulos():
     tipo = request.args.get('tipo', 'R')
     if tipo not in ('R', 'P', 'todos'):
         tipo = 'R'
+    if (tipo != 'R' or request.args.get('lista')) and not _ve_recebidos():
+        flash('Seu perfil vê em Cobranças só os atrasados, inadimplentes, acordos, perdidos e cancelados.', 'warning')
+        return redirect(url_for('financeiro.titulos'))
     status = request.args.get('status', 'abertos')
     venc_de = request.args.get('venc_de') or None
     venc_ate = request.args.get('venc_ate') or None
@@ -227,7 +244,10 @@ def _titulos_receber(emps, sel):
             mes = date(int(raw[:4]), int(raw[5:]), 1)
         except ValueError:
             mes = None
-    aba = request.args.get('aba') if request.args.get('aba') in ('rec', 'abe', 'atr', 'ina', 'ac', 'perd', 'canc') else 'abe'
+    ve_rec = _ve_recebidos()
+    aba = request.args.get('aba') if request.args.get('aba') in ('rec', 'abe', 'atr', 'ina', 'ac', 'perd', 'canc') else ('abe' if ve_rec else 'atr')
+    if not ve_rec and aba in ('rec', 'abe'):
+        aba = 'atr'
     # Período (17/11/2026): per=mes|ant|ano|datas (+ de/ate). Vale a baixa no Recebido e o vencimento nas outras.
     per_raw = request.args.get('per') if request.args.get('per') in ('mes', 'ant', 'ano', 'datas') else ''
     def _d(k):
@@ -241,7 +261,7 @@ def _titulos_receber(emps, sel):
     grupos_ids = ids_dos_grupos(m['filtros']['grupos'])      # 17/11/2026: botão "Cobrar o grupo" quando um grupo está no filtro
     emp = ','.join(map(str, sel))
     return render_template(
-        'financeiro/titulos_receber.html', m=m, aba=aba, per=per_raw if per else '', grupos_ids=grupos_ids,
+        'financeiro/titulos_receber.html', m=m, aba=aba, per=per_raw if per else '', grupos_ids=grupos_ids, ve_rec=ve_rec,
         pode_perd=current_user.has_permission('financeiro.titulos.excluir'),
         pode_acordo=current_user.has_permission('financeiro.cobranca.vincular'),   # 26/11/2026: Acordos
         brl=TR.brl, ROMPE_AC=__import__('utils.acordos', fromlist=['ROMPE']).ROMPE,
@@ -267,7 +287,7 @@ def titulos_relatorio():
     from zoneinfo import ZoneInfo
     from flask import send_file
     from utils import relatorio_titulos as RT
-    f = RT.ler_filtros(request.args)
+    f = _sits_permitidas(RT.ler_filtros(request.args))
     fatos, _ = RT.coletar(f, fresco=True)
     rot = _relatorio_rotulos(f)
     agora = datetime.now(ZoneInfo('America/Sao_Paulo'))
@@ -314,7 +334,7 @@ def titulos_relatorio_previa():
     """Quantos lançamentos e quanto dá, ao vivo, e as opções de cada filtro (só o que existe com os outros
     marcados) — a caixa pede a cada clique."""
     from utils import relatorio_titulos as RT
-    return jsonify(RT.previa(RT.ler_filtros(request.args)))
+    return jsonify(RT.previa(_sits_permitidas(RT.ler_filtros(request.args)), sits=None if _ve_recebidos() else RT.SITS_ATRASO))
 
 
 @financeiro.route('/financeiro/titulos/novo', methods=['POST'])
