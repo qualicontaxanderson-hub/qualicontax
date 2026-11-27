@@ -455,9 +455,9 @@ class FinBoleto:
         r = execute_query(
             f"""SELECT SUM(situacao IN ('waiting', 'new')) AS abertos,
                        SUM(situacao = 'unpaid') AS vencidos,
-                       SUM(situacao = 'paid' AND pago_em >= DATE_FORMAT(CURDATE(), '%%Y-%%m-01')) AS pagos_mes,
+                       SUM(situacao = 'paid' AND pago_em >= (CURDATE() - INTERVAL (DAY(CURDATE()) - 1) DAY)) AS pagos_mes,
                        COALESCE(SUM(CASE WHEN situacao IN ('waiting', 'new', 'unpaid') THEN valor END), 0) AS valor_aberto,
-                       COALESCE(SUM(CASE WHEN situacao = 'paid' AND pago_em >= DATE_FORMAT(CURDATE(), '%%Y-%%m-01')
+                       COALESCE(SUM(CASE WHEN situacao = 'paid' AND pago_em >= (CURDATE() - INTERVAL (DAY(CURDATE()) - 1) DAY)
                                          THEN COALESCE(valor_pago, valor) END), 0) AS valor_pago_mes
                   FROM fin_boletos {cond}""", params, fetch=True, fetch_one=True) or {}
         return {k: (r.get(k) or 0) for k in ('abertos', 'vencidos', 'pagos_mes', 'valor_aberto', 'valor_pago_mes')}
