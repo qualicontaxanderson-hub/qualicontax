@@ -588,6 +588,7 @@ function nvToggle(corpo, chev) {
   gav.addEventListener('click', function (e) { if (e.target === gav) fecharGaveta(); });   // clique fora da caixa fecha
   document.addEventListener('keydown', function (e) { if (e.key === 'Escape') { if (!luz.hidden) luz.hidden = true; else if (!gav.hidden) fecharGaveta(); } });
   var m = location.hash.match(/^#n=(\d+)$/); if (m && $('nv' + m[1])) abrirGaveta($('nv' + m[1]));
+  var abrirId = {{ abrir_id|default(0)|tojson }}; if (abrirId && $('nv' + abrirId)) { abrirGaveta($('nv' + abrirId)); $('nv' + abrirId).scrollIntoView({ block: 'center' }); }   // link do WhatsApp (?abrir=<id>)
 
   // ---- ações (delegadas: valem no cartão, na gaveta e no aviso verde)
   document.addEventListener('click', function (e) {

@@ -12,6 +12,7 @@ ainda não. Rascunhos nascem das publicações do sistema por scripts/novidades_
 Tabelas em migrations/novidades_15_11.py.
 """
 import logging
+import os
 import re
 from datetime import date, datetime, timedelta
 
@@ -26,6 +27,7 @@ from utils.db_helper import execute_query
 logger = logging.getLogger(__name__)
 
 novidades = Blueprint('novidades', __name__, url_prefix='/novidades')
+APP_URL = os.getenv('APP_URL', 'https://app.qualicontax.com.br').rstrip('/')   # link da publicação no texto do WhatsApp
 
 SELO_DIAS = 45          # o número no menu conta só o recente (quem chega não herda o histórico)
 MESES = ('jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez')
@@ -295,6 +297,15 @@ def index():
         n['zap'] = _texto_zap(n)
         (out if publicada else rasc).append(n)
 
+    # Link do WhatsApp (?abrir=<id>): a página abre direto nessa novidade, na aba Todas (27/11/2026, Anderson:
+    # "tem que ir o link da novidade").
+    try:
+        abrir_id = int(request.args.get('abrir') or 0)
+    except ValueError:
+        abrir_id = 0
+    if abrir_id and not any(n['id'] == abrir_id for n in out + rasc):
+        abrir_id = 0
+
     # Acabou de publicar? A página volta com ?zap=<id> e oferece o texto pronto do WhatsApp.
     zap_pub = None
     try:
@@ -354,13 +365,13 @@ def index():
         tema = ''
     if ver == 'rascunhos':
         aba = 'rasc'
-    elif tema or zap_pub or not novas:
+    elif tema or zap_pub or abrir_id or not novas:
         aba = 'todas'
     else:
         aba = 'nova'
     return render_template('novidades/index.html', lista=out, rasc=rasc, kpi=kpi, zap_pub=zap_pub,
                            dias=_agrupar_dias(out, hoje), dias_rasc=_agrupar_dias(rasc, hoje),
-                           temas=temas, tema_sel=tema, aba_ini=aba,
+                           temas=temas, tema_sel=tema, aba_ini=aba, abrir_id=abrir_id,
                            TIPOS=TIPOS, AREAS_VISUAL=AREAS_VISUAL,
                            eh_admin=admin, grupos=grupos, telas_por_grupo=_telas_por_grupo(telas),
                            equipe_leitura=equipe_leitura, hoje=hoje.isoformat())
@@ -390,7 +401,6 @@ def _texto_zap(n):
                     itens.append('• …')
                 corpo.append('\n'.join(itens))
     tipo_rotulo = TIPOS.get(n['tipo'], TIPOS['melhoria'])[0]
-    tema_nome = n['tema'][1] if n.get('tema') else ('Para todos' if n['area'] == 'Todos' else n['area'])
     onde = 'Para todos' if n['area'] == 'Todos' else n['area']
     if n.get('tela_nome'):
         onde += ' › ' + n['tela_nome']
@@ -400,7 +410,8 @@ def _texto_zap(n):
         vale = f"👥 Para quem usa as telas de *{n['area']}*. Não usa? Pode ignorar."
     else:
         vale = '👥 Para *toda a equipe*.'
-    linha = '━━━━━━━━━━━━━━━━━━━━'
+    # 27/11/2026 — Anderson: os traços "invadem as linhas do WhatsApp" (saíram) e "tem que ir o link da novidade".
+    link = f"{APP_URL}/novidades/?abrir={n['id']}"
     # O departamento em destaque, logo abaixo do título (Anderson: "deixar mais claro qual o
     # departamento que está sendo alterado").
     if n['area'] == 'Todos':
@@ -412,22 +423,22 @@ def _texto_zap(n):
     partes = [
         '📢 *NOVIDADE NO QUALICONTAX*',
         *cabeca,
-        linha,
+        '',
         f"{ZAP_EMOJI.get(n['tipo'], '✨')} *{n['titulo']}*",
         f'🏷️ {tipo_rotulo}',
         vale,
         '',
         '\n\n'.join(corpo),
         '',
-        f'📣 *Leia com calma em Novidades › {tema_nome}* (menu da esquerda): texto completo, passo a passo e print. '
+        '👉 *Toque no link e leia tudo* (passo a passo e print):',
+        link,
         'Ao terminar, toque em *Entendi*.',
         '',
-        '🎧 *Dúvida ou algo não funcionou?* Clique em *Pedir ajuda*, o botão verde de qualquer tela. Nada de grupo: '
-        'o chamado já vai com a tela e o print, e a resposta chega em *Atendimento*.',
-        linha,
+        '🎧 Dúvida? *Pedir ajuda*, o botão verde de qualquer tela. A resposta chega em *Atendimento*.',
+        '',
         '_Bom trabalho!_ 💚',
     ]
-    return '\n'.join(partes)
+    return '\n'.join(p for p in partes if p is not None)
 
 
 def _tema_de(n, telas):
