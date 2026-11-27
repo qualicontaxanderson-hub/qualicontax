@@ -291,6 +291,7 @@ _EVENTO = {'escrita.criou_contrato_prestacao': ('', 'fa-pen-ruler', 'Rascunho mo
            'escrita.devolveu_contrato_prestacao': ('tj-verm', 'fa-rotate-left', 'Devolvido para acertar por %s'),
            'escrita.enviou_contrato_prestacao': ('tj-azul', 'fa-envelope', '%s enviou para assinatura'),
            'escrita.cancelou_contrato_prestacao': ('tj-verm', 'fa-ban', 'Cancelado por %s'),
+           'escrita.reabriu_contrato_prestacao': ('tj-laranja', 'fa-pen-to-square', '%s reabriu o contrato para alterar'),
            'escrita.concluiu_contrato_prestacao': ('tj-verde', 'fa-flag-checkered', 'Assinado por todos: via final guardada e enviada')}
 
 
@@ -317,7 +318,7 @@ def _eventos(c, ass):
             dn = {}
         if lg['acao'] == 'escrita.devolveu_contrato_prestacao' and dn.get('motivo'):
             det = '“%s”' % dn['motivo']
-        elif lg['acao'] == 'escrita.cancelou_contrato_prestacao' and dn.get('motivo'):
+        elif lg['acao'] in ('escrita.cancelou_contrato_prestacao', 'escrita.reabriu_contrato_prestacao') and dn.get('motivo'):
             det = '“%s”' % dn['motivo']
         elif lg['acao'] == 'escrita.enviou_contrato_prestacao':
             env = dn.get('enviados') or []
@@ -491,10 +492,25 @@ def _honorario_do_contrato(c, aprovado_por, banco=None):
     else:
         alvos = [(pagantes[0]['cliente_id'], d.get('valor'), pagantes[0]['razao'])] if pagantes else []
     criados, avisos = [], []
+    # 27/11/2026 — contrato reaberto para alteração (contrato_reabrir): o honorário que a aprovação ANTERIOR deste mesmo contrato
+    # criou é ACERTADO com os dados novos, não duplicado — desde que nenhuma cobrança tenha saído dele. Se já saiu, fica como está.
+    deste = {c.get('fin_contrato_id')} | {fid for r in (d.get('reaberturas') or []) for fid in ((r.get('aprovacao') or {}).get('honorarios_criados') or [])}
+    deste.discard(None)
     for cid, valor, razao in alvos:
         if not valor or float(valor) <= 0:
             avisos.append('%s: sem valor no contrato, honorário não criado' % razao); continue
         vig = FinContrato.por_cliente(cid)
+        if vig and vig[0]['id'] in deste and not _tem_cobranca(vig[0]['id']):
+            fid = vig[0]['id']
+            FinContrato.atualizar(fid, {'valor': valor, 'dia_vencimento': int(d.get('dia_vencimento') or 10), 'inicio': inicio,
+                                        'decimo_tipo': _DECIMO.get(d.get('decimo'), 'DUAS'), 'reajuste_tipo': reaj,
+                                        'reajuste_obs': d.get('reajuste_escala') or d.get('reajuste_indice'), 'aprovado_por': aprovado_por,
+                                        'proximo_reajuste': date(int(d['reajuste_proximo'][:4]), int(d['reajuste_proximo'][5:7]), 1) if d.get('reajuste_proximo') else None,
+                                        'banco_boleto': str(banco['id']) if banco and not banco.get('padrao') else None},
+                                  itens=[{'descricao': 'Honorários contábeis', 'valor': valor}])
+            avisos.append('%s: o honorário foi acertado para %s por mês (contrato alterado)' % (razao, brl(valor)))
+            criados.append(fid)
+            continue
         if vig:
             avisos.append('%s já tinha honorário vigente de %s: ficou como estava (mude em Honorários, se precisar)' % (razao, brl(vig[0]['valor'])))
             continue
@@ -508,6 +524,11 @@ def _honorario_do_contrato(c, aprovado_por, banco=None):
             FinContrato.atualizar(fid, {'banco_boleto': str(banco['id'])})
         criados.append(fid)
     return criados, avisos
+
+
+def _tem_cobranca(fin_contrato_id):
+    r = execute_query('SELECT COUNT(*) AS n FROM fin_titulos WHERE contrato_id = %s', (fin_contrato_id,), fetch=True, fetch_one=True) or {}
+    return bool(r.get('n'))
 
 
 def _cobranca_do_contrato(c, avisos):
@@ -744,7 +765,7 @@ def contrato_ver(cid):
             a['texto_wa'] = _texto_whatsapp_assinatura(a, c, a['link'])
             a['wa_link'] = _wa_link(a['fone'], a['texto_wa'])
     cls, ico = STATUS_CLS.get(c['status'], ('tx-perd', 'fa-circle'))
-    return render_template('financeiro/contrato_ver.html', c=c, assinantes=ass, ROTULO=ROTULO, aprov=_aprovador(), cls=cls, ico=ico,
+    return render_template('financeiro/contrato_ver.html', c=c, assinantes=ass, ROTULO=ROTULO, aprov=_aprovador(), admin=current_user.is_admin(), cls=cls, ico=ico,
                            eventos=_eventos(c, ass), n_assinados=sum(1 for a in ass if a['assinado_em']),
                            meu=c.get('criado_por') == current_user.id, montado=PrestContrato.montar(c['dados']), hoje=date.today(), AREAS=AREAS, brl=brl,
                            SIGN_Q=SIGNATARIOS_QUALICONTAX, bancos=_bancos_cobranca() if c['status'] in ('APROVACAO', 'RASCUNHO') else [])
@@ -885,11 +906,12 @@ def contrato_enviar(cid):
 @permission_required(MONTAR)
 def contrato_cancelar(cid):
     c = PrestContrato.get(cid)
-    _so_meu_ou_aprov(c)
-    if c['status'] in ('APROVADO', 'ENVIADO') and not _aprovador():
-        flash('Contrato já aprovado: só quem aprova pode cancelar.', 'warning')
+    if not c:
+        abort(404)
+    if not current_user.is_admin():     # 27/11/2026 — Anderson: "só editar e cancelar só o admin, senão vamos ficar com muitos contratos"
+        flash('Só o administrador cancela um contrato. Se é para acertar algo, peça a ele a alteração.', 'warning')
         return redirect(url_for('financeiro.contrato_ver', cid=cid))
-    if not c or c['status'] == 'ASSINADO':
+    if c['status'] == 'ASSINADO':
         flash('Contrato assinado não se cancela aqui: faça um distrato ou adendo.', 'warning')
         return redirect(url_for('financeiro.contrato_ver', cid=cid))
     motivo = (request.form.get('motivo') or '').strip()[:400]
@@ -902,6 +924,49 @@ def contrato_cancelar(cid):
     registrar('escrita.cancelou_contrato_prestacao', 'financeiro', tabela='prest_contratos', registro_id=cid, antes={'status': c['status']}, depois={'status': 'CANCELADO', 'motivo': motivo})
     flash('Contrato cancelado, com o motivo registrado.', 'info')
     return redirect(url_for('financeiro.contrato_ver', cid=cid))
+
+
+@financeiro.route('/comercial/contratos/<int:cid>/reabrir', methods=['POST'])
+@permission_required(MONTAR)
+def contrato_reabrir(cid):
+    """ALTERAR um contrato já aprovado (ou enviado) que ninguém assinou: volta para RASCUNHO, abre o formulário, e depois é
+    aprovar de novo e enviar. Anderson (27/11/2026): "vamos fazer só editar e cancelar só o admin, senão vamos ficar com muitos
+    contratos" — caso do Posto Castelândia: dois sócios no contrato, só um ficou. Só o administrador.
+    O honorário criado na aprovação FICA: na reaprovação, _honorario_do_contrato o acerta com os dados novos se nenhuma cobrança
+    saiu dele. O PDF congelado no envio e a data de assinatura deixam de valer; os links que o cliente recebeu param de funcionar
+    até o novo envio (status RASCUNHO). Tudo que a aprovação anterior registrou fica em dados['reaberturas']."""
+    c = PrestContrato.get(cid)
+    if not c:
+        abort(404)
+    volta = redirect(url_for('financeiro.contrato_ver', cid=cid))
+    if not current_user.is_admin():
+        flash('Só o administrador altera um contrato já aprovado.', 'warning')
+        return volta
+    if c['status'] not in ('APROVADO', 'ENVIADO'):
+        flash('Só contrato aprovado ou enviado, ainda sem assinatura, volta para alteração.', 'warning')
+        return volta
+    ass = PrestContrato.assinantes(cid)
+    if any(a.get('assinado_em') for a in ass):
+        flash('Alguém já assinou: não dá para alterar. Faça um adendo, ou cancele e monte outro.', 'warning')
+        return volta
+    motivo = (request.form.get('motivo') or '').strip()[:400]
+    if not motivo:
+        flash('Diga o que vai alterar.', 'warning')
+        return volta
+    d = c['dados']
+    d.setdefault('reaberturas', []).append({'por': current_user.id, 'nome': getattr(current_user, 'nome', ''), 'em': _agora().isoformat(timespec='minutes'),
+                                            'motivo': motivo, 'status_antes': c['status'], 'aprovacao': d.get('aprovacao'),
+                                            'data_assinatura': d.get('data_assinatura'), 'pdf_sha256': c.get('pdf_sha256')})
+    for k in ('aprovacao', 'autorizacao', 'pedido_aprovacao', 'reprovado', 'data_assinatura'):
+        d.pop(k, None)
+    execute_query('UPDATE prest_contratos SET dados = %s, enviado_em = NULL, pdf_sha256 = NULL, pdf_path = NULL WHERE id = %s',
+                  (json.dumps(d, ensure_ascii=False, default=str), cid), fetch=False)
+    PrestContrato.mudar_status(cid, 'RASCUNHO')
+    registrar('escrita.reabriu_contrato_prestacao', 'financeiro', tabela='prest_contratos', registro_id=cid,
+              antes={'status': c['status'], 'pdf_sha256': c.get('pdf_sha256')},
+              depois={'status': 'RASCUNHO', 'motivo': motivo, 'empresa': d['empresas'][0]['razao'], 'honorario': c.get('fin_contrato_id')})
+    flash('Contrato de volta ao rascunho. Altere o que precisa, aprove de novo e envie para assinatura.', 'info')
+    return redirect(url_for('financeiro.contrato_editar', cid=cid))
 
 
 @financeiro.route('/comercial/contratos/<int:cid>/nota', methods=['POST'])
