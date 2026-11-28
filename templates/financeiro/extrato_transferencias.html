@@ -69,6 +69,7 @@
 .xt-par { display:grid; grid-template-columns:22px minmax(0,1fr) 38px minmax(0,1fr) 120px 270px; gap:12px; align-items:center; padding:12px 16px; border-top:1px solid #f1f5f3; }
 .xt-par:first-child { border-top:0; }
 .xt-par[hidden] { display:none; }
+.xt-par { cursor:pointer; -webkit-tap-highlight-color:transparent; user-select:none; }
 .xt-par.marcado { background:#faf5ff; }
 .xt-cx { width:18px; height:18px; accent-color:var(--roxo); cursor:pointer; margin:0; }
 .xt-ponta { display:flex; gap:10px; align-items:center; min-width:0; padding:8px 10px; border-radius:12px; background:#f8fafc; }
@@ -179,7 +180,7 @@
   .xt-par:first-child { border-top:1px solid var(--linha); }
   .xt-par .xt-cx { grid-area:cx; } .xt-par .xt-val { grid-area:val; } .xt-par > .xt-ponta:nth-of-type(1) { grid-area:a; }
   .xt-par .xt-seta { grid-area:s; transform:rotate(90deg); width:28px; height:28px; } .xt-par > .xt-ponta:nth-of-type(2) { grid-area:b; }
-  .xt-par .xt-bts { grid-area:bt; grid-column:auto; } .xt-par .xt-bts .xt-b { flex:1; }
+  .xt-par .xt-bts { grid-area:bt; grid-column:1 / -1; } .xt-par .xt-bts .xt-b { flex:1; }
   .xt-sus { grid-template-columns:22px minmax(0,1fr) auto; } .xt-sus .dt { display:none; }
   .xt-lib { grid-template-columns:1fr; }
   .ex-wiz { position:fixed; left:0; right:0; bottom:0; top:auto; margin:0; width:100%; max-width:none !important; max-height:92vh; border-radius:18px 18px 0 0 !important; animation:none; }
@@ -236,6 +237,7 @@
          data-caminho="{{ 'mesma' if p.mesma_empresa else (p.saiu.empresa_id ~ '>' ~ p.entrou.empresa_id) }}"
          data-rotulo="{{ 'Mesma empresa' if p.mesma_empresa else ((mapa.get(p.saiu.empresa_id) or '?') ~ ' → ' ~ (mapa.get(p.entrou.empresa_id) or '?')) }}"
          data-mes="{{ m }}" data-mes-rotulo="{{ p.saiu.data.strftime('%m/%Y') }}"
+         onclick="tfLinha(this, event)"
          data-busca="{{ (p.saiu.descricao ~ ' ' ~ p.entrou.descricao ~ ' ' ~ brl(p.valor) ~ ' ' ~ ('%.2f' | format(p.valor))) | lower }}">
       <input type="checkbox" class="xt-cx" aria-label="marcar" onchange="tfToca(this)">
       {{ ponta(p.saiu, 'Saiu', 'db') }}
@@ -586,6 +588,15 @@ function tfMarcados() {
     return c.closest('.xt-par').getAttribute('data-id'); });
 }
 function tfToca() { tfPinta(); }
+// Tocar em QUALQUER lugar do par marca/desmarca (27/11/2026, Anderson: "queria
+// clicar em qualquer lugar e não só no checkbox"). Botão e a própria caixa
+// continuam fazendo só o que fazem.
+function tfLinha(par, ev) {
+  if (ev.target.closest('button, a, input, label')) return;
+  var cx = par.querySelector('.xt-cx');
+  cx.checked = !cx.checked;
+  tfPinta();
+}
 function tfMarcaVisiveis(on) {
   document.querySelectorAll('.xt-par:not([hidden]) .xt-cx').forEach(function (c) { c.checked = on; });
   tfPinta();
