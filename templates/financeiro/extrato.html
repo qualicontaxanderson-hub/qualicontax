@@ -2,189 +2,169 @@
 
 {% block title %}Extrato Bancário - Qualicontax{% endblock %}
 
-{% block extra_css %}
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/tom-select@2.4.3/dist/css/tom-select.default.min.css">
-{% endblock %}
-
 {% block content %}
 {% set SEMANA = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta',
                  'Sábado', 'Domingo'] %}
 {% include 'financeiro/_nav_financeiro.html' %}
-{# Identidade da casa: esta tela fala a MESMA língua da Conferência de Entradas
-   (barra verde de escopo, KPIs em gradiente, filtros que nascem fechados, abas
-   internas). As classes são as do fiscal com prefixo ex- para não colidirem com
-   o CSS global. No celular a linha vira CARTÃO — regra da casa: tabela não rola
-   a página. #}
 <style>
-/* ---- barra de escopo (cc-empresa-bar do fiscal) ---- */
-.ex-escopo { background:linear-gradient(120deg,#0b3b2b,#116a43); border-radius:12px;
-  padding:14px 20px; margin-bottom:18px; display:flex; align-items:center; gap:12px;
-  flex-wrap:wrap; box-shadow:0 2px 10px rgba(0,0,0,.15); }
-.ex-escopo-lbl { font-size:11px; font-weight:700; color:rgba(255,255,255,.75);
-  text-transform:uppercase; letter-spacing:.5px; white-space:nowrap; }
-.ex-chips-linha { display:flex; gap:6px; flex-wrap:wrap; }
-.ex-chip { padding:6px 15px; border-radius:99px; border:1.5px solid rgba(255,255,255,.28);
-  background:rgba(255,255,255,.10); color:#eafff3; font-weight:700; font-size:12.5px;
-  text-decoration:none; white-space:nowrap; }
-.ex-chip:hover { background:rgba(255,255,255,.2); color:#fff; }
-.ex-chip.ativo { background:#fff; color:#0f3d2e; border-color:#fff; font-weight:800; }
-.ex-selo-escopo { display:inline-flex; align-items:center; gap:5px; padding:5px 12px;
-  border-radius:99px; font-size:12px; font-weight:700; margin-left:auto;
-  background:rgba(255,255,255,.18); color:#fff; border:1px solid rgba(255,255,255,.35); }
+/* ═════════ EXTRATO no molde de Cobranças (27/11/2026) ═════════
+   Anderson: "está tudo muito ruim, botões não funcionam, filtros nada a ver".
+   Faixa verde com os números que são ABAS, uma barra de filtros que abre
+   listinhas, a faixa fina das contas e uma LINHA por lançamento. */
+.xe { --verde:#0f3d2e; --linha:#e6eeea; --mudo:#7d968a; --tinta:#0f172a; font-size:14px; }
+.xe *, .xe *::before, .xe *::after { box-sizing:border-box; }
+.xe-hero { background:linear-gradient(120deg,#0f3d2e,#14532d 60%,#166534); color:#fff; border-radius:22px;
+           padding:24px 28px 60px; display:flex; justify-content:space-between; align-items:flex-start; gap:16px; flex-wrap:wrap; }
+.xe-hero h1 { font-size:24px; font-weight:800; margin:0; letter-spacing:-.02em; color:#fff; }
+.xe-hero h1 i { opacity:.8; margin-right:8px; }
+.xe-hero p { margin:4px 0 0; font-size:13px; opacity:.85; }
+.xe-hero-bts { display:flex; gap:8px; flex-wrap:wrap; }
+.xe-hb { display:inline-flex; align-items:center; white-space:nowrap; gap:8px; padding:10px 16px; border-radius:12px; font:inherit; font-weight:700; font-size:13px;
+         border:1px solid rgba(255,255,255,.3); background:rgba(255,255,255,.1); color:#fff !important; text-decoration:none; cursor:pointer; }
+.xe-hb:hover { background:rgba(255,255,255,.2); }
+.xe-hb.prim { background:#fff; color:var(--verde) !important; border-color:#fff; }
+.xe-abas { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:12px; margin:-40px 14px 16px; position:relative; z-index:2; }
+.xe-aba { text-align:left; background:#fff; border:1px solid var(--linha); border-radius:18px; padding:15px 18px; box-shadow:0 10px 28px rgba(15,61,46,.08);
+          display:flex; gap:14px; align-items:center; min-width:0; text-decoration:none !important; color:inherit; transition:box-shadow .15s, transform .15s; }
+.xe-aba:hover { transform:translateY(-1px); box-shadow:0 14px 32px rgba(15,61,46,.12); }
+.xe-aba.on { box-shadow:0 0 0 2px var(--cor), 0 14px 32px rgba(15,61,46,.12); }
+.xe-aba-ico { width:44px; height:44px; border-radius:13px; background:var(--fundo); color:var(--cor); display:flex; align-items:center; justify-content:center; font-size:17px; flex-shrink:0; }
+.xe-aba-t { min-width:0; }
+.xe-aba-lbl { display:block; font-size:11.5px; font-weight:800; letter-spacing:.6px; text-transform:uppercase; color:var(--mudo); }
+.xe-aba-val { display:block; font-size:24px; font-weight:800; color:var(--tinta); line-height:1.1; font-variant-numeric:tabular-nums; }
+.xe-aba-sub { display:block; font-size:12px; color:#94a3b8; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.a-fal { --cor:#ea580c; --fundo:#fff4ec; } .a-conf { --cor:#2563eb; --fundo:#eff4ff; }
+.a-ok { --cor:#16a34a; --fundo:#ecfdf3; } .a-tr { --cor:#7c3aed; --fundo:#f5f3ff; }
 
-/* ---- KPIs (cc-kpi do fiscal) ---- */
-.ex-kpis { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr));
-  gap:12px; margin-bottom:18px; }
-.ex-kpi { border-radius:12px; padding:14px 16px; color:#fff; box-shadow:0 3px 12px rgba(0,0,0,.12); }
-.ex-kpi:nth-child(1) { background:linear-gradient(135deg,#1e3a5f,#2563eb); }
-.ex-kpi:nth-child(2) { background:linear-gradient(135deg,#166534,#22c55e); }
-.ex-kpi:nth-child(3) { background:linear-gradient(135deg,#991b1b,#ef4444); }
-.ex-kpi:nth-child(4) { background:linear-gradient(135deg,#1d4ed8,#3b82f6); }
-.ex-kpi:nth-child(5) { background:linear-gradient(135deg,#92400e,#f59e0b); }
-.ex-kpi-lbl { font-size:10px; font-weight:700; color:rgba(255,255,255,.8);
-  text-transform:uppercase; letter-spacing:.5px; }
-.ex-kpi-val { font-size:20px; font-weight:800; margin-top:4px; font-variant-numeric:tabular-nums; }
-.ex-kpi-pe { font-size:10.5px; color:rgba(255,255,255,.75); margin-top:3px; }
+/* barra de filtros: cada botão abre a sua listinha; o form é UM só */
+.xe-barra { display:flex; align-items:center; gap:8px; flex-wrap:wrap; background:#fff; border:1px solid var(--linha); border-radius:16px; padding:10px 12px; margin:0 0 12px; }
+.xe-pop { position:relative; }
+.xe-f { display:inline-flex; align-items:center; gap:7px; padding:8px 12px; border:1px solid var(--linha); border-radius:11px; background:#fff; font:inherit;
+        font-size:13px; font-weight:700; color:#334155; cursor:pointer; white-space:nowrap; }
+.xe-f:hover { border-color:#bbf7d0; }
+.xe-f .fa-chevron-down { font-size:10px; color:#94a3b8; }
+.xe-f.on { background:#ecfdf3; border-color:#86efac; color:#166534; }
+.xe-f .v { font-weight:600; color:#15803d; max-width:190px; overflow:hidden; text-overflow:ellipsis; }
+.xe-busca { flex:1; min-width:220px; display:flex; align-items:center; gap:8px; border:1px solid var(--linha); border-radius:11px; padding:0 12px; color:#94a3b8; }
+.xe-busca input { border:0; outline:0; flex:1; font:inherit; font-size:13.5px; color:var(--tinta); background:transparent; min-width:0; padding:9px 0; }
+.xe-busca button { border:0; background:none; color:#94a3b8; cursor:pointer; padding:4px; }
+.xe-tot { margin-left:auto; display:flex; gap:14px; font-size:13px; white-space:nowrap; font-variant-numeric:tabular-nums; color:#475569; }
+.xe-tot b { font-weight:800; }
+.xe .cr { color:#15803d; } .xe .db { color:#dc2626; }
+.xe-menu { display:none; position:absolute; top:calc(100% + 6px); left:0; z-index:40; background:#fff; border:1px solid var(--linha); border-radius:14px;
+           box-shadow:0 18px 40px rgba(15,23,42,.16); padding:12px; width:340px; max-width:calc(100vw - 32px); }
+.xe-pop.aberto .xe-menu { display:block; }
+.xe-menu h6 { margin:2px 0 8px; font-size:11px; font-weight:800; letter-spacing:.6px; text-transform:uppercase; color:var(--mudo); }
+.xe-menu-lista { max-height:320px; overflow:auto; margin:0 -4px; padding:0 4px; }
+.xe-opt { display:flex; align-items:center; gap:10px; padding:8px; border-radius:9px; font-size:13px; cursor:pointer; margin:0; font-weight:500; color:#1e293b; }
+.xe-opt:hover { background:#f0fdf4; }
+.xe-opt input { width:17px; height:17px; accent-color:#16a34a; flex-shrink:0; margin:0; }
+.xe-opt .e { color:#94a3b8; font-size:12px; }
+.xe-opt .n { margin-left:auto; font-size:12px; font-weight:800; color:#64748b; }
+.xe-menu-pe { display:flex; justify-content:space-between; align-items:center; margin-top:10px; padding-top:10px; border-top:1px solid var(--linha); }
+.xe-lnk { font-size:12.5px; font-weight:700; color:#16a34a; background:none; border:0; cursor:pointer; padding:0; }
+.xe-ok { background:#16a34a; color:#fff; border:0; border-radius:9px; padding:8px 16px; font:inherit; font-weight:800; font-size:12.5px; cursor:pointer; }
+.xe-emps { display:flex; flex-wrap:wrap; gap:6px; }
+.xe-emps button { padding:7px 12px; border-radius:99px; border:1px solid var(--linha); background:#fff; font:inherit; font-size:12.5px; font-weight:700; cursor:pointer; color:#334155; }
+.xe-emps button.on { background:var(--verde); color:#fff; border-color:var(--verde); }
+.xe-rap { display:grid; grid-template-columns:1fr 1fr; gap:6px; margin-bottom:12px; }
+.xe-rap button { padding:9px; border-radius:10px; border:1px solid var(--linha); background:#fff; font:inherit; font-size:12.5px; font-weight:700; cursor:pointer; color:#334155; }
+.xe-rap button:hover { border-color:#86efac; background:#f0fdf4; }
+.xe-2 { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+.xe-campo label { display:block; font-size:11px; font-weight:800; color:var(--mudo); text-transform:uppercase; letter-spacing:.5px; margin-bottom:4px; }
+.xe-campo input, .xe-campo select { width:100%; border:1px solid var(--linha); border-radius:10px; padding:8px 10px; font:inherit; font-size:13px; color:var(--tinta); background:#fff; }
+.xe-campo + .xe-campo { margin-top:10px; }
 
-/* ---- filtros (cc-filters do fiscal) ---- */
-.ex-filtros { background:#fff; border:1.5px solid #e2e8f0; border-radius:12px;
-  padding:14px 18px; margin-bottom:14px; box-shadow:0 1px 6px rgba(0,0,0,.06); }
-.ex-filtros-cab { display:flex; align-items:center; gap:8px; cursor:pointer; }
-.ex-filtros-cab h3 { font-size:13px; font-weight:700; color:#334155; margin:0; flex:1; }
-.ex-selo-filtro { font-size:10px; font-weight:700; background:#dcfce7; color:#15803d;
-  border-radius:99px; padding:2px 9px; }
-.ex-grade { display:grid; grid-template-columns:repeat(4,1fr); gap:10px 14px; margin-top:12px; }
-/* ---- Tom Select no campo Conta (mesmo ajuste da Conferência de Entradas) ---- */
-.ex-grade .ts-wrapper { width:100%; }
-.ex-grade .ts-control { border:1.5px solid #e2e8f0; border-radius:7px; background:#f8fafc; font-size:13px; padding:3px 8px; min-height:35px; }
-.ex-grade .ts-wrapper.focus .ts-control { border-color:#22c55e; background:#fff; box-shadow:none; }
-.ex-grade .ts-control > input { font-size:13px; }
-.ex-grade .ts-control .item { background:#dcfce7; color:#166534; border-radius:5px; font-size:11.5px; font-weight:700; padding:1px 5px; margin:1px 3px 1px 0; }
-.ex-grade .ts-control .item .remove { border-left-color:rgba(0,0,0,.12); padding:0 4px; }
-.ts-dropdown { font-size:12.5px; border:1.5px solid #e2e8f0; border-radius:8px; box-shadow:0 8px 24px rgba(0,0,0,.12); }
-.ts-dropdown .optgroup-header { font-size:10.5px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:#94a3b8; padding:8px 12px 4px; }
-.ts-dropdown .active { background:#f0fdf4; color:#0f172a; }
-.ts-dropdown .no-results { color:#94a3b8; }
-.ex-opt { display:flex; align-items:baseline; gap:8px; }
-.ex-opt-banco { font-weight:700; color:#0f172a; }
-.ex-opt-num { font-family:'Courier New',monospace; color:#475569; }
-.ex-opt-ag { font-size:11px; color:#94a3b8; }
-.ex-opt-meta { margin-left:auto; font-size:11px; color:#94a3b8; white-space:nowrap; }
-.ex-grade label { font-size:10px; font-weight:700; color:#94a3b8; display:block;
-  margin-bottom:3px; text-transform:uppercase; }
-.ex-grade input, .ex-grade select { width:100%; padding:7px 10px; border:1.5px solid #e2e8f0;
-  border-radius:7px; font-size:13px; background:#f8fafc; color:#334155; min-height:33px; }
-.ex-grade input:focus, .ex-grade select:focus { border-color:#22c55e; outline:none; background:#fff; }
-.ex-per { display:flex; gap:6px; }
-.ex-per button { flex:1; border:none; border-radius:7px; padding:7px 6px; font-size:11.5px;
-  font-weight:700; color:#fff; cursor:pointer; }
-.ex-per .v { background:#16a34a; } .ex-per .a { background:#2563eb; } .ex-per .r { background:#7c3aed; }
-.ex-acoes-filtro { display:flex; gap:8px; margin-top:12px; }
+/* faixa fina das contas */
+.xe-contas { display:flex; gap:8px; overflow-x:auto; padding:2px 2px 10px; margin-bottom:4px; scrollbar-width:thin; }
+.xe-ct { flex:0 0 auto; display:flex; align-items:center; gap:10px; padding:8px 12px 8px 10px; background:#fff; border:1px solid var(--linha); border-radius:14px;
+         border-left:4px solid var(--c); text-decoration:none !important; color:inherit; }
+.xe-ct:hover { box-shadow:0 6px 16px rgba(15,61,46,.08); }
+.xe-ct.on { box-shadow:0 0 0 2px var(--c); }
+.xe-ct b { display:block; font-size:13px; font-weight:800; color:var(--tinta); line-height:1.15; }
+.xe-ct i { display:block; font-style:normal; font-size:11.5px; color:#94a3b8; }
+.xe-ct .fal, .xe-ct .okk { font-size:11.5px; font-weight:800; padding:2px 8px; border-radius:99px; margin-left:2px; white-space:nowrap; }
+.xe-ct .fal { color:#c2410c; background:#fff4ec; } .xe-ct .okk { color:#15803d; background:#ecfdf3; }
 
-/* ---- abas internas (cc-tabs do fiscal) ---- */
-.ex-abas { display:flex; gap:4px; border-bottom:2px solid #e2e8f0; margin-bottom:14px;
-  align-items:center; flex-wrap:wrap; }
-.ex-aba { padding:9px 16px; font-size:12.5px; font-weight:700; color:#64748b;
-  border-bottom:2px solid transparent; margin-bottom:-2px; text-decoration:none;
-  display:inline-flex; align-items:center; gap:7px; }
-.ex-aba:hover { color:#16a34a; }
-.ex-aba.ativa { color:#16a34a; border-bottom-color:#16a34a; }
-.ex-cont { background:#f1f5f9; color:#6b7280; padding:1px 7px; border-radius:99px;
-  font-size:10px; font-weight:800; }
-.ex-cont.alerta { background:#fef3c7; color:#92400e; }
-.ex-abas-dir { margin-left:auto; display:flex; gap:8px; padding-bottom:6px; }
+.xe-info { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin:4px 0 6px; font-size:13px; color:#64748b; }
+.xe-info a { font-weight:700; color:#15803d; }
+.xe-info .dir { margin-left:auto; }
+.xe-filtro-chip { display:inline-flex; align-items:center; gap:6px; background:#ecfdf3; border:1px solid #bbf7d0; color:#166534; border-radius:99px; padding:3px 10px; font-size:12px; font-weight:700; text-decoration:none !important; }
 
-/* ---- tabela ---- */
-/* SEM overflow:hidden. Ele fazia esta caixa virar o container de rolagem, e
-   o cabecalho do dia grudava no topo DELA em vez do topo da tela — parecia
-   fixo e mostrava o dia errado. O canto arredondado volta pelos filhos. */
-.ex-caixa { background:#fff; border:1.5px solid #e2e8f0; border-radius:12px; }
-.ex-lista { display:flex; flex-direction:column; }
-.ex-lista > :first-child { border-radius:11px 11px 0 0; }
-.ex-lista > :last-child { border-radius:0 0 11px 11px; }
+/* lista: uma linha por lançamento */
+.xe-dia { display:flex; align-items:center; gap:10px; margin:16px 0 8px; }
+.xe-dia .d { background:var(--verde); color:#fff; border-radius:10px; padding:5px 11px; font-weight:800; font-size:13px; }
+.xe-dia .s { font-size:12.5px; color:#64748b; }
+.xe-dia .marcar { border:0; background:none; font:inherit; font-size:12px; font-weight:700; color:#16a34a; cursor:pointer; padding:0; }
+.xe-dia .r { flex:1; height:1px; background:var(--linha); }
+.xe-dia .t { font-size:12.5px; font-variant-numeric:tabular-nums; display:flex; gap:10px; }
+.xe-tab { background:#fff; border:1px solid var(--linha); border-radius:16px; overflow:hidden; }
+.xe-l { display:grid; grid-template-columns:22px 170px minmax(0,1fr) 140px 200px 150px; gap:14px; align-items:center; padding:11px 16px; border-top:1px solid #f1f5f3; scroll-margin-top:90px; }
+.xe-l:first-child { border-top:0; }
+.xe-l:hover { background:#fafdfb; }
+.xe-l.marcado { background:#f0fdf4; }
+.xe-cx { width:18px; height:18px; accent-color:#16a34a; cursor:pointer; margin:0; }
+.xe-bco { display:flex; gap:9px; align-items:center; min-width:0; }
+.xe-bco .t { min-width:0; }
+.xe-bco b { display:block; font-size:12.5px; font-weight:800; color:var(--tinta); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.xe-bco i { display:block; font-style:normal; font-size:11.5px; color:#94a3b8; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.xe-pt { width:28px; height:28px; border-radius:8px; flex-shrink:0; display:inline-flex; align-items:center; justify-content:center; color:#fff; font-size:12px; }
+.xe-quem { min-width:0; }
+.xe-quem b { display:block; font-size:13.5px; font-weight:800; color:var(--tinta); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.xe-quem span { display:block; font-size:12px; color:#94a3b8; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.xe-quem .mudo { color:#64748b; font-weight:700; }
+.xe-rec { display:inline-flex !important; align-items:center; gap:5px; margin-top:3px; font-size:11.5px !important; font-weight:700; color:#1d4ed8 !important; background:#eff6ff; border-radius:7px; padding:2px 8px; max-width:100%; }
+.xe-rec.dobro { color:#b45309 !important; background:#fffbeb; }
+.xe-val { text-align:right; font-weight:800; font-size:15px; font-variant-numeric:tabular-nums; white-space:nowrap; }
+.xe-stw { min-width:0; }
+.xe-st { display:inline-flex; align-items:center; gap:6px; padding:4px 10px; border-radius:99px; font-size:12px; font-weight:800; max-width:100%; }
+.xe-st > span { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.xe-st em { font-style:normal; font-size:10.5px; background:#fff; border-radius:99px; padding:0 6px; }
+.st-fal { background:#fff4ec; color:#c2410c; } .st-ok { background:#ecfdf3; color:#15803d; }
+.st-tr { background:#f5f3ff; color:#6d28d9; } .st-conf { background:#eff4ff; color:#1d4ed8; }
+.xe-ac { display:flex; gap:6px; justify-content:flex-end; align-items:center; }
+.xe-ac form { margin:0; display:contents; }
+.xe-bt { display:inline-flex; align-items:center; justify-content:center; gap:7px; padding:8px 12px; border-radius:10px; font:inherit; font-size:12.5px; font-weight:800;
+         border:1px solid var(--linha); background:#fff; color:#334155 !important; cursor:pointer; white-space:nowrap; text-decoration:none !important; flex:1; }
+.xe-bt:hover { border-color:#cbd5e1; background:#f8fafc; }
+.xe-bt.prim { background:#ea580c; color:#fff !important; border-color:#ea580c; }
+.xe-bt.prim:hover { background:#c2410c; }
+.xe-bt.roxo { background:#f5f3ff; color:#6d28d9 !important; border-color:#ddd6fe; }
+.xe-bt.verde { background:#f0fdf4; color:#15803d !important; border-color:#bbf7d0; }
+.xe-bt.ico { flex:0 0 36px; width:36px; padding:8px 0; }
+.xe-mais { display:flex; align-items:center; gap:8px; width:max-content; margin:16px auto 0; padding:11px 22px; border-radius:12px; border:1px solid var(--linha); background:#fff;
+           font-weight:800; color:#166534 !important; text-decoration:none !important; }
+.xe-fim { text-align:center; color:#94a3b8; font-size:12.5px; margin-top:14px; }
+.xe-vazio { background:#fff; border:1px dashed #cfe0d6; border-radius:16px; padding:36px 16px; text-align:center; color:#64748b; }
+.xe-vazio i { font-size:28px; color:#16a34a; display:block; margin-bottom:10px; }
+/* lote: a barra aparece com o primeiro marcado */
+body.ex-selecionando .xe-ac { visibility:hidden; }
+body.ex-selecionando .xe-l { cursor:pointer; }
 
-/* O DIA aparece uma vez, no alto, e gruda ENQUANTO o dia rola — abaixo das
-   duas barras que ja sao sticky: .top-bar (60px) e .nav-fiscal (49px).
-   Medido no Chromium; com top:0 o cabecalho sumia atras do verde. */
-.ex-dia { position:sticky; top:calc(var(--top-bar-height, 60px) + 49px); z-index:3;
-  background:#e6ede9;
-  border-top:1px solid #dde5e0; border-bottom:1px solid #dde5e0;
-  padding:8px 15px; display:flex; align-items:baseline; gap:10px; }
-.ex-dia:first-child { border-top:0; }
-.ex-dia b { font-size:13px; font-weight:800; color:#0f3d2e; letter-spacing:-.01em; }
-.ex-dia span { margin-left:auto; font-size:10.5px; font-weight:700; color:#64748b;
-  font-variant-numeric:tabular-nums; white-space:nowrap; display:flex; gap:7px; }
-.ex-dia i { font-style:normal; }
-
-/* O LANCAMENTO: 1 descricao / 2 empresa / 3 quem / 4 banco 5 agencia / 6 valor.
-   A ordem e do Anderson, e ela nao muda de tamanho para tamanho — o que muda
-   e onde o valor fica. */
-.ex-reg { border-bottom:1px solid #f1f5f9; padding:13px 15px; display:flex;
-  gap:18px; align-items:flex-start; }
-.ex-reg:last-child { border-bottom:0; }
-.ex-reg:hover { background:#f8fdfa; }
-.ex-corpo { flex:1 1 auto; min-width:0; max-width:720px; }
-.ex-rot { font-size:8.5px; font-weight:800; letter-spacing:.09em; text-transform:uppercase;
-  color:#94a3b8; display:block; line-height:1.5; }
-
-.ex-desc { font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
-  font-size:11px; line-height:1.5; color:#94a3b8; overflow-wrap:anywhere; }
-.ex-desc b { color:#1e293b; font-weight:700; }
-
-.ex-emp { display:flex; align-items:center; gap:9px; margin-top:10px;
-  padding:7px 12px 7px 7px; border-radius:12px; background:#eaf3ee; border:1px solid #cfe3d8; }
-.ex-emp i { font-style:normal; flex:0 0 26px; height:26px; border-radius:8px; display:grid;
-  place-items:center; font-size:12px; font-weight:800; color:#fff; background:#0f3d2e; }
-.ex-emp b { font-size:13px; font-weight:700; line-height:1.3; overflow-wrap:anywhere;
-  min-width:0; color:#1e293b; }
-
-.ex-quem { margin-top:9px; }
-.ex-quem b { display:block; font-size:14px; font-weight:700; line-height:1.3;
-  overflow-wrap:anywhere; color:#1e293b; }
-.ex-docnum { display:block; font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
-  font-size:11.5px; font-weight:600; color:#64748b; margin-top:1px; }
-
-.ex-par { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1.25fr);
-  gap:3px 12px; margin-top:9px; align-items:start; }
-.ex-v { font-size:12.5px; font-weight:600; overflow-wrap:anywhere; color:#1e293b; }
-.ex-mono { font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
-  font-size:11.5px; letter-spacing:-.02em; }
-/* Agencia em falta grita em ambar: escondendo o campo, ninguem lembraria de
-   preencher — hoje so C6 e Cora tem agencia no cadastro. */
-.ex-falta { color:#b45309; font-weight:700; font-style:italic; }
-
-.ex-pe { flex:0 0 auto; display:flex; flex-direction:column; align-items:flex-end; gap:7px;
-  min-width:170px; }
-.ex-val { font-size:19px; font-weight:800; font-variant-numeric:tabular-nums;
-  white-space:nowrap; letter-spacing:-.025em; }
-.ex-cred { color:#15803d; } .ex-deb { color:#b91c1c; }
-.ex-pil { display:inline-flex; align-items:center; gap:5px; font-size:9.5px; font-weight:800;
-  letter-spacing:.04em; border-radius:99px; padding:3px 10px; background:#fef6e3;
-  color:#b45309; border:1px solid #fcd9a0; text-align:right; }
-.ex-pil.ok { background:#e8f7ee; color:#0f3d2e; border-color:#86efac; }
-.ex-rec { display:flex; align-items:flex-start; gap:6px; width:100%; font-size:11.5px; font-weight:700; line-height:1.3; color:#166534; background:#f0fdf4; border:1px solid #86efac; border-radius:8px; padding:5px 8px; margin-bottom:4px; }
-.ex-rec i { margin-top:2px; } .ex-rec.dobro { color:#9a3412; background:#fff7ed; border-color:#fdba74; }
-.ex-pil em { font-style:normal; background:#dcfce7; color:#166534; border-radius:99px;
-  padding:0 6px; font-size:9px; }
-.ex-btn-tag { border:1.5px solid #e2e8f0; background:#fff; border-radius:7px; padding:5px 11px;
-  font-size:11.5px; font-weight:700; color:#475569; cursor:pointer; white-space:nowrap; }
-.ex-btn-tag.destaque { border-color:#fcd34d; background:#fffbeb; color:#92400e; }
-.ex-rodape { font-size:12px; color:#5b7468; padding:10px 14px; border-top:1px solid #f1f5f9; }
-.ex-vazio { text-align:center; color:#6b7280; padding:40px 16px; }
-.ex-mob { display:none; }
-
-/* NO COMPUTADOR os campos deitam: 2, 3 e 4-5 lado a lado, com a descricao
-   por cima ocupando a linha toda. A ordem que era de cima para baixo vira da
-   esquerda para a direita — o bloco deixa de ocupar meia tela. */
-@media (min-width: 1024px) {
-  .ex-corpo { max-width:none; display:grid; gap:9px 26px;
-    grid-template-columns:minmax(190px,0.9fr) minmax(210px,1.2fr) minmax(240px,1.1fr);
-    grid-template-areas:'desc desc desc' 'emp quem conta'; align-items:start; }
-  .ex-desc { grid-area:desc; }
-  .ex-emp  { grid-area:emp;  margin-top:0; align-self:center; }
-  .ex-quem { grid-area:quem; margin-top:0; }
-  .ex-par  { grid-area:conta; margin-top:0; }
-  .ex-reg { padding:14px 16px; }
+@media (max-width: 1250px) {
+  .xe-l { grid-template-columns:22px 150px minmax(0,1fr) 120px 170px 130px; gap:10px; }
+  .xe-tot { display:none; }
+}
+@media (max-width: 900px) {
+  .xe-hero { padding:20px 18px 54px; border-radius:18px; }
+  .xe-hero h1 { font-size:21px; }
+  .xe-hero-bts { width:100%; } .xe-hb { flex:1; justify-content:center; }
+  .xe-abas { grid-template-columns:1fr 1fr; margin:-40px 6px 14px; gap:8px; }
+  .xe-aba { padding:12px; gap:10px; align-items:flex-start; }
+  .xe-aba-ico { width:34px; height:34px; font-size:14px; border-radius:10px; }
+  .xe-aba-val { font-size:20px; }
+  .xe-aba-sub { white-space:normal; }
+  .xe-barra { flex-wrap:nowrap; overflow-x:auto; padding:8px; }
+  .xe-busca { min-width:200px; order:-1; }
+  .xe-menu { position:fixed; left:12px !important; right:12px; top:auto; bottom:12px; width:auto; max-width:none; max-height:75vh; overflow:auto; }
+  .xe-tab { background:transparent; border:0; display:flex; flex-direction:column; gap:8px; overflow:visible; }
+  .xe-l { grid-template-columns:auto minmax(0,1fr) auto; grid-template-areas:"cx bco val" "quem quem quem" "st st st" "ac ac ac";
+          background:#fff; border:1px solid var(--linha); border-radius:14px; gap:8px 10px; padding:12px; }
+  .xe-l:first-child { border-top:1px solid var(--linha); }
+  .xe-l .xe-cx { grid-area:cx; } .xe-l .xe-bco { grid-area:bco; } .xe-l .xe-quem { grid-area:quem; } .xe-l .xe-val { grid-area:val; }
+  .xe-l .xe-stw { grid-area:st; } .xe-l .xe-ac { grid-area:ac; justify-content:stretch; }
+  .xe-quem b, .xe-quem span { white-space:normal; }
+  .xe-dia .t { display:none; }
 }
 
 /* ================= ASSISTENTE DE CLASSIFICAR =================
@@ -312,167 +292,6 @@
   .ex-wiz-pe .btn { padding:13px 16px; font-size:15px; }
 }
 
-/* ═══════════ D3: a cor diz O QUE FAZER, nao de onde veio ═══════════════
-   Decisao do Anderson em 17/09/2026, depois de ver tres estrategias de cor
-   lado a lado. As outras duas pintavam o BANCO — bonito e inerte, porque
-   banco nao muda: a tela ficaria igual no comeco e no fim do dia. Aqui a cor
-   e o ESTADO, entao a tela se apaga sozinha conforme o servico anda.
-
-     ambar  falta voce      (sem categoria)
-     ciano  a conferir      (a regra chutou, confirme)
-     azul   esperando o par (par_estado suspeito)
-     roxo   par a aprovar   (par_estado casado — entre empresas)
-     verde  ja classificado
-
-   O banco vira um pontinho colorido: ele nao pede acao. */
-.ex-cards { display:grid; grid-template-columns:repeat(4, minmax(0,1fr));
-  gap:11px; padding:13px 15px; }
-.ex-reg { background:#fff; border:1.5px solid #e6eeea; border-radius:13px;
-  overflow:hidden; display:flex; flex-direction:column; padding:0; gap:0; }
-.ex-reg:hover { border-color:#cbd5e1; }
-.ex-reg .ex-topo { height:4px; background:#cbd5e1; flex:0 0 4px; }
-.ex-reg .ex-corpo { flex:1 1 auto; min-width:0; max-width:none; display:flex;
-  flex-direction:column; gap:8px; padding:11px 13px; }
-.ex-reg .ex-pe { display:flex; align-items:center; gap:7px; flex-wrap:wrap;
-  padding:0 13px 11px; margin-top:auto; }
-/* o ponto do banco + a empresa, no alto de cada cartao: numa grade o cartao
-   tem de se explicar sozinho, nao da para confiar na coluna */
-.ex-cab { display:flex; align-items:center; gap:7px; min-width:0; }
-.ex-cab .pt { width:8px; height:8px; border-radius:99px; flex:0 0 8px;
-  background:#94a3b8; }
-.ex-cab .bco { font-size:9.5px; font-weight:800; letter-spacing:.3px;
-  text-transform:uppercase; color:#6f8a7c; white-space:nowrap; }
-.ex-cab .emp { font-size:10px; font-weight:700; color:#4f7263;
-  white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-width:0; }
-/* #c3d2c9 sobre o ambar do "falta voce" ficou ilegivel no print de 17/09 —
-   cinza claro so funciona sobre branco. */
-.ex-reg .ex-desc { font-family:ui-monospace,Consolas,monospace; font-size:9.5px;
-  color:#8fa89a; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-/* a descricao promovida a heroi: 2 linhas e corta, sem virar paragrafo */
-.ex-reg .ex-quem-crua { font-size:13px; font-weight:600; line-height:1.35;
-  display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical;
-  overflow:hidden; }
-/* "o banco nao disse quem" e um AVISO, nao um rotulo neutro — a cor separa a
-   linha que explica uma ausencia da que anuncia um dado */
-.ex-reg .ex-rot-mudo { color:#b45309; }
-/* DE ONDE VEM: agencia e conta, que ate 17/09/2026 nao apareciam em cartao
-   nenhum. Em letra de maquina porque e numero que se confere, nao se le. */
-.ex-reg .ex-conta-linha { font-size:10px; color:#8fa89a; margin-top:-3px;
-  white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-.ex-reg .ex-conta-linha em { font-style:normal; font-weight:700; color:#b45309;
-  background:#fffbeb; border:1px solid #fde68a; border-radius:99px;
-  padding:1px 7px; margin-left:5px; font-size:9px; }
-.ex-reg .ex-quem b { display:block; font-size:14px; font-weight:700;
-  color:#0f3d2e; line-height:1.3; }
-.ex-reg .ex-docnum { font-size:10px; color:#9bb0a5; }
-.ex-reg .ex-val { font-size:20px; font-weight:800; letter-spacing:-.02em;
-  font-variant-numeric:tabular-nums; }
-/* ── os cinco estados ── */
-.ex-reg.e-falta   { background:#fffcf4; border-color:#fbd88c; }
-.ex-reg.e-falta   .ex-topo { background:#fbbf24; }
-.ex-reg.e-conf    { background:#f2fbfd; border-color:#a5dfe9; }
-.ex-reg.e-conf    .ex-topo { background:#0891b2; }
-.ex-reg.e-espera  { background:#f5f9fd; border-color:#bfd9f0; }
-.ex-reg.e-espera  .ex-topo { background:#3b82f6; }
-.ex-reg.e-par     { background:#faf6ff; border-color:#ddc9f2; }
-.ex-reg.e-par     .ex-topo { background:#8b5cf6; }
-.ex-reg.e-pronto  { background:#f4fdf7; border-color:#a7e8c1; }
-.ex-reg.e-pronto  .ex-topo { background:#00a85a; }
-/* A GRADE ENCOLHE ANTES DA PAGINA. Medido em 17/09/2026: a 1.180px cada
-   coluna fica com 280px e o nome longo corta. Regra da casa — a pagina nunca
-   rola de lado. */
-@media (max-width:1500px) { .ex-cards { grid-template-columns:repeat(3, minmax(0,1fr)); } }
-@media (max-width:1100px) { .ex-cards { grid-template-columns:repeat(2, minmax(0,1fr)); } }
-@media (max-width:720px)  { .ex-cards { grid-template-columns:1fr; gap:9px; padding:11px 13px; } }
-
-/* ── A FAIXA DE CONTAS: onde esta o servico, antes de rolar a tela ──
-   Pedida pelo Anderson em 17/09/2026 apontando o relatorio do posto: numero
-   grande, blocos de metrica com rotulo miudo, minigrafico e link no rodape.
-   A cor e a do BANCO — aqui o assunto E o banco, ao contrario do cartao de
-   lancamento, onde a cor e o estado. */
-.ex-painel { margin:0 0 18px; }
-/* QUEBRA. Sem o wrap, a fila (inicial + nome + risco + total + pilula) nao
-   cabia em 390px e a PAGINA passava a rolar de lado — medido no Chromium em
-   17/09/2026: o span.pil-falta terminava em 401px numa tela de 390. A regra da
-   casa e que a pagina nunca rola; quem encolhe e o conteudo. */
-.ex-emp-cab { display:flex; align-items:center; gap:10px; margin:0 0 10px;
-  flex-wrap:wrap; }
-.ex-emp-cab .nome { min-width:0; overflow:hidden; text-overflow:ellipsis; }
-@media (max-width:620px) {
-  /* no celular o total vira detalhe: o que importa e o nome e o que falta */
-  .ex-emp-cab .tot { display:none; }
-  .ex-emp-cab .risco { display:none; }
-}
-.ex-emp-cab .ini { width:26px; height:26px; border-radius:8px; background:#0f3d2e;
-  display:grid; place-items:center; flex:0 0 26px; font-size:11px; font-weight:800;
-  color:#fff; }
-.ex-emp-cab .nome { font-size:15px; font-weight:800; color:#0f3d2e;
-  letter-spacing:-.01em; }
-.ex-emp-cab .risco { height:1px; flex:1 1 auto;
-  background:linear-gradient(90deg,#dde7e2,rgba(221,231,226,0)); }
-.ex-emp-cab .tot { font-size:11.5px; color:#6f8a7c; font-variant-numeric:tabular-nums;
-  white-space:nowrap; }
-.pil-falta { font-size:10.5px; font-weight:800; color:#fff; background:#b45309;
-  border-radius:99px; padding:3px 10px; white-space:nowrap; }
-.pil-ok { font-size:10.5px; font-weight:800; color:#15803d; background:#f0fdf4;
-  border:1px solid #bbf7d0; border-radius:99px; padding:2px 10px; white-space:nowrap; }
-
-.ex-contas { display:grid; grid-template-columns:repeat(auto-fit,minmax(275px,1fr));
-  gap:12px; margin-bottom:18px; }
-.ex-contac { background:#fff; border:1px solid #e6eeea; border-radius:15px;
-  overflow:hidden; box-shadow:0 1px 3px rgba(15,61,46,.05); display:flex;
-  flex-direction:column; }
-.ex-contac.atencao { border-color:#f3d7b8; box-shadow:0 2px 10px rgba(180,83,9,.08); }
-.ex-contac .tarja { height:3px; flex:0 0 3px; }
-.ex-contac .corpo { padding:13px 15px 12px; display:flex; flex-direction:column; gap:11px; }
-.ex-contac .topo { display:flex; align-items:center; gap:9px; }
-.ex-contac .chip { width:28px; height:28px; border-radius:9px; display:grid;
-  place-items:center; flex:0 0 28px; font-size:12px; }
-.ex-contac .ident { min-width:0; }
-.ex-contac .ident b { display:block; font-size:13.5px; font-weight:800; color:#0f3d2e;
-  line-height:1.2; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-.ex-contac .ident i { font-style:normal; font-size:10px; color:#9bb0a5; }
-.ex-contac .qtd { margin-left:auto; text-align:right; flex:0 0 auto; }
-.ex-contac .qtd b { display:block; font-size:26px; font-weight:800; color:#0f3d2e;
-  line-height:1; letter-spacing:-.03em; font-variant-numeric:tabular-nums; }
-.ex-contac .qtd i { font-style:normal; font-size:8.5px; font-weight:800;
-  letter-spacing:.1em; text-transform:uppercase; color:#9bb0a5; }
-.ex-contac .blocos { display:grid; grid-template-columns:1fr 1fr; gap:7px; }
-.ex-contac .bl { background:#f7faf8; border:1px solid #edf3ef; border-radius:10px;
-  padding:7px 10px; min-width:0; }
-.ex-contac .bl b { display:block; font-size:12.5px; font-weight:700; margin-top:1px;
-  font-variant-numeric:tabular-nums; white-space:nowrap; overflow:hidden;
-  text-overflow:ellipsis; }
-.ex-contac .spark { display:flex; align-items:flex-end; gap:2px; height:30px; }
-.ex-contac .spark i { flex:1 1 auto; border-radius:2px 2px 0 0; min-width:2px; }
-.ex-contac .spark.vazio { align-items:center; font-size:10.5px; color:#c3d2c9; }
-.ex-contac .pe { display:flex; align-items:center; gap:8px; padding-top:10px;
-  border-top:1px solid #f1f5f3; }
-.ex-contac .pe a { margin-left:auto; font-size:10.5px; font-weight:700;
-  color:#00a85a; text-decoration:none; white-space:nowrap; }
-.ex-contac .pe a:hover { color:#0f3d2e; }
-@media (max-width:520px) { .ex-contas { grid-template-columns:1fr; } }
-
-/* ================= LOTE: selecionar e classificar de uma vez ========== */
-/* No cartao a caixinha flutua no canto: em coluna ela nao pode ocupar uma
-   linha inteira do fluxo, senao empurra o conteudo quando o modo lote liga. */
-.ex-reg { position:relative; }
-.ex-reg .ex-caixinha { display:none; position:absolute; top:10px; right:11px;
-  z-index:2; width:24px; height:24px; border-radius:8px;
-  border:2px solid #cbd5e1; background:#fff; align-items:center;
-  justify-content:center; color:transparent; font-weight:900; font-size:13px; }
-body.ex-selecionando .ex-reg .ex-caixinha { display:flex; }
-body.ex-selecionando .ex-reg { cursor:pointer; }
-body.ex-selecionando .ex-reg.marcado { background:#f0fdf4; border-color:#00a85a;
-  box-shadow:0 0 0 1px #00a85a inset; }
-body.ex-selecionando .ex-reg.marcado .ex-caixinha { background:#00a85a;
-  border-color:#00a85a; color:#fff; }
-body.ex-selecionando .ex-pe .ex-btn-tag,
-body.ex-selecionando .ex-pe form { display:none; }
-.ex-dia-marcar { display:none; margin-left:10px; border:0; background:transparent;
-  font-family:inherit; font-size:10.5px; font-weight:800; color:#00a85a;
-  cursor:pointer; letter-spacing:.03em; text-transform:uppercase; }
-body.ex-selecionando .ex-dia-marcar { display:inline; }
 .ex-barra-lote { position:fixed; left:0; right:0; bottom:0; z-index:300;
   background:#0f3d2e; color:#eafff3; padding:12px 16px
     calc(12px + env(safe-area-inset-bottom)); display:none; align-items:center;
@@ -481,569 +300,316 @@ body.ex-selecionando .ex-barra-lote { display:flex; }
 .ex-barra-lote b { font-size:14px; font-weight:800; }
 .ex-barra-lote span { font-size:12px; opacity:.8; font-variant-numeric:tabular-nums; }
 .ex-barra-lote .btn { margin-left:auto; }
-
-/* No CELULAR o valor desce para baixo do bloco, em vez de disputar a largura. */
+/* Janela de classificar no molde da janela laranja das Cobranças (27/11/2026):
+   faixa colorida com o lançamento — verde se entrou, laranja se saiu. */
+.ex-wiz { --wc:#ea580c; --wce:#c2410c; max-width:720px !important; width:calc(100% - 32px); padding:0 !important; overflow:hidden; border-radius:20px !important; border:0 !important; }
+.ex-wiz[data-tipo="R"] { --wc:#16a34a; --wce:#15803d; }
+.ex-wiz .modal-header { background:linear-gradient(120deg,var(--wc),var(--wce)); color:#fff; border:0; padding:16px 22px 4px; margin:0; }
+.ex-wiz .modal-header h3 { color:#fff; font-size:13px; font-weight:800; letter-spacing:.06em; text-transform:uppercase; opacity:.9; margin:0; }
+.ex-wiz .modal-close { color:#fff; background:rgba(255,255,255,.18); border:0; width:32px; height:32px; border-radius:10px; font-size:20px; line-height:1; opacity:1; }
+.ex-wiz-lanc { background:linear-gradient(120deg,var(--wc),var(--wce)); color:#fff; border-radius:0; margin:0; padding:4px 22px 16px; font-size:12.5px; }
+.ex-wiz-lanc:empty { padding:6px 22px 10px; }
+.ex-wiz-lanc .wl-top { display:flex; justify-content:space-between; align-items:flex-start; gap:14px; }
+.ex-wiz-lanc .wl-q { min-width:0; }
+.ex-wiz-lanc .wl-q b { display:block; font-size:19px; font-weight:800; line-height:1.2; margin-top:5px; overflow-wrap:anywhere; }
+.ex-wiz-lanc .wl-chip { display:inline-block; background:rgba(255,255,255,.2); border-radius:99px; padding:2px 10px; font-size:11.5px; font-weight:800; }
+.ex-wiz-lanc .wl-v { font-size:24px; font-weight:800; white-space:nowrap; font-variant-numeric:tabular-nums; }
+.ex-wiz-lanc .wl-m { margin-top:6px; opacity:.9; font-weight:600; }
+.ex-wiz-lanc .wl-d { margin-top:4px; font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:11px; opacity:.75; overflow-wrap:anywhere; }
+.ex-wiz-lanc .wl-av { margin-top:8px; background:rgba(255,255,255,.18); border-radius:8px; padding:5px 9px; font-weight:700; }
+.ex-wiz-abas { background:#fff; padding:14px 22px 6px !important; }
+.ex-wiz-aba.feita i, .ex-wiz-aba.agora i { background:var(--wc); }
+.ex-wiz-corpo { padding:8px 22px 16px; max-height:min(56vh, 520px); }
+.ex-wiz-passo b { color:var(--tinta, #0f172a); }
+.ex-wiz-pe { background:#f8faf9; border-top:1px solid #e6eeea; padding:12px 22px; margin:0; }
+.ex-wiz-pe #exWizSeguir, .ex-wiz-pe #exWizGravar { background:linear-gradient(135deg,var(--wc),var(--wce)); border:0; font-weight:800; }
+.ex-cartao.on { border-color:var(--wc); background:color-mix(in srgb, var(--wc) 7%, #fff); box-shadow:0 0 0 1px var(--wc) inset; }
+.ex-cartao .ok { color:var(--wc); }
+.ex-barra-lote { background:#0f3d2e; border-radius:16px; left:16px; right:16px; bottom:12px; max-width:760px; margin:0 auto; }
 @media (max-width: 768px) {
-  .ex-reg { flex-direction:column; gap:0; padding:12px 14px; }
-  .ex-corpo { max-width:none; width:100%; }
-  .ex-pe { flex-direction:row; align-items:center; width:100%; min-width:0;
-    margin-top:11px; padding-top:10px; border-top:1px dashed #e2e8f0; gap:9px; }
-  .ex-val { margin-left:auto; font-size:18px; }
-  .ex-btn-tag { flex:0 0 auto; }
-  .ex-dia { padding:7px 14px; }
-}
-
-/* ================= CELULAR: a linha vira CARTÃO =================
-   Mesma marcação do computador — os <td> só ganharam classe, que não pinta nada
-   no desktop. Aqui a linha vira grade e ninguém arrasta tabela de lado. */
-@media (max-width: 768px) {
-  /* min-width:0 é OBRIGATÓRIO aqui: um filho flex com overflow-x:auto se recusa
-     a encolher abaixo do conteúdo (min-width:auto) e empurra a PÁGINA INTEIRA
-     para o lado — foi o que aconteceu em 20/08/2026. */
-  .ex-escopo { flex-direction:column; align-items:stretch; padding:12px 14px; gap:9px; }
-  .ex-escopo > * { min-width:0; max-width:100%; }
-  .ex-selo-escopo { margin-left:0; align-self:flex-start; font-size:11px; }
-  /* QUEBRAR linha, nao rolar: com poucas empresas o rolo so cortava o ultimo
-     chip e dava cara de inacabado (Anderson, 20/08/2026). */
-  .ex-chips-linha { flex-wrap:wrap; min-width:0; }
-  .ex-chip { flex:1 1 auto; text-align:center; }
-  .ex-chip { padding:7px 12px; font-size:12px; }
-  /* KPI compacto: no celular o cartão é para bater o olho, não para ler ficha */
-  .ex-kpis { grid-template-columns:repeat(2,1fr); gap:7px; margin-bottom:12px; }
-  .ex-kpi { padding:9px 11px; border-radius:10px; }
-  .ex-kpi-lbl { font-size:9px; }
-  .ex-kpi-val { font-size:15px; margin-top:2px; }
-  .ex-kpi-pe { display:none; }
-  .ex-grade { grid-template-columns:1fr; }
-  .ex-abas { flex-wrap:nowrap; overflow-x:auto; }
-  .ex-aba { white-space:nowrap; padding:9px 13px; }
-  .ex-abas-dir { margin-left:0; }
-  .ex-caixa { border:0; background:transparent; box-shadow:none; }
-  /* O link de Memorizacoes repete no topo da tela e some daqui; o botao
-     SELECIONAR so existe aqui — esconder a barra inteira deixava o celular
-     sem como entrar no modo de lote (pego pelo teste no webkit). */
-  .ex-abas-dir { display:flex; }
-  .ex-abas-dir .btn:not(#exBtSelecionar) { display:none; }
-  .ex-mob { display:inline; }
+  .ex-wiz { width:100%; border-radius:18px 18px 0 0 !important; }
+  .ex-wiz-lanc .wl-top { flex-direction:column; gap:4px; }
+  .ex-wiz-lanc .wl-v { font-size:21px; }
+  .ex-barra-lote { left:8px; right:8px; bottom:8px; flex-wrap:wrap; }
 }
 </style>
 
-<div class="page-header">
+{# Link para a MESMA tela trocando só o que se pede. 'conta' pode vir
+   repetido, por isso lists(); a página (pag) só vai quando pedida. #}
+{% macro xlink() -%}
+{%- set d = {} -%}
+{%- for k, vs in request.args.lists() -%}{%- if vs and k not in kwargs and k != 'pag' -%}{%- set _ = d.update({k: vs}) -%}{%- endif -%}{%- endfor -%}
+{%- for k, v in kwargs.items() -%}{%- if v not in (None, '', []) -%}{%- set _ = d.update({k: v}) -%}{%- endif -%}{%- endfor -%}
+{{ url_for('financeiro.extrato', **d) }}
+{%- endmacro %}
+{% macro _fmt(s) %}{{ (s[8:10] ~ '/' ~ s[5:7] ~ '/' ~ s[2:4]) if s else '' }}{% endmacro %}
+
+{% set _en = [] %}{% for i in sel_empresas %}{% set _ = _en.append(emp_mapa.get(i) or '?') %}{% endfor %}
+<div class="xe">
+<div class="xe-hero">
     <div>
-        <h1 class="page-title">
-            <i class="fas fa-university" style="color: var(--primary-green);"></i>
-            Extrato Bancário
-        </h1>
-        <p class="page-subtitle">Lançamentos das contas, classificação e memorização</p>
+        <h1><i class="fas fa-building-columns"></i>Extrato bancário</h1>
+        <p>Tudo o que entrou e saiu das contas{% if sel_empresas %} · {{ _en | join(', ') }}{% endif %}</p>
     </div>
-    <div class="page-actions">
-        {# Importar é MODAL, como a "Importação Manual" do Fiscal: um bloco verde
-           fixo comia meia tela no celular sem ser usado todo dia. #}
-        <button class="btn btn-primary" onclick="exAbrirImport()">
-            <i class="fas fa-file-import"></i> Importar OFX
-        </button>
-        {# A porta da fila de transferências só aparece quando há fila: botão
-           que nunca tem nada atrás vira enfeite, e enfeite ensina a ignorar. #}
-        {% if n_travados %}
-        <a href="{{ url_for('financeiro.extrato_transferencias') }}"
-           class="btn btn-outline" style="border-color:#fbbf24;color:#b45309">
-            <i class="fas fa-right-left"></i> Transferências
-            <span class="badge" style="background:#b45309">{{ n_travados }}</span>
-        </a>
-        {% endif %}
-        <a href="{{ url_for('financeiro.extrato_memorizacoes') }}" class="btn btn-outline">
-            <i class="fas fa-memory"></i> Memorizações
-        </a>
+    <div class="xe-hero-bts">
+        {# Importar é janela: o bloco fixo comia meia tela no celular #}
+        <button type="button" class="xe-hb prim" onclick="exAbrirImport()"><i class="fas fa-file-import"></i> Importar extrato</button>
+        <a class="xe-hb" href="{{ url_for('financeiro.extrato_memorizacoes') }}"><i class="fas fa-brain"></i> Memorizações</a>
     </div>
 </div>
 
-<!-- ── Escopo: quais empresas estão na conta ─────────────────────── -->
-{% set _outros = {} %}
-{# .lists(): 'conta' agora pode vir repetido — .items() devolveria só a
-   primeira e trocar de empresa perderia as outras contas escolhidas #}
-{% for k, vs in request.args.lists() %}{% if k != 'emp' and vs %}{% set _ = _outros.update({k: vs}) %}{% endif %}{% endfor %}
-<div class="ex-escopo">
-    <span class="ex-escopo-lbl"><i class="fas fa-building"></i> Visualizar por</span>
-    <div class="ex-chips-linha">
-        <a class="ex-chip {{ 'ativo' if not sel_empresas }}"
-           href="{{ url_for('financeiro.extrato', **_outros) }}">TODAS</a>
-        {% for e in fin_empresas %}
-        {% if e.cliente_id in sel_empresas %}
-            {% set _nova = sel_empresas | reject('equalto', e.cliente_id) | list %}
-        {% else %}
-            {% set _nova = sel_empresas + [e.cliente_id] %}
-        {% endif %}
-        {% set _csv = _nova | join(',') %}
-        <a class="ex-chip {{ 'ativo' if e.cliente_id in sel_empresas }}"
-           title="{{ e.nome_razao_social }}"
-           href="{{ url_for('financeiro.extrato', emp=_csv, **_outros) if _csv else url_for('financeiro.extrato', **_outros) }}">{{ e.apelido }}</a>
-        {% endfor %}
-    </div>
-    <span class="ex-selo-escopo">
-        <i class="fas fa-{{ 'check-circle' if sel_empresas else 'globe' }}"></i>
-        {{ (sel_empresas | length ~ ' empresa(s)') if sel_empresas else 'Todas as empresas' }}
-        · {{ contas | length }} conta(s)
-    </span>
+{# As ABAS são os números. Contam o filtro sem a classificação: estando numa,
+   as outras continuam dizendo quanto têm. #}
+<div class="xe-abas">
+    <a class="xe-aba a-fal {{ 'on' if filtros.classif == 'nao' }}" href="{{ xlink(classif='nao') }}">
+        <span class="xe-aba-ico"><i class="fas fa-tag"></i></span>
+        <span class="xe-aba-t"><span class="xe-aba-lbl">A classificar</span><span class="xe-aba-val">{{ abas.sem or 0 }}</span>
+        <span class="xe-aba-sub">lançamentos sem categoria</span></span></a>
+    <a class="xe-aba a-conf {{ 'on' if filtros.classif == 'conferir' }}" href="{{ xlink(classif='conferir') }}">
+        <span class="xe-aba-ico"><i class="fas fa-eye"></i></span>
+        <span class="xe-aba-t"><span class="xe-aba-lbl">A conferir</span><span class="xe-aba-val">{{ abas.conf or 0 }}</span>
+        <span class="xe-aba-sub">a memorização classificou, confira</span></span></a>
+    <a class="xe-aba a-tr" href="{{ url_for('financeiro.extrato_transferencias') }}">
+        <span class="xe-aba-ico"><i class="fas fa-right-left"></i></span>
+        <span class="xe-aba-t"><span class="xe-aba-lbl">Transferências</span><span class="xe-aba-val">{{ n_pares }}</span>
+        <span class="xe-aba-sub">pares para aprovar{% if n_espera %} · {{ n_espera }} esperando{% endif %}</span></span></a>
+    <a class="xe-aba a-ok {{ 'on' if filtros.classif == 'sim' }}" href="{{ xlink(classif='sim') }}">
+        <span class="xe-aba-ico"><i class="fas fa-check"></i></span>
+        <span class="xe-aba-t"><span class="xe-aba-lbl">Classificados</span><span class="xe-aba-val">{{ abas.com or 0 }}</span>
+        <span class="xe-aba-sub">já têm categoria</span></span></a>
 </div>
 
-<!-- ── Números do filtro ─────────────────────────────────────────── -->
-<div class="ex-kpis">
-    <div class="ex-kpi">
-        <div class="ex-kpi-lbl">Lançamentos</div>
-        <div class="ex-kpi-val">{{ totais.n or 0 }}</div>
-        <div class="ex-kpi-pe">no filtro atual</div>
-    </div>
-    <div class="ex-kpi">
-        <div class="ex-kpi-lbl">Créditos</div>
-        <div class="ex-kpi-val">{{ totais.creditos | float | round(2) | format_currency }}</div>
-        <div class="ex-kpi-pe">o que entrou</div>
-    </div>
-    <div class="ex-kpi">
-        <div class="ex-kpi-lbl">Débitos</div>
-        <div class="ex-kpi-val">{{ (totais.debitos | float | abs) | round(2) | format_currency }}</div>
-        <div class="ex-kpi-pe">o que saiu</div>
-    </div>
-    <div class="ex-kpi">
-        {% set liq = (totais.creditos | float) + (totais.debitos | float) %}
-        <div class="ex-kpi-lbl">Líquido</div>
-        <div class="ex-kpi-val">{{ liq | round(2) | format_currency }}</div>
-        <div class="ex-kpi-pe">entradas − saídas</div>
-    </div>
-    <div class="ex-kpi">
-        <div class="ex-kpi-lbl">Sem categoria</div>
-        <div class="ex-kpi-val">{{ totais.sem_cat or 0 }}</div>
-        <div class="ex-kpi-pe">esperando você</div>
-    </div>
-</div>
+{# ── Filtros: UM form; cada botão abre a sua listinha ── #}
+{% set conta_sel = contas | selectattr('valor', 'in', filtros.conta) | list %}
+{% set cat_sel = categorias | selectattr('id', 'equalto', (filtros.categoria_id | int) if filtros.categoria_id else -1) | list %}
+<form method="GET" action="{{ url_for('financeiro.extrato') }}" id="exFormFiltro" class="xe-barra" onsubmit="exFiltroLimpa(this)">
+    <input type="hidden" name="classif" value="{{ filtros.classif }}">
+    <input type="hidden" name="emp" id="exEmp" value="{{ sel_empresas | join(',') }}">
+    {% if filtros.documento %}<input type="hidden" name="documento" value="{{ filtros.documento }}">{% endif %}
 
-<!-- ── Filtros (nascem fechados, como no Fiscal) ─────────────────── -->
-<div class="ex-filtros">
-    <div class="ex-filtros-cab" onclick="exToggleFiltros()">
-        <h3><i class="fas fa-filter" style="color:#22c55e; margin-right:4px;"></i>Filtros</h3>
-        {% if filtros_ativos %}<span class="ex-selo-filtro">{{ filtros_ativos }} ativo(s)</span>{% endif %}
-        <i class="fas fa-chevron-down" id="exChevron"
-           style="font-size:11px; color:#9ca3af; transition:transform .25s;"></i>
+    <div class="xe-busca" onclick="this.querySelector('input').focus()">
+        <i class="fas fa-search"></i>
+        <input type="search" name="busca" value="{{ filtros.busca }}" placeholder="Nome, CPF/CNPJ, texto do banco ou nº do documento" enterkeyhint="search">
+        {% if filtros.busca %}<button type="button" title="Limpar a busca" onclick="var i=this.previousElementSibling; i.value=''; i.form.requestSubmit();"><i class="fas fa-times"></i></button>{% endif %}
     </div>
-    {# Nasce fechado SEMPRE — o selo "N ativo(s)" ja diz que ha filtro. #}
-    <div id="exFiltroCorpo" style="display:none;">
-        <form method="GET" action="{{ url_for('financeiro.extrato') }}" id="exFormFiltro">
-            <input type="hidden" name="emp" value="{{ sel_empresas | join(',') }}">
-            <div class="ex-grade">
-                <div>
-                    <label>Data Início</label>
-                    <input type="date" name="data_de" id="exDataDe" value="{{ filtros.data_de }}">
-                </div>
-                <div>
-                    <label>Data Fim</label>
-                    <input type="date" name="data_ate" id="exDataAte" value="{{ filtros.data_ate }}">
-                </div>
-                <div>
-                    <label>Período rápido</label>
-                    <div class="ex-per">
-                        <button type="button" class="v" onclick="exPeriodo('atual')">Atual</button>
-                        <button type="button" class="a" onclick="exPeriodo('anterior')">Mês ant.</button>
-                        <button type="button" class="r" onclick="exPeriodo('ano')">Ano</button>
-                    </div>
-                </div>
-                <div>
-                    <label>Conta</label>
-                    {# Uma opção por CONTA, não por grafia: o rótulo vem do
-                       cadastro e o value carrega todas as grafias que o
-                       extrato tem dessa conta (ver contas_filtro). #}
-                    <select name="conta" id="exConta" multiple
-                            placeholder="Todas — digite para buscar">
-                        {% for emp, itens in contas | groupby('empresa') %}
-                        <optgroup label="{{ emp }}">
-                            {% for ct in itens %}
-                            {% set _d = {'banco': ct.banco, 'conta': ct.conta, 'ag': ct.agencia,
-                                         'meta': '{:,}'.format(ct.n).replace(',', '.') ~ ' lanç',
-                                         'busca': ct.variantes | join(' ')} %}
-                            {# aspas SIMPLES: o JSON vem cheio de aspas duplas (o tojson
-                               do Jinja escapa &, <, > e ', que é o que fecha aqui) #}
-                            <option value="{{ ct.valor }}" data-data='{{ _d | tojson }}'
-                                    {% if ct.valor in filtros.conta %}selected{% endif %}>{{ ct.banco }} {{ ct.conta }}</option>
-                            {% endfor %}
-                        </optgroup>
-                        {% endfor %}
-                    </select>
-                </div>
-                <div>
-                    <label>Categoria</label>
-                    <select name="categoria_id">
-                        <option value="">Todas</option>
-                        {% for c in categorias %}
-                        <option value="{{ c.id }}" {% if filtros.categoria_id == c.id|string %}selected{% endif %}>
-                            {{ c.grupo }} · {{ c.nome }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
-                <div>
-                    <label>Centro de custo</label>
-                    <select name="centro_id">
-                        <option value="">Todos</option>
-                        <option value="sem" {% if filtros.centro_id == 'sem' %}selected{% endif %}>Sem centro</option>
-                        {% for cc in centros %}
-                        <option value="{{ cc.id }}" {% if filtros.centro_id == cc.id|string %}selected{% endif %}>{{ cc.nome }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
-                <div>
-                    <label>Classificação</label>
-                    <select name="classif">
-                        <option value="nao" {% if filtros.classif == 'nao' %}selected{% endif %}>Sem categoria</option>
-                        <option value="todos" {% if filtros.classif == 'todos' %}selected{% endif %}>Todos</option>
-                        <option value="sim" {% if filtros.classif == 'sim' %}selected{% endif %}>Classificados</option>
-                    </select>
-                </div>
-                <div>
-                    <label>Tipo</label>
-                    <select name="tipo">
-                        <option value="">Crédito e débito</option>
-                        <option value="credito" {% if filtros.tipo == 'credito' %}selected{% endif %}>Só créditos</option>
-                        <option value="debito" {% if filtros.tipo == 'debito' %}selected{% endif %}>Só débitos</option>
-                    </select>
-                </div>
-                <div>
-                    <label>Valor Mínimo (R$)</label>
-                    <input type="number" name="vmin" min="0" step="0.01" placeholder="0,00"
-                           value="{{ filtros.vmin }}">
-                </div>
-                <div>
-                    <label>Valor Máximo (R$)</label>
-                    <input type="number" name="vmax" min="0" step="0.01" placeholder="0,00"
-                           value="{{ filtros.vmax }}">
-                </div>
-                <div>
-                    <label>Documento</label>
-                    <input type="text" name="documento" placeholder="Nº do doc. ou PIX"
-                           value="{{ filtros.documento }}">
-                </div>
-                <div>
-                    <label>Descrição</label>
-                    <input type="text" name="busca" placeholder="Parte do texto"
-                           value="{{ filtros.busca }}">
-                </div>
+
+    <div class="xe-pop">
+        <button type="button" class="xe-f {{ 'on' if sel_empresas }}" onclick="exMenu(this)"><i class="fas fa-building"></i> Empresa{% if sel_empresas %}: <span class="v">{{ _en | join(', ') }}</span>{% endif %} <i class="fas fa-chevron-down"></i></button>
+        <div class="xe-menu">
+            <h6>Mostrar as contas de</h6>
+            <div class="xe-emps" id="exEmps">
+                <button type="button" class="{{ 'on' if not sel_empresas }}" data-emp="">Todas</button>
+                {% for e in fin_empresas %}
+                <button type="button" class="{{ 'on' if e.cliente_id in sel_empresas }}" data-emp="{{ e.cliente_id }}" title="{{ e.nome_razao_social }}">{{ e.apelido }}</button>
+                {% endfor %}
             </div>
-            <div class="ex-acoes-filtro">
-                <button type="submit" class="btn btn-primary"><i class="fas fa-search"></i> Buscar</button>
-                <a href="{{ url_for('financeiro.extrato', emp=(sel_empresas | join(','))) if sel_empresas else url_for('financeiro.extrato') }}"
-                   class="btn btn-outline"><i class="fas fa-times"></i> Limpar</a>
-            </div>
-        </form>
-    </div>
-</div>
-
-<!-- ── Abas internas ─────────────────────────────────────────────── -->
-{% set _base = {} %}
-{% for k, v in request.args.items() %}{% if k != 'classif' and v %}{% set _ = _base.update({k: v}) %}{% endif %}{% endfor %}
-<div class="ex-abas">
-    <a class="ex-aba {{ 'ativa' if filtros.classif == 'todos' }}"
-       href="{{ url_for('financeiro.extrato', classif='todos', **_base) }}">
-        <i class="fas fa-list"></i> Lançamentos <span class="ex-cont">{{ totais.n or 0 }}</span>
-    </a>
-    <a class="ex-aba {{ 'ativa' if filtros.classif == 'nao' }}"
-       href="{{ url_for('financeiro.extrato', classif='nao', **_base) }}">
-        <i class="fas fa-tag"></i> Sem categoria
-        <span class="ex-cont {{ 'alerta' if totais.sem_cat }}">{{ totais.sem_cat or 0 }}</span>
-    </a>
-    <a class="ex-aba {{ 'ativa' if filtros.classif == 'sim' }}"
-       href="{{ url_for('financeiro.extrato', classif='sim', **_base) }}">
-        <i class="fas fa-check"></i> Classificados
-    </a>
-    {% if totais.a_conferir or filtros.classif == 'conferir' %}
-    {# So existe quando ha o que conferir: aba permanente com zero e mobilia. #}
-    <a class="ex-aba {{ 'ativa' if filtros.classif == 'conferir' }}"
-       href="{{ url_for('financeiro.extrato', classif='conferir', **_base) }}">
-        <i class="fas fa-eye"></i> A conferir
-        <span class="ex-cont alerta">{{ totais.a_conferir or 0 }}</span>
-    </a>
-    {% endif %}
-    <div class="ex-abas-dir">
-        <button type="button" class="btn btn-outline" id="exBtSelecionar"
-                onclick="exLoteLiga()">
-            <i class="fas fa-check-double"></i> Selecionar
-        </button>
-        <a href="{{ url_for('financeiro.extrato_memorizacoes') }}" class="btn btn-outline">
-            <i class="fas fa-memory"></i> Memorizações
-        </a>
-    </div>
-</div>
-
-<!-- ── Lançamentos ───────────────────────────────────────────────── -->
-<div class="ex-caixa">
-    {# ── Onde está o serviço, antes de rolar a tela ──
-       So aparece com MAIS DE UMA empresa no filtro: com uma so, ela repetiria
-       o cartao de cima e viraria mobilia. por_empresa=None e consulta cortada
-       pelo teto — esconder e melhor que mostrar zero. #}
-    {% if por_conta_painel %}
-    {# o link troca conta E classificacao, entao os dois saem da base #}
-    {% set _base_painel = {} %}
-    {% for k, v in request.args.items() %}{% if k not in ('classif', 'conta') and v %}{% set _ = _base_painel.update({k: v}) %}{% endif %}{% endfor %}
-    <div class="ex-painel">
-        {% for e in por_empresa or [] %}
-        {% set nome_emp = emp_mapa.get(e.empresa_id) or 'sem empresa' %}
-        {% set contas_da = por_conta_painel | selectattr('empresa_id', 'equalto', e.empresa_id) | list %}
-        {% if contas_da %}
-        <div class="ex-emp-cab">
-            <span class="ini">{{ nome_emp[:1] | upper }}</span>
-            <span class="nome">{{ nome_emp }}</span>
-            <span class="risco"></span>
-            <span class="tot">{{ e.n }} lançamento{{ '' if e.n == 1 else 's' }}
-                · {{ e.contas }} conta{{ '' if e.contas == 1 else 's' }}</span>
-            {% if e.sem_cat %}<span class="pil-falta">{{ e.sem_cat }} a classificar</span>
-            {% else %}<span class="pil-ok">tudo classificado</span>{% endif %}
+            <div class="xe-menu-pe"><span style="font-size:12px;color:#94a3b8">pode marcar mais de uma</span><button type="button" class="xe-ok" onclick="exEmpAplica()">Aplicar</button></div>
         </div>
+    </div>
 
-        <div class="ex-contas">
-            {% for c in contas_da %}
-            {% set cc = conta_de(c.conta, c.banco) %}
-            {% set cor = cc.cor or COR_BANCO.get((cc.banco_id or '') | string, '#94a3b8') %}
-            <div class="ex-contac {{ 'atencao' if c.sem_cat else '' }}">
-                <span class="tarja" style="background:{{ cor }}"></span>
-                <div class="corpo">
-                    <div class="topo">
-                        {% if logo_banco_url(cc.banco_id) %}{{ logo_banco(cc.banco_id, cor, 34, cc.banco_nome or '') }}
-                        {% else %}<span class="chip" style="background:{{ cor }}1f; color:{{ cor }}">
-                            <i class="fas fa-building-columns"></i></span>{% endif %}
-                        <span class="ident">
-                            <b>{{ cc.apelido or cc.banco_nome or c.banco or '—' }}</b>
-                            <i class="ex-mono">{{ c.conta or '—' }}</i>
-                        </span>
-                        <span class="qtd"><b>{{ c.n }}</b><i>lançamentos</i></span>
-                    </div>
-
-                    <div class="blocos">
-                        <div class="bl"><span class="ex-rot">entrou</span>
-                            <b class="ex-cred">{{ c.creditos | float | round(2) | format_currency }}</b></div>
-                        <div class="bl"><span class="ex-rot">saiu</span>
-                            <b class="ex-deb">{{ c.debitos | float | round(2) | format_currency }}</b></div>
-                    </div>
-
-                    {# SO com serie de verdade. Conta com poucos dias de
-                       movimento diz isso, em vez de fingir um grafico. #}
-                    {% if c.serie %}
-                    <div class="spark" title="lançamentos por dia">
-                        {% for h in c.serie %}
-                        <i style="height:{{ h }}%; background:{{ cor }}{{ '' if h > 60 else '66' }}"></i>
-                        {% endfor %}
-                    </div>
-                    {% else %}
-                    <div class="spark vazio">poucos dias com movimento — sem gráfico</div>
-                    {% endif %}
-
-                    <div class="pe">
-                        {% if c.sem_cat %}
-                        <span class="pil-falta">{{ c.sem_cat }} a classificar</span>
-                        {% else %}
-                        <span class="pil-ok">em dia</span>
-                        {% endif %}
-                        <a href="{{ url_for('financeiro.extrato', conta=c.conta, classif='nao', **_base_painel) }}">ver só esta →</a>
-                    </div>
-                </div>
+    <div class="xe-pop">
+        <button type="button" class="xe-f {{ 'on' if conta_sel }}" onclick="exMenu(this)"><i class="fas fa-building-columns"></i> Conta{% if conta_sel %}: <span class="v">{{ conta_sel[0].banco }}{% if conta_sel | length > 1 %} +{{ conta_sel | length - 1 }}{% endif %}</span>{% endif %} <i class="fas fa-chevron-down"></i></button>
+        <div class="xe-menu">
+            <h6>Contas</h6>
+            <div class="xe-menu-lista">
+                {% for ct in contas %}
+                <label class="xe-opt"><input type="checkbox" name="conta" value="{{ ct.valor }}" {{ 'checked' if ct.valor in filtros.conta }}>
+                    <span>{{ ct.banco }} <span class="e">{{ ct.conta }} · {{ emp_mapa.get(ct.empresa_id) or ct.empresa }}</span></span>
+                    <span class="n">{{ '{:,}'.format(ct.n).replace(',', '.') }}</span></label>
+                {% else %}<p style="color:#94a3b8;font-size:13px;margin:0">Nenhuma conta com extrato.</p>
+                {% endfor %}
             </div>
+            <div class="xe-menu-pe"><button type="button" class="xe-lnk" onclick="exMenuLimpa(this)">Limpar</button><button type="submit" class="xe-ok">Aplicar</button></div>
+        </div>
+    </div>
+
+    <div class="xe-pop">
+        <button type="button" class="xe-f {{ 'on' if filtros.data_de or filtros.data_ate }}" onclick="exMenu(this)"><i class="far fa-calendar"></i> Período{% if filtros.data_de or filtros.data_ate %}: <span class="v">{{ _fmt(filtros.data_de) or '…' }} a {{ _fmt(filtros.data_ate) or 'hoje' }}</span>{% endif %} <i class="fas fa-chevron-down"></i></button>
+        <div class="xe-menu">
+            <h6>Rápido</h6>
+            <div class="xe-rap">
+                <button type="button" onclick="exPeriodo('atual')">Este mês</button>
+                <button type="button" onclick="exPeriodo('anterior')">Mês passado</button>
+                <button type="button" onclick="exPeriodo('ano')">Este ano</button>
+                <button type="button" onclick="exPeriodo('tudo')">Tudo</button>
+            </div>
+            <h6>Ou escolha as datas</h6>
+            <div class="xe-2">
+                <div class="xe-campo"><label>De</label><input type="date" name="data_de" id="exDataDe" value="{{ filtros.data_de }}"></div>
+                <div class="xe-campo"><label>Até</label><input type="date" name="data_ate" id="exDataAte" value="{{ filtros.data_ate }}"></div>
+            </div>
+            <div class="xe-menu-pe"><button type="button" class="xe-lnk" onclick="exMenuLimpa(this)">Limpar</button><button type="submit" class="xe-ok">Aplicar</button></div>
+        </div>
+    </div>
+
+    <div class="xe-pop">
+        <button type="button" class="xe-f {{ 'on' if filtros.tipo }}" onclick="exMenu(this)"><i class="fas fa-arrows-up-down"></i> {{ {'credito': 'Só entradas', 'debito': 'Só saídas'}.get(filtros.tipo, 'Entrada / saída') }} <i class="fas fa-chevron-down"></i></button>
+        <div class="xe-menu" style="width:240px">
+            {% for v, r in [('', 'Entradas e saídas'), ('credito', 'Só o que entrou'), ('debito', 'Só o que saiu')] %}
+            <label class="xe-opt"><input type="radio" name="tipo" value="{{ v }}" {{ 'checked' if (filtros.tipo or '') == v }} onchange="this.form.requestSubmit()"> {{ r }}</label>
             {% endfor %}
         </div>
-        {% endif %}
-        {% endfor %}
     </div>
-    {% endif %}
 
-    {% if lancamentos %}
-    {# Vincular pagamento (14/11/2026): crédito ainda sem título ganha o botão. Uma consulta para a lista toda. #}
-    {% set pode_vincular = pode_rota('financeiro.vincular_pagamento') %}
-    {% set com_baixa = linhas_com_baixa(lancamentos) if pode_vincular else [] %}
-    {% set receb = recebimentos_das_linhas(lancamentos) %}
-    <div class="ex-lista">
-        {# A data aparece UMA vez, no alto do dia. Os dias vem prontos da
-           rota — comparar com a linha anterior aqui e o que faz cabecalho
-           repetido quando a ordem vem torta. #}
-        {% for d in dias %}
-        <div class="ex-dia">
-            <b>{{ SEMANA[d.data.weekday()] }} · {{ d.data.strftime('%d/%m') }}</b>
-            <button type="button" class="ex-dia-marcar"
-                    onclick="exLoteDia(this)">marcar dia</button>
-            <span>
-                {{ d.itens | length }} lanç.
-                {% if d.entradas %}<i class="ex-cred">+{{ d.entradas | float | round(2) | format_currency }}</i>{% endif %}
-                {% if d.saidas %}<i class="ex-deb">{{ d.saidas | float | round(2) | format_currency }}</i>{% endif %}
-            </span>
+    <div class="xe-pop">
+        <button type="button" class="xe-f {{ 'on' if filtros.categoria_id or filtros.centro_id }}" onclick="exMenu(this)"><i class="fas fa-folder-tree"></i> Categoria{% if cat_sel %}: <span class="v">{{ cat_sel[0].nome }}</span>{% elif filtros.centro_id %}: <span class="v">centro de custo</span>{% endif %} <i class="fas fa-chevron-down"></i></button>
+        <div class="xe-menu">
+            <div class="xe-campo"><label>Categoria</label>
+                <select name="categoria_id">
+                    <option value="">Todas</option>
+                    {% for g, itens in categorias | groupby('grupo') %}
+                    <optgroup label="{{ g }}">{% for c in itens %}<option value="{{ c.id }}" {{ 'selected' if filtros.categoria_id == c.id | string }}>{{ c.nome }}</option>{% endfor %}</optgroup>
+                    {% endfor %}
+                </select></div>
+            <div class="xe-campo"><label>Centro de custo</label>
+                <select name="centro_id">
+                    <option value="">Todos</option>
+                    <option value="sem" {{ 'selected' if filtros.centro_id == 'sem' }}>Sem centro</option>
+                    {% for cc in centros %}<option value="{{ cc.id }}" {{ 'selected' if filtros.centro_id == cc.id | string }}>{{ cc.nome }}</option>{% endfor %}
+                </select></div>
+            <div class="xe-menu-pe"><button type="button" class="xe-lnk" onclick="exMenuLimpa(this)">Limpar</button><button type="submit" class="xe-ok">Aplicar</button></div>
         </div>
+    </div>
 
-        <div class="ex-cards">
-        {% for l in d.itens %}
-        {% set q = ler(l.descricao) %}
-        {# conta_de tolera a grafia e, se nao casar, nomeia o banco pelo
-           codigo do arquivo — era isto que fazia a tela dizer "0237" #}
-        {% set cc = conta_de(l.conta, l.banco) %}
-        {# O ESTADO manda na cor (decisao de 17/09/2026). A ordem dos testes e
-           a mesma da barra de acoes la embaixo — se divergirem, o cartao fica
-           de uma cor e o botao oferece outra coisa. #}
-        {% set estado = ('e-par'    if (l.par_estado == 'casado'   and not l.categoria_id) else
-                         'e-espera' if (l.par_estado == 'suspeito' and not l.categoria_id) else
-                         'e-conf'   if (l.categoria_id and l.conferir) else
-                         'e-pronto' if l.categoria_id else 'e-falta') %}
-        <div class="ex-reg {{ estado }}" data-lanc="{{ l.id }}" data-valor="{{ l.valor }}"
-             data-conta="{{ l.conta }}" data-banco="{{ cc.get('apelido') or '' }}"
-             data-tem-cat="{{ 1 if l.categoria_id else 0 }}"
-             onclick="exLoteToca(this, event)">
-            <span class="ex-topo"></span>
-            <span class="ex-caixinha">✓</span>
-            <div class="ex-corpo">
-                {# Banco e empresa no alto: numa grade o cartao tem de se
-                   explicar sozinho — nao ha coluna em que confiar. #}
-                {# DE ONDE VEM: banco · empresa em cima, agência·conta embaixo.
-                   Antes a agência não aparecia em cartão nenhum, e o banco
-                   podia sair como "0237". #}
-                <div class="ex-cab">
-                    {% if logo_banco_url(cc.banco_id) %}{{ logo_banco(cc.banco_id, None, 18) }}
-                    {% else %}<span class="pt" style="background:{{ cc.cor or COR_BANCO.get((cc.banco_id or '') | string, '#94a3b8') }}"></span>{% endif %}
-                    <span class="bco">{{ cc.apelido or cc.banco_nome or l.banco or '—' }}</span>
-                    <span class="emp">· {{ emp_mapa.get(l.empresa_id) or 'sem empresa' }}</span>
-                </div>
-                <div class="ex-conta-linha ex-mono">
-                    {% if cc.agencia %}ag. {{ cc.agencia }} · {% endif %}{{ l.conta or '—' }}
-                    {% if cc.sem_cadastro %}<em title="Esta conta não está cadastrada em Contas — o nome do banco veio do código do arquivo">conta não cadastrada</em>{% endif %}
-                </div>
-
-                {# O HEROI DO CARTAO.
-                   Quando o banco nao nomeia ninguem, o heroi e a DESCRICAO —
-                   nunca um travessao. O ler_descricao so extrai nome quando ha
-                   CPF/CNPJ na linha, e o C6 escreve "Pix enviado para FULANO"
-                   sem documento nenhum: com "—" no lugar, todo cartao do C6
-                   (a conta com mais pendencia) nasceria sem dizer nada, com o
-                   nome logo abaixo em cinza claro. Ver [D3, 17/09/2026]. #}
-                <div class="ex-quem">
-                    {% if q.nome %}
-                    <span class="ex-rot">Quem {{ 'pagou' if l.valor >= 0 else 'recebeu' }}</span>
-                    <b>{{ q.nome }}</b>
-                    {% if q.doc %}
-                    <span class="ex-docnum">{{ 'CPF' if q.doc | length == 11 else 'CNPJ' }}
-                        {{ doc_fmt(q.doc) }}</span>
-                    {% endif %}
-                    {% else %}
-                    {# Sem nome extraido, a propria descricao e o heroi — e o
-                       rotulo diz POR QUE, em vez de gastar a linha nobre com
-                       "o que o banco escreveu". Quando nem documento ha, o
-                       cartao assume: o banco nao identificou ninguem. #}
-                    <span class="ex-rot ex-rot-mudo">o banco não disse quem</span>
-                    <b class="ex-quem-crua">{{ l.descricao }}</b>
-                    {% if l.documento %}
-                    <span class="ex-docnum ex-mono" title="{{ l.documento }}">id {{ l.documento[:18] }}{% if l.documento | length > 18 %}…{% endif %}</span>
-                    {% endif %}
-                    {% endif %}
-                </div>
-
-                {# A descricao CRUA, embaixo, so quando ela NAO virou o heroi —
-                   repetir a mesma frase duas vezes no mesmo cartao e ruido.
-                   q.depois existe quando o nome vem ANTES do documento (Cora,
-                   Nubank): sem ele o resto sumiria. #}
-                {% if q.nome %}
-                <div class="ex-desc" title="{{ l.descricao }}">{{ q.antes }}{{ q.nome }}{{ q.depois }}</div>
-                {% endif %}
-
-                <span class="ex-val {{ 'ex-cred' if l.valor >= 0 else 'ex-deb' }}">
-                    {{ l.valor | float | round(2) | format_currency }}</span>
+    <div class="xe-pop">
+        <button type="button" class="xe-f {{ 'on' if filtros.vmin or filtros.vmax }}" onclick="exMenu(this)"><i class="fas fa-dollar-sign"></i> Valor{% if filtros.vmin or filtros.vmax %}: <span class="v">{{ filtros.vmin or '0' }} a {{ filtros.vmax or '…' }}</span>{% endif %} <i class="fas fa-chevron-down"></i></button>
+        <div class="xe-menu" style="width:280px">
+            <div class="xe-2">
+                <div class="xe-campo"><label>De R$</label><input type="number" name="vmin" min="0" step="0.01" placeholder="0,00" value="{{ filtros.vmin }}"></div>
+                <div class="xe-campo"><label>Até R$</label><input type="number" name="vmax" min="0" step="0.01" placeholder="sem limite" value="{{ filtros.vmax }}"></div>
             </div>
-
-            {# o estado e a acao #}
-            <div class="ex-pe">
-                {# 25/11/2026: o crédito que pagou uma cobrança diz qual; o pagamento repetido do mesmo boleto aparece como PAGO EM DOBRO #}
-                {% set rc = receb.get(l.id) %}
-                {% if rc and rc.tipo == 'baixa' %}
-                <span class="ex-rec" title="Este dinheiro deu baixa na cobrança {{ rc.titulo_id }}">
-                    <i class="fas fa-check-circle"></i> Recebimento · {{ rc.nome or '' }}{% if rc.texto %} · {{ rc.texto }}{% endif %}{% if rc.venc %} · venc. {{ rc.venc.strftime('%d/%m') }}{% endif %}
-                </span>
-                {% elif rc and rc.tipo == 'dobro' %}
-                <span class="ex-rec dobro" title="O banco recebeu o mesmo boleto mais de uma vez. Este crédito NÃO deu baixa em outra parcela: decida se vira adiantamento ou se devolve.">
-                    <i class="fas fa-clone"></i> PAGO EM DUPLICIDADE · {{ rc.nome or '' }}{% if rc.texto %} · {{ rc.texto }}{% endif %}{% if rc.venc %} · venc. {{ rc.venc.strftime('%d/%m') }}{% endif %}{% if rc.usado %} · usado para pagar a cobrança{% if rc.usado.texto %} {{ rc.usado.texto }}{% endif %}{% if rc.usado.venc %} venc. {{ rc.usado.venc.strftime('%d/%m') }}{% endif %}{% if rc.situacao == 'A_DECIDIR' %} · resto a decidir{% endif %}{% elif rc.situacao == 'A_DECIDIR' %} · a decidir{% elif rc.situacao == 'DEVOLVIDO' %} · devolver ao cliente{% endif %}
-                </span>
-                {% endif %}
-                {% if l.categoria_id and l.conferir %}
-                <span class="ex-pil">
-                    👁 a conferir · {{ l.categoria_nome }}{% if l.centro_nome %} · {{ l.centro_nome }}{% endif %}
-                </span>
-                {% elif l.categoria_id %}
-                <span class="ex-pil ok">
-                    {{ l.categoria_nome }}{% if l.centro_nome %} · {{ l.centro_nome }}{% endif %}
-                    {% if l.memorizacao_id %}<em title="Classificado sozinho pela memorização">auto</em>{% endif %}
-                </span>
-                {% else %}
-                <span class="ex-pil">sem categoria</span>
-                {% endif %}
-                {# o valor subiu para o corpo do cartao — aqui ficam so estado
-                   e acao, que e o que a pessoa vem fazer #}
-                {% if l.conferir %}
-                {# As tres saidas: era isso mesmo / muda so este / muda o criterio. #}
-                <form method="POST" style="display:inline;"
-                      action="{{ url_for('financeiro.extrato_confirmar', lanc_id=l.id) }}">
-                    <button class="ex-btn-tag" style="border-color:#86efac; background:#f0fdf4; color:#15803d;"
-                            title="Era isso mesmo — a marca sai, a classificação fica">
-                        <i class="fas fa-check"></i> Confirmar
-                    </button>
-                </form>
-                {% endif %}
-                {% if l.par_estado in ('casado', 'suspeito') and not l.categoria_id %}
-                {# Trava de transferência do grupo: a decisão é em Transferências,
-                   não aqui — classificar um lado contaria o dinheiro duas vezes. #}
-                <a class="ex-btn-tag" style="border-color:#fcd34d; background:#fffbeb; color:#92400e;"
-                   href="{{ url_for('financeiro.extrato_transferencias') }}"
-                   title="{{ 'As duas pontas se acharam: aprove o par em Transferências' if l.par_estado == 'casado' else 'Parece transferência do grupo e a outra ponta ainda não chegou: veja em Transferências' }}">
-                    <i class="fas fa-exchange-alt"></i>
-                    {{ 'Par a aprovar' if l.par_estado == 'casado' else 'Esperando a outra ponta' }}
-                </a>
-                {% else %}
-                <button class="ex-btn-tag {{ '' if l.categoria_id else 'destaque' }}"
-                        title="{{ ('Desta vez foi outra coisa — muda só este, a regra continua'
-                                   if l.conferir else
-                                   ('Trocar a categoria' if l.categoria_id
-                                    else 'Classificar (e memorizar, se quiser)')) }}"
-                        data-id="{{ l.id }}" data-desc="{{ l.descricao }}"
-                        data-tipo="{{ 'R' if l.valor >= 0 else 'P' }}"
-                        data-valor="{{ l.valor | float | round(2) | format_currency }}"
-                        data-cat="{{ l.categoria_id or '' }}"
-                        data-centro="{{ l.centro_custo_id or '' }}"
-                        onclick="exAbrirClassificar(this)">
-                    <i class="fas fa-tag"></i>
-                    {{ 'Trocar' if l.categoria_id else 'Classificar' }}
-                </button>
-                {% endif %}
-                {% if pode_vincular and l.valor > 0 and l.id not in com_baixa and (receb.get(l.id) or {}).get('tipo') != 'baixa' and l.par_estado not in ('casado', 'suspeito', 'aprovado') %}
-                <a class="ex-btn-tag" href="{{ url_for('financeiro.vincular_pagamento', lanc_id=l.id) }}"
-                   title="Pagamento de cliente: dar baixa no(s) título(s), tratar a diferença e tirar o boleto do banco">
-                    <i class="fas fa-link"></i> Vincular a título
-                </a>
-                {% endif %}
-                {% if l.conferir and l.memorizacao_id %}
-                <a class="ex-btn-tag" title="O chute da regra estava errado — mude o critério dela"
-                   href="{{ url_for('financeiro.extrato_memorizacoes') }}">
-                    <i class="fas fa-memory"></i> a regra…
-                </a>
-                {% endif %}
-            </div>
+            <div class="xe-menu-pe"><button type="button" class="xe-lnk" onclick="exMenuLimpa(this)">Limpar</button><button type="submit" class="xe-ok">Aplicar</button></div>
         </div>
-        {% endfor %}
-        </div>{# /ex-cards #}
-        {% endfor %}
     </div>
-    {% if lancamentos | length >= limite %}
-    <div class="ex-rodape">
-        <i class="fas fa-circle-info"></i>
-        Mostrando os {{ limite }} mais recentes do filtro — os cartões acima contam
-        TODOS. Aperte o período para ver o restante.
+
+    <div class="xe-tot">
+        <span>Entrou <b class="cr">{{ totais.creditos | float | round(2) | format_currency }}</b></span>
+        <span>Saiu <b class="db">{{ (totais.debitos | float | abs) | round(2) | format_currency }}</b></span>
     </div>
-    {% endif %}
-    {% else %}
-    <div class="ex-vazio">
-        <i class="fas fa-file-import" style="font-size:2em; display:block; margin-bottom:10px;"></i>
-        {% if filtros_ativos %}
-            Nenhum lançamento com esses filtros.
-        {% else %}
-            Nenhum lançamento importado ainda — baixe o OFX no internet banking e
-            importe acima.
-        {% endif %}
-    </div>
-    {% endif %}
+</form>
+
+{# ── Faixa fina das contas: toque filtra por ela ── #}
+{% if por_conta_painel %}
+<div class="xe-contas">
+    {% for c in por_conta_painel | sort(attribute='sem_cat', reverse=True) %}
+    {% set cc = conta_de(c.conta, c.banco) %}
+    {% set cor = cc.cor or COR_BANCO.get((cc.banco_id or '') | string, '#94a3b8') %}
+    {% set chave = chave_conta.get((c.empresa_id, c.conta)) %}
+    {% set ligada = chave and chave in filtros.conta %}
+    <a class="xe-ct {{ 'on' if ligada }}" style="--c:{{ cor }}"
+       href="{{ xlink(conta=([] if ligada else [chave])) if chave else '#' }}"
+       title="{{ 'Mostrar todas as contas' if ligada else 'Mostrar só esta conta' }} · {{ c.conta }}">
+        {% if logo_banco_url(cc.banco_id) %}{{ logo_banco(cc.banco_id, cor, 28, cc.banco_nome or '') }}
+        {% else %}<span class="xe-pt" style="background:{{ cor }}"><i class="fas fa-building-columns"></i></span>{% endif %}
+        <span><b>{{ cc.apelido or cc.banco_nome or c.banco or '—' }}</b><i>{{ emp_mapa.get(c.empresa_id) or 'sem empresa' }}</i></span>
+        {% if c.sem_cat %}<span class="fal">{{ c.sem_cat }}</span>{% else %}<span class="okk">em dia</span>{% endif %}
+    </a>
+    {% endfor %}
 </div>
+{% endif %}
+
+<div class="xe-info">
+    {% set _nomes = {'nao': 'sem categoria', 'conferir': 'a conferir', 'sim': 'classificados', 'todos': 'com e sem categoria'} %}
+    <span><b>{{ totais.n or 0 }}</b> lançamento{{ '' if totais.n == 1 else 's' }} {{ _nomes.get(filtros.classif) }}</span>
+    {% if filtros_ativos %}<a class="xe-filtro-chip" href="{{ url_for('financeiro.extrato', classif=filtros.classif, emp=(sel_empresas | join(',')) or None) }}"><i class="fas fa-times"></i> limpar {{ filtros_ativos }} filtro{{ '' if filtros_ativos == 1 else 's' }}</a>{% endif %}
+    {% if filtros.classif != 'todos' %}<a href="{{ xlink(classif='todos') }}">ver todos</a>{% endif %}
+    {% if lancamentos %}<span class="dir"><i class="far fa-square-check"></i> marque vários para classificar de uma vez</span>{% endif %}
+</div>
+
+{% if lancamentos %}
+{# Vincular pagamento (14/11/2026): crédito ainda sem título ganha o botão. Uma consulta para a lista toda. #}
+{% set pode_vincular = pode_rota('financeiro.vincular_pagamento') %}
+{% set com_baixa = linhas_com_baixa(lancamentos) if pode_vincular else [] %}
+{% set receb = recebimentos_das_linhas(lancamentos) %}
+{% for d in dias %}
+<div class="xe-dia">
+    <span class="d">{{ d.data.strftime('%d/%m') }}</span><span class="s">{{ SEMANA[d.data.weekday()] | lower }}</span>
+    <button type="button" class="marcar" onclick="exLoteDia(this)">marcar o dia</button>
+    <span class="r"></span>
+    <span class="t">{% if d.entradas %}<b class="cr">+{{ d.entradas | float | round(2) | format_currency }}</b>{% endif %}{% if d.saidas %}<b class="db">{{ d.saidas | float | round(2) | format_currency }}</b>{% endif %}</span>
+</div>
+<div class="xe-tab">
+    {% for l in d.itens %}
+    {% set q = ler(l.descricao) %}
+    {% set cc = conta_de(l.conta, l.banco) %}
+    {% set rc = receb.get(l.id) %}
+    {% set travado = l.par_estado in ('casado', 'suspeito') and not l.categoria_id %}
+    <div class="xe-l" id="l{{ l.id }}" data-lanc="{{ l.id }}" data-valor="{{ l.valor }}"
+         data-tem-cat="{{ 1 if l.categoria_id else 0 }}" onclick="exLoteToca(this, event)">
+        <input type="checkbox" class="xe-cx" aria-label="marcar" {{ 'disabled title="Transferência: decida em Transferências"' | safe if travado }}>
+        <div class="xe-bco">
+            {% if logo_banco_url(cc.banco_id) %}{{ logo_banco(cc.banco_id, None, 28) }}
+            {% else %}<span class="xe-pt" style="background:{{ cc.cor or COR_BANCO.get((cc.banco_id or '') | string, '#94a3b8') }}"><i class="fas fa-building-columns"></i></span>{% endif %}
+            <span class="t"><b>{{ cc.apelido or cc.banco_nome or l.banco or '—' }}</b>
+                <i title="{% if cc.agencia %}ag. {{ cc.agencia }} · {% endif %}{{ l.conta }}">{{ emp_mapa.get(l.empresa_id) or 'sem empresa' }}</i></span>
+        </div>
+        <div class="xe-quem" title="{{ l.descricao }}">
+            {% if q.nome %}
+            <b>{{ q.nome }}</b>
+            <span>{{ 'Pagou' if l.valor >= 0 else 'Recebeu' }}{% if q.doc %} · {{ 'CPF' if q.doc | length == 11 else 'CNPJ' }} {{ doc_fmt(q.doc) }}{% endif %} · {{ q.antes }}{{ q.depois }}</span>
+            {% else %}
+            <b>{{ l.descricao }}</b>
+            <span class="mudo">o banco não disse quem{% if l.documento %} · id {{ l.documento[:18] }}{% endif %}</span>
+            {% endif %}
+            {% if rc and rc.tipo == 'baixa' %}
+            <span class="xe-rec" title="Este dinheiro deu baixa na cobrança {{ rc.titulo_id }}"><i class="fas fa-check-circle"></i> Pagou a cobrança · {{ rc.nome or '' }}{% if rc.texto %} · {{ rc.texto }}{% endif %}{% if rc.venc %} · venc. {{ rc.venc.strftime('%d/%m') }}{% endif %}</span>
+            {% elif rc and rc.tipo == 'dobro' %}
+            <span class="xe-rec dobro" title="O banco recebeu o mesmo boleto mais de uma vez. Este crédito NÃO deu baixa em outra parcela."><i class="fas fa-clone"></i> PAGO EM DUPLICIDADE · {{ rc.nome or '' }}{% if rc.texto %} · {{ rc.texto }}{% endif %}{% if rc.usado %} · usado na cobrança{% if rc.usado.texto %} {{ rc.usado.texto }}{% endif %}{% elif rc.situacao == 'A_DECIDIR' %} · a decidir{% elif rc.situacao == 'DEVOLVIDO' %} · devolver ao cliente{% endif %}</span>
+            {% endif %}
+        </div>
+        <div class="xe-val {{ 'cr' if l.valor >= 0 else 'db' }}">{{ l.valor | float | round(2) | format_currency }}</div>
+        <div class="xe-stw">
+            {% if l.par_estado == 'casado' and not l.categoria_id %}<span class="xe-st st-tr"><i class="fas fa-right-left"></i><span>Transferência a aprovar</span></span>
+            {% elif l.par_estado == 'suspeito' and not l.categoria_id %}<span class="xe-st st-tr"><i class="fas fa-hourglass-half"></i><span>Esperando a outra ponta</span></span>
+            {% elif l.categoria_id and l.conferir %}<span class="xe-st st-conf" title="{{ l.categoria_nome }}{% if l.centro_nome %} · {{ l.centro_nome }}{% endif %}"><i class="fas fa-eye"></i><span>Conferir · {{ l.categoria_nome }}</span></span>
+            {% elif l.categoria_id %}<span class="xe-st st-ok" title="{{ l.categoria_nome }}{% if l.centro_nome %} · {{ l.centro_nome }}{% endif %}"><i class="fas fa-check"></i><span>{{ l.categoria_nome }}</span>{% if l.memorizacao_id %}<em title="Classificado sozinho pela memorização">auto</em>{% endif %}</span>
+            {% else %}<span class="xe-st st-fal"><i class="fas fa-tag"></i><span>Sem categoria</span></span>{% endif %}
+        </div>
+        <div class="xe-ac">
+            {% if travado %}
+            <a class="xe-bt roxo" href="{{ url_for('financeiro.extrato_transferencias') }}"
+               title="{{ 'As duas pontas se acharam: aprove o par em Transferências' if l.par_estado == 'casado' else 'Parece transferência do grupo e a outra ponta ainda não chegou' }}">Ver o par <i class="fas fa-arrow-right"></i></a>
+            {% else %}
+            {% if l.conferir %}
+            <form method="POST" action="{{ url_for('financeiro.extrato_confirmar', lanc_id=l.id) }}">
+                <button class="xe-bt verde" title="Era isso mesmo — a marca sai, a classificação fica"><i class="fas fa-check"></i> Confirmar</button>
+            </form>
+            {% endif %}
+            <button type="button" class="xe-bt {{ '' if l.categoria_id else 'prim' }} {{ 'ico' if l.conferir else '' }}"
+                    title="{{ ('Desta vez foi outra coisa — muda só este' if l.conferir else ('Trocar a categoria' if l.categoria_id else 'Classificar (e memorizar, se quiser)')) }}"
+                    data-id="{{ l.id }}" data-tipo="{{ 'R' if l.valor >= 0 else 'P' }}"
+                    data-cat="{{ l.categoria_id or '' }}" data-centro="{{ l.centro_custo_id or '' }}"
+                    onclick="exAbrirClassificar(this)">
+                <i class="fas fa-{{ 'pen' if l.categoria_id else 'tag' }}"></i>{% if not l.conferir %} {{ 'Trocar' if l.categoria_id else 'Classificar' }}{% endif %}
+            </button>
+            {% endif %}
+            {% if pode_vincular and l.valor > 0 and l.id not in com_baixa and (rc or {}).get('tipo') != 'baixa' and l.par_estado not in ('casado', 'suspeito', 'aprovado') %}
+            <a class="xe-bt ico" href="{{ url_for('financeiro.vincular_pagamento', lanc_id=l.id) }}"
+               title="Pagamento de cliente: dar baixa na cobrança, tratar a diferença e tirar o boleto do banco"><i class="fas fa-link"></i></a>
+            {% endif %}
+            {% if l.conferir and l.memorizacao_id %}
+            <a class="xe-bt ico" href="{{ url_for('financeiro.extrato_memorizacoes') }}" title="O chute da regra estava errado — mude o critério dela"><i class="fas fa-brain"></i></a>
+            {% endif %}
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% endfor %}
+{% if lancamentos | length >= limite and (totais.n or 0) > limite %}
+<a class="xe-mais" href="{{ xlink(pag=pag + 1) }}#l{{ lancamentos[-1].id }}">Mostrar mais 50 <i class="fas fa-chevron-down"></i></a>
+<div class="xe-fim">mostrando {{ lancamentos | length }} de {{ totais.n }}</div>
+{% elif pag > 1 or (totais.n or 0) > 20 %}
+<div class="xe-fim">são todos — {{ lancamentos | length }} lançamento{{ '' if lancamentos | length == 1 else 's' }}</div>
+{% endif %}
+{% else %}
+<div class="xe-vazio">
+    {% if filtros_ativos %}<i class="fas fa-filter"></i>Nenhum lançamento com esses filtros.
+    {% elif filtros.classif == 'nao' %}<i class="fas fa-circle-check"></i><b>Tudo classificado.</b> Não há lançamento sem categoria.
+    {% elif filtros.classif == 'conferir' %}<i class="fas fa-circle-check"></i>Nada para conferir.
+    {% else %}<i class="fas fa-file-import"></i>Nenhum lançamento importado ainda — baixe o extrato no banco e use <b>Importar extrato</b>.{% endif %}
+</div>
+{% endif %}
+</div>{# /xe #}
 
 <!-- ── Modal: importar OFX (sai quando a leitura pela pasta entrar) ── -->
 <div id="exModalImport" class="modal" style="display:none;">
@@ -1118,8 +684,6 @@ body.ex-selecionando .ex-barra-lote { display:flex; }
             <button class="modal-close" onclick="exWizFechar()">&times;</button>
         </div>
 
-        <div class="ex-wiz-abas" id="exWizAbas"></div>
-
         <form method="POST" id="exWizForm" action="">
             <input type="hidden" name="memorizar"  id="exwMemorizar">
             <input type="hidden" name="conta"      id="exwConta">
@@ -1165,6 +729,7 @@ body.ex-selecionando .ex-barra-lote { display:flex; }
                qualquer passo, em qualquer rolagem, da para ver o que se
                esta classificando. #}
             <div class="ex-wiz-lanc" id="exWizLanc"></div>
+            <div class="ex-wiz-abas" id="exWizAbas"></div>
             <div class="modal-body ex-wiz-corpo">
                 <p class="ex-wiz-passo" id="exWizPasso"></p>
                 <div id="exWizTela"></div>
@@ -1186,37 +751,6 @@ body.ex-selecionando .ex-barra-lote { display:flex; }
 {% endblock %}
 
 {% block extra_js %}
-<script src="https://cdn.jsdelivr.net/npm/tom-select@2.4.3/dist/js/tom-select.complete.min.js"></script>
-<script>
-// Filtro de conta: o MESMO componente do filtro de emitente da Conferência de
-// Entradas (Tom Select, 2.4.3). Escolhe várias, busca digitando o nome do
-// banco ou qualquer pedaço do número — inclusive a grafia velha, que continua
-// no extrato e viaja em 'busca'.
-document.addEventListener('DOMContentLoaded', function () {
-    var campo = document.getElementById('exConta');
-    if (!campo || typeof TomSelect === 'undefined') return;
-    new TomSelect(campo, {
-        plugins: ['remove_button'],
-        maxOptions: null,
-        hideSelected: true,
-        searchField: ['text', 'busca'],
-        render: {
-            option: function (d, escape) {
-                return '<div class="ex-opt">'
-                     + '<span class="ex-opt-banco">' + escape(d.banco || d.text) + '</span>'
-                     + '<span class="ex-opt-num">' + escape(d.conta || '') + '</span>'
-                     + (d.ag ? '<span class="ex-opt-ag">ag ' + escape(d.ag) + '</span>' : '')
-                     + '<span class="ex-opt-meta">' + escape(d.meta || '') + '</span>'
-                     + '</div>';
-            },
-            item: function (d, escape) {
-                return '<div>' + escape(d.banco || d.text)
-                     + ' <span class="ex-opt-num">' + escape(d.conta || '') + '</span></div>';
-            }
-        }
-    });
-});
-</script>
 <script>
 var EX_URL_CLAS = "{{ url_for('financeiro.extrato_classificar', lanc_id=0) }}";
 
@@ -1246,15 +780,73 @@ document.addEventListener('submit', function (e) {
     } catch (err) { }
 })();
 
-function exToggleFiltros() {
-    var corpo = document.getElementById('exFiltroCorpo');
-    var chev = document.getElementById('exChevron');
-    var abrindo = corpo.style.display === 'none';
-    corpo.style.display = abrindo ? '' : 'none';
-    chev.style.transform = abrindo ? 'rotate(180deg)' : '';
+// ── Barra de filtros: cada botão abre a sua listinha ───────────────────
+// Uma aberta por vez; clique fora ou Esc fecha. O form é um só, então
+// "Aplicar" de qualquer listinha leva todos os filtros juntos.
+function exMenu(bt) {
+    var pop = bt.closest('.xe-pop');
+    var abrir = !pop.classList.contains('aberto');
+    document.querySelectorAll('.xe-pop.aberto').forEach(function (p) { p.classList.remove('aberto'); });
+    if (abrir) {
+        pop.classList.add('aberto');
+        // a listinha não pode sair pela direita da tela
+        var m = pop.querySelector('.xe-menu');
+        m.style.left = '0px';
+        if (window.innerWidth > 900) {
+            var r = m.getBoundingClientRect();
+            if (r.right > window.innerWidth - 12) m.style.left = (window.innerWidth - 12 - r.right) + 'px';
+        }
+    }
+}
+document.addEventListener('click', function (e) {
+    if (!e.target.closest('.xe-pop')) {
+        document.querySelectorAll('.xe-pop.aberto').forEach(function (p) { p.classList.remove('aberto'); });
+    }
+});
+document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') document.querySelectorAll('.xe-pop.aberto').forEach(function (p) { p.classList.remove('aberto'); });
+});
+// "Limpar" de uma listinha zera só os campos DELA e já busca.
+function exMenuLimpa(bt) {
+    var m = bt.closest('.xe-menu');
+    m.querySelectorAll('input, select').forEach(function (el) {
+        if (el.type === 'checkbox' || el.type === 'radio') el.checked = false;
+        else el.value = '';
+    });
+    document.getElementById('exFormFiltro').requestSubmit();
+}
+// Empresas: marca/desmarca; "Todas" desliga as outras.
+document.addEventListener('click', function (e) {
+    var b = e.target.closest('#exEmps button');
+    if (!b) return;
+    var todas = document.querySelector('#exEmps button[data-emp=""]');
+    if (!b.getAttribute('data-emp')) {
+        document.querySelectorAll('#exEmps button').forEach(function (x) { x.classList.toggle('on', x === b); });
+    } else {
+        b.classList.toggle('on');
+        var alguma = document.querySelectorAll('#exEmps button.on:not([data-emp=""])').length > 0;
+        todas.classList.toggle('on', !alguma);
+    }
+});
+function exEmpAplica() {
+    var ids = [];
+    document.querySelectorAll('#exEmps button.on').forEach(function (x) {
+        if (x.getAttribute('data-emp')) ids.push(x.getAttribute('data-emp'));
+    });
+    document.getElementById('exEmp').value = ids.join(',');
+    // trocar de empresa muda a lista de contas: a conta escolhida sai
+    document.querySelectorAll('#exFormFiltro input[name="conta"]').forEach(function (c) { c.checked = false; });
+    document.getElementById('exFormFiltro').requestSubmit();
+}
+// Endereço limpo: campo vazio não vai na URL.
+function exFiltroLimpa(f) {
+    f.querySelectorAll('input, select').forEach(function (el) {
+        if (el.name && el.value === '' && el.type !== 'checkbox' && el.type !== 'radio') el.disabled = true;
+    });
+    setTimeout(function () { f.querySelectorAll('[disabled]').forEach(function (el) { el.disabled = false; }); }, 0);
 }
 
-// Períodos rápidos: preenchem as datas e JÁ buscam (igual ao Fiscal).
+// Períodos rápidos: preenchem as datas e JÁ buscam.
 function exPeriodo(qual) {
     var hoje = new Date();
     var ini, fim;
@@ -1264,30 +856,32 @@ function exPeriodo(qual) {
     } else if (qual === 'anterior') {
         ini = new Date(hoje.getFullYear(), hoje.getMonth() - 1, 1);
         fim = new Date(hoje.getFullYear(), hoje.getMonth(), 0);
-    } else {
+    } else if (qual === 'ano') {
         ini = new Date(hoje.getFullYear(), 0, 1);
         fim = hoje;
     }
     // Data LOCAL, nunca toISOString: à noite o UTC joga o dia para trás.
     function iso(d) {
+        if (!d) return '';
         var m = String(d.getMonth() + 1).padStart(2, '0');
         var dia = String(d.getDate()).padStart(2, '0');
         return d.getFullYear() + '-' + m + '-' + dia;
     }
     document.getElementById('exDataDe').value = iso(ini);
     document.getElementById('exDataAte').value = iso(fim);
-    document.getElementById('exFormFiltro').submit();
+    document.getElementById('exFormFiltro').requestSubmit();
 }
 
 // =====================================================================
-// LOTE. Um estado (os marcados) e uma funcao que redesenha a partir dele —
-// tres funcoes mexendo em classe soltas foi o que ja quebrou os filtros da
-// tela de categorias uma vez.
+// LOTE. Um estado (os marcados) e uma funcao que redesenha a partir dele.
+// 27/11/2026: a caixinha fica SEMPRE à vista — marcar a primeira já liga o
+// lote e faz a barra aparecer; desmarcar a última desliga. Antes era preciso
+// achar o botão "Selecionar", e o "marcar dia" não fazia nada sem ele.
 // =====================================================================
 var LOTE = { ligado: false, marcados: {} };
 
 function exLoteLiga() {
-  LOTE = { ligado: true, marcados: {} };
+  LOTE.ligado = true;
   document.body.classList.add('ex-selecionando');
   exLotePinta();
 }
@@ -1296,60 +890,58 @@ function exLoteDesliga() {
   document.body.classList.remove('ex-selecionando');
   exLotePinta();
 }
+function exLoteMarca(reg, marcar) {
+  var id = reg.getAttribute('data-lanc');
+  var cx = reg.querySelector('.xe-cx');
+  if (cx && cx.disabled) return;
+  if (marcar) LOTE.marcados[id] = { valor: parseFloat(reg.getAttribute('data-valor')),
+                                    temCat: reg.getAttribute('data-tem-cat') === '1', reg: reg };
+  else delete LOTE.marcados[id];
+}
+function exLoteAcerta() {
+  var n = Object.keys(LOTE.marcados).length;
+  if (n && !LOTE.ligado) { exLoteLiga(); return; }
+  if (!n && LOTE.ligado) { exLoteDesliga(); return; }
+  exLotePinta();
+}
 
 function exLoteToca(reg, ev) {
-  if (!LOTE.ligado) return;
-  // clique num botao/link dentro do cartao nao e marcacao
-  if (ev.target.closest('a, button, form')) return;
+  var naCaixa = ev.target.classList && ev.target.classList.contains('xe-cx');
+  if (!naCaixa && !LOTE.ligado) return;
+  // clique num botao/link dentro da linha nao e marcacao
+  if (!naCaixa && ev.target.closest('a, button, form')) return;
   var id = reg.getAttribute('data-lanc');
-  if (LOTE.marcados[id]) delete LOTE.marcados[id];
-  else LOTE.marcados[id] = { valor: parseFloat(reg.getAttribute('data-valor')),
-                             temCat: reg.getAttribute('data-tem-cat') === '1',
-                             reg: reg };
-  exLotePinta();
+  exLoteMarca(reg, !LOTE.marcados[id]);
+  exLoteAcerta();
 }
 
 function exLoteDia(bt) {
-  // Marca (ou desmarca) todos os lancamentos do dia.
-  //
-  // ATENCAO: isto andava por IRMAOS (nextElementSibling ate o proximo
-  // .ex-dia) e funcionava porque os .ex-reg eram irmaos do cabecalho. Com a
-  // grade de 17/09/2026 eles passaram a viver DENTRO de um .ex-cards, e o
-  // laco antigo saia vazio — "marcar dia" nao faria nada, sem erro nenhum.
-  // Agora procura a grade do dia e pega os cartoes de dentro dela.
-  var el = bt.closest('.ex-dia').nextElementSibling;
-  var doDia = [];
-  while (el && !el.classList.contains('ex-dia')) {
-    if (el.classList.contains('ex-cards')) {
-      doDia = doDia.concat(
-        Array.prototype.slice.call(el.querySelectorAll('.ex-reg[data-lanc]')));
-    } else if (el.classList.contains('ex-reg')) {
-      doDia.push(el);          // formato antigo, se algum dia voltar
-    }
-    el = el.nextElementSibling;
-  }
-  var todos = doDia.every(function (r) { return LOTE.marcados[r.getAttribute('data-lanc')]; });
-  doDia.forEach(function (r) {
-    var id = r.getAttribute('data-lanc');
-    if (todos) delete LOTE.marcados[id];
-    else LOTE.marcados[id] = { valor: parseFloat(r.getAttribute('data-valor')),
-                               temCat: r.getAttribute('data-tem-cat') === '1',
-                               reg: r };
+  // Marca (ou desmarca) todos os lancamentos do dia: as linhas moram na
+  // tabela logo depois do cabecalho do dia.
+  var tab = bt.closest('.xe-dia').nextElementSibling;
+  if (!tab) return;
+  var doDia = Array.prototype.slice.call(tab.querySelectorAll('.xe-l[data-lanc]')).filter(function (r) {
+    var cx = r.querySelector('.xe-cx'); return !(cx && cx.disabled);
   });
-  exLotePinta();
+  if (!doDia.length) { alert('Neste dia só há transferências — elas se decidem na tela de Transferências.'); return; }
+  var todos = doDia.every(function (r) { return LOTE.marcados[r.getAttribute('data-lanc')]; });
+  doDia.forEach(function (r) { exLoteMarca(r, !todos); });
+  exLoteAcerta();
 }
 
 function exLotePinta() {
-  document.querySelectorAll('.ex-reg').forEach(function (r) {
-    r.classList.toggle('marcado',
-      !!LOTE.marcados[r.getAttribute('data-lanc')]);
+  document.querySelectorAll('.xe-l[data-lanc]').forEach(function (r) {
+    var on = !!LOTE.marcados[r.getAttribute('data-lanc')];
+    r.classList.toggle('marcado', on);
+    var cx = r.querySelector('.xe-cx');
+    if (cx) cx.checked = on;
   });
   var ids = Object.keys(LOTE.marcados);
   var soma = 0;
   ids.forEach(function (id) { soma += LOTE.marcados[id].valor; });
   var q = document.getElementById('exLoteQtd');
   if (q) {
-    q.textContent = ids.length + ' selecionado' + (ids.length === 1 ? '' : 's');
+    q.textContent = ids.length + ' marcado' + (ids.length === 1 ? '' : 's');
     document.getElementById('exLoteSoma').textContent = ids.length ? exMoeda(soma) : '';
     document.getElementById('exLoteIr').disabled = !ids.length;
     // Todos ja classificados? O gesto certo e GERAR TITULOS, nao reclassificar.
@@ -1377,7 +969,7 @@ function exLoteAbre() {
   // DESC). Elegerem representantes diferentes daria trecho de um e dia de
   // outro.
   var livres = [], soma = 0, sinais = {};
-  document.querySelectorAll('.ex-reg[data-lanc]').forEach(function (reg) {
+  document.querySelectorAll('.xe-l[data-lanc]').forEach(function (reg) {
     var id = reg.getAttribute('data-lanc');
     var m = LOTE.marcados[id];
     if (!m || m.temCat) return;
@@ -1389,7 +981,7 @@ function exLoteAbre() {
   // As duas travas da rota, avisadas ANTES: descobrir no flash da volta e
   // tarde, e o assistente inteiro teria sido preenchido a toa.
   if (!livres.length) {
-    alert('Todos os selecionados já têm categoria — o lote não sobrescreve '
+    alert('Todos os marcados já têm categoria — o lote não sobrescreve '
           + 'decisão já tomada.');
     return;
   }
@@ -1405,7 +997,7 @@ function exLoteAbre() {
     tipo: sinais.P ? 'P' : 'R',
     lote: livres,
     soma: soma,
-    aviso: jaTem ? (jaTem + ' selecionado(s) já tinham categoria e ficam como '
+    aviso: jaTem ? (jaTem + ' marcado(s) já tinham categoria e ficam como '
                     + 'estão') : ''
   });
 }
@@ -1524,6 +1116,8 @@ function exWizAbrir(dados) {
   document.getElementById('exWizTitulo').textContent = W.lote
     ? ('Classificar ' + W.lote.length + ' lançamentos')
     : 'Classificar Lançamento';
+  document.querySelector('#exWiz .ex-wiz').setAttribute('data-tipo', W.tipo === 'R' ? 'R' : 'P');
+  document.getElementById('exWizLanc').innerHTML = '';
   document.getElementById('exWiz').classList.add('aberto');
   document.getElementById('exWizTela').innerHTML =
     '<p class="ex-vazio-lista">lendo o lançamento…</p>';
@@ -1626,23 +1220,18 @@ function exWizDesenha() {
   document.getElementById('exWizPasso').innerHTML =
     'Passo ' + (W.i + 1) + ' de ' + passos.length + ' — <b>' + passo + '</b>';
 
-  if (W.lanc && W.lote) {
-    // No lote o cartao mostra o TAMANHO da selecao e o total, com o mais
-    // recente como amostra — e ele que dita o trecho proposto.
+  // O lançamento fica no alto, na faixa colorida (molde da janela laranja
+  // das Cobranças): quem, quanto, de onde. Verde = entrou, laranja = saiu.
+  if (W.lanc) {
+    var _nome = W.lote ? (W.lote.length + ' lançamentos') : (W.lanc.nome || W.lanc.descricao);
+    var _val = W.lote ? W.loteSoma : W.lanc.valor;
     document.getElementById('exWizLanc').innerHTML =
-      '<div class="n">' + W.lote.length + ' lançamentos · ' +
-      exMoeda(W.loteSoma) + '</div>' +
-      '<div class="d">' + exEsc(W.lanc.descricao) + '</div>' +
-      '<div class="m">o mais recente · ' + W.lanc.data + ' · ' +
-      exEsc(W.lanc.banco) + ' · ' + exMoeda(W.lanc.valor) + '</div>' +
-      (W.loteAviso ? '<div class="m" style="color:#b45309">' +
-        exEsc(W.loteAviso) + '</div>' : '');
-  } else if (W.lanc) {
-    document.getElementById('exWizLanc').innerHTML =
-      '<div class="d">' + exEsc(W.lanc.descricao) + '</div>' +
-      (W.lanc.nome ? '<div class="n">' + exEsc(W.lanc.nome) + '</div>' : '') +
-      '<div class="m">' + W.lanc.data + ' · ' + exEsc(W.lanc.banco) + ' · ' +
-      exMoeda(W.lanc.valor) + '</div>';
+      '<div class="wl-top"><div class="wl-q"><span class="wl-chip">' + (_val >= 0 ? 'Entrada' : 'Saída') + '</span>' +
+      '<b>' + exEsc(_nome) + '</b></div><b class="wl-v">' + exMoeda(_val) + '</b></div>' +
+      '<div class="wl-m">' + (W.lote ? 'o mais recente: ' : '') + W.lanc.data + ' · ' + exEsc(W.lanc.banco) +
+      (W.lote ? ' · ' + exMoeda(W.lanc.valor) : '') + '</div>' +
+      ((W.lote || W.lanc.nome) ? '<div class="wl-d">' + exEsc(W.lanc.descricao) + '</div>' : '') +
+      (W.loteAviso ? '<div class="wl-av">' + exEsc(W.loteAviso) + '</div>' : '');
   }
 
   if (passo === 'Como') {

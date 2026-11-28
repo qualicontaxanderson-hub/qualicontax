@@ -1396,31 +1396,60 @@ def extrato():
     # A lista sai UMA vez e é agrupada por dia aqui: decidir "mudou o dia?"
     # no Jinja exigiria comparar a linha com a anterior, que foi o que
     # duplicou cabeçalho na tela de categorias quando a ordem veio torta.
-    lancs = ExtratoLancamento.listar(**args)
+    # Página de 50 (27/11/2026): a tela tentava desenhar 1.356 cartões de uma
+    # vez — 50 mil pixels de altura e meio minuto para abrir. "Mostrar mais"
+    # pede a página seguinte e a tela volta no mesmo lugar.
+    try:
+        pag = max(1, min(40, int(request.args.get('pag') or 1)))
+    except ValueError:
+        pag = 1
+    limite = 50 * pag
+    lancs = ExtratoLancamento.listar(limite=limite, **args)
     # A fila de transferências não respeita o filtro da tela: ela é uma
     # pendência do escritório, não um recorte do que se está olhando. Se
     # seguisse o filtro, ela desapareceria ao trocar de mês e ninguém a
     # resolveria.
-    n_travados = (execute_query(
-        "SELECT COUNT(*) n FROM extrato_lancamentos "
-        " WHERE par_estado IN ('casado', 'suspeito')",
-        fetch=True, fetch_one=True) or {}).get('n') or 0
+    _pares = {r['par_estado']: int(r['n'] or 0) for r in (execute_query(
+        "SELECT par_estado, COUNT(*) n FROM extrato_lancamentos "
+        " WHERE par_estado IN ('casado', 'suspeito') GROUP BY par_estado",
+        fetch=True) or [])}
+    n_travados = sum(_pares.values())
+    # As abas contam o filtro SEM a classificação: estando numa aba, as
+    # outras continuam dizendo quanto têm.
+    _sem_classif = dict(args, classif=None)
+    _w, _p = ExtratoLancamento._where(**_sem_classif)
+    _abas = execute_query(
+        f"""SELECT COUNT(*) n, COALESCE(SUM(e.categoria_id IS NULL), 0) sem,
+                   COALESCE(SUM(e.categoria_id IS NOT NULL), 0) com,
+                   COALESCE(SUM(e.conferir = 1), 0) conf
+              FROM extrato_lancamentos e WHERE {_w}""",
+        tuple(_p), fetch=True, fetch_one=True) or {}
+    contas_f = ExtratoLancamento.contas_filtro(empresa_ids=sel)
+    # A faixa de contas filtra pela MESMA chave do filtro de Conta. O link
+    # antigo ("ver só esta") mandava o número cru da conta, que o filtro não
+    # reconhece — e a tela mostrava tudo de novo (27/11/2026).
+    chave_conta = {}
+    for o in contas_f:
+        for v in o['variantes']:
+            chave_conta[(o['empresa_id'], v)] = o['valor']
+    painel_args = dict(args, classif=None, conta_pares=None)
     return render_template('financeiro/extrato.html',
                            lancamentos=lancs,
                            n_travados=n_travados,
+                           n_pares=_pares.get('casado', 0) // 2,
+                           n_espera=_pares.get('suspeito', 0),
+                           abas={k: int(v or 0) for k, v in _abas.items()},
+                           pag=pag, chave_conta=chave_conta,
                            dias=ExtratoLancamento.por_dia(lancs),
                            totais=ExtratoLancamento.totais(**args),
-                           # A faixa do topo: onde está o serviço, por empresa.
-                           # None quando a consulta é cortada pelo teto — o
-                           # template esconde a faixa em vez de mostrar zero.
-                           por_empresa=ExtratoLancamento.por_empresa(**args),
-                           # a faixa de CONTAS do topo: numero grande,
-                           # entrou/saiu, a classificar e o minigrafico
-                           por_conta_painel=ExtratoLancamento.por_conta_painel(**args),
+                           # a faixa de CONTAS do topo: cada conta e quanto
+                           # falta classificar nela (não segue o filtro de
+                           # conta, senão as outras sumiriam da faixa)
+                           por_conta_painel=ExtratoLancamento.por_conta_painel(**painel_args),
                            # a cor da marca de cada banco vem do CATALOGO, nao
                            # do template: banco novo entra num lugar so
                            COR_BANCO=_cores_banco(),
-                           contas=ExtratoLancamento.contas_filtro(empresa_ids=sel),
+                           contas=contas_f,
                            # apelido e agência vêm do CADASTRO de contas: o
                            # extrato guarda o nome cru do OFX, e o do Sicredi
                            # chega como "CCPI DO CERRADO DE GO".
@@ -1443,7 +1472,7 @@ def extrato():
                                fetch=True) or [],
                            fin_empresas=emps, sel_empresas=sel, emp_mapa=mapa,
                            filtros_ativos=ativos, hoje=date.today(),
-                           limite=500, filtros=filtros)
+                           limite=limite, filtros=filtros)
 
 
 def _volta_extrato(**padrao):
@@ -2916,7 +2945,7 @@ def extrato_transferencias():
     # o extrato de X" não diz se falta um mês da conta conhecida ou se o
     # dinheiro caiu numa conta que ninguém cadastrou (14/09/2026).
     from datetime import date as _date
-    from models.extrato_lancamento import FinContaBancaria
+    from models.extrato_lancamento import FinContaBancaria, ExtratoLancamento
     _rot = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
     from utils.extrato_ingest import banco_curto as _bc
     def banco_curto_safe(b):
@@ -2960,6 +2989,9 @@ def extrato_transferencias():
         total_pares=sum(p['valor'] for p in pares),
         total_suspeitos=sum(abs(float(s['l']['valor'])) for s in suspeitos),
         n_suspeitos=len(suspeitos), mapa=mapa,
+        # nome e logo do banco pelo CADASTRO (o extrato guarda '0237')
+        conta_de=ExtratoLancamento.conta_resolver(),
+        COR_BANCO=_cores_banco(),
         categorias=FinCategoria.listar(),
         cats_saida=_cats_por_grupo(FinCategoria.listar(), ('P', 'I', 'T')),
         cats_entrada=_cats_por_grupo(FinCategoria.listar(), ('R', 'T')),

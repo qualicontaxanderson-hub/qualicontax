@@ -1,357 +1,326 @@
 {% extends "base.html" %}
 
-{% block title %}Transferências do Grupo - Qualicontax{% endblock %}
+{% block title %}Transferências entre as contas - Qualicontax{% endblock %}
 
 {% block content %}
 {% include 'financeiro/_nav_financeiro.html' %}
+{% macro brl(v) %}R$ {{ '{:,.2f}'.format(v | float).replace(',', 'X').replace('.', ',').replace('X', '.') }}{% endmacro %}
+{% macro ponta(l, rotulo, cls) %}
+{% set cc = conta_de(l.conta, l.banco) %}
+{% set cor = cc.cor or COR_BANCO.get((cc.banco_id or '') | string, '#94a3b8') %}
+<div class="xt-ponta">
+  {% if logo_banco_url(cc.banco_id) %}{{ logo_banco(cc.banco_id, cor, 30, cc.banco_nome or '') }}
+  {% else %}<span class="xt-pt" style="background:{{ cor }}"><i class="fas fa-building-columns"></i></span>{% endif %}
+  <span class="t"><span class="lbl {{ cls }}">{{ rotulo }} · {{ l.data.strftime('%d/%m') }}</span>
+    <b>{{ cc.apelido or cc.banco_nome or l.banco or '—' }} · {{ mapa.get(l.empresa_id) or 'sem empresa' }}</b>
+    <i title="{{ l.descricao }}">{{ l.descricao }}</i></span>
+</div>
+{% endmacro %}
 <style>
-/* barra de ações fica visível no fim da rolagem, no PC e no celular */
-.tf-acoes { position: sticky; bottom: 0; background:#fff; border-top:1px solid #e2e8f0; padding:10px 14px; display:flex; flex-wrap:wrap; gap:8px; align-items:center; z-index:2; }
-@media (max-width: 640px) {
-  .tf-acoes { padding:10px; }
-  .tf-acoes .tf-bt { flex: 1 1 100%; justify-content:center; }
-  .tf-acoes .tf-marcatudo { flex: 1 1 100%; }
-  .tf-acoes label { flex: 1 1 100%; }
-  .tf-acoes span { flex: 1 1 100%; }
-}
+/* Transferências no molde de Cobranças (27/11/2026). Anderson: "as de
+   transferências de contas estão piores ainda". Um par = UMA linha: de onde
+   saiu → onde entrou, o valor e os botões. Marcar vários abre a barra. */
+.xt { --verde:#0f3d2e; --linha:#e6eeea; --mudo:#7d968a; --tinta:#0f172a; --roxo:#7c3aed; font-size:14px; }
+.xt *, .xt *::before, .xt *::after { box-sizing:border-box; }
+.xt-hero { background:linear-gradient(120deg,#3b0764,#5b21b6 60%,#6d28d9); color:#fff; border-radius:22px; padding:24px 28px 60px;
+           display:flex; justify-content:space-between; align-items:flex-start; gap:16px; flex-wrap:wrap; }
+.xt-hero h1 { font-size:24px; font-weight:800; margin:0; letter-spacing:-.02em; color:#fff; }
+.xt-hero h1 i { opacity:.8; margin-right:8px; }
+.xt-hero p { margin:5px 0 0; font-size:13px; opacity:.88; max-width:760px; line-height:1.45; }
+.xt-hb { display:inline-flex; align-items:center; gap:8px; padding:10px 16px; border-radius:12px; font-weight:700; font-size:13px; white-space:nowrap;
+         border:1px solid rgba(255,255,255,.3); background:rgba(255,255,255,.1); color:#fff !important; text-decoration:none !important; }
+.xt-hb:hover { background:rgba(255,255,255,.2); }
+.xt-abas { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; margin:-40px 14px 16px; position:relative; z-index:2; }
+.xt-aba { text-align:left; font:inherit; cursor:pointer; background:#fff; border:1px solid var(--linha); border-radius:18px; padding:15px 18px;
+          box-shadow:0 10px 28px rgba(15,61,46,.08); display:flex; gap:14px; align-items:center; min-width:0; color:inherit; }
+.xt-aba.on { box-shadow:0 0 0 2px var(--cor), 0 14px 32px rgba(15,61,46,.12); }
+.xt-aba-ico { width:44px; height:44px; border-radius:13px; background:var(--fundo); color:var(--cor); display:flex; align-items:center; justify-content:center; font-size:17px; flex-shrink:0; }
+.xt-aba-lbl { display:block; font-size:11.5px; font-weight:800; letter-spacing:.6px; text-transform:uppercase; color:var(--mudo); }
+.xt-aba-val { display:block; font-size:24px; font-weight:800; color:var(--tinta); line-height:1.1; font-variant-numeric:tabular-nums; }
+.xt-aba-sub { display:block; font-size:12px; color:#94a3b8; }
+.a-tr { --cor:#7c3aed; --fundo:#f5f3ff; } .a-fal { --cor:#ea580c; --fundo:#fff4ec; }
+.xt-painel[hidden] { display:none; }
+.xt-barra { display:flex; align-items:center; gap:8px; flex-wrap:wrap; background:#fff; border:1px solid var(--linha); border-radius:16px; padding:10px 12px; margin:0 0 12px; }
+.xt-pop { position:relative; }
+.xt-f { display:inline-flex; align-items:center; gap:7px; padding:8px 12px; border:1px solid var(--linha); border-radius:11px; background:#fff; font:inherit;
+        font-size:13px; font-weight:700; color:#334155; cursor:pointer; white-space:nowrap; }
+.xt-f .fa-chevron-down { font-size:10px; color:#94a3b8; }
+.xt-f.on { background:#f5f3ff; border-color:#c4b5fd; color:#5b21b6; }
+.xt-f .v { font-weight:600; color:#6d28d9; }
+.xt-menu { display:none; position:absolute; top:calc(100% + 6px); left:0; z-index:40; background:#fff; border:1px solid var(--linha); border-radius:14px;
+           box-shadow:0 18px 40px rgba(15,23,42,.16); padding:8px; width:320px; max-height:380px; overflow:auto; }
+.xt-pop.aberto .xt-menu { display:block; }
+.xt-opt { display:flex; align-items:center; gap:10px; width:100%; padding:9px 10px; border-radius:9px; font:inherit; font-size:13px; cursor:pointer; border:0; background:none; text-align:left; color:#1e293b; }
+.xt-opt:hover { background:#f5f3ff; } .xt-opt.on { background:#ede9fe; font-weight:800; color:#5b21b6; }
+.xt-opt b { margin-left:auto; font-size:12px; color:#64748b; }
+.xt-busca { flex:1; min-width:200px; display:flex; align-items:center; gap:8px; border:1px solid var(--linha); border-radius:11px; padding:0 12px; color:#94a3b8; }
+.xt-busca input { border:0; outline:0; flex:1; font:inherit; font-size:13.5px; color:var(--tinta); background:transparent; min-width:0; padding:9px 0; }
+.xt-conta { margin-left:auto; font-size:12.5px; color:#64748b; white-space:nowrap; }
+.xt-info { display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin:4px 0 6px; font-size:13px; color:#64748b; }
+.xt-info label { display:inline-flex; align-items:center; gap:8px; font-weight:700; color:#334155; cursor:pointer; margin:0; }
+.xt-info input { width:18px; height:18px; accent-color:var(--roxo); margin:0; }
+.xt-mes { display:flex; align-items:center; gap:10px; margin:16px 0 8px; }
+.xt-mes[hidden] { display:none; }
+.xt-mes .d { background:var(--verde); color:#fff; border-radius:10px; padding:5px 11px; font-weight:800; font-size:13px; }
+.xt-mes .s { font-size:12.5px; color:#64748b; }
+.xt-mes .r { flex:1; height:1px; background:var(--linha); }
+.xt-tab { background:#fff; border:1px solid var(--linha); border-radius:16px; overflow:hidden; }
+.xt-tab[hidden] { display:none; }
+.xt-par { display:grid; grid-template-columns:22px minmax(0,1fr) 38px minmax(0,1fr) 120px 270px; gap:12px; align-items:center; padding:12px 16px; border-top:1px solid #f1f5f3; }
+.xt-par:first-child { border-top:0; }
+.xt-par[hidden] { display:none; }
+.xt-par.marcado { background:#faf5ff; }
+.xt-cx { width:18px; height:18px; accent-color:var(--roxo); cursor:pointer; margin:0; }
+.xt-ponta { display:flex; gap:10px; align-items:center; min-width:0; padding:8px 10px; border-radius:12px; background:#f8fafc; }
+.xt-ponta .t { min-width:0; }
+.xt-ponta b { display:block; font-size:13px; font-weight:800; color:var(--tinta); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.xt-ponta i { display:block; font-style:normal; font-size:11.5px; color:#94a3b8; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.xt-ponta .lbl { display:block; font-size:10.5px; font-weight:800; letter-spacing:.5px; text-transform:uppercase; }
+.xt-pt { width:30px; height:30px; border-radius:8px; flex-shrink:0; display:inline-flex; align-items:center; justify-content:center; color:#fff; font-size:12px; }
+.xt .cr { color:#15803d; } .xt .db { color:#dc2626; }
+.xt-seta { width:36px; height:36px; border-radius:50%; background:#f5f3ff; color:var(--roxo); display:flex; align-items:center; justify-content:center; justify-self:center; }
+.xt-val { text-align:right; font-weight:800; font-size:15px; font-variant-numeric:tabular-nums; white-space:nowrap; }
+.xt-val small { display:block; font-size:11.5px; font-weight:600; color:#94a3b8; }
+.xt-entre { display:inline-block; font-size:11px; font-weight:800; color:#b45309; background:#fffbeb; border-radius:99px; padding:2px 8px; margin-top:3px; }
+.xt-bts { display:flex; gap:6px; justify-content:flex-end; }
+.xt-b { display:inline-flex; align-items:center; justify-content:center; gap:6px; padding:8px 11px; border-radius:10px; font:inherit; font-size:12.5px; font-weight:800;
+        border:1px solid var(--linha); background:#fff; color:#334155; cursor:pointer; white-space:nowrap; }
+.xt-b:hover { background:#f8fafc; }
+.xt-b.ok { background:var(--roxo); color:#fff; border-color:var(--roxo); flex:1; }
+.xt-b.ok:hover { background:#6d28d9; }
+.xt-b.nao { color:#b91c1c; }
+.xt-b.lado { background:#fffbeb; color:#92400e; border-color:#fde68a; }
+.xt-vazio { background:#fff; border:1px dashed #d8d0f5; border-radius:16px; padding:36px 16px; text-align:center; color:#64748b; }
+.xt-vazio i { font-size:28px; color:var(--roxo); display:block; margin-bottom:10px; }
+/* barra dos marcados */
+.xt-massa { position:fixed; left:16px; right:16px; bottom:12px; max-width:860px; margin:0 auto; z-index:300; background:#1e1b4b; color:#fff; border-radius:16px;
+            padding:12px 16px; display:none; align-items:center; gap:10px; flex-wrap:wrap; box-shadow:0 18px 40px rgba(30,27,75,.35); }
+.xt-massa.on { display:flex; }
+.xt-massa b { font-size:14px; } .xt-massa span { font-size:12.5px; opacity:.8; font-variant-numeric:tabular-nums; }
+.xt-massa .esp { flex:1; }
+.xt-massa button { border:0; border-radius:10px; padding:9px 14px; font:inherit; font-weight:800; font-size:13px; cursor:pointer; }
+.xt-massa .m-ok { background:#a78bfa; color:#1e1b4b; }
+.xt-massa .m-lado { background:#fde68a; color:#78350f; }
+.xt-massa .m-nao { background:transparent; color:#fecaca; border:1px solid rgba(254,202,202,.5); }
+.xt-massa .m-x { background:transparent; color:#c7d2fe; }
+/* esperando a outra ponta */
+.xt-dest { background:#fff; border:1px solid var(--linha); border-radius:16px; overflow:hidden; margin-bottom:14px; }
+.xt-dest-cab { display:flex; align-items:center; gap:10px; flex-wrap:wrap; padding:14px 16px; background:linear-gradient(120deg,#fff7ed,#fff); border-bottom:1px solid #fed7aa; }
+.xt-dest-cab b { font-size:15px; font-weight:800; color:#7c2d12; }
+.xt-dest-cab span { font-size:12.5px; color:#9a3412; font-weight:700; }
+.xt-dest-cab .marcar { margin-left:auto; border:0; background:none; font:inherit; font-size:12.5px; font-weight:800; color:#c2410c; cursor:pointer; }
+.xt-cob { display:flex; flex-wrap:wrap; align-items:center; gap:6px 8px; padding:10px 16px; font-size:12px; color:#78350f; border-bottom:1px solid #f1f5f3; }
+.xt-cob-item { display:inline-flex; align-items:center; gap:5px; background:#fff; border:1px solid #fde68a; border-radius:99px; padding:2px 10px; white-space:nowrap; }
+.xt-cob-item.amb { border-color:#f59e0b; } .xt-cob-item b { color:#b45309; }
+.xt-cob-dica { flex-basis:100%; color:#92400e; }
+.xt-sus { display:grid; grid-template-columns:22px 90px minmax(0,1fr) 140px; gap:12px; align-items:center; padding:10px 16px; border-top:1px solid #f1f5f3; cursor:pointer; margin:0; font-weight:400; }
+.xt-sus:hover { background:#fffaf5; }
+.xt-sus .dt { font-weight:800; font-size:13px; color:var(--tinta); }
+.xt-sus .ds { min-width:0; } .xt-sus .ds b { display:block; font-size:12.5px; font-weight:800; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.xt-sus .ds i { display:block; font-style:normal; font-size:11.5px; color:#94a3b8; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.xt-lib { display:grid; grid-template-columns:minmax(0,1fr) 280px auto; gap:8px; padding:12px 16px; background:#fffbeb; border-top:1px solid #fde68a; align-items:center; }
+.xt-lib input, .xt-lib select { border:1px solid #fde68a; border-radius:10px; padding:9px 12px; font:inherit; font-size:13px; min-width:0; background:#fff; }
+.xt-lib button { border:0; border-radius:10px; padding:10px 16px; font:inherit; font-weight:800; font-size:13px; background:#c2410c; color:#fff; cursor:pointer; white-space:nowrap; }
+.xt-lib-pe { padding:0 16px 12px; background:#fffbeb; font-size:12px; color:#92400e; }
 
-/* Duas naturezas, dois desenhos. O par CASADO e uma "coisa" com estado
-   (espera decisao) e tem dois lados que precisam ser vistos juntos: cartao.
-   O suspeito e registro para percorrer e marcar em lote: lista com caixa.
-   Ver o criterio cartao-ou-tabela. Nada de tabela larga: no celular ela
-   rolaria a pagina, e a regra e que a pagina nunca rola de lado. */
-.tf-topo { display:grid; gap:10px; grid-template-columns:1fr; margin-bottom:14px; }
-@media (min-width:700px) { .tf-topo { grid-template-columns:1fr 1fr; } }
-.tf-card-n { background:#fff; border:1.5px solid #e2e8f0; border-radius:14px;
-  padding:14px 16px; }
-.tf-card-n small { color:#64748b; font-size:11.5px; font-weight:700;
-  text-transform:uppercase; letter-spacing:.05em; display:block; }
-.tf-card-n b { font-size:26px; color:#0f172a; display:block; margin-top:2px;
-  line-height:1.1; }
-.tf-card-n span { color:#475569; font-size:12.5px; }
-
-.tf-sec { background:#fff; border:1.5px solid #e2e8f0; border-radius:14px;
-  margin-bottom:14px; overflow:hidden; }
-.tf-cab { display:flex; align-items:center; gap:10px; padding:12px 16px;
-  background:#f0fdf4; border-bottom:1px solid #bbf7d0; flex-wrap:wrap; }
-.tf-cab b { color:#0f3d2e; font-size:13.5px; flex:1; text-transform:uppercase;
-  letter-spacing:.05em; min-width:0; }
-.tf-cab span { color:#0f3d2e; font-size:11.5px; font-weight:700; opacity:.8;
-  white-space:nowrap; }
-.tf-cab.amb { background:#fffbeb; border-bottom-color:#fde68a; }
-.tf-cab.amb b, .tf-cab.amb span { color:#7c2d12; }
-.tf-corpo { padding:12px; display:grid; gap:10px; }
-
-/* ── o par ── */
-.tf-par { border:1.5px solid #e2e8f0; border-radius:12px; overflow:hidden; }
-.tf-par[hidden] { display:none; }
-.tf-cob { display:flex; flex-wrap:wrap; align-items:center; gap:6px 8px; padding:8px 14px; background:#fffbeb; border-bottom:1px solid #fde68a; font-size:12px; color:#78350f; }
-.tf-cob-lbl { font-weight:700; }
-.tf-cob-item { background:#fff; border:1px solid #fde68a; border-radius:99px; padding:2px 9px; white-space:nowrap; }
-.tf-cob-item.amb { border-color:#f59e0b; }
-.tf-cob-item b { color:#b45309; }
-.tf-cob-dica { flex-basis:100%; color:#92400e; }
-.tf-filtro { display:flex; flex-wrap:wrap; align-items:center; gap:6px 10px; padding:10px 14px;
-  background:#f8fafc; border-bottom:1px solid #e2e8f0; }
-.tf-filtro-lbl { font-size:11px; font-weight:700; color:#64748b; text-transform:uppercase; letter-spacing:.04em; }
-.tf-chips { display:flex; flex-wrap:wrap; gap:6px; }
-.tf-chip { padding:5px 12px; border-radius:99px; border:1.5px solid #d1d5db; background:#fff; color:#334155;
-  font-weight:700; font-size:12.5px; cursor:pointer; white-space:nowrap; font-family:inherit; }
-.tf-chip b { font-weight:800; color:#64748b; margin-left:4px; }
-.tf-chip:hover { border-color:#16a34a; color:#166534; }
-.tf-chip.ativo { background:#0f3d2e; border-color:#0f3d2e; color:#fff; }
-.tf-chip.ativo b { color:#bbf7d0; }
-.tf-filtro-conta { margin-left:auto; font-size:12px; color:#64748b; }
-@media (max-width: 640px) {
-  .tf-filtro { padding:8px 10px; }
-  .tf-filtro-lbl { flex:1 1 100%; }
-  .tf-filtro-conta { flex:1 1 100%; margin-left:0; }
-}
-.tf-par-cab { display:flex; align-items:center; gap:10px; padding:9px 12px;
-  background:#f8fafc; border-bottom:1px solid #eef2f7; }
-.tf-par-cab label { display:flex; align-items:center; gap:8px; margin:0;
-  cursor:pointer; font-weight:800; color:#0f172a; font-size:15px; }
-.tf-par-cab .tf-quando { margin-left:auto; color:#64748b; font-size:12px;
-  white-space:nowrap; }
-.tf-lado { display:flex; gap:10px; padding:9px 12px; align-items:flex-start; }
-.tf-lado + .tf-lado { border-top:1px dashed #e2e8f0; }
-.tf-seta { width:22px; flex:0 0 22px; text-align:center; font-size:13px; }
-.tf-saiu .tf-seta { color:#dc2626; }
-.tf-entrou .tf-seta { color:#059669; }
-.tf-lado-txt { min-width:0; flex:1; }
-.tf-lado-txt b { display:block; font-size:12.5px; color:#0f172a; }
-.tf-lado-txt code { display:block; font-size:11.5px; color:#64748b;
-  background:transparent; padding:0; word-break:break-word; }
-.tf-lado-v { font-weight:800; font-size:13px; white-space:nowrap; }
-.tf-saiu .tf-lado-v { color:#dc2626; }
-.tf-entrou .tf-lado-v { color:#059669; }
-
-/* ── o suspeito ── */
-.tf-sus { display:flex; gap:10px; padding:9px 12px; align-items:flex-start;
-  border:1.5px solid #e2e8f0; border-radius:12px; }
-.tf-sus label { display:flex; gap:9px; align-items:flex-start; margin:0;
-  cursor:pointer; flex:1; min-width:0; }
-.tf-sus .tf-lado-txt b { font-size:13px; }
-
-.tf-acoes { display:flex; gap:8px; padding:10px 12px; flex-wrap:wrap;
-  border-top:1px solid #eef2f7; background:#fcfdfe; align-items:center; }
-.tf-bt { border:0; border-radius:10px; padding:9px 15px; font-weight:800;
-  font-size:13px; cursor:pointer; font-family:inherit; }
-.tf-bt-ok { background:var(--primary-green, #00A85A); color:#fff; }
-.tf-bt-nao { background:#fff; color:#b91c1c; border:1.5px solid #fecaca; }
-.tf-bt-lib { background:#b45309; color:#fff; }
-.tf-bt:disabled { opacity:.45; cursor:not-allowed; }
-.tf-marcatudo { border:1px solid #d1d5db; background:#fff; color:#475569;
-  border-radius:999px; padding:5px 13px; font-weight:700; font-size:12px;
-  cursor:pointer; font-family:inherit; }
-.tf-form-lib { display:grid; gap:8px; padding:10px 12px; background:#fffbeb;
-  border-top:1px solid #fde68a; }
-@media (min-width:820px) {
-  .tf-form-lib { grid-template-columns:1fr 260px auto; align-items:center; }
-}
-.tf-form-lib input, .tf-form-lib select { border:1.5px solid #e2e8f0;
-  border-radius:10px; padding:9px 12px; font:inherit; font-size:13.5px;
-  min-width:0; background:#fff; }
-.tf-vazio { padding:22px 16px; text-align:center; color:#64748b;
-  font-size:13.5px; }
-.tf-nota { color:#475569; font-size:12.5px; margin:0 2px 14px; line-height:1.5; }
-
-/* ================= ASSISTENTE 'APROVAR POR LADO' =================
-   Copia do assistente de Classificar (extrato.html): um passo por tela,
-   cartoes de grupo -> categoria -> tipo de gasto, rodape fixo. */
-#tfWiz { display:none; }
-#tfWiz.aberto { display:block; }
-.ex-wiz { max-width:580px; display:flex; flex-direction:column; max-height:calc(100vh - 10%); }
+/* janela "aprovar por lado" — molde da janela de classificar do Extrato */
+#tfWiz { display:none; } #tfWiz.aberto { display:block; }
+.ex-wiz { --wc:#7c3aed; --wce:#5b21b6; max-width:640px !important; width:calc(100% - 32px); display:flex; flex-direction:column; max-height:calc(100vh - 10%);
+          padding:0 !important; overflow:hidden; border-radius:20px !important; border:0 !important; }
+.ex-wiz .modal-header { background:linear-gradient(120deg,var(--wc),var(--wce)); color:#fff; border:0; padding:16px 22px 4px; margin:0; }
+.ex-wiz .modal-header h3 { color:#fff; font-size:13px; font-weight:800; letter-spacing:.06em; text-transform:uppercase; opacity:.9; margin:0; }
+.ex-wiz .modal-close { color:#fff; background:rgba(255,255,255,.18); border:0; width:32px; height:32px; border-radius:10px; font-size:20px; line-height:1; opacity:1; }
 #tfWizForm { display:flex; flex-direction:column; flex:1 1 auto; min-height:0; }
-.ex-wiz-corpo { flex:1 1 auto; min-height:0; overflow-y:auto; max-height:min(58vh, 470px); }
-.ex-wiz-abas { display:flex; gap:6px; padding:0 22px 12px; }
+.ex-wiz-lanc { background:linear-gradient(120deg,var(--wc),var(--wce)); color:#fff; padding:4px 22px 16px; font-size:12.5px; }
+.ex-wiz-lanc .n { font-size:20px; font-weight:800; margin-top:4px; }
+.ex-wiz-lanc .m { margin-top:4px; opacity:.9; font-weight:600; }
+.ex-wiz-abas { display:flex; gap:6px; background:#fff; padding:14px 22px 6px; }
 .ex-wiz-aba { flex:1 1 0; min-width:0; }
 .ex-wiz-aba i { display:block; height:3px; border-radius:99px; background:#e2e8f0; }
 .ex-wiz-aba span { display:block; font-size:10px; font-weight:700; color:#b6c2bb; margin-top:6px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-.ex-wiz-aba.feita i, .ex-wiz-aba.agora i { background:#00a85a; }
-.ex-wiz-aba.feita span { color:#5b7468; cursor:pointer; }
-.ex-wiz-aba.agora span { color:#0f3d2e; font-weight:800; }
+.ex-wiz-aba.feita i, .ex-wiz-aba.agora i { background:var(--wc); }
+.ex-wiz-aba.feita span { color:#5b7468; cursor:pointer; } .ex-wiz-aba.agora span { color:#0f172a; font-weight:800; }
+.ex-wiz-corpo { flex:1 1 auto; min-height:0; overflow-y:auto; max-height:min(56vh, 500px); padding:8px 22px 16px; }
 .ex-wiz-passo { font-size:12px; color:#7d968a; margin:0 0 12px; }
-.ex-wiz-passo b { display:block; font-size:17px; font-weight:800; color:#0f3d2e; margin-top:1px; }
-.ex-wiz-lanc { background:#f7faf8; border-radius:11px; padding:10px 12px; margin:0 22px 12px; font-size:11.5px; flex:0 0 auto; }
-.ex-wiz-lanc .d { font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:10.5px; color:#94a3b8; overflow-wrap:anywhere; line-height:1.45; }
-.ex-wiz-lanc .n { font-size:13.5px; font-weight:700; color:#1e293b; margin-top:3px; }
-.ex-wiz-lanc .m { color:#64748b; font-weight:600; margin-top:2px; }
+.ex-wiz-passo b { display:block; font-size:17px; font-weight:800; color:#0f172a; margin-top:1px; }
 .ex-cartoes { display:flex; flex-direction:column; gap:7px; }
 .ex-cartao { display:flex; align-items:flex-start; gap:11px; width:100%; text-align:left; padding:12px 13px; border:1.5px solid #e2e8f0; border-radius:12px; background:#fff; cursor:pointer; font-family:inherit; color:#1e293b; }
-.ex-cartao:hover { border-color:#86efac; background:#f8fdfa; }
-.ex-cartao.on { border-color:#00a85a; background:#f0fdf4; box-shadow:0 0 0 1px #00a85a inset; }
+.ex-cartao:hover { border-color:#c4b5fd; background:#faf5ff; }
+.ex-cartao.on { border-color:var(--wc); background:#f5f3ff; box-shadow:0 0 0 1px var(--wc) inset; }
 .ex-cartao .b { flex:0 0 30px; height:30px; border-radius:9px; display:grid; place-items:center; font-size:14px; background:#f1f5f9; margin-top:1px; }
-.ex-cartao .t { flex:1 1 auto; min-width:0; }
-.ex-cartao .t b { display:block; font-size:14px; font-weight:700; }
+.ex-cartao .t { flex:1 1 auto; min-width:0; } .ex-cartao .t b { display:block; font-size:14px; font-weight:700; }
 .ex-cartao .t small { display:block; font-size:11.5px; color:#8a9a91; margin-top:2px; line-height:1.35; }
-.ex-cartao .ok { color:#00a85a; font-weight:900; opacity:0; margin-top:4px; }
-.ex-cartao.on .ok { opacity:1; }
+.ex-cartao .ok { color:var(--wc); font-weight:900; opacity:0; margin-top:4px; } .ex-cartao.on .ok { opacity:1; }
 .ex-rot { display:block; font-size:10px; font-weight:800; letter-spacing:.07em; text-transform:uppercase; color:#94a3b8; margin:14px 0 7px; }
-.ex-resumo { background:#f0fdf4; border:1px solid #86efac; border-radius:11px; padding:12px 13px; font-size:12.5px; color:#166534; line-height:1.55; }
+.ex-resumo { background:#f5f3ff; border:1px solid #c4b5fd; border-radius:11px; padding:12px 13px; font-size:12.5px; color:#4c1d95; line-height:1.55; }
 .ex-resumo b { font-weight:800; }
-.ex-cond { display:flex; align-items:flex-start; gap:9px; padding:9px 2px; border-bottom:1px solid #f1f5f9; font-size:13px; cursor:pointer; }
-.ex-cond:last-child { border-bottom:0; }
-.ex-cond input { margin-top:3px; width:17px; height:17px; accent-color:#00a85a; }
-.ex-cond div { flex:1 1 auto; min-width:0; }
-.ex-cond b { display:block; font-size:13px; font-weight:600; }
+.ex-cond { display:flex; align-items:flex-start; gap:9px; padding:9px 2px; font-size:13px; cursor:pointer; }
+.ex-cond input { margin-top:3px; width:17px; height:17px; accent-color:var(--wc); }
+.ex-cond div { flex:1 1 auto; min-width:0; } .ex-cond b { display:block; font-size:13px; font-weight:600; }
 .ex-cond small { display:block; font-size:11.5px; color:#94a3b8; margin-top:1px; }
-.ex-wiz-pe { display:flex; gap:9px; }
+.ex-wiz-pe { display:flex; gap:9px; background:#f8faf9; border-top:1px solid #e6eeea; padding:12px 22px; margin:0; }
 .ex-wiz-pe .btn { flex:1 1 auto; justify-content:center; }
-.ex-vazio-lista { text-align:center; color:#94a3b8; font-size:12.5px; padding:18px 8px; }
-.tf-selo { display:inline-block; font-size:9px; background:#00a85a; color:#fff; border-radius:99px; padding:2px 8px; vertical-align:middle; margin-left:6px; letter-spacing:.04em; }
-@media (max-width: 768px) {
-  #tfWiz.aberto { display:block; }
-  .ex-wiz { position:fixed; left:0; right:0; bottom:0; top:auto; margin:0; width:100%; max-width:none; max-height:92vh; border-radius:18px 18px 0 0; animation:none; }
-  .ex-wiz .modal-header { padding:16px 18px 12px; flex:0 0 auto; }
-  .ex-wiz-abas { padding:0 18px 12px; }
-  .ex-wiz-lanc { margin:0 18px 12px; }
-  .ex-wiz-corpo { max-height:none; padding:0 18px 18px; -webkit-overflow-scrolling:touch; }
-  .ex-wiz-pe { padding:12px 18px calc(12px + env(safe-area-inset-bottom)); background:#fff; }
-  .ex-wiz-pe .btn { padding:13px 16px; font-size:15px; }
+.ex-wiz-pe #tfWizSeguir, .ex-wiz-pe #tfWizGravar { background:linear-gradient(135deg,var(--wc),var(--wce)); border:0; font-weight:800; }
+.tf-selo { display:inline-block; font-size:9px; background:var(--wc); color:#fff; border-radius:99px; padding:2px 8px; vertical-align:middle; margin-left:6px; letter-spacing:.04em; }
+
+@media (max-width: 1250px) {
+  .xt-par { grid-template-columns:22px minmax(0,1fr) 30px minmax(0,1fr) 120px; }
+  .xt-par .xt-bts { grid-column:2 / -1; }
+}
+@media (max-width: 900px) {
+  .xt-hero { padding:20px 18px 54px; border-radius:18px; } .xt-hero h1 { font-size:21px; }
+  .xt-abas { margin:-40px 6px 14px; gap:8px; }
+  .xt-aba { padding:12px; gap:10px; align-items:flex-start; }
+  .xt-aba-ico { width:34px; height:34px; font-size:14px; border-radius:10px; } .xt-aba-val { font-size:20px; }
+  .xt-barra { flex-wrap:nowrap; overflow-x:auto; padding:8px; } .xt-busca { order:-1; } .xt-conta { display:none; }
+  .xt-menu { position:fixed; left:12px !important; right:12px; top:auto; bottom:12px; width:auto; max-height:70vh; }
+  .xt-tab { background:transparent; border:0; display:flex; flex-direction:column; gap:8px; overflow:visible; }
+  .xt-par { grid-template-columns:auto minmax(0,1fr); grid-template-areas:"cx val" "a a" "s s" "b b" "bt bt"; background:#fff; border:1px solid var(--linha); border-radius:14px; gap:8px; padding:12px; }
+  .xt-par:first-child { border-top:1px solid var(--linha); }
+  .xt-par .xt-cx { grid-area:cx; } .xt-par .xt-val { grid-area:val; } .xt-par > .xt-ponta:nth-of-type(1) { grid-area:a; }
+  .xt-par .xt-seta { grid-area:s; transform:rotate(90deg); width:28px; height:28px; } .xt-par > .xt-ponta:nth-of-type(2) { grid-area:b; }
+  .xt-par .xt-bts { grid-area:bt; grid-column:auto; } .xt-par .xt-bts .xt-b { flex:1; }
+  .xt-sus { grid-template-columns:22px minmax(0,1fr) auto; } .xt-sus .dt { display:none; }
+  .xt-lib { grid-template-columns:1fr; }
+  .ex-wiz { position:fixed; left:0; right:0; bottom:0; top:auto; margin:0; width:100%; max-width:none !important; max-height:92vh; border-radius:18px 18px 0 0 !important; animation:none; }
+  .ex-wiz-corpo { max-height:none; }
 }
 </style>
 
-<h4 style="margin:0 0 4px"><i class="fas fa-right-left"></i> Transferências do Grupo</h4>
-<p class="tf-nota">
-  Dinheiro que andou entre as suas contas não é receita nem despesa — é o mesmo
-  dinheiro trocando de bolso. Enquanto estiver aqui, <b>não entra no DRE e não
-  pode ser classificado</b>: classificar um lado só contaria duas vezes.
-</p>
-
-<div class="tf-topo">
-  <div class="tf-card-n">
-    <small>Pares a aprovar</small>
-    <b>{{ pares|length }}</b>
-    <span>R$ {{ '{:,.2f}'.format(total_pares).replace(',', 'X').replace('.', ',').replace('X', '.') }} — as duas pontas já se acharam</span>
+<div class="xt">
+<div class="xt-hero">
+  <div>
+    <h1><i class="fas fa-right-left"></i>Transferências entre as contas</h1>
+    <p>Dinheiro que só mudou de conta dentro do grupo. Não é receita nem despesa: enquanto estiver aqui, <b>não entra no DRE e não pode ser classificado</b> — classificar um lado só contaria duas vezes.</p>
   </div>
-  <div class="tf-card-n">
-    <small>Esperando a outra ponta</small>
-    <b>{{ n_suspeitos }}</b>
-    <span>R$ {{ '{:,.2f}'.format(total_suspeitos).replace(',', 'X').replace('.', ',').replace('X', '.') }} — falta o extrato do outro lado</span>
-  </div>
+  <a class="xt-hb" href="{{ url_for('financeiro.extrato') }}"><i class="fas fa-arrow-left"></i> Voltar ao extrato</a>
 </div>
 
-{# ─────────────── PARES ─────────────── #}
-<div class="tf-sec">
-  <div class="tf-cab">
-    <b><i class="fas fa-link"></i> As duas pontas se acharam</b>
-    <span>{{ pares|length }} par(es)</span>
+<div class="xt-abas">
+  <button type="button" class="xt-aba a-tr on" data-aba="pares" onclick="tfAba('pares')">
+    <span class="xt-aba-ico"><i class="fas fa-link"></i></span>
+    <span><span class="xt-aba-lbl">Prontos para aprovar</span><span class="xt-aba-val">{{ pares | length }}</span>
+    <span class="xt-aba-sub">{{ brl(total_pares) }} · as duas pontas se acharam</span></span></button>
+  <button type="button" class="xt-aba a-fal" data-aba="espera" onclick="tfAba('espera')">
+    <span class="xt-aba-ico"><i class="fas fa-hourglass-half"></i></span>
+    <span><span class="xt-aba-lbl">Esperando a outra ponta</span><span class="xt-aba-val">{{ n_suspeitos }}</span>
+    <span class="xt-aba-sub">{{ brl(total_suspeitos) }} · falta o extrato do outro lado</span></span></button>
+</div>
+
+{# ═════════════ PARES ═════════════ #}
+<div class="xt-painel" id="tfPares">
+{% if pares %}
+  <div class="xt-barra">
+    <div class="xt-busca"><i class="fas fa-search"></i><input type="search" id="tfBusca" placeholder="Valor (ex.: 1.199,50) ou texto do banco" oninput="tfFiltrar()"></div>
+    <div class="xt-pop"><button type="button" class="xt-f" id="tfBtCaminho" onclick="tfMenu(this)"><i class="fas fa-route"></i> Caminho <i class="fas fa-chevron-down"></i></button>
+      <div class="xt-menu" id="tfMenuCaminho"></div></div>
+    <div class="xt-pop"><button type="button" class="xt-f" id="tfBtMes" onclick="tfMenu(this)"><i class="far fa-calendar"></i> Mês <i class="fas fa-chevron-down"></i></button>
+      <div class="xt-menu" id="tfMenuMes"></div></div>
+    <span class="xt-conta" id="tfConta"></span>
   </div>
-  {% if pares %}
-  {# ── Filtros (14/09/2026): um caminho por vez agiliza — a decisão do assistente
-        vale para todos os marcados, e "Marcar todos" marca só o que está visível. ── #}
-  <div class="tf-filtro" id="tfFiltro">
-    <span class="tf-filtro-lbl">Caminho</span>
-    <div class="tf-chips" id="tfChipsCaminho"></div>
-    <span class="tf-filtro-lbl">Mês</span>
-    <div class="tf-chips" id="tfChipsMes"></div>
-    <span class="tf-filtro-conta" id="tfFiltroConta"></span>
+  <div class="xt-info">
+    <label><input type="checkbox" id="tfTodos" onchange="tfMarcaVisiveis(this.checked)"> Marcar todos os que estão na tela</label>
+    <span>“Aprovar” põe os dois lados em <b>Entre contas do grupo</b>. Entre empresas, “Por lado” deixa escolher uma categoria para cada empresa.</span>
   </div>
-  <form method="POST" id="fPares">
-    <div class="tf-corpo">
-      {% for p in pares %}
-      <div class="tf-par"
-           data-caminho="{{ 'mesma' if p.mesma_empresa else (p.saiu.empresa_id ~ '>' ~ p.entrou.empresa_id) }}"
-           data-rotulo="{{ 'Mesma empresa' if p.mesma_empresa else ((mapa.get(p.saiu.empresa_id) or '?') ~ ' → ' ~ (mapa.get(p.entrou.empresa_id) or '?')) }}"
-           data-mes="{{ p.saiu.data.strftime('%Y-%m') }}"
-           data-mes-rotulo="{{ p.saiu.data.strftime('%m/%Y') }}">
-        <div class="tf-par-cab">
-          <label>
-            <input type="checkbox" name="lanc" value="{{ p.saiu.id }}" class="ckPar">
-            R$ {{ '{:,.2f}'.format(p.valor).replace(',', 'X').replace('.', ',').replace('X', '.') }}
-          </label>
-          <span class="tf-quando">
-            {{ p.saiu.data.strftime('%d/%m/%Y') }}
-            {% if p.dias %}· entrou {{ p.dias }} dia depois{% endif %}
-            {% if not p.mesma_empresa %}· <b>entre empresas</b>{% endif %}
-          </span>
-        </div>
-        <div class="tf-lado tf-saiu">
-          <div class="tf-seta"><i class="fas fa-arrow-up"></i></div>
-          <div class="tf-lado-txt">
-            <b>SAIU · {% if logo_banco_url(p.saiu.banco) %}{{ logo_banco(p.saiu.banco, None, 16) }} {% endif %}{{ p.saiu.banco }} · {{ p.saiu.conta }}{% if mapa.get(p.saiu.empresa_id) %} · {{ mapa[p.saiu.empresa_id] }}{% endif %}</b>
-            <code>{{ p.saiu.descricao }}</code>
-          </div>
-          <div class="tf-lado-v">−R$ {{ '{:,.2f}'.format(p.valor).replace(',', 'X').replace('.', ',').replace('X', '.') }}</div>
-        </div>
-        <div class="tf-lado tf-entrou">
-          <div class="tf-seta"><i class="fas fa-arrow-down"></i></div>
-          <div class="tf-lado-txt">
-            <b>ENTROU · {% if logo_banco_url(p.entrou.banco) %}{{ logo_banco(p.entrou.banco, None, 16) }} {% endif %}{{ p.entrou.banco }} · {{ p.entrou.conta }}{% if mapa.get(p.entrou.empresa_id) %} · {{ mapa[p.entrou.empresa_id] }}{% endif %}</b>
-            <code>{{ p.entrou.descricao }}</code>
-          </div>
-          <div class="tf-lado-v">+R$ {{ '{:,.2f}'.format(p.valor).replace(',', 'X').replace('.', ',').replace('X', '.') }}</div>
-        </div>
+  {% set ns = namespace(mes='') %}
+  {% for p in pares %}
+    {% set m = p.saiu.data.strftime('%Y-%m') %}
+    {% if m != ns.mes %}
+      {% if ns.mes %}</div>{% endif %}
+      {% set ns.mes = m %}
+      <div class="xt-mes" data-mes="{{ m }}"><span class="d">{{ ['', 'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'][p.saiu.data.month] }} de {{ p.saiu.data.year }}</span><span class="s"></span><span class="r"></span></div>
+      <div class="xt-tab" data-mes="{{ m }}">
+    {% endif %}
+    <div class="xt-par" data-id="{{ p.saiu.id }}" data-valor="{{ p.valor }}"
+         data-entre="{{ 0 if p.mesma_empresa else 1 }}"
+         data-caminho="{{ 'mesma' if p.mesma_empresa else (p.saiu.empresa_id ~ '>' ~ p.entrou.empresa_id) }}"
+         data-rotulo="{{ 'Mesma empresa' if p.mesma_empresa else ((mapa.get(p.saiu.empresa_id) or '?') ~ ' → ' ~ (mapa.get(p.entrou.empresa_id) or '?')) }}"
+         data-mes="{{ m }}" data-mes-rotulo="{{ p.saiu.data.strftime('%m/%Y') }}"
+         data-busca="{{ (p.saiu.descricao ~ ' ' ~ p.entrou.descricao ~ ' ' ~ brl(p.valor) ~ ' ' ~ ('%.2f' | format(p.valor))) | lower }}">
+      <input type="checkbox" class="xt-cx" aria-label="marcar" onchange="tfToca(this)">
+      {{ ponta(p.saiu, 'Saiu', 'db') }}
+      <span class="xt-seta"><i class="fas fa-arrow-right"></i></span>
+      {{ ponta(p.entrou, 'Entrou' ~ (' ' ~ p.dias ~ ' dia' ~ ('' if p.dias == 1 else 's') ~ ' depois' if p.dias else ''), 'cr') }}
+      <div class="xt-val">{{ brl(p.valor) }}{% if not p.mesma_empresa %}<br><span class="xt-entre">entre empresas</span>{% endif %}</div>
+      <div class="xt-bts">
+        <button type="button" class="xt-b nao" onclick="tfUm('negar', '{{ p.saiu.id }}')" title="Não é transferência: os dois lados voltam para o extrato a classificar">Não é</button>
+        {% if not p.mesma_empresa %}<button type="button" class="xt-b lado" onclick="tfLadoUm('{{ p.saiu.id }}')" title="Uma categoria para cada empresa (pró-labore na PJ, receita na PF)">Por lado</button>{% endif %}
+        <button type="button" class="xt-b ok" onclick="tfUm('aprovar', '{{ p.saiu.id }}')"><i class="fas fa-check"></i> Aprovar</button>
       </div>
-      {% endfor %}
     </div>
-    <div class="tf-acoes">
-      <button type="button" class="tf-marcatudo" onclick="tfTudo('ckPar', this)">Marcar todos</button>
-      <button type="submit" class="tf-bt tf-bt-ok"
-              formaction="{{ url_for('financeiro.extrato_transferencias_aprovar') }}">
-        <i class="fas fa-check"></i> É transferência — aprovar
-      </button>
-      <button type="button" class="tf-bt tf-bt-ok" onclick="tfLadoAbrir()"
-              title="Só para pares ENTRE empresas: cada lado com a sua categoria (pró-labore na PJ, receita na PF)">
-        <i class="fas fa-code-branch"></i> Aprovar por lado (entre empresas)
-      </button>
-      <button type="submit" class="tf-bt tf-bt-nao"
-              formaction="{{ url_for('financeiro.extrato_transferencias_negar') }}"
-              onclick="return confirm('Destravar o par? Os dois lados voltam para a fila normal e passam a poder ser classificados como qualquer outro lançamento.')">
-        Não é transferência
-      </button>
-      <span style="color:#64748b;font-size:12px">Aprovar classifica os dois lados
-        como “Entre contas do grupo”.</span>
-    </div>
-  </form>
-  {% else %}
-  <div class="tf-vazio">Nenhum par esperando decisão.</div>
-  {% endif %}
+  {% endfor %}
+  {% if ns.mes %}</div>{% endif %}
+  <div class="xt-vazio" id="tfNada" hidden><i class="fas fa-filter"></i>Nenhum par com esse filtro.</div>
+{% else %}
+  <div class="xt-vazio"><i class="fas fa-circle-check"></i><b>Nenhum par esperando decisão.</b></div>
+{% endif %}
 </div>
 
-{# ─────────────── SUSPEITOS, por destino ─────────────── #}
+{# ═════════════ ESPERANDO A OUTRA PONTA ═════════════ #}
+<div class="xt-painel" id="tfEspera" hidden>
 {% for destino, d in destinos.items() %}
-<div class="tf-sec">
-  <div class="tf-cab amb">
+<form method="POST" action="{{ url_for('financeiro.extrato_transferencias_liberar') }}" class="xt-dest">
+  <div class="xt-dest-cab">
     <b><i class="fas fa-hourglass-half"></i> Esperando o extrato de {{ destino }}</b>
-    <span>{{ d.itens|length }} lançamento(s) ·
-      R$ {{ '{:,.2f}'.format(d.total).replace(',', 'X').replace('.', ',').replace('X', '.') }}</span>
+    <span>{{ d.itens | length }} lançamento{{ '' if d.itens | length == 1 else 's' }} · {{ brl(d.total) }}</span>
+    <button type="button" class="marcar" onclick="tfTudoNoForm(this)">Marcar todos</button>
   </div>
   {% set cob = cobertura_dest.get(destino) if cobertura_dest else None %}
-  <div class="tf-cob">
+  <div class="xt-cob">
     {% if cob %}
-      <span class="tf-cob-lbl">Extratos de {{ destino }} já recebidos este ano:</span>
+      <span>Extratos de {{ destino }} que já chegaram este ano:</span>
       {% for c in cob %}
-      <span class="tf-cob-item {% if c.faltam or not c.cadastrada %}amb{% endif %}"
-            title="{{ c.total }} lançamento(s){% if c.faltam %} · faltam {{ c.faltam|join(', ') }}{% endif %}{% if not c.cadastrada %} · conta sem cadastro{% endif %}">
-        {% if logo_banco_url(c.banco) %}{{ logo_banco(c.banco, None, 16) }} {% endif %}{{ c.banco }} {{ c.conta }} · {{ c.faixa }}{% if c.faltam %} <b>(falta {{ c.faltam|join(', ') }})</b>{% endif %}{% if not c.cadastrada %} <b>(sem cadastro)</b>{% endif %}
+      <span class="xt-cob-item {% if c.faltam or not c.cadastrada %}amb{% endif %}" title="{{ c.total }} lançamento(s){% if c.faltam %} · faltam {{ c.faltam | join(', ') }}{% endif %}{% if not c.cadastrada %} · conta sem cadastro{% endif %}">
+        {% if logo_banco_url(c.banco) %}{{ logo_banco(c.banco, None, 16) }}{% endif %}{{ c.banco }} {{ c.conta }} · {{ c.faixa }}{% if c.faltam %} <b>(falta {{ c.faltam | join(', ') }})</b>{% endif %}{% if not c.cadastrada %} <b>(sem cadastro)</b>{% endif %}
       </span>
       {% endfor %}
     {% else %}
-      <span class="tf-cob-lbl">Nenhum extrato de {{ destino }} recebido este ano.</span>
+      <span><b>Nenhum extrato de {{ destino }} chegou este ano.</b></span>
     {% endif %}
     {% set pistas = cobertura_dest.get(destino ~ '::pistas') if cobertura_dest else None %}
     {% if pistas %}
-    <span class="tf-cob-item amb" title="A descrição diz transferência dentro do mesmo banco: o dinheiro foi para uma conta de {{ destino }} nesse banco">
-      <b>Pista:</b> {% for b, n in pistas.items() %}{{ n }} transferência(s) dentro do {{ b }}{% if not loop.last %} · {% endif %}{% endfor %} → {{ destino }} deve ter conta no {{ pistas.keys()|join(' e ') }} sem extrato aqui
-    </span>
+    <span class="xt-cob-item amb" title="A descrição diz transferência dentro do mesmo banco"><b>Pista:</b> {% for b, n in pistas.items() %}{{ n }} transferência(s) dentro do {{ b }}{% if not loop.last %} · {% endif %}{% endfor %} → {{ destino }} deve ter conta no {{ pistas.keys() | join(' e ') }} sem extrato aqui</span>
     {% endif %}
-    <span class="tf-cob-dica">Se o dinheiro caiu numa conta que não está aqui, cadastre-a em
-      <a href="{{ url_for('financeiro.contas') }}">Contas</a> e mande o extrato dela. O quadro completo, mês a mês, está lá.</span>
+    <span class="xt-cob-dica">Quando o extrato da outra conta chegar, o par se forma sozinho. Se o dinheiro caiu numa conta que não está aqui, cadastre em <a href="{{ url_for('financeiro.contas') }}">Contas</a> e mande o extrato dela.</span>
   </div>
-  <form method="POST" action="{{ url_for('financeiro.extrato_transferencias_liberar') }}">
-    <div class="tf-corpo">
-      {% for s in d.itens %}
-      <div class="tf-sus">
-        <label>
-          <input type="checkbox" name="lanc" value="{{ s.l.id }}">
-          <span class="tf-lado-txt">
-            <b>{{ s.l.data.strftime('%d/%m/%Y') }} · {% if logo_banco_url(s.l.banco) %}{{ logo_banco(s.l.banco, None, 16) }} {% endif %}{{ s.l.banco }} · {{ s.l.conta }}</b>
-            <code>{{ s.l.descricao }}</code>
-          </span>
-        </label>
-        <div class="tf-lado-v" style="color:{{ '#059669' if s.l.valor >= 0 else '#dc2626' }}">
-          {{ '+' if s.l.valor >= 0 else '−' }}R$ {{ '{:,.2f}'.format(s.l.valor|abs|float).replace(',', 'X').replace('.', ',').replace('X', '.') }}
-        </div>
-      </div>
-      {% endfor %}
-    </div>
-    <div class="tf-form-lib">
-      <input type="text" name="motivo" maxlength="255" required
-             placeholder="Por que liberar sem a outra ponta? (obrigatório — ex.: conta encerrada, sem acesso ao extrato)">
-      <select name="categoria_id" required>
-        <option value="">O que era este dinheiro?</option>
-        {% for c in categorias %}
-          {% if c.ativo %}
-          <option value="{{ c.id }}">{{ {'R':'Receita','P':'Despesa','I':'Investimento','T':'Transferência'}.get(c.tipo, c.tipo) }} · {{ c.grupo }} · {{ c.nome }}</option>
-          {% endif %}
-        {% endfor %}
-      </select>
-      <button type="submit" class="tf-bt tf-bt-lib">
-        <i class="fas fa-unlock"></i> Liberar selecionados
-      </button>
-    </div>
-    <div class="tf-acoes">
-      <button type="button" class="tf-marcatudo"
-              onclick="tfTudoNoForm(this)">Marcar todos deste grupo</button>
-      <span style="color:#64748b;font-size:12px">Liberar <b>classifica no mesmo
-        gesto</b>, e o motivo fica gravado na linha.</span>
-    </div>
-  </form>
-</div>
+  {% for s in d.itens %}
+  {% set cc = conta_de(s.l.conta, s.l.banco) %}
+  <label class="xt-sus">
+    <input type="checkbox" class="xt-cx" name="lanc" value="{{ s.l.id }}">
+    <span class="dt">{{ s.l.data.strftime('%d/%m/%Y') }}</span>
+    <span class="ds"><b>{{ cc.apelido or cc.banco_nome or s.l.banco }} · {{ mapa.get(s.l.empresa_id) or '—' }}</b><i title="{{ s.l.descricao }}">{{ s.l.descricao }}</i></span>
+    <span class="xt-val {{ 'cr' if s.l.valor >= 0 else 'db' }}">{{ '+' if s.l.valor >= 0 else '−' }}{{ brl(s.l.valor | abs) }}</span>
+  </label>
+  {% endfor %}
+  <div class="xt-lib">
+    <input type="text" name="motivo" maxlength="255" required placeholder="Por que liberar sem a outra ponta? (ex.: conta encerrada, sem acesso ao extrato)">
+    <select name="categoria_id" required>
+      <option value="">O que era este dinheiro?</option>
+      {% for c in categorias %}{% if c.ativo %}
+      <option value="{{ c.id }}">{{ {'R':'Receita','P':'Despesa','I':'Investimento','T':'Transferência'}.get(c.tipo, c.tipo) }} · {{ c.grupo }} · {{ c.nome }}</option>
+      {% endif %}{% endfor %}
+    </select>
+    <button type="submit"><i class="fas fa-unlock"></i> Liberar os marcados</button>
+  </div>
+  <div class="xt-lib-pe">Liberar já classifica, e o motivo fica gravado no lançamento.</div>
+</form>
+{% else %}
+<div class="xt-vazio"><i class="fas fa-circle-check"></i>Nada esperando extrato de outra empresa.</div>
 {% endfor %}
-
-{% if not destinos %}
-<div class="tf-sec">
-  <div class="tf-cab amb">
-    <b><i class="fas fa-hourglass-half"></i> Esperando a outra ponta</b>
-    <span>0</span>
-  </div>
-  <div class="tf-vazio">Nada esperando extrato de outra empresa.</div>
 </div>
-{% endif %}
+</div>{# /xt #}
 
+{# barra dos pares marcados #}
+<form method="POST" id="fPares" class="xt-massa">
+  <span id="fParesIds"></span>
+  <b id="tfQtd">0 marcados</b><span id="tfSoma"></span>
+  <span class="esp"></span>
+  <button type="button" class="m-x" onclick="tfDesmarca()">Cancelar</button>
+  <button type="submit" class="m-nao" formaction="{{ url_for('financeiro.extrato_transferencias_negar') }}"
+          onclick="return confirm('Não é transferência? Os dois lados voltam para o extrato e passam a poder ser classificados.')">Não é</button>
+  <button type="button" class="m-lado" id="tfBtLado" onclick="tfLadoAbrir()">Por lado</button>
+  <button type="submit" class="m-ok" id="tfBtOk" formaction="{{ url_for('financeiro.extrato_transferencias_aprovar') }}"><i class="fas fa-check"></i> Aprovar</button>
+</form>
 
 {# ===== ASSISTENTE 'APROVAR POR LADO' — mesmo desenho do Classificar Lancamento ===== #}
 <div id="tfWiz" class="modal">
@@ -360,7 +329,6 @@
       <h3 id="tfWizTitulo">Aprovar por lado</h3>
       <button class="modal-close" type="button" onclick="tfWizFechar()">&times;</button>
     </div>
-    <div class="ex-wiz-abas" id="tfWizAbas"></div>
     <form method="POST" id="tfWizForm" action="{{ url_for('financeiro.extrato_transferencias_aprovar_lado') }}">
       <div id="tfWizCampos"></div>
       <select id="tfCatalogo" style="display:none" aria-hidden="true" tabindex="-1">
@@ -370,6 +338,7 @@
         {% endfor %}
       </select>
       <div class="ex-wiz-lanc" id="tfWizLanc"></div>
+      <div class="ex-wiz-abas" id="tfWizAbas"></div>
       <div class="modal-body ex-wiz-corpo">
         <p class="ex-wiz-passo" id="tfWizPasso"></p>
         <div id="tfWizTela"></div>
@@ -384,6 +353,8 @@
 </div>
 
 <script>
+var TF_URL_NEGAR = "{{ url_for('financeiro.extrato_transferencias_negar') }}";
+var TF_URL_APROVAR = "{{ url_for('financeiro.extrato_transferencias_aprovar') }}";
 
 // ===== ASSISTENTE 'APROVAR POR LADO' (par ENTRE empresas) =====
 // Copia do desenho do Classificar Lancamento (extrato.html): tres passos —
@@ -411,9 +382,8 @@ function tfRotulo(id) {
 }
 
 function tfLadoAbrir() {
-  var ids = Array.prototype.slice.call(document.querySelectorAll('input.ckPar:checked'))
-    .map(function (c) { return c.value; }).filter(function (id) { return TF_PARES[id]; });
-  if (!ids.length) { alert('Marque ao menos um par ENTRE empresas (os da mesma empresa usam "É transferência — aprovar").'); return; }
+  var ids = tfMarcados().filter(function (id) { return TF_PARES[id]; });
+  if (!ids.length) { alert('Marque ao menos um par ENTRE empresas. Os da mesma empresa usam o botão Aprovar.'); return; }
   var caminhos = {};
   ids.forEach(function (id) { var p = TF_PARES[id]; caminhos[p.de + '>' + p.para] = p; });
   var ks = Object.keys(caminhos);
@@ -539,76 +509,132 @@ function tfWizDesenha() {
   }).join('') + (TW.regra ? '<input type="hidden" name="memorizar" value="on">' : '');
   document.getElementById('tfWizCampos').innerHTML = campos;
 }
-// Marcar todos por CLASSE (os pares) — o rotulo do botao conta o que ele fez,
-// para ninguem clicar duas vezes achando que nao pegou.
-function tfTudo(classe, bt) {
-  // so os VISIVEIS: com o filtro de caminho ligado, "todos" e o caminho escolhido
-  var cks = Array.prototype.filter.call(document.querySelectorAll('.' + classe), function (c) {
-    var par = c.closest('.tf-par'); return !par || !par.hidden;
-  });
-  var ligar = bt.getAttribute('data-on') !== '1';
-  cks.forEach(function (c) { c.checked = ligar; });
-  bt.setAttribute('data-on', ligar ? '1' : '0');
-  bt.textContent = ligar ? ('Desmarcar (' + cks.length + ')') : tfRotuloTudo();
-}
-function tfRotuloTudo() {
-  var vis = document.querySelectorAll('.tf-par:not([hidden]) .ckPar').length,
-      tot = document.querySelectorAll('.tf-par .ckPar').length;
-  return vis === tot ? 'Marcar todos' : ('Marcar os ' + vis + ' visíveis');
+
+// ── Abas, filtros e marcação (27/11/2026) ─────────────────────────────
+function tfAba(qual) {
+  document.querySelectorAll('.xt-aba').forEach(function (b) { b.classList.toggle('on', b.getAttribute('data-aba') === qual); });
+  document.getElementById('tfPares').hidden = qual !== 'pares';
+  document.getElementById('tfEspera').hidden = qual !== 'espera';
+  if (qual !== 'pares') tfDesmarca();
+  try { history.replaceState(null, '', qual === 'espera' ? '#espera' : location.pathname + location.search); } catch (e) {}
 }
 
-// ── Filtros de caminho e mês (14/09/2026): montados a partir dos proprios
-// pares, contam sozinhos e escondem sem recarregar. Par escondido perde a
-// marcacao, para o assistente nunca receber um caminho misturado.
-var TF_F = { caminho: '', mes: '' };
-function tfChips(alvo, chave, itens) {
-  var box = document.getElementById(alvo); if (!box) return;
-  box.innerHTML = '';
-  var tudo = document.createElement('button'); tudo.type = 'button'; tudo.className = 'tf-chip' + (TF_F[chave] ? '' : ' ativo');
-  tudo.innerHTML = 'Todos<b>' + itens.reduce(function (a, i) { return a + i.n; }, 0) + '</b>';
-  tudo.onclick = function () { TF_F[chave] = ''; tfFiltrar(); };
-  box.appendChild(tudo);
-  itens.forEach(function (i) {
-    var b = document.createElement('button'); b.type = 'button';
-    b.className = 'tf-chip' + (TF_F[chave] === i.v ? ' ativo' : '');
-    b.innerHTML = i.t.replace(/</g, '&lt;') + '<b>' + i.n + '</b>';
-    b.onclick = function () { TF_F[chave] = (TF_F[chave] === i.v ? '' : i.v); tfFiltrar(); };
-    box.appendChild(b);
-  });
+function tfMenu(bt) {
+  var pop = bt.closest('.xt-pop'), abrir = !pop.classList.contains('aberto');
+  document.querySelectorAll('.xt-pop.aberto').forEach(function (p) { p.classList.remove('aberto'); });
+  if (abrir) pop.classList.add('aberto');
 }
-function tfContar(attr, rot, filtroOutro) {
-  var m = {};
-  document.querySelectorAll('.tf-par').forEach(function (p) {
-    if (filtroOutro && !filtroOutro(p)) return;
-    var v = p.getAttribute(attr); if (!m[v]) m[v] = { v: v, t: p.getAttribute(rot), n: 0 }; m[v].n++;
+document.addEventListener('click', function (e) {
+  if (!e.target.closest('.xt-pop')) document.querySelectorAll('.xt-pop.aberto').forEach(function (p) { p.classList.remove('aberto'); });
+});
+document.addEventListener('keydown', function (e) {
+  if (e.key === 'Escape') document.querySelectorAll('.xt-pop.aberto').forEach(function (p) { p.classList.remove('aberto'); });
+});
+
+// Os filtros são montados a partir dos próprios pares e contam sozinhos.
+// Par escondido perde a marcação: a barra nunca age sobre o que não se vê.
+var TF_F = { caminho: '', mes: '' };
+function tfEscH(t) { return String(t).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+function tfOpcoes(alvo, chave, attr, rot, outro, bt, nome) {
+  var m = {}, tot = 0;
+  document.querySelectorAll('.xt-par').forEach(function (p) {
+    if (outro && !outro(p)) return;
+    var v = p.getAttribute(attr); if (!m[v]) m[v] = { v: v, t: p.getAttribute(rot), n: 0 }; m[v].n++; tot++;
   });
-  return Object.keys(m).sort().map(function (k) { return m[k]; });
+  var itens = Object.keys(m).sort().map(function (k) { return m[k]; });
+  if (chave === 'mes') itens.reverse();
+  var box = document.getElementById(alvo); if (!box) return;
+  box.innerHTML = '<button type="button" class="xt-opt' + (TF_F[chave] ? '' : ' on') + '" data-v="">Todos<b>' + tot + '</b></button>' +
+    itens.map(function (i) {
+      return '<button type="button" class="xt-opt' + (TF_F[chave] === i.v ? ' on' : '') + '" data-v="' + tfEscH(i.v) + '">' + tfEscH(i.t) + '<b>' + i.n + '</b></button>';
+    }).join('');
+  box.querySelectorAll('.xt-opt').forEach(function (o) {
+    o.onclick = function () { TF_F[chave] = o.getAttribute('data-v'); box.closest('.xt-pop').classList.remove('aberto'); tfFiltrar(); };
+  });
+  var b = document.getElementById(bt), sel = itens.filter(function (i) { return i.v === TF_F[chave]; })[0];
+  b.classList.toggle('on', !!TF_F[chave]);
+  b.innerHTML = '<i class="' + (chave === 'mes' ? 'far fa-calendar' : 'fas fa-route') + '"></i> ' + nome +
+    (sel ? ': <span class="v">' + tfEscH(sel.t) + '</span>' : '') + ' <i class="fas fa-chevron-down"></i>';
 }
 function tfFiltrar() {
-  var vis = 0;
-  document.querySelectorAll('.tf-par').forEach(function (p) {
+  var q = ((document.getElementById('tfBusca') || {}).value || '').trim().toLowerCase();
+  var vis = 0, total = 0;
+  document.querySelectorAll('.xt-par').forEach(function (p) {
+    total++;
     var ok = (!TF_F.caminho || p.getAttribute('data-caminho') === TF_F.caminho)
-          && (!TF_F.mes || p.getAttribute('data-mes') === TF_F.mes);
+          && (!TF_F.mes || p.getAttribute('data-mes') === TF_F.mes)
+          && (!q || p.getAttribute('data-busca').indexOf(q) >= 0);
     p.hidden = !ok;
-    if (!ok) { var ck = p.querySelector('.ckPar'); if (ck) ck.checked = false; }
+    if (!ok) p.querySelector('.xt-cx').checked = false;
     if (ok) vis++;
   });
-  tfChips('tfChipsCaminho', 'caminho', tfContar('data-caminho', 'data-rotulo', function (p) { return !TF_F.mes || p.getAttribute('data-mes') === TF_F.mes; }));
-  tfChips('tfChipsMes', 'mes', tfContar('data-mes', 'data-mes-rotulo', function (p) { return !TF_F.caminho || p.getAttribute('data-caminho') === TF_F.caminho; }));
-  var c = document.getElementById('tfFiltroConta'); if (c) c.textContent = vis + ' de ' + document.querySelectorAll('.tf-par').length + ' par(es)';
-  var bt = document.querySelector('.tf-acoes .tf-marcatudo'); if (bt) { bt.setAttribute('data-on', '0'); bt.textContent = tfRotuloTudo(); }
+  document.querySelectorAll('.xt-tab').forEach(function (t) {
+    var n = t.querySelectorAll('.xt-par:not([hidden])').length;
+    t.hidden = !n;
+    var cab = t.previousElementSibling;
+    if (cab && cab.classList.contains('xt-mes')) { cab.hidden = !n; cab.querySelector('.s').textContent = n + ' par' + (n === 1 ? '' : 'es'); }
+  });
+  var nada = document.getElementById('tfNada'); if (nada) nada.hidden = vis > 0;
+  tfOpcoes('tfMenuCaminho', 'caminho', 'data-caminho', 'data-rotulo', function (p) { return !TF_F.mes || p.getAttribute('data-mes') === TF_F.mes; }, 'tfBtCaminho', 'Caminho');
+  tfOpcoes('tfMenuMes', 'mes', 'data-mes', 'data-mes-rotulo', function (p) { return !TF_F.caminho || p.getAttribute('data-caminho') === TF_F.caminho; }, 'tfBtMes', 'Mês');
+  var c = document.getElementById('tfConta'); if (c) c.textContent = vis === total ? total + ' pares' : vis + ' de ' + total + ' pares';
+  tfPinta();
 }
-if (document.getElementById('tfFiltro')) tfFiltrar();
-// Marcar todos DENTRO DO FORMULARIO (cada destino tem o seu): buscar por
-// classe pegaria os outros destinos tambem, e a liberacao e por grupo.
+
+function tfMarcados() {
+  return Array.prototype.map.call(document.querySelectorAll('.xt-par:not([hidden]) .xt-cx:checked'), function (c) {
+    return c.closest('.xt-par').getAttribute('data-id'); });
+}
+function tfToca() { tfPinta(); }
+function tfMarcaVisiveis(on) {
+  document.querySelectorAll('.xt-par:not([hidden]) .xt-cx').forEach(function (c) { c.checked = on; });
+  tfPinta();
+}
+function tfDesmarca() {
+  document.querySelectorAll('.xt-par .xt-cx').forEach(function (c) { c.checked = false; });
+  var t = document.getElementById('tfTodos'); if (t) t.checked = false;
+  tfPinta();
+}
+function tfPinta() {
+  var ids = tfMarcados(), soma = 0, entre = 0;
+  document.querySelectorAll('.xt-par').forEach(function (p) {
+    var on = p.querySelector('.xt-cx').checked && !p.hidden;
+    p.classList.toggle('marcado', on);
+    if (on) { soma += parseFloat(p.getAttribute('data-valor')); if (p.getAttribute('data-entre') === '1') entre++; }
+  });
+  var barra = document.getElementById('fPares');
+  barra.classList.toggle('on', ids.length > 0);
+  document.getElementById('tfQtd').textContent = ids.length + ' par' + (ids.length === 1 ? '' : 'es') + ' marcado' + (ids.length === 1 ? '' : 's');
+  document.getElementById('tfSoma').textContent = ids.length ? tfMoeda(soma) : '';
+  document.getElementById('tfBtOk').innerHTML = '<i class="fas fa-check"></i> Aprovar' + (ids.length > 1 ? ' os ' + ids.length : '');
+  document.getElementById('tfBtLado').style.display = entre ? '' : 'none';
+  document.getElementById('fParesIds').innerHTML = ids.map(function (id) { return '<input type="hidden" name="lanc" value="' + id + '">'; }).join('');
+}
+// Botões da própria linha: agem só naquele par.
+function tfUm(acao, id) {
+  if (acao === 'negar' && !confirm('Não é transferência? Os dois lados voltam para o extrato e passam a poder ser classificados.')) return;
+  var f = document.createElement('form');
+  f.method = 'POST';
+  f.action = acao === 'negar' ? TF_URL_NEGAR : TF_URL_APROVAR;
+  f.innerHTML = '<input type="hidden" name="lanc" value="' + id + '">';
+  document.body.appendChild(f);
+  f.submit();
+}
+function tfLadoUm(id) {
+  document.querySelectorAll('.xt-par .xt-cx').forEach(function (c) { c.checked = c.closest('.xt-par').getAttribute('data-id') === id; });
+  tfPinta();
+  tfLadoAbrir();
+}
+// Marcar todos DENTRO de um destino (cada destino tem o seu formulário).
 function tfTudoNoForm(bt) {
   var form = bt.closest('form');
   var cks = form.querySelectorAll('input[name="lanc"]');
   var ligar = bt.getAttribute('data-on') !== '1';
   cks.forEach(function (c) { c.checked = ligar; });
   bt.setAttribute('data-on', ligar ? '1' : '0');
-  bt.textContent = ligar ? ('Desmarcar (' + cks.length + ')')
-                         : 'Marcar todos deste grupo';
+  bt.textContent = ligar ? ('Desmarcar (' + cks.length + ')') : 'Marcar todos';
 }
+if (document.getElementById('tfBusca')) tfFiltrar();
+if (location.hash === '#espera') tfAba('espera');
 </script>
 {% endblock %}
